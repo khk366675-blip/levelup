@@ -1,0 +1,1066 @@
+export type StatKey = 'STR' | 'VIT' | 'AGI' | 'INT' | 'PER' | 'SEN'
+
+export const STAT_META: Record<StatKey, { label: string; color: string; icon: string }> = {
+  STR: { label: '근력', color: 'text-red-300', icon: '💪' },
+  VIT: { label: '체력', color: 'text-emerald-300', icon: '🛡️' },
+  AGI: { label: '민첩', color: 'text-yellow-300', icon: '⚡' },
+  INT: { label: '지능', color: 'text-cyan-300', icon: '📘' },
+  PER: { label: '인내', color: 'text-purple-300', icon: '🔥' },
+  SEN: { label: '감각', color: 'text-pink-300', icon: '👁️' },
+}
+
+export type Rank = 'E' | 'D' | 'C' | 'B' | 'A' | 'S' | 'National'
+
+export type Category =
+  | 'workout'
+  | 'study'
+  | 'career'
+  | 'health'
+  | 'mind'
+  | 'finance'
+  | 'social'
+  | 'challenge'
+  | 'habit'
+
+export const CATEGORY_META: Record<Category, { label: string; icon: string; color: string }> = {
+  workout:   { label: '운동',   icon: '🏋️', color: 'from-red-500/20 to-orange-500/10' },
+  study:     { label: '학습',   icon: '📚', color: 'from-cyan-500/20 to-blue-500/10' },
+  career:    { label: '커리어', icon: '💻', color: 'from-violet-500/20 to-indigo-500/10' },
+  health:    { label: '건강',   icon: '🥗', color: 'from-emerald-500/20 to-teal-500/10' },
+  mind:      { label: '정신',   icon: '🧘', color: 'from-purple-500/20 to-fuchsia-500/10' },
+  finance:   { label: '재정',   icon: '💰', color: 'from-yellow-500/20 to-amber-500/10' },
+  social:    { label: '관계',   icon: '🤝', color: 'from-pink-500/20 to-rose-500/10' },
+  challenge: { label: '도전',   icon: '⚔️', color: 'from-sky-500/20 to-cyan-500/10' },
+  habit:     { label: '습관',   icon: '🧹', color: 'from-slate-400/20 to-zinc-500/10' },
+}
+
+export type Difficulty = 'easy' | 'normal' | 'hard' | 'elite' | 'apex' | 'boss'
+
+export const DIFFICULTY_META: Record<Difficulty, { label: string; xp: number; color: string }> = {
+  easy:   { label: 'E급', xp: 15,  color: 'text-zinc-300' },
+  normal: { label: 'D급', xp: 30,  color: 'text-emerald-300' },
+  hard:   { label: 'C급', xp: 60,  color: 'text-cyan-300' },
+  elite:  { label: 'B급', xp: 120, color: 'text-purple-300' },
+  apex:   { label: 'A급', xp: 180, color: 'text-pink-300' },
+  boss:   { label: 'S급', xp: 250, color: 'text-amber-300' },
+}
+
+// ── Job System ─────────────────────────────────────────────────────────
+
+export type JobId =
+  | 'unawakened'
+  | 'golden-eye-diviner'
+  | 'grimoire-decoder'
+  | 'iron-squire'
+  | 'silent-monk'
+  | 'nameless-awakened'
+  | 'golden-oracle'
+  | 'abyss-archivist'
+  | 'steelheart-fighter'
+  | 'chrono-judge'
+  | 'fate-harmonizer'
+
+export type JobLine =
+  | 'market'
+  | 'research'
+  | 'training'
+  | 'discipline'
+  | 'balance'
+
+export interface JobDefinition {
+  id: JobId
+  name: string
+  line: JobLine
+  tier: 0 | 1 | 2
+  description: string
+  unlockText: string
+  nextJobId?: string
+  effects: {
+    xpBonusByCategory?: Partial<Record<Category, number>>
+    statBonus?: Partial<Record<StatKey, number>>
+    dropBonus?: number
+  }
+}
+
+export const JOB_DEFINITIONS: JobDefinition[] = [
+  {
+    id: 'unawakened',
+    name: '미각성자',
+    line: 'balance',
+    tier: 0,
+    description: '아직 자신의 길을 정하지 않은 헌터.',
+    unlockText: '기본 직업',
+    effects: {},
+  },
+  {
+    id: 'golden-eye-diviner',
+    name: '금안의 점술사',
+    line: 'market',
+    tier: 1,
+    description: '시장의 흐름과 자본의 흔적을 읽는 자.',
+    unlockText: '시장 점검 30회 또는 금융/커리어 계열 성장 조건 달성',
+    nextJobId: 'golden-oracle',
+    effects: {
+      xpBonusByCategory: {
+        finance: 0.05,
+        career: 0.05,
+      },
+    },
+  },
+  {
+    id: 'grimoire-decoder',
+    name: '금서 해독자',
+    line: 'research',
+    tier: 1,
+    description: '흩어진 자료와 산업의 문맥을 해독하는 기록자.',
+    unlockText: '학습/커리어 퀘스트 누적 조건 달성',
+    nextJobId: 'abyss-archivist',
+    effects: {
+      xpBonusByCategory: {
+        study: 0.05,
+        career: 0.03,
+      },
+    },
+  },
+  {
+    id: 'iron-squire',
+    name: '강철의 견습기사',
+    line: 'training',
+    tier: 1,
+    description: '육체를 단련해 한계를 밀어붙이는 수련자.',
+    unlockText: '운동/건강 퀘스트 누적 조건 달성',
+    nextJobId: 'steelheart-fighter',
+    effects: {
+      xpBonusByCategory: {
+        workout: 0.05,
+        health: 0.05,
+      },
+    },
+  },
+  {
+    id: 'silent-monk',
+    name: '침묵의 수도자',
+    line: 'discipline',
+    tier: 1,
+    description: '욕망을 누르고 시간을 다스리는 수행자.',
+    unlockText: '습관/정신/절제 계열 조건 달성',
+    nextJobId: 'chrono-judge',
+    effects: {
+      xpBonusByCategory: {
+        habit: 0.05,
+        mind: 0.05,
+      },
+    },
+  },
+  {
+    id: 'nameless-awakened',
+    name: '무명의 각성자',
+    line: 'balance',
+    tier: 1,
+    description: '한쪽에 치우치지 않고 균형 있게 성장한 각성자.',
+    unlockText: '여러 카테고리를 균형 있게 성장',
+    nextJobId: 'fate-harmonizer',
+    effects: {
+      xpBonusByCategory: {
+        career: 0.02,
+        study: 0.02,
+        workout: 0.02,
+        health: 0.02,
+        habit: 0.02,
+        mind: 0.02,
+      },
+    },
+  },
+  // ── 2nd Tier Jobs ──────────────────────────────────────────────────
+  {
+    id: 'golden-oracle',
+    name: '황금안의 예언자',
+    line: 'market',
+    tier: 2,
+    description: '자본의 흐름 너머에 숨은 징조를 읽어내는 예언자.',
+    unlockText: '금안의 점술사 보유 + 시장 점검 100회 또는 finance/career 퀘스트 누적 150회',
+    effects: {
+      xpBonusByCategory: {
+        finance: 0.08,
+        career: 0.08,
+      },
+    },
+  },
+  {
+    id: 'abyss-archivist',
+    name: '심연의 기록관',
+    line: 'research',
+    tier: 2,
+    description: '흩어진 지식과 기록의 심연에서 진실을 끌어올리는 자.',
+    unlockText: '금서 해독자 보유 + study/career 퀘스트 누적 180회',
+    effects: {
+      xpBonusByCategory: {
+        study: 0.08,
+        career: 0.06,
+      },
+    },
+  },
+  {
+    id: 'steelheart-fighter',
+    name: '강철심장의 투사',
+    line: 'training',
+    tier: 2,
+    description: '흔들리지 않는 심장으로 한계를 부수는 전투형 헌터.',
+    unlockText: '강철의 견습기사 보유 + workout/health 퀘스트 누적 180회 또는 던전 클리어 20회',
+    effects: {
+      xpBonusByCategory: {
+        workout: 0.08,
+        health: 0.08,
+      },
+    },
+  },
+  {
+    id: 'chrono-judge',
+    name: '시간의 심판관',
+    line: 'discipline',
+    tier: 2,
+    description: '흐트러진 욕망과 시간을 심판하는 규율의 집행자.',
+    unlockText: '침묵의 수도자 보유 + habit/mind 퀘스트 누적 180회 또는 숏폼 제한/명상 루틴 90회',
+    effects: {
+      xpBonusByCategory: {
+        habit: 0.08,
+        mind: 0.08,
+      },
+    },
+  },
+  {
+    id: 'fate-harmonizer',
+    name: '운명의 조율자',
+    line: 'balance',
+    tier: 2,
+    description: '모든 성장의 흐름을 조율해 자신의 운명을 다시 쓰는 각성자.',
+    unlockText: '무명의 각성자 보유 + 5개 이상 카테고리에서 각각 50회 이상 완료',
+    effects: {
+      xpBonusByCategory: {
+        career: 0.04,
+        study: 0.04,
+        workout: 0.04,
+        health: 0.04,
+        habit: 0.04,
+        mind: 0.04,
+      },
+    },
+  },
+]
+
+export const JOB_LINE_META: Record<JobLine, { label: string; icon: string }> = {
+  market: { label: '시장', icon: '💰' },
+  research: { label: '연구', icon: '📚' },
+  training: { label: '수련', icon: '⚔️' },
+  discipline: { label: '절제', icon: '🧘' },
+  balance: { label: '균형', icon: '⚖️' },
+}
+
+// ───────────────────────────────────────────────────────────────────────
+
+export interface Quest {
+  id: string
+  title: string
+  description?: string
+  category: Category
+  difficulty: Difficulty
+  statRewards: Partial<Record<StatKey, number>>
+  type: 'daily' | 'main' | 'dungeon'
+  /** for daily: ISO date when last completed; reset at midnight */
+  lastCompletedAt?: string
+  /** for main/dungeon */
+  completed?: boolean
+  /** for repeating daily routines vs one-time quests user adds */
+  recurring?: boolean
+  createdAt: string
+  /** dungeon: number of times you must complete to clear (e.g. 30-day) */
+  totalSteps?: number
+  currentSteps?: number
+  /** daily only: days that must pass after completion before this can be done again.
+   *  undefined or 0 = standard daily (midnight reset). 1 = every other day. 4 = every 5 days. */
+  cooldownDays?: number
+  /** main/dungeon: auto-reset on a cycle. 'monthly' resets on the 1st of each month. */
+  resetCycle?: 'monthly'
+  /** ISO timestamp of the most recent auto-reset (or initial stamp). */
+  lastResetAt?: string
+}
+
+export type ItemRarity = 'common' | 'uncommon' | 'rare' | 'epic' | 'legendary'
+
+export const RARITY_META: Record<ItemRarity, { label: string; color: string; ring: string }> = {
+  common:    { label: '일반',    color: 'text-zinc-200',   ring: 'ring-zinc-500/40' },
+  uncommon:  { label: '고급',    color: 'text-emerald-300', ring: 'ring-emerald-400/50' },
+  rare:      { label: '희귀',    color: 'text-cyan-300',    ring: 'ring-cyan-400/60' },
+  epic:      { label: '영웅',    color: 'text-purple-300',  ring: 'ring-purple-400/70 shadow-glow-purple' },
+  legendary: { label: '전설',    color: 'text-amber-300',   ring: 'ring-amber-400/80 shadow-glow-lg' },
+}
+
+// ── Equipment System ───────────────────────────────────────────────
+
+export type EquipmentSlot = 'weapon' | 'armor' | 'accessory' | 'artifact'
+
+export type ItemEffectType =
+  | 'xp_bonus'
+  | 'drop_bonus'
+  | 'rarity_bonus'
+  | 'stat_bonus'
+
+export interface ItemEffect {
+  type: ItemEffectType
+  category?: Category
+  stat?: StatKey
+  value: number
+}
+
+export type EquipmentState = Partial<Record<EquipmentSlot, string>>
+
+export const EQUIPMENT_SLOT_LABEL: Record<EquipmentSlot, string> = {
+  weapon: '무기',
+  armor: '방어구',
+  accessory: '장신구',
+  artifact: '유물',
+}
+
+// ── Consumable System ──────────────────────────────────────────────
+
+export type ConsumableEffectType =
+  | 'instant_xp'
+  | 'next_quest_xp_bonus'
+  | 'next_category_xp_bonus'
+  | 'temporary_drop_bonus'
+  | 'temporary_rarity_bonus'
+  | 'temporary_stat_bonus'
+  | 'gate_penalty_reduction'
+  | 'gate_success_bonus'
+
+export interface ConsumableEffect {
+  type: ConsumableEffectType
+  value: number
+  category?: Category
+  stat?: StatKey
+  duration?: 'next_quest' | 'today' | 'next_gate'
+}
+
+export interface ActiveConsumableEffect extends ConsumableEffect {
+  id: string
+  sourceItemId: string
+  sourceItemName: string
+  activatedAt: string
+  consumed: boolean
+}
+
+// ── Gate / Combat System ───────────────────────────────────────────
+
+export type GateRank = 'E' | 'D' | 'C' | 'B' | 'A' | 'S'
+
+export interface GateDefinition {
+  id: string
+  name: string
+  description: string
+  rank: GateRank
+
+  /** 안내용. 실제 위험도/밸런싱 기준은 recommendedPower다. */
+  recommendedLevel: number
+  /** 실제 위험도/밸런싱 기준. */
+  recommendedPower: number
+
+  monsterIds: string[]
+  rewardTableId: string
+  failPenaltyId: string
+
+  expiresInHours: number
+}
+
+export interface ActiveGate {
+  instanceId: string
+  gateId: string
+  spawnedAt: string
+  expiresAt: string
+  status: 'active' | 'cleared' | 'failed' | 'expired'
+  source: 'random' | 'dungeon_clear' | 'event'
+}
+
+export interface MonsterCombatStats {
+  maxHp: number
+  atk: number
+  def: number
+  speed: number
+  critRate: number
+  accuracy: number
+  evasionRate: number
+}
+
+export interface MonsterDefinition {
+  id: string
+  name: string
+  description: string
+  rank: GateRank
+  stats: MonsterCombatStats
+  skillIds: string[]
+}
+
+export type SkillOwnerType = 'job' | 'equipment' | 'monster' | 'common'
+export type SkillType = 'attack' | 'buff' | 'debuff' | 'heal'
+export type CombatEffectKind = 'stat' | 'damage_reduction' | 'counter'
+
+export interface SkillEffect {
+  kind?: CombatEffectKind
+  stat?: 'atk' | 'def' | 'speed' | 'critRate' | 'accuracy' | 'evasionRate'
+  value: number
+  durationTurns?: number
+  target: 'self' | 'enemy'
+  counterRate?: number
+  counterPower?: number
+}
+
+export interface SkillDefinition {
+  id: string
+  name: string
+  description: string
+
+  ownerType: SkillOwnerType
+  type: SkillType
+
+  /** 스킬 cooldown은 턴 기반이다. */
+  power?: number
+  cooldownTurns?: number
+
+  /** 초기 전투는 player vs monster 중심. 다수 몬스터/광역 스킬이 필요하면 target을 확장한다. */
+  effect?: SkillEffect
+  effects?: SkillEffect[]
+}
+
+export interface ActiveCombatEffect {
+  sourceSkillId: string
+  kind?: CombatEffectKind
+  stat?: 'atk' | 'def' | 'speed' | 'critRate' | 'accuracy' | 'evasionRate'
+  value: number
+  remainingTurns: number
+  targetId: string
+  counterRate?: number
+  counterPower?: number
+}
+
+export interface PlayerCombatStats {
+  maxHp: number
+  atk: number
+  def: number
+  speed: number
+  critRate: number
+  evasionRate: number
+  accuracy: number
+  skillTotalPower: number
+}
+
+export interface BattleTurn {
+  turnNumber: number
+  waveNumber?: number
+  waveLabel?: string
+
+  actorType: 'player' | 'monster'
+  actorId: string
+  actorName: string
+
+  targetType: 'player' | 'monster'
+  targetId: string
+  targetName: string
+
+  skillId?: string
+  skillName?: string
+
+  outcome: 'hit' | 'miss' | 'evade' | 'critical' | 'buff' | 'debuff' | 'heal'
+  damage?: number
+  remainingHp?: number
+
+  message: string
+}
+
+export interface CombatLog {
+  battleId: string
+  gateInstanceId: string
+  result: 'victory' | 'defeat' | 'draw'
+  turns: BattleTurn[]
+  totalTurns: number
+  playerHpRemaining: number
+  rewards: GateReward[]
+  penaltyApplied?: GatePenalty
+  totalWaves?: number
+  clearedWaves?: number
+}
+
+export interface GateStatus {
+  stamina: number
+  maxStamina: number // 초기 100 고정
+  injuredUntil?: string
+  recoveryQuestProgress?: number
+  recoveryQuestRequired?: number
+  lastStaminaRecoveredAt?: string
+  lastDailyGateRollDate?: string
+}
+
+export interface GateReward {
+  type: 'xp' | 'item'
+  amount?: number
+  itemId?: string
+  itemName?: string
+  rarity?: ItemRarity
+}
+
+export interface GateRewardTable {
+  id: string
+  name: string
+  xp: number
+  itemDropChance: number
+  rarityBias?: Partial<Record<ItemRarity, number>>
+}
+
+export interface GatePenalty {
+  id: string
+  name: string
+  staminaCost: number
+  injuryHours?: number
+}
+
+// Active gate 정책:
+// - 동시 활성 게이트는 1개.
+// - active gate가 있을 때 발생한 새 출현 트리거는 무시한다.
+// - draw는 보상/패널티 없이 active gate 상태를 유지한다.
+// - GateStatus 회복 로직은 11-2 이후가 아니라 별도 단계에서 구현한다.
+// - 같은 대상에게 같은 stat의 buff/debuff가 다시 적용되면 누적하지 않고 새 효과로 덮어쓰며 remainingTurns를 refresh한다.
+// - PlayerCombatStats는 저장값이 아니라 base hunter stats + equipment stat_bonus + job modifiers + consumable temporary_stat_bonus + skill modifiers로 계산하는 유도값이다.
+// - 칭호/영구 업적은 base stat만 사용한다.
+// - maxStamina = 100, gateEntryCost = 20, stamina 자연 회복은 시간당 +10, daily/main/random 완료 시 +5가 기본 정책이다.
+// - lastDailyGateRollDate는 하루 첫 접속 게이트 출현 roll을 local dateKey 기준 하루 1회로 제한한다.
+
+// ───────────────────────────────────────────────────────────────────
+
+export interface Item {
+  id: string
+  name: string
+  icon: string
+  rarity: ItemRarity
+  description: string
+  acquiredAt: string
+  
+  equippable?: boolean
+  slot?: EquipmentSlot
+  effects?: ItemEffect[]
+  /** 장착 중일 때 플레이어가 사용할 수 있는 전투 스킬 ID 목록. 주로 epic/legendary 장비에 부여한다. */
+  combatSkillIds?: string[]
+  
+  consumable?: boolean
+  consumableEffects?: ConsumableEffect[]
+}
+
+export type TitleCategory =
+  | 'progress'
+  | 'stat'
+  | 'collection'
+  | 'hidden'
+  | 'meta'
+
+export type TitleRarity =
+  | 'normal'
+  | 'rare'
+  | 'epic'
+  | 'legendary'
+
+export interface TitleDefinition {
+  id: string
+  name: string
+  description: string
+  category: TitleCategory
+  rarity: TitleRarity
+  hidden: boolean
+  conditionText?: string
+}
+
+export const TITLE_DEFINITIONS: TitleDefinition[] = [
+  {
+    id: 'first-awakening',
+    name: '첫 번째 각성',
+    description: '시스템의 부름에 응답해 헌터의 길에 들어섰다.',
+    category: 'progress',
+    rarity: 'normal',
+    hidden: false,
+    conditionText: '레벨 5 도달',
+  },
+  {
+    id: 'hunter',
+    name: '하급 헌터',
+    description: '수많은 의뢰를 넘어 정식 헌터의 자격을 증명했다.',
+    category: 'progress',
+    rarity: 'rare',
+    hidden: false,
+    conditionText: '레벨 25 도달',
+  },
+  {
+    id: 'veteran-hunter',
+    name: '숙련된 사냥꾼',
+    description: '반복된 전투와 훈련 끝에 노련한 헌터로 성장했다.',
+    category: 'progress',
+    rarity: 'epic',
+    hidden: false,
+    conditionText: '레벨 50 도달',
+  },
+  {
+    id: 'shadow-hunter',
+    name: '그림자 추적자',
+    description: '첫 던전의 어둠을 통과하고 그림자의 흔적을 쫓기 시작했다.',
+    category: 'progress',
+    rarity: 'rare',
+    hidden: false,
+    conditionText: '첫 dungeon 클리어',
+  },
+  {
+    id: 'trained-one',
+    name: '철혈의 입문자',
+    description: '육체의 한계를 넘기 위한 첫 문턱을 넘어섰다.',
+    category: 'stat',
+    rarity: 'normal',
+    hidden: false,
+    conditionText: 'STR 30',
+  },
+  {
+    id: 'iron-hunter',
+    name: '무쇠 완력의 헌터',
+    description: '단련된 힘으로 일상의 벽을 정면으로 부순다.',
+    category: 'stat',
+    rarity: 'rare',
+    hidden: false,
+    conditionText: 'STR 50',
+  },
+  {
+    id: 'steel-hunter',
+    name: '강철 육체의 계승자',
+    description: '강철처럼 단단한 육체로 흔들리지 않는 기반을 세웠다.',
+    category: 'stat',
+    rarity: 'epic',
+    hidden: false,
+    conditionText: 'STR 80',
+  },
+  {
+    id: 'sage-apprentice',
+    name: '현자의 견습생',
+    description: '지식의 문 앞에서 첫 번째 주문을 해독했다.',
+    category: 'stat',
+    rarity: 'normal',
+    hidden: false,
+    conditionText: 'INT 30',
+  },
+  {
+    id: 'market-eye',
+    name: '흐름을 읽는 눈',
+    description: '숫자와 기록 사이에 숨어 있는 흐름을 감지하기 시작했다.',
+    category: 'stat',
+    rarity: 'rare',
+    hidden: false,
+    conditionText: 'INT 50',
+  },
+  {
+    id: 'analyst',
+    name: '심연의 해석자',
+    description: '흩어진 정보의 심연에서 의미를 끌어올리는 자가 되었다.',
+    category: 'stat',
+    rarity: 'epic',
+    hidden: false,
+    conditionText: 'INT 80',
+  },
+  {
+    id: 'unyielding-will',
+    name: '꺾이지 않는 의지',
+    description: '흔들림 속에서도 자신의 루틴을 지켜낸 의지의 증거.',
+    category: 'stat',
+    rarity: 'rare',
+    hidden: false,
+    conditionText: 'PER 50',
+  },
+  {
+    id: 'steel-mental',
+    name: '강철 정신의 수도자',
+    description: '유혹과 나태를 견디며 정신을 강철처럼 벼려냈다.',
+    category: 'stat',
+    rarity: 'epic',
+    hidden: false,
+    conditionText: 'PER 80',
+  },
+  {
+    id: 'awakened-one',
+    name: '감각을 깨운 자',
+    description: '보이지 않던 신호와 기회를 감지하기 시작했다.',
+    category: 'stat',
+    rarity: 'rare',
+    hidden: false,
+    conditionText: 'SEN 50',
+  },
+  {
+    id: 'ruler-of-instinct',
+    name: '직감의 지배자',
+    description: '날카로운 감각으로 전리품과 기회의 흐름을 붙잡는다.',
+    category: 'stat',
+    rarity: 'epic',
+    hidden: false,
+    conditionText: 'SEN 80',
+  },
+  {
+    id: 'first-treasure',
+    name: '첫 전리품의 주인',
+    description: '첫 고급 전리품을 손에 넣고 헌터로서의 감각을 깨웠다.',
+    category: 'collection',
+    rarity: 'rare',
+    hidden: false,
+    conditionText: '첫 epic 이상 아이템 획득',
+  },
+  {
+    id: 'collector',
+    name: '전리품 수집가',
+    description: '수많은 전리품을 모아 자신만의 무기고를 채워가고 있다.',
+    category: 'collection',
+    rarity: 'rare',
+    hidden: false,
+    conditionText: '인벤토리 50개 누적',
+  },
+  {
+    id: 'legend-in-hand',
+    name: '전설을 쥔 자',
+    description: '전설의 격을 지닌 전리품을 손에 넣었다.',
+    category: 'collection',
+    rarity: 'legendary',
+    hidden: false,
+    conditionText: 'legendary 아이템 첫 획득',
+  },
+  // ── Hidden Titles ──────────────────────────────────────────────────
+  {
+    id: 'dawn-hunter',
+    name: '🌅 새벽의 사냥꾼',
+    description: '어둠이 물러가기 전 일어나 하루를 먼저 시작하는 자.',
+    category: 'hidden',
+    rarity: 'rare',
+    hidden: true,
+    conditionText: '7시 전 기상 daily 30일 연속',
+  },
+  {
+    id: 'ruler-of-dawn',
+    name: '🌅 여명의 지배자',
+    description: '백 번의 새벽을 맞이하며 시간의 흐름을 지배하기 시작했다.',
+    category: 'hidden',
+    rarity: 'epic',
+    hidden: true,
+    conditionText: '7시 전 기상 daily 100회 누적',
+  },
+  {
+    id: 'incarnation-of-restraint',
+    name: '🧘 절제의 화신',
+    description: '도파민의 유혹을 30일간 견뎌내며 절제를 체화했다.',
+    category: 'hidden',
+    rarity: 'rare',
+    hidden: true,
+    conditionText: '숏폼 30분 이내 daily 30일 연속',
+  },
+  {
+    id: 'dopamine-hunter',
+    name: '🧘 도파민 사냥꾼',
+    description: '흩어진 집중력을 되찾아 도파민의 흐름을 역으로 사냥한다.',
+    category: 'hidden',
+    rarity: 'epic',
+    hidden: true,
+    conditionText: '숏폼 30분 이내 daily 90회 누적',
+  },
+  {
+    id: 'quiet-mind',
+    name: '🧘 고요한 마음',
+    description: '30일간 고요 속에 머물며 마음의 소음을 잠재웠다.',
+    category: 'hidden',
+    rarity: 'rare',
+    hidden: true,
+    conditionText: '명상 daily 30일 연속',
+  },
+  {
+    id: 'market-observer',
+    name: '📈 시장의 관찰자',
+    description: '시장의 마감 종소리를 60번 기록하며 흐름을 읽는 눈을 길렀다.',
+    category: 'hidden',
+    rarity: 'rare',
+    hidden: true,
+    conditionText: '시장 마감 점검 daily 60회 누적',
+  },
+  {
+    id: 'enemy-of-body-fat',
+    name: '💪 체지방의 적',
+    description: '60번의 기록을 통해 자신의 육체를 정밀하게 추적하기 시작했다.',
+    category: 'hidden',
+    rarity: 'rare',
+    hidden: true,
+    conditionText: '체중 기록 daily 60회 누적',
+  },
+  {
+    id: 'near-burnout',
+    name: '🔥 번아웃 직전',
+    description: '하루에 15개 이상의 의뢰를 처리하며 한계에 도전했다.',
+    category: 'hidden',
+    rarity: 'rare',
+    hidden: true,
+    conditionText: '하루에 daily 15개 이상 클리어',
+  },
+  {
+    id: 'all-nighter',
+    name: '🔥 올나이터',
+    description: '자정의 어둠 속에서도 의뢰를 완수하는 불굴의 헌터.',
+    category: 'hidden',
+    rarity: 'rare',
+    hidden: true,
+    conditionText: '자정~2시 사이 daily 완료 5회',
+  },
+  {
+    id: 'hundred-days-record',
+    name: '🎮 백일의 기록',
+    description: '백 일의 시간을 시스템과 함께하며 성장의 흔적을 남겼다.',
+    category: 'hidden',
+    rarity: 'epic',
+    hidden: true,
+    conditionText: '앱 사용 100일',
+  },
+  {
+    id: 'national-level-hunter',
+    name: '👑 국가급 사냥꾼',
+    description: '국가가 주목하는 최상위 헌터의 반열에 올랐다.',
+    category: 'hidden',
+    rarity: 'legendary',
+    hidden: true,
+    conditionText: 'National 랭크 도달',
+  },
+  {
+    id: 'systems-favor',
+    name: '👑 시스템의 총애',
+    description: '다섯 개의 전설을 손에 쥐며 시스템의 특별한 총애를 받았다.',
+    category: 'hidden',
+    rarity: 'legendary',
+    hidden: true,
+    conditionText: 'legendary 아이템 5개 보유',
+  },
+  {
+    id: 'sleepless-hunter',
+    name: '👑 불면불휴',
+    description: '백 일을 쉬지 않고 달려온 불굴의 의지를 증명했다.',
+    category: 'hidden',
+    rarity: 'legendary',
+    hidden: true,
+    conditionText: 'daily streak 100일',
+  },
+  // ── Meta Hidden Titles ──────────────────────────────────────────────
+  {
+    id: 'greeting-the-system',
+    name: '🎮 시스템에 인사',
+    description: 'LEVEL UP 시스템에 처음 접속하여 헌터의 여정을 시작했다.',
+    category: 'hidden',
+    rarity: 'normal',
+    hidden: true,
+    conditionText: '첫 로그인',
+  },
+  {
+    id: 'title-collector',
+    name: '🎮 컬렉터',
+    description: '열 개의 칭호를 모으며 자신의 성장을 기록하고 있다.',
+    category: 'hidden',
+    rarity: 'rare',
+    hidden: true,
+    conditionText: '칭호 10개 보유',
+  },
+  {
+    id: 'hall-of-hunters',
+    name: '🎮 헌터의 전당',
+    description: '스물다섯 개의 칭호를 모아 헌터의 전당에 이름을 올렸다.',
+    category: 'hidden',
+    rarity: 'epic',
+    hidden: true,
+    conditionText: '칭호 25개 보유',
+  },
+  // ── Additional Hidden Titles (5-5) ─────────────────────────────────
+  {
+    id: 'portfolio-manager',
+    name: '📈 포트폴리오 매니저',
+    description: '여섯 번의 운용 일지를 작성하며 자본의 흐름을 기록했다.',
+    category: 'hidden',
+    rarity: 'rare',
+    hidden: true,
+    conditionText: 'CMA 운용 일지 6회 작성',
+  },
+  {
+    id: 'self-reliant-hunter',
+    name: '🏠 자립한 헌터',
+    description: '생활의 기본을 스스로 관리하며 진정한 자립을 이뤘다.',
+    category: 'hidden',
+    rarity: 'rare',
+    hidden: true,
+    conditionText: '빨래 + 청소 + 분리수거 daily 각 10회 누적',
+  },
+  {
+    id: 'guardian-of-hygiene',
+    name: '🏠 위생의 수호자',
+    description: '백 번의 관리를 통해 자신의 공간을 지켜낸 수호자.',
+    category: 'hidden',
+    rarity: 'epic',
+    hidden: true,
+    conditionText: '자취 daily 카테고리 합산 100회',
+  },
+  {
+    id: 'perfectionist',
+    name: '👑 완벽주의자',
+    description: '일주일 동안 단 하나의 빈틈도 허용하지 않은 완벽의 화신.',
+    category: 'hidden',
+    rarity: 'legendary',
+    hidden: true,
+    conditionText: '일주일 동안 모든 daily 100% 완료',
+  },
+]
+
+export interface Title {
+  id: string
+  name: string
+  description: string
+  unlockedAt: string
+  equipped?: boolean
+}
+
+export interface SystemMessage {
+  id: string
+  kind: 'levelup' | 'quest' | 'item' | 'title' | 'rank' | 'info'
+  title: string
+  lines: string[]
+  createdAt: string
+}
+
+export interface HunterState {
+  name: string
+  level: number
+  xp: number
+  totalXp: number
+  rank: Rank
+  job: string // legacy display field
+  jobId: JobId
+  unlockedJobIds: JobId[]
+  stats: Record<StatKey, number>
+  /** points the user can spend manually on any stat (+1 per level-up) */
+  freeStatPoints: number
+  streak: number
+  lastActiveDate?: string
+  /** completions per category since the last level-up. Used to pick auto-distribute target. */
+  categoryProgress: Record<Category, number>
+  /** ISO date of last streak-protection use. One charge per calendar month at PER >= 10. */
+  streakProtectionLastUsed?: string
+  /** IDs of unlocked titles */
+  ownedTitleIds: string[]
+  /** ID of currently equipped title */
+  equippedTitleId?: string
+}
+
+// ── Random Quest System ────────────────────────────────────────────
+
+export interface RandomQuestTemplate {
+  id: string
+  title: string
+  description: string
+  category: Category
+  difficulty: Difficulty
+  xp: number
+  weight: number
+}
+
+export interface ActiveRandomQuest extends RandomQuestTemplate {
+  instanceId: string
+  generatedAt: string
+  expiresAt: string
+  completed: boolean
+}
+
+// ───────────────────────────────────────────────────────────────────
+
+export interface AchievementStats {
+  questCompletions: {
+    total: number
+    byQuestId: Record<string, number>
+    byCategory: Record<Category, number>
+    byType: Record<'daily' | 'main' | 'dungeon', number>
+  }
+  
+  dailyCompletions: {
+    total: number
+    byQuestId: Record<string, number>
+    byCategory: Record<Category, number>
+    currentStreakByQuestId: Record<string, number>
+    bestStreakByQuestId: Record<string, number>
+  }
+  
+  dungeonClears: {
+    total: number
+    byQuestId: Record<string, number>
+  }
+  
+  mainClears: {
+    total: number
+    byQuestId: Record<string, number>
+  }
+  
+  special: {
+    // 7시 전 기상 (daily-sleep)
+    earlyWakeBefore7Count: number
+    earlyWakeBefore7CurrentStreak: number
+    earlyWakeBefore7BestStreak: number
+    
+    // 숏폼 30분 이내 (daily-shortform-limit)
+    noShortsWithin30MinCount: number
+    noShortsWithin30MinCurrentStreak: number
+    noShortsWithin30MinBestStreak: number
+    
+    // 명상 (daily-meditate)
+    meditationCount: number
+    meditationCurrentStreak: number
+    meditationBestStreak: number
+    
+    // 시장 마감 점검 (daily-market-close)
+    marketCheckCount: number
+    
+    // 월 소비 제한 (main-spend-monthly)
+    spendingLimitMonthlyClearCount: number
+    
+    // CMA 운용 일지 (dungeon-cma-journal)
+    cmaJournalCount: number
+    
+    // 체중 기록 (daily-weigh)
+    weightRecordCount: number
+    
+    // 심야 완료 (00:00~01:59 daily 완료)
+    lateNightCompletionCount: number
+    
+    // 하루 15개 이상 daily 클리어한 날 수
+    daily15PlusClearDays: number
+    daily15PlusClearDateKeys: string[]
+    
+    // 하루 daily 0개 클리어 연속 일수
+    zeroDailyClearCurrentStreak: number
+    zeroDailyClearBestStreak: number
+    
+    // 완벽한 주간 (7일 연속 모든 가용 daily 완료)
+    perfectDailyWeekCount: number
+    
+    // 부활 횟수 (streak 보호 사용)
+    resurrectionCount: number
+  }
+  
+  app: {
+    firstSeenAt?: string
+    lastSeenAt?: string
+    activeDays: number
+    activeDateKeys: string[]
+  }
+  
+  dailyHistory: Record<
+    string,
+    {
+      completedDailyQuestIds: string[]
+      completedDailyCount: number
+      totalDailyAvailableCount: number
+      completedAllAvailableDailies: boolean
+    }
+  >
+}

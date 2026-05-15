@@ -1,0 +1,4112 @@
+# LEVEL UP — Hunter System
+
+"나 혼자만 레벨업" 컨셉을 차용한 게임화 자기개발 웹앱. 개인 프로젝트, 로컬 단일 사용자용.
+
+## 실행
+
+| 동작 | 명령 |
+|---|---|
+| 시작 | `start_levelup.bat` (포트 정리 → vite 실행 → 브라우저 오픈) |
+| 종료 | `stop_levelup.bat` (포트 3002 LISTENING 프로세스 kill) |
+| 수동 | `npm run dev` — http://localhost:3002 |
+| 빌드 | `npm run build` |
+
+dev 서버는 `vite.config.ts`에서 `strictPort: true, port: 3002`로 고정.
+
+## 스택
+
+- **Vite + React 18 + TypeScript** — SPA, 라우팅 없이 탭 전환
+- **Tailwind CSS** — 다크 + 시안/퍼플 홀로그램 테마
+- **Zustand + persist** — localStorage 키 `levelup-save`에 전체 상태 저장
+- **framer-motion** — 레벨업 모달, 카드 전환, XP 바 애니메이션
+- **lucide-react** — 아이콘
+
+## 파일 구조
+
+```
+levelup/
+├── start_levelup.bat / stop_levelup.bat
+├── index.html, vite.config.ts, tsconfig.json
+├── tailwind.config.js, postcss.config.js
+├── public/sword.svg
+└── src/
+    ├── main.tsx              # 엔트리
+    ├── App.tsx               # 헤더 + 탭 네비 + 페이지 라우팅
+    ├── index.css             # tailwind + 글로벌 (그리드, 코너 브라켓, 스캔라인, XP 시머)
+    ├── components/
+    │   ├── HunterStatus.tsx  # 이름/직업/레벨/EXP/랭크/스탯/스트릭 패널
+    │   ├── QuestCard.tsx     # 일일/메인/던전 공통 카드
+    │   ├── AddQuestModal.tsx # 커스텀 퀘스트 추가
+    │   ├── Inventory.tsx     # 획득 아이템 그리드
+    │   ├── TitleCollection.tsx # 칭호 컬렉션 (보유/미보유, 장착 UI)
+    │   └── SystemMessage.tsx # "── SYSTEM ──" 모달 큐
+    └── lib/
+        ├── types.ts          # Quest/Item/Stat/Category/Difficulty/Rarity 타입과 메타
+        ├── game.ts           # xpToNextLevel, rankFromLevel, 날짜 유틸, 스탯 보너스 헬퍼
+        ├── seed.ts           # 기본 일일/메인/던전 + 아이템 풀
+        └── store.ts          # Zustand 스토어 (모든 게임 로직)
+```
+
+## 게임 모델
+
+**Hunter**
+- `level`, `xp`, `totalXp`, `rank` (E→D→C→B→A→S→National), `job`, `streak`
+- 스탯 6종: `STR`(근력) `VIT`(체력) `AGI`(민첩) `INT`(지능) `PER`(인내) `SEN`(감각)
+- `freeStatPoints`: 사용자가 직접 배분할 수 있는 자유 포인트 (레벨업 시 +1)
+- `categoryProgress`: 레벨업 이후 카테고리별 완료 횟수 (자동 분배 결정용)
+- `streakProtectionLastUsed`: PER 기반 streak 보호 마지막 사용 날짜
+- `ownedTitleIds`: 해금한 칭호 ID 목록
+- `equippedTitleId`: 현재 장착 중인 칭호 ID
+
+**칭호 시스템 (v6 — 기반 구조 + 컬렉션 UI)**
+- 칭호 정의: `types.ts > TITLE_DEFINITIONS` (17개 일반 칭호)
+- 카테고리: `progress` (진행도), `stat` (스탯), `collection` (수집), `hidden` (히든), `meta` (메타)
+- 레어리티: `normal`, `rare`, `epic`, `legendary`
+- 자동 해금 조건:
+  - **레벨**: 5 (첫 각성), 25 (헌터), 50 (베테랑 헌터)
+  - **STR**: 30 (단련된 자), 50 (무쇠의 헌터), 80 (강철의 헌터)
+  - **INT**: 30 (현자의 견습), 50 (시장의 눈), 80 (분석가)
+  - **PER**: 50 (불굴의 의지), 80 (강철 멘탈)
+  - **SEN**: 50 (깨어있는 자), 80 (직감의 지배자)
+  - **수집**: epic 이상 첫 획득 (첫 보물), 인벤토리 50개 (수집가), legendary 첫 획득 (전설을 손에)
+  - **던전**: 첫 던전 클리어 (그림자 사냥꾼)
+- 첫 해금 칭호는 자동 장착
+- 헤더에 장착 칭호 표시 (amber 색상)
+- 해금 시 SystemMessage (kind: 'title') 표시
+- **칭호 컬렉션 탭**: 보유/미보유 칭호 확인, 장착 UI, 필터 (전체/보유/미보유)
+- 앱 진입 시 자동 해금 체크 (`checkTitleUnlocks`)
+
+**스탯 시스템 (v5 — 실작동)**
+- 레벨업 시 **자동 +2** (직전 레벨업 이후 가장 많이 완료한 카테고리의 스탯) + **자유배분권 +1**
+- 카테고리 → 스탯 매핑 (`game.ts > CATEGORY_TO_STAT`):
+  - workout/health → STR
+  - study/career → INT
+  - mind/finance → SEN
+  - habit/challenge → PER
+  - social → AGI
+- 스탯 효과 (10마다):
+  - **STR**: 운동/건강 daily/dungeon XP +5%
+  - **VIT**: 운동/건강 daily 드롭률 +3%
+  - **AGI**: dungeon 부분 보상 XP +5%
+  - **INT**: 학습/커리어 daily/dungeon XP +5%
+  - **PER**: streak 자동 보호 (월 1회, 10마다 1회)
+  - **SEN**: 레어리티 가중치 보너스 +1% (epic/legendary 확률 증가)
+
+**Quest** (`type: 'daily' | 'main' | 'dungeon'`)
+- **daily** — `lastCompletedAt` + `cooldownDays`로 가용성 판정. `recurring: true`.
+  - `cooldownDays` 의미: cycleLength = `cooldownDays + 1`.
+    - 0 또는 undefined → 매일 가능 (다음날 자정 리셋)
+    - 1 → 격일 (월 완료 → 수 가용)
+    - 4 → 5일 주기 (일 완료 → 금 가용)
+  - 가용성 헬퍼: `game.ts > getCooldownRemaining(q)` (남은 일수 반환, 0이면 가용)
+- **main** — 1회성 장기 목표, `completed` 플래그.
+- **dungeon** — `totalSteps` / `currentSteps`로 단계 진행. 매 진행마다 부분 XP, 클리어 시 전체 보상 + 보장 아이템 드롭.
+
+**자동 재생성 (resetCycle)**
+- `resetCycle: 'monthly'` + `lastResetAt` 필드로 main/dungeon을 매월 1일에 자동 리셋.
+- 트리거: 앱 마운트 시 `App.tsx`가 `resetDailiesIfNewDay()` 호출 → 내부에서 monthly reset도 같이 처리.
+- 동작: `isBeforeMonth(lastResetAt)`가 true면 main은 `completed=false`, dungeon은 `currentSteps=0`로 되돌리고 `lastResetAt`을 이번 달 1일로 갱신. 첫 마운트 시 (`lastResetAt` 미정의)에는 진행도는 그대로 두고 타임스탬프만 찍음.
+- 적용 시드: `main-spend-monthly`, `dungeon-{arm,back,chest,shoulder,leg}-monthly`.
+
+**난이도 → XP** (`DIFFICULTY_META`):
+E급 15 / D급 30 / C급 60 / B급 120 / A급 180 / S급 250
+
+**아이템 드롭 확률** (`store.ts > completeQuest`):
+boss 100% · apex 92% · elite 85% · hard 45% · normal 20% · easy 8%
+- VIT 보너스 적용 (운동/건강 카테고리): 10마다 +3%
+
+**레어리티 가중 확률** (`store.ts > randomItem`):
+legendary 2% · epic 8% · rare 15% · uncommon 25% · common 50%
+- SEN 보너스 적용: 10마다 +1% (epic/legendary 가중치 증가)
+
+**레벨업 공식** (`game.ts`):
+`xpToNextLevel(L) = round(100 + (L-1)*75 + (L-1)^1.5 * 8)`
+레벨업 시 자동 +2 (카테고리 기반) + 자유배분권 +1, 랭크 임계치 통과 시 랭크 메시지.
+
+**시스템 메시지** (`SystemMessage`)
+- 종류: `quest`, `levelup`, `item`, `rank`, `title`, `info`
+- `store.ts`에서 액션마다 큐에 push, 모달은 항상 첫 메시지만 표시 + `+N` 뱃지.
+
+**카테고리** (`Category`)
+운동(`workout`) · 학습(`study`) · 커리어(`career`) · 건강(`health`) · 정신(`mind`) · 재정(`finance`) · 관계(`social`) · 도전(`challenge`) · 습관(`habit`)
+
+## 자주 만지는 곳
+
+| 하고 싶은 일 | 파일 |
+|---|---|
+| 기본 일일 퀘스트 추가/수정 | `src/lib/seed.ts > DEFAULT_DAILIES` |
+| 메인/던전 퀘스트 추가/수정 | `src/lib/seed.ts > DEFAULT_MAIN_QUESTS`, `DEFAULT_DUNGEONS` |
+| 아이템 추가 | `src/lib/seed.ts > ITEM_POOL` |
+| 칭호 추가/수정 | `src/lib/types.ts > TITLE_DEFINITIONS` + `store.ts > checkTitleUnlocks` |
+| 카테고리 추가 | `src/lib/types.ts > Category` + `CATEGORY_META` + `game.ts > CATEGORY_TO_STAT` |
+| 난이도 추가/XP 조정 | `src/lib/types.ts > Difficulty` + `DIFFICULTY_META` |
+| cooldown / 월간 재생성 로직 | `src/lib/game.ts > getCooldownRemaining`, `isBeforeMonth`; `store.ts > resetDailiesIfNewDay` |
+| 레벨업 곡선 조정 | `src/lib/game.ts > xpToNextLevel` |
+| 드롭 확률 조정 | `src/lib/store.ts > completeQuest`의 `dropChance` ternary |
+| 스탯 보너스 강도 조정 | `src/lib/game.ts > getXpMultiplier`, `getDropChanceBonus` 등 |
+| 커스텀 퀘스트 스탯 보상량 | `src/components/AddQuestModal.tsx`의 `baseGain` ternary |
+| 랭크 임계 레벨 | `src/lib/game.ts > rankFromLevel` |
+| 색상/글로우 토큰 | `tailwind.config.js`, `src/index.css` (`.panel`, `.btn`, `.xp-bar-fill`) |
+
+## 데이터 저장
+
+전부 브라우저 `localStorage["levelup-save"]`에 JSON으로 저장. 헤더 우측 **리셋** 버튼으로 초기화. 서버/DB 없음.
+
+스토어 스키마를 변경하면 `store.ts`의 `version` 값을 올려서 기존 저장본을 무효화할 것. (현재 v8)
+
+**AchievementStats 기록 구조** (v7~v8):
+- `questCompletions`: 전체 퀘스트 완료 기록 (total, byQuestId, byCategory, byType)
+- `dailyCompletions`: daily 전용 기록 (total, byQuestId, byCategory, currentStreak, bestStreak)
+- `dungeonClears`: 던전 최종 클리어 기록
+- `mainClears`: 메인 퀘스트 완료 기록
+- `special`: 히든 칭호용 특수 카운터 (7시 전 기상, 숏폼 제한, 명상, 시장 점검, 월 소비 제한, CMA 일지, 체중 기록, 심야 완료, 15+ daily 클리어 일수, 0 daily 연속, 완벽한 주간, 부활 횟수)
+- `app`: 앱 사용 기록 (firstSeenAt, lastSeenAt, activeDays, activeDateKeys)
+- `dailyHistory`: 날짜별 daily 완료 기록 (completedDailyQuestIds, completedDailyCount, totalDailyAvailableCount, completedAllAvailableDailies)
+
+**special 카운터 매핑**:
+- `earlyWakeBefore7*`: `daily-sleep` (23시 전 취침 / 7시 전 기상)
+- `noShortsWithin30Min*`: `daily-shortform-limit` (숏폼 30분 이내)
+- `meditation*`: `daily-meditate` (명상 10분)
+- `marketCheckCount`: `daily-market-close` (시장 마감 점검)
+- `spendingLimitMonthlyClearCount`: `main-spend-monthly` (월 소비 70만원 이하)
+- `cmaJournalCount`: `dungeon-cma-journal` (CMA 운용 일지)
+- `weightRecordCount`: `daily-weigh` (공복 체중 기록)
+- `lateNightCompletionCount`: 00:00~01:59 사이 daily 완료 (올나이터 칭호용)
+- `daily15PlusClearDays`: 하루 15개 이상 daily 클리어한 날 수 (중복 방지: daily15PlusClearDateKeys)
+- `resurrectionCount`: streak 보호 사용 횟수 (PER 스탯 효과)
+
+**daily streak 계산 규칙** (v8):
+- 어제 같은 daily 완료 기록 있음 → currentStreak + 1
+- 어제 완료 기록 없음 → currentStreak = 1
+- 같은 날 중복 완료 → streak 증가 없음
+- bestStreak는 currentStreak의 최댓값으로 자동 갱신
+- TODO: cooldownDays가 있는 daily는 cooldown-aware streak 필요 (현재는 단순 전날 기준)
+
+**dailyHistory 계산 규칙** (v8):
+- `totalDailyAvailableCount`: 오늘 완료 가능하거나 이미 완료된 daily 수 (cooldownDays 고려)
+- `completedDailyCount`: 오늘 완료한 daily 수
+- `completedAllAvailableDailies`: completedDailyCount >= totalDailyAvailableCount
+
+**Difficulty / Category 등 enum 확장 시 영향 받는 코드**
+- `store.ts > completeQuest`의 `dropChance` ternary — 새 난이도용 분기 추가 안 하면 fallback(0.08)로 떨어짐
+- `AddQuestModal.tsx`의 `baseGain` ternary — 새 난이도용 분기 안 추가하면 fallback(1)로 떨어짐
+- `AddQuestModal.tsx`의 `Object.keys(CATEGORY_META).map(...)` — 객체 리터럴 순서가 UI 버튼 순서
+- `game.ts > CATEGORY_TO_STAT` — 새 카테고리 추가 시 매핑 필수
+- `types.ts > TITLE_DEFINITIONS` — 새 칭호 추가 시 정의 필수
+- `store.ts > checkTitleUnlocks` — 새 칭호 해금 조건 추가 필수
+
+## 배포 (GitHub + Vercel)
+
+### Vercel 설정값
+- **Framework Preset**: Vite (자동 감지)
+- **Build Command**: `npm run build` (= `tsc && vite build`)
+- **Output Directory**: `dist`
+- **Install Command**: `npm install` (기본값)
+- **Node Version**: 20.x 이상 (로컬은 24.x — Vercel 기본 20+로 충분)
+- **별도 `vercel.json` 불필요** — Vite 프리셋 자동 처리.
+- **SPA 라우팅 rewrite도 불필요** — 이 앱은 client-side routing 없이 탭 전환만 사용.
+
+### GitHub 커밋 정책
+- `.gitignore`로 다음 제외:
+  - `node_modules/` — 600MB+ 의존성, Vercel이 자동 설치
+  - `dist/` — 빌드 산출물, Vercel이 자동 빌드
+  - `.env*` — 시크릿 (현재 미사용이지만 미래 대비)
+  - `.vscode/` 대부분 (`settings.json`은 예외 허용)
+  - 시뮬레이션 출력 (`sim-result.md`, `sim-output.txt`)
+- **커밋 필요**: `package.json`, `package-lock.json`, `src/`, `public/`, `scripts/`, `index.html`, `*.config.{ts,js}`, `tsconfig.json`, `CLAUDE.md`, `docs/`, `start_levelup.bat`, `stop_levelup.bat`, `INSTRUCTIONS.md`
+
+### dev-only 설정의 배포 영향
+- `vite.config.ts`의 `server.port = 3002`는 **dev 서버 전용**. `vite build`는 정적 파일만 생성하므로 Vercel 배포와 무관.
+- `package.json > scripts.dev`의 `--port 3002 --host` 옵션도 dev 전용.
+- 결론: dev/prod 분리 잘 되어 있음. 추가 환경 분기 없음.
+
+### 빌드 산출물 (참고)
+- `dist/index.html` (~0.47 KB)
+- `dist/assets/index-*.js` (~421 KB, gzip ~133 KB)
+- `dist/assets/index-*.css` (~33 KB, gzip ~6.5 KB)
+- `dist/sword.svg` (favicon)
+
+## 모바일 사용 시 주의사항
+
+모바일 브라우저(특히 iOS Safari/Chrome)에서 사용할 때 localStorage 관련 제약:
+
+### localStorage 용량
+- 일반적으로 모바일 브라우저 localStorage 한도는 **5~10MB**.
+- 현재 앱의 `levelup-save` JSON은 가벼움 (수십 KB 수준, 메시지 큐를 dismiss하면 더 작아짐).
+- 인벤토리/메시지가 수천 개 누적되면 한도 접근 가능 — 그때 리셋 또는 정리 권장.
+
+### 데이터 손실 시나리오 (모바일 특화)
+1. **사파리 시크릿/프라이빗 모드**: localStorage 비활성 → 앱이 매번 초기 상태로 시작. 일반 모드 사용 필수.
+2. **iOS Safari "웹사이트 데이터 지우기"** 또는 Chrome **"사이트 데이터 삭제"**: `levelup-save` 통째 삭제 → 진행도 전부 손실.
+3. **iOS Safari ITP (Intelligent Tracking Prevention)**: 7일간 사이트 미방문 시 localStorage 자동 삭제 가능. **최소 1주에 한 번은 앱 열어두기 권장**.
+4. **저장 공간 부족 시 OS 자동 정리**: iOS는 저장공간 부족 시 사파리 데이터를 정리할 수 있음.
+
+### 백업 / 복원 (Export / Import) — 헤더 우측 버튼
+
+앱에 내장된 백업 기능을 사용한다. ([src/components/BackupControls.tsx](src/components/BackupControls.tsx))
+
+**저장 백업 (Export)**
+- 헤더 우측 `저장 백업` 버튼 → `levelup-backup-YYYY-MM-DD-HHMM.json` 파일 다운로드.
+- 파일 구조 (wrapper):
+  ```json
+  {
+    "app": "LEVEL_UP",
+    "type": "levelup-save-backup",
+    "exportedAt": "ISO timestamp",
+    "storageKey": "levelup-save",
+    "data": { "state": {...}, "version": N }
+  }
+  ```
+- 저장 데이터가 없거나 손상되면 alert로 안내.
+
+**저장 불러오기 (Import)**
+- 헤더 우측 `저장 불러오기` 버튼 → 파일 선택 → 검증 → confirm 후 적용.
+- 두 가지 입력 형식 모두 허용:
+  - A. wrapper 백업: `{ app, type: "levelup-save-backup", data: {...} }`
+  - B. raw Zustand persist: `{ state, version }` (예: DevTools에서 직접 복사한 값)
+- **검증 단계**:
+  1. JSON 파싱 성공해야 함
+  2. wrapper면 `data` 추출 / raw면 그대로 사용
+  3. `state` 객체 존재 필수
+  4. `version`이 있으면 number 타입 필수
+  5. `state.hunter` 또는 `state.quests` 중 하나 이상 존재해야 함
+- 검증 실패 시 alert + **기존 데이터 그대로 유지**.
+- 검증 성공 시 confirm: "현재 진행도가 백업 파일 내용으로 덮어써집니다. 계속할까요?"
+- 사용자가 확인 → 안전장치로 현재 데이터를 `levelup-save-before-import` 임시 키에 보관 → `levelup-save` 덮어쓰기 → `window.location.reload()`로 Zustand 재수화.
+
+**임시 안전키: `levelup-save-before-import`**
+- Import 직전 현재 상태를 이 키에 자동 보관.
+- 복원이 실수였을 때 DevTools에서 다음과 같이 되돌릴 수 있음:
+  ```js
+  localStorage.setItem('levelup-save', localStorage.getItem('levelup-save-before-import'))
+  location.reload()
+  ```
+- 다음 import 시 덮어써짐 (한 번 분량만 보존).
+
+**금지 사항**
+- `levelup-save` key 이름 변경 금지 (Zustand persist 설정과 직결).
+- persist `version` 임의 변경 금지 (마이그레이션 로직과 직결).
+- 검증을 우회하고 raw write 하지 말 것 (게임 상태 깨질 수 있음).
+
+### 멀티 디바이스
+- localStorage는 **device + browser별 격리**. 데스크탑/모바일 간 진행도 자동 동기화 없음.
+- 한 디바이스에서만 일관되게 사용 권장. 두 디바이스 병행 시 진행도 갈라짐.
+- **수동 동기화 방법**:
+  1. 디바이스 A에서 `저장 백업` → JSON 파일 다운로드
+  2. 클라우드(드라이브/iCloud/메일)로 파일 전송
+  3. 디바이스 B에서 `저장 불러오기` → JSON 선택 → confirm
+- 모바일에서는 **주기적으로 (예: 주 1회) 백업 파일을 다운로드해 클라우드에 보관** 권장. iOS ITP의 7일 미접속 시 데이터 삭제 위험에 대한 보험.
+
+### Vercel 재배포와 저장 데이터
+- 같은 Vercel URL + 같은 브라우저 환경이면 redeploy 후에도 localStorage `levelup-save` 그대로 유지됨 (브라우저 origin이 동일하므로).
+- **단, 도메인이 바뀌면 origin이 바뀌어 데이터 접근 불가** (예: `levelup-abc.vercel.app` → 커스텀 도메인). 이런 경우 도메인 전환 전에 백업 export 필수.
+- 브라우저 데이터 삭제, 시크릿 모드, ITP 자동 삭제 등으로 localStorage가 비워지면 진행도 손실. **백업이 유일한 보호 수단**.
+
+### PWA / 홈 화면 추가
+- 현재 `manifest.json` 미구현 — 홈 화면 추가해도 일반 북마크 수준 (localStorage는 정상 동작).
+- 진짜 PWA(오프라인 + service worker)로 만들려면 별건 작업 필요.
+
+### 모바일 UX 점검 포인트
+- viewport meta tag: `<meta name="viewport" content="width=device-width, initial-scale=1.0" />` 설정됨 ✓
+- 다크 테마 + 모노스페이스 UI라 작은 화면에서도 가독성 OK.
+- 던전 카드의 "단계 +N XP" 보조 표시 등은 작은 화면에서 줄바꿈 발생 가능 — 실사용 확인 권장.
+
+## 디자인 원칙
+
+- "시스템 창" 느낌 — 코너 브라켓 (`.corner-bracket`), 스캔라인, 시안 글로우
+- 시스템 텍스트는 monospace (`.system-text`) + 자간 넓게
+- 한글 폰트: Pretendard Variable (CDN)
+- 강조 색: cyan(`#60e8ff`) → 일반 UI / purple → 영웅 아이템 / amber → 레벨업·전설
+
+## 작업 이력
+
+### 4차 작업 완료 (2025-05-15) — 스탯 시스템 실작동
+- ✅ `types.ts`: `freeStatPoints`, `categoryProgress`, `streakProtectionLastUsed` 필드 추가
+- ✅ `game.ts`: 스탯 보너스 헬퍼 함수 추가 (`getXpMultiplier`, `getDropChanceBonus`, `getPartialRewardMultiplier`, `getRarityWeightBonus`, `shouldProtectStreak`)
+- ✅ `store.ts`: 레벨업 로직 변경 (자동 +2 + 자유배분권 +1), 스탯 효과 적용 (XP/드롭/던전/레어리티), streak 보호, `allocateFreeStat` 액션 추가
+- ✅ `HunterStatus.tsx`: 자유배분권 표시, 각 스탯에 +1 버튼 추가, 스탯 효과 표시 ("+15% 학습 XP" 등)
+- ✅ persist version 4 → 5
+- ✅ 빌드 통과 확인
+
+**카테고리 → 스탯 매핑 결정**:
+- workout/health → STR (운동은 근력 중심)
+- study/career → INT (학습/커리어는 지능)
+- mind/finance → SEN (정신/재정은 감각)
+- habit/challenge → PER (습관/도전은 인내)
+- social → AGI (관계는 민첩)
+
+**categoryProgress 트래킹**: `completeQuest`와 `progressDungeon`에서 퀘스트 완료 시 해당 카테고리 카운트 증가. `applyXp` 내부에서 레벨업 시 가장 많은 카테고리의 스탯에 +2 자동 분배 후 리셋.
+
+**streak 보호**: `resetDailiesIfNewDay`에서 lastActiveDate가 2일 이상 차이나면 `shouldProtectStreak` 체크. PER >= 10이고 이번 달에 미사용이면 보호 발동 + 시스템 메시지.
+
+**UI 변경**: 헤더에 자유배분권 표시 (amber 색상, animate-pulse), 각 스탯 카드에 효과 설명 추가 (작은 텍스트), +1 버튼은 `freeStatPoints > 0`일 때만 표시.
+
+### 5차 작업 1단계 완료 (2025-05-15) — 칭호 시스템 기반 구조
+- ✅ `types.ts`: 칭호 타입 추가 (`TitleCategory`, `TitleRarity`, `TitleDefinition`), `TITLE_DEFINITIONS` 17개 일반 칭호 정의
+- ✅ `types.ts`: Hunter에 `ownedTitleIds`, `equippedTitleId` 필드 추가
+- ✅ `store.ts`: 칭호 액션 추가 (`unlockTitle`, `equipTitle`, `checkTitleUnlocks`)
+- ✅ `store.ts`: 자동 해금 로직 구현 (레벨/스탯/수집/던전 클리어 조건)
+- ✅ `store.ts`: `completeQuest`, `progressDungeon`, `allocateFreeStat` 후 `checkTitleUnlocks` 호출
+- ✅ `store.ts`: 던전 클리어 시 `shadow-hunter` 칭호 해금
+- ✅ `App.tsx`: 헤더에 장착 칭호 표시 (amber 색상, border, system-text)
+- ✅ `SystemMessage.tsx`: 기존 `title` 메시지 타입 활용
+- ✅ persist version 5 → 6 (migrate 함수로 기존 데이터 호환)
+- ✅ 빌드 통과 확인
+
+**구현된 칭호 (17개)**:
+- 진행도: 첫 각성 (Lv5), 헌터 (Lv25), 베테랑 헌터 (Lv50), 그림자 사냥꾼 (첫 던전 클리어)
+- 스탯: 단련된 자 (STR 30), 무쇠의 헌터 (STR 50), 강철의 헌터 (STR 80), 현자의 견습 (INT 30), 시장의 눈 (INT 50), 분석가 (INT 80), 불굴의 의지 (PER 50), 강철 멘탈 (PER 80), 깨어있는 자 (SEN 50), 직감의 지배자 (SEN 80)
+- 수집: 첫 보물 (epic 이상 첫 획득), 수집가 (인벤토리 50개), 전설을 손에 (legendary 첫 획득)
+
+**자동 해금 트리거**:
+- 퀘스트 완료 후 (레벨/아이템 변화)
+- 던전 진행/클리어 후 (레벨/아이템/던전 클리어 조건)
+- 자유 스탯 배분 후 (스탯 변화)
+
+**첫 칭호 자동 장착**: 해금된 첫 칭호는 자동으로 장착되어 헤더에 표시됨.
+
+**다음 단계 예정**: 칭호 컬렉션 탭 UI, 히든 칭호 추가, 칭호 필터/장착 UI.
+
+### 5차 작업 2단계 완료 (2025-05-15) — 칭호 컬렉션 탭 + 장착 UI
+- ✅ `TitleCollection.tsx`: 새 컴포넌트 생성 (칭호 카드 목록, 필터, 장착 UI)
+- ✅ `App.tsx`: 칭호 탭 추가 (Award 아이콘), 앱 진입 시 `checkTitleUnlocks` 호출
+- ✅ 칭호 컬렉션 UI: 상단 요약 (보유 칭호 수, 현재 장착), 필터 (전체/보유/미보유)
+- ✅ 칭호 카드: 레어리티별 색상 (normal: zinc, rare: cyan, epic: purple, legendary: amber)
+- ✅ 장착 UI: 보유 칭호는 장착 버튼, 장착 중은 배지 표시, 미보유는 잠김 상태
+- ✅ 미보유 칭호 표시 분리: 일반 칭호는 실제 정보 표시, 히든 칭호는 "???" 처리
+- ✅ 빌드 통과 확인
+
+**칭호 컬렉션 탭 구성**:
+- 상단 요약: 보유 칭호 수 (N / 17), 현재 장착 칭호 표시
+- 필터 버튼: 전체 / 보유 / 미보유
+- 칭호 카드 그리드: 3열 레이아웃 (md: 2열, lg: 3열)
+- 각 카드: 아이콘 (보유: Award, 미보유: Lock), 이름, 레어리티 배지, 설명, 조건, 장착 버튼
+
+**미보유 칭호 표시 규칙**:
+- **일반 칭호** (`hidden: false`): 미보유여도 실제 이름/설명/조건 표시, 상태 "잠김"
+- **히든 칭호** (`hidden: true`): 미보유 시 이름 "???", 설명 "조건을 만족하면 정체가 드러납니다.", 조건 "조건: ???", 상태 "숨겨진 칭호" (purple 강조)
+- 보유한 히든 칭호는 실제 정보 표시
+
+**레어리티 스타일**:
+- normal (일반): zinc 계열
+- rare (희귀): cyan 계열
+- epic (영웅): purple 계열
+- legendary (전설): amber 계열
+
+**장착 흐름**:
+1. 칭호 탭에서 보유 칭호 카드의 "장착" 버튼 클릭
+2. `equipTitle(titleId)` 호출
+3. 헤더의 장착 칭호 표시 즉시 변경
+4. 칭호 카드에 "장착 중" 배지 표시
+
+**앱 진입 시 자동 해금**: `App.tsx`의 `useEffect`에서 `init()` 후 `checkTitleUnlocks()` 호출. 기존 저장 데이터 기준으로 조건을 만족하는 칭호 자동 해금.
+
+**다음 단계 예정**: 히든 칭호 추가, 칭호 효과 시스템 (장착 시 보너스).
+
+### 5차 작업 3단계 완료 (2025-05-15) — 히든 칭호용 기록/카운터 구조
+- ✅ `types.ts`: `AchievementStats` 타입 추가 (questCompletions, dailyCompletions, dungeonClears, mainClears, special, app, dailyHistory)
+- ✅ `store.ts`: `achievementStats` 필드 추가, `createInitialAchievementStats()` 초기화 함수
+- ✅ `store.ts`: `recordAppOpen()` 액션 추가 (앱 사용 기록)
+- ✅ `store.ts`: `completeQuest`에 기록 업데이트 로직 추가 (daily/main 완료 기록, special 카운터, dailyHistory)
+- ✅ `store.ts`: `progressDungeon`에 기록 업데이트 로직 추가 (dungeon 진행/클리어 기록)
+- ✅ `store.ts`: `resetDailiesIfNewDay`에 resurrectionCount 증가 추가
+- ✅ `App.tsx`: 앱 진입 시 `recordAppOpen()` 호출
+- ✅ persist version 6 → 7 (migrate 함수로 achievementStats 기본값 추가)
+- ✅ 빌드 통과 확인
+
+**AchievementStats 구조**:
+- `questCompletions`: 모든 퀘스트 완료 누적 (total, byQuestId, byCategory, byType)
+- `dailyCompletions`: daily 전용 (total, byQuestId, byCategory, currentStreak, bestStreak)
+- `dungeonClears`: 던전 최종 클리어만 카운트
+- `mainClears`: 메인 퀘스트 완료 카운트
+- `special`: 히든 칭호용 특수 카운터 17개 (7시 전 기상, 숏폼 제한, 명상, 시장 점검, 월 소비 제한, CMA 일지, 체중 기록, 심야 완료, 15+ daily 클리어 일수, 0 daily 연속, 완벽한 주간, 부활 횟수)
+- `app`: 앱 사용 기록 (firstSeenAt, lastSeenAt, activeDays, activeDateKeys)
+- `dailyHistory`: 날짜별 daily 완료 기록 (YYYY-MM-DD 키)
+
+**special 카운터 매핑** (실제 quest id 기반):
+- `daily-sleep` → earlyWakeBefore7Count/Streak
+- `daily-shortform-limit` → noShortsWithin30MinCount/Streak
+- `daily-meditate` → meditationCount/Streak
+- `daily-market-close` → marketCheckCount
+- `main-spend-monthly` → spendingLimitMonthlyClearCount
+- `dungeon-cma-journal` → cmaJournalCount
+- `daily-weigh` → weightRecordCount
+- streak 보호 사용 → resurrectionCount
+
+**중복 방지 로직**:
+- daily 완료 시 `dailyHistory[dateKey]`에 이미 해당 quest id가 있으면 카운터 증가 안 함
+- 앱 진입 시 `activeDateKeys`에 오늘 날짜가 이미 있으면 activeDays 증가 안 함
+
+**TODO 항목**:
+- daily별 streak 정확한 계산 (어제 완료 여부 체크 필요) → ✅ v8에서 구현 완료
+- dailyHistory의 totalDailyAvailableCount, completedAllAvailableDailies 계산 → ✅ v8에서 구현 완료
+- daily15PlusClearDays, zeroDailyClearStreak, perfectDailyWeekCount 계산 로직 → ✅ daily15PlusClearDays v8에서 구현 완료
+- zeroDailyClearStreak: 날짜 전환 시점 로직 필요 (다음 단계에서 구현)
+- perfectDailyWeekCount: 7일 구간 계산 필요 (히든 칭호 구현 시 처리)
+- cooldown-aware streak: cooldownDays가 있는 daily의 정확한 연속 기록 (필요 시 개선)
+
+**다음 단계 예정**: 히든 칭호 추가 및 해금 조건 구현, 기록 기반 칭호 판정.
+
+### 5차 작업 3단계 보정 완료 (2025-05-15) — 히든 칭호 기록 정확도 보정
+- ✅ `types.ts`: `daily15PlusClearDateKeys` 필드 추가
+- ✅ `store.ts`: lateNightCompletionCount 기준 변경 (22시 이후 → 00:00~01:59)
+- ✅ `store.ts`: daily streak 보정 (어제 완료 여부 체크, 중복 방지)
+- ✅ `store.ts`: totalDailyAvailableCount 계산 (cooldownDays 고려)
+- ✅ `store.ts`: completedAllAvailableDailies 계산 (실제 비교)
+- ✅ `store.ts`: daily15PlusClearDays 계산 (중복 방지)
+- ✅ persist version 7 → 8 (daily15PlusClearDateKeys 기본값 추가)
+- ✅ 빌드 통과 확인
+
+**lateNightCompletionCount 기준**:
+- 변경 전: 22시 이후 또는 6시 이전
+- 변경 후: 00:00~01:59 (자정~새벽 2시)
+- 목적: 올나이터 히든 칭호 조건 (자정~2시 사이 daily 완료 5회)
+
+**daily streak 보정**:
+- 어제 같은 daily 완료 기록 있음 → currentStreak + 1
+- 어제 완료 기록 없음 → currentStreak = 1 (리셋)
+- 같은 날 중복 완료 → streak 증가 없음
+- special 카운터 (earlyWakeBefore7, noShortsWithin30Min, meditation)도 동일 로직 적용
+
+**totalDailyAvailableCount**:
+- 오늘 완료 가능하거나 이미 완료된 daily 수 계산
+- `getCooldownRemaining(quest) === 0` 또는 이미 완료된 quest 포함
+- 매 daily 완료 시마다 재계산하여 정확도 유지
+
+**completedAllAvailableDailies**:
+- `totalDailyAvailableCount > 0 && completedDailyCount >= totalDailyAvailableCount`
+- 모든 가용 daily를 완료했는지 실시간 판정
+- 히든 칭호 "완벽주의자", "부활" 조건에 사용
+
+**daily15PlusClearDays**:
+- 하루 15개 이상 daily 클리어 시 증가
+- `daily15PlusClearDateKeys`로 중복 방지 (같은 날짜 1회만 카운트)
+- 16개, 17개 완료해도 같은 날이면 추가 증가 없음
+
+**보류 항목**:
+- `zeroDailyClearStreak`: 날짜 전환 시점에 daily 0개 완료 판정 필요 (다음 단계)
+- `perfectDailyWeekCount`: 7일 연속 completedAllAvailableDailies 계산 필요 (히든 칭호 구현 시)
+- cooldown-aware streak: cooldownDays > 0인 daily의 정확한 연속 기록 (필요 시 개선)
+
+**다음 단계 예정**: 히든 칭호 추가 (올나이터, 아침형 인간, 절제, 금융, 자취, 운동, 번뇌, 메타, 히든 중 히든 등).
+
+### 5차 작업 4A단계 완료 (2025-05-15) — 히든 칭호 1차 구현
+- ✅ `types.ts`: 히든 칭호 13개 메타데이터 추가 (TITLE_DEFINITIONS에 추가)
+- ✅ `store.ts`: `checkTitleUnlocks()`에 히든 칭호 해금 조건 추가
+- ✅ 빌드 통과 확인
+
+**구현된 히든 칭호 (13개)**:
+- **아침형 인간**:
+  - 🌅 새벽의 사냥꾼 (rare): 7시 전 기상 30일 연속 (`earlyWakeBefore7CurrentStreak >= 30`)
+  - 🌅 여명의 지배자 (epic): 7시 전 기상 100회 누적 (`earlyWakeBefore7Count >= 100`)
+- **절제**:
+  - 🧘 절제의 화신 (rare): 숏폼 제한 30일 연속 (`noShortsWithin30MinCurrentStreak >= 30`)
+  - 🧘 도파민 사냥꾼 (epic): 숏폼 제한 90회 누적 (`noShortsWithin30MinCount >= 90`)
+  - 🧘 고요한 마음 (rare): 명상 30일 연속 (`meditationCurrentStreak >= 30`)
+- **금융**:
+  - 📈 시장의 관찰자 (rare): 시장 마감 점검 60회 누적 (`marketCheckCount >= 60`)
+- **운동**:
+  - 💪 체지방의 적 (rare): 체중 기록 60회 누적 (`weightRecordCount >= 60`)
+- **번뇌**:
+  - 🔥 번아웃 직전 (rare): 하루 15개 이상 daily 클리어 (`daily15PlusClearDays >= 1`)
+  - 🔥 올나이터 (rare): 자정~2시 사이 daily 완료 5회 (`lateNightCompletionCount >= 5`)
+- **메타**:
+  - 🎮 백일의 기록 (epic): 앱 사용 100일 (`app.activeDays >= 100`)
+- **히든 중 히든** (legendary):
+  - 👑 국가급 사냥꾼: National 랭크 도달 (`rank === 'National'`)
+  - 👑 시스템의 총애: legendary 아이템 5개 보유 (`legendaryCount >= 5`)
+  - 👑 불면불휴: daily streak 100일 (`streak >= 100`)
+
+**해금 조건 트리거**:
+- daily 완료 후 (아침형, 절제, 금융, 운동, 번뇌 계열)
+- main 완료 후 (기존 일반 칭호)
+- dungeon 클리어 후 (기존 일반 칭호)
+- 아이템 획득 후 (시스템의 총애)
+- 앱 진입 시 (백일의 기록, 국가급 사냥꾼)
+- 레벨업 후 (국가급 사냥꾼, 불면불휴)
+
+**보류한 히든 칭호 (복잡한 조건)**:
+- 태양보다 일찍: 7시 전 기상 + 폰 1시간 안 보기 동시 판정 필요
+- 포트폴리오 매니저: CMA 일지 구조/퀘스트 성격 확인 필요
+- 자본의 추적자: 3개월 연속 월 소비 제한 판정 필요
+- 자립한 헌터: 빨래/청소/분리수거 quest id 확인 및 각 10회 판정 필요
+- 위생의 수호자: 자취 daily 범위 정의 필요
+- 5분할의 완성자: 월간 5개 운동 던전 모두 클리어 판정 필요
+- 불사의 몸: 단백질+물+유산소 동시 30일 판정 필요
+- 빙결: zeroDailyClearStreak 로직 필요
+- 부활: streak 깨진 후 다음날 all clear 판정 필요
+- 완벽주의자: 7일 연속 모든 daily 완료 판정 필요
+- 시스템에 인사: 기존 사용자에게 소급 해금 여부 결정 필요
+- 컬렉터: 전체 칭호 10개 보유 기준 (다음 단계에서 처리 권장)
+- 헌터의 전당: 전체 칭호 25개 보유 기준 (다음 단계에서 처리 권장)
+
+**다음 단계 예정**: 히든 칭호 2차 구현 (복잡한 조건), 칭호 효과 시스템 (장착 시 보너스).
+
+### 5차 작업 4B단계 완료 (2025-05-15) — 히든 칭호 소형 마무리 (메타 계열 3개)
+- ✅ `types.ts`: 메타 히든 칭호 3개 메타데이터 추가 (TITLE_DEFINITIONS에 추가)
+- ✅ `store.ts`: `checkTitleUnlocks()`에 메타 칭호 해금 조건 추가
+- ✅ `store.ts`: 칭호 수 기반 칭호 해금 로직 개선 (2단계 체크)
+- ✅ 빌드 통과 확인
+
+**추가된 메타 히든 칭호 (3개)**:
+1. 🎮 시스템에 인사 (normal) — 첫 로그인 (`app.firstSeenAt` 존재)
+2. 🎮 컬렉터 (rare) — 칭호 10개 보유 (`ownedTitleIds.length >= 10`)
+3. 🎮 헌터의 전당 (epic) — 칭호 25개 보유 (`ownedTitleIds.length >= 25`)
+
+**해금 조건 구현**:
+- `greeting-the-system`: `stats.app.firstSeenAt` 존재 시 해금 (앱 진입 시 자동)
+- `title-collector`: 보유 칭호 10개 이상
+- `hall-of-hunters`: 보유 칭호 25개 이상
+
+**칭호 수 기반 해금 로직**:
+- 1단계: 일반 칭호 + 히든 칭호 조건 체크 → 해금
+- 2단계: 업데이트된 보유 칭호 수로 컬렉터/헌터의 전당 체크 → 해금
+- 이로써 `greeting-the-system` 해금 직후 보유 칭호 수가 10개가 되면 `title-collector`도 즉시 해금됨
+- 중복 해금 방지: `unlockTitle`에서 이미 보유한 칭호는 재해금 안 함
+
+**앱 진입 시 해금 흐름**:
+1. `recordAppOpen()` 실행 → `firstSeenAt` 생성 (첫 접속 시)
+2. `checkTitleUnlocks()` 실행 → `greeting-the-system` 해금
+3. 보유 칭호 수 체크 → 조건 만족 시 `title-collector`, `hall-of-hunters` 해금
+
+**칭호 총 개수**:
+- 일반 칭호: 17개
+- 히든 칭호 (5-4A): 13개
+- 메타 히든 칭호 (5-4B): 3개
+- **총 33개**
+- `TitleCollection.tsx`는 `TITLE_DEFINITIONS.length` 기반으로 자동 표시 (하드코딩 없음)
+
+**5차 칭호 시스템 1차 완성**:
+- ✅ 칭호 기반 구조 (17개 일반 칭호)
+- ✅ 칭호 컬렉션 탭 + 장착 UI
+- ✅ 히든 칭호 기록/카운터 구조 (AchievementStats)
+- ✅ 히든 칭호 1차 구현 (13개)
+- ✅ 메타 히든 칭호 (3개)
+- **총 33개 칭호 구현 완료**
+
+**보류한 복잡한 히든 칭호 (13개)**:
+- 태양보다 일찍, 포트폴리오 매니저, 자본의 추적자, 자립한 헌터, 위생의 수호자
+- 5분할의 완성자, 불사의 몸, 빙결, 부활, 완벽주의자
+- (컬렉터, 헌터의 전당은 이번 단계에서 구현 완료)
+
+**다음 단계 예정**: 6차 작업 — 성장 곡선 조정 (XP 공식, 랭크 임계치 등).
+
+### 6차 작업 완료 (2025-05-15) — 성장 곡선 조정
+- ✅ `game.ts`: `xpToNextLevel` 공식 조정 (약 1.8배 느리게, 초반 할인 적용)
+- ✅ `game.ts`: `rankFromLevel` 기준 확인 (이미 적절한 수준, 변경 없음)
+- ✅ 빌드 통과 확인
+
+**XP 곡선 조정 (최종)**:
+```typescript
+export const xpToNextLevel = (level: number): number => {
+  // Adjusted growth curve: slower mid-late game, early discount for Lv 1-10
+  const l = Math.max(1, level)
+  const base = 100 + (l - 1) * 105 + Math.pow(l - 1, 1.58) * 18
+  const earlyDiscount = l <= 5 ? 0.85 : l <= 10 ? 0.95 : 1
+  return Math.round(base * earlyDiscount)
+}
+```
+
+**공식 의도**:
+- `(l - 1) * 105`: 기존 75보다 상승 (선형 성장 강화)
+- `Math.pow(l - 1, 1.58) * 18`: 중후반 요구 XP 상승 (지수 성장 강화)
+- `earlyDiscount`: Lv 1-5는 0.85배, Lv 6-10은 0.95배 (초반 진입 장벽 완화)
+- `Math.max(1, level)`: 비정상 level 입력 방어
+
+**XP 비교 (최종)**:
+| Level | Old XP | New XP | 배율 |
+|------:|-------:|-------:|-----:|
+| 1 | 100 | 85 | 0.85x |
+| 2 | 183 | 190 | 1.04x |
+| 5 | 446 | 579 | 1.30x |
+| 10 | 960 | 1,543 | 1.61x |
+| 15 | 1,550 | 2,735 | 1.76x |
+| 20 | 2,210 | 3,982 | 1.80x |
+| 30 | 3,710 | 6,825 | 1.84x |
+| 50 | 7,420 | 13,674 | 1.84x |
+
+**성장 곡선 보정 (2025-05-15)**:
+- 초기 공식에서 중후반 배율이 1.37~1.43배로 목표(1.7배)보다 낮아 재조정
+- 선형 계수 95 → 105, 지수 계수 13 → 18, 지수 1.55 → 1.58로 상향
+- 최종 배율: Lv 15+ 약 1.76~1.84배 (목표 달성)
+
+**랭크 임계치**:
+- 기존 `rankFromLevel` 기준이 이미 적절하여 변경 없음
+- E: Lv 1-7 (초보 헌터)
+- D: Lv 8-17 (루틴 정착)
+- C: Lv 18-29 (중급 성장)
+- B: Lv 30-44 (확실한 성장 체감)
+- A: Lv 45-59 (장기 목표)
+- S: Lv 60-79 (상위 헌터)
+- National: Lv 80+ (엔드게임)
+
+**persist 버전**:
+- 변경 없음 (v8 유지)
+- 저장 스키마 변경 없음 (공식과 랭크 계산 로직만 변경)
+- 기존 유저의 level, xp, totalXp 그대로 유지
+- 다음 레벨 요구 XP만 새 공식 기준으로 계산됨
+
+**성장 속도 조정 의도**:
+- 초반 (Lv 1-5): 기존보다 약간 빠르게 (0.85배) → 진입 장벽 완화
+- 초중반 (Lv 6-10): 기존과 비슷하거나 약간 느림 (0.95~1.6배) → 재미 유지
+- 중반 (Lv 11-20): 약 1.6~1.8배 느리게 → 성장 체감 강화
+- 후반 (Lv 21+): 약 1.8배 느리게 → 장기 목표 설정
+- 향후 랜덤 퀘스트, 장비, 게이트, 보스, 직업 패시브 등 추가 성장 요소 대비
+
+**다음 단계 예정**: 7차 작업 — 직업/각성형 시스템.
+
+### 7차 작업 1단계 완료 (2025-05-15) — 직업/각성 시스템 기반 구조
+- ✅ `types.ts`: Job 타입 추가 (`JobId`, `JobLine`, `JobDefinition`, `JOB_DEFINITIONS`, `JOB_LINE_META`)
+- ✅ `types.ts`: HunterState에 `jobId`, `unlockedJobIds` 필드 추가 (기존 `job` 필드는 표시용으로 유지)
+- ✅ `store.ts`: Job 액션 추가 (`unlockJob`, `equipJob`, `checkJobAwakening`)
+- ✅ `store.ts`: `completeQuest`에 직업 XP 보너스 적용
+- ✅ `store.ts`: `checkJobAwakening` 호출 추가 (quest 완료, dungeon 진행/클리어 후)
+- ✅ `HunterStatus.tsx`: 직업 정보 표시 개선 (계열, 효과 표시)
+- ✅ persist version 8 → 9 (jobId, unlockedJobIds 기본값 추가)
+- ✅ 빌드 통과 확인
+
+**직업 시스템 컨셉**:
+- 미각성자 → 조건 충족 → 각성 이벤트 → 1차 직업 획득
+- RPG 스타일 직업명 (현실 직무 느낌 배제)
+- 직업별 XP 보너스 (카테고리 기반)
+
+**구현된 1차 직업 (5개)**:
+1. **금안의 점술사** (market 계열):
+   - 설명: 시장의 흐름과 자본의 흔적을 읽는 자
+   - 해금 조건: 시장 점검 30회 OR finance/career 퀘스트 50회
+   - 효과: finance XP +5%, career XP +5%
+   - 2차 직업 (미구현): 황금안의 예언자
+
+2. **금서 해독자** (research 계열):
+   - 설명: 흩어진 자료와 산업의 문맥을 해독하는 기록자
+   - 해금 조건: study/career 퀘스트 70회
+   - 효과: study XP +5%, career XP +3%
+   - 2차 직업 (미구현): 심연의 기록관
+
+3. **강철의 견습기사** (training 계열):
+   - 설명: 육체를 단련해 한계를 밀어붙이는 수련자
+   - 해금 조건: workout/health 퀘스트 70회 OR dungeon 클리어 5회
+   - 효과: workout XP +5%, health XP +5%
+   - 2차 직업 (미구현): 강철심장의 투사
+
+4. **침묵의 수도자** (discipline 계열):
+   - 설명: 욕망을 누르고 시간을 다스리는 수행자
+   - 해금 조건: habit/mind 퀘스트 70회 OR 숏폼제한/명상 중 하나 30회
+   - 효과: habit XP +5%, mind XP +5%
+   - 2차 직업 (미구현): 시간의 심판관
+
+5. **무명의 각성자** (balance 계열):
+   - 설명: 한쪽에 치우치지 않고 균형 있게 성장한 각성자
+   - 해금 조건: 4개 이상 카테고리에서 각각 20회 이상
+   - 효과: career/study/workout/health/habit/mind XP +2%
+   - 2차 직업 (미구현): 운명의 조율자
+
+**직업 계열 (JobLine)**:
+- market (시장): 금융/투자 성장
+- research (연구): 분석/리서치 성장
+- training (수련): 운동/건강 성장
+- discipline (절제): 루틴/절제 성장
+- balance (균형): 전반적 균형 성장
+
+**직업 효과**:
+- 현재 구현: XP 보너스 (카테고리별 2~5%)
+- 미구현: 스탯 보너스, 드롭률 보너스
+
+**직업 해금 흐름**:
+1. 퀘스트 완료/던전 클리어로 achievementStats 누적
+2. `checkJobAwakening()` 호출 → 조건 체크
+3. 조건 만족 시 `unlockJob()` → SystemMessage 표시
+4. 미각성자 상태면 자동 장착
+5. HunterStatus에 직업 정보 표시 (계열, 효과)
+
+**XP 계산 (직업 보너스 적용)**:
+```typescript
+const baseXp = DIFFICULTY_META[q.difficulty].xp
+const statMultiplier = getXpMultiplier(s.hunter, q.category)
+const jobCategoryBonus = currentJob?.effects.xpBonusByCategory?.[q.category] ?? 0
+const xp = Math.round(baseXp * statMultiplier * (1 + jobCategoryBonus))
+```
+
+**HunterState 필드**:
+- `job`: string (표시용, 기존 호환)
+- `jobId`: JobId (실제 직업 ID)
+- `unlockedJobIds`: JobId[] (해금한 직업 목록)
+
+**persist 마이그레이션 (v8 → v9)**:
+- `jobId` 없으면 'unawakened' 기본값
+- `unlockedJobIds` 없으면 ['unawakened'] 기본값
+- 기존 `job` 필드가 '각성하지 못한 자'면 '미각성자'로 변경
+
+**이번 단계에서 구현하지 않은 것**:
+- 2차 직업 (메타데이터에만 nextJobId로 명시)
+- 직업 선택 전용 탭/UI
+- 직업별 스탯 보너스, 드롭률 보너스
+- 전투력/게이트/보스 시스템
+- 장비 시스템
+- 랜덤 퀘스트
+
+**다음 단계 예정**: 7차 작업 2단계 — 직업 선택 UI, 2차 각성 시스템 (추후 논의).
+
+### 7차 작업 2단계 완료 (2025-05-15) — 직업 선택/전환 UI 추가
+- ✅ `JobPanel.tsx`: 새 컴포넌트 생성 (현재 직업 요약, 직업 카드 목록, 전환 버튼)
+- ✅ `HunterStatus.tsx`: JobPanel 연결 (space-y-6 wrapper로 기존 패널과 JobPanel 배치)
+- ✅ 빌드 통과 확인
+
+**JobPanel 구성**:
+- **현재 직업 요약**: 상단에 현재 장착 직업 표시 (이름, 계열, 설명, 효과)
+  - 미각성자일 때: "각성 조건을 달성하면 직업이 개방됩니다." 안내
+  - 각성 직업일 때: XP 보너스 효과 표시
+- **직업 목록**: JOB_DEFINITIONS 기반 카드 그리드 (md: 2열)
+  - 각 카드: 아이콘 (장착: Check, 미해금: Lock), 이름, 계열, 티어, 설명, 해금 조건, 효과, 상태/버튼
+  - 상태 표시:
+    - 장착 중: amber 테두리 + "장착 중" 배지
+    - 해금됨 + 미장착: cyan 테두리 + "전환" 버튼
+    - 미해금: 잠김 상태 (opacity 60%, 실제 정보 표시)
+
+**미해금 직업 표시 규칙**:
+- 칭호와 달리 직업은 **목표가 되어야 함**
+- 미해금 직업도 이름/설명/해금 조건 모두 표시
+- 잠김 상태 표시 (Lock 아이콘, 낮은 opacity, "잠김" 버튼)
+- 유저가 "무엇을 해야 각성하는지" 명확히 알 수 있음
+
+**직업 전환 흐름**:
+1. JobPanel에서 해금된 직업 카드의 "전환" 버튼 클릭
+2. `equipJob(jobId)` 호출
+3. 헤더의 직업명 즉시 변경
+4. HunterStatus의 직업 정보 즉시 변경
+5. JobPanel의 카드 상태 즉시 변경 (장착 중 배지 이동)
+
+**JobPanel 헬퍼 함수**:
+- `formatJobEffects(job)`: 직업 효과를 문자열 배열로 변환
+  - XP 보너스: "학습 XP +5%" 형식 (CATEGORY_META 라벨 활용)
+  - 드롭 보너스: "드롭률 +10%" 형식 (미구현)
+  - 효과 없음: ["효과 없음"]
+
+**직업 계열 라벨**:
+- JOB_LINE_META 활용 (types.ts에 정의)
+- market: 💰 시장
+- research: 📚 연구
+- training: ⚔️ 수련
+- discipline: 🧘 절제
+- balance: ⚖️ 균형
+
+**티어 표시**:
+- 0 (기본): zinc 색상
+- 1 (1차 각성): cyan 색상
+- 2 (2차 각성): purple 색상 (미구현)
+
+**HunterStatus 레이아웃 변경**:
+- 기존: 단일 panel
+- 변경 후: `<div className="space-y-6">` wrapper
+  - 첫 번째 자식: 기존 상태 패널 (이름/직업/레벨/XP/스탯/스트릭)
+  - 두 번째 자식: `<JobPanel />` (직업 선택/전환 UI)
+
+**디자인 일관성**:
+- 기존 `.panel`, `.corner-bracket`, `.system-text` 스타일 유지
+- 색상: cyan (일반 UI), amber (장착 중), purple (효과), zinc (미해금)
+- framer-motion 애니메이션 (카드 fade-in)
+
+**이번 단계에서 구현하지 않은 것**:
+- 2차 직업 (메타데이터만 존재)
+- 직업 트리/진화 UI
+- 직업 효과 추가/수정 (XP 보너스만 적용)
+- 전환 시 SystemMessage (선택사항, 생략)
+- 전환 시 확인 모달 (즉시 전환)
+- 게이트/전투력/보스 시스템
+- 장비 시스템
+
+**다음 단계 예정**: 7차 작업 3단계 — 2차 각성 시스템 구현.
+
+### 7차 작업 3단계 완료 (2025-05-15) — 2차 각성 시스템 구현
+- ✅ `types.ts`: 2차 직업 5개 추가 (JobId 타입 확장, JOB_DEFINITIONS에 tier 2 직업 추가)
+- ✅ `store.ts`: 2차 각성 조건 추가 (`checkJobAwakening`에 tier 2 조건 구현)
+- ✅ `store.ts`: 2차 각성 자동 장착 로직 (1차 직업 장착 중일 때만 진화)
+- ✅ `store.ts`: 2차 각성 SystemMessage 개선 (진화 메시지)
+- ✅ persist version 9 → 10 (JobId 타입 확장, 스키마 구조 변경 없음)
+- ✅ 빌드 통과 확인
+
+**구현된 2차 직업 (5개)**:
+1. **황금안의 예언자** (market 계열, tier 2):
+   - 설명: 자본의 흐름 너머에 숨은 징조를 읽어내는 예언자
+   - 해금 조건: 금안의 점술사 보유 + (시장 점검 100회 OR finance/career 퀘스트 150회)
+   - 효과: finance XP +8%, career XP +8%
+   - 1차 대비 보너스: 5% → 8% (1.6배 강화)
+
+2. **심연의 기록관** (research 계열, tier 2):
+   - 설명: 흩어진 지식과 기록의 심연에서 진실을 끌어올리는 자
+   - 해금 조건: 금서 해독자 보유 + study/career 퀘스트 180회
+   - 효과: study XP +8%, career XP +6%
+   - 1차 대비 보너스: 5%/3% → 8%/6% (약 1.7배 강화)
+
+3. **강철심장의 투사** (training 계열, tier 2):
+   - 설명: 흔들리지 않는 심장으로 한계를 부수는 전투형 헌터
+   - 해금 조건: 강철의 견습기사 보유 + (workout/health 퀘스트 180회 OR dungeon 클리어 20회)
+   - 효과: workout XP +8%, health XP +8%
+   - 1차 대비 보너스: 5% → 8% (1.6배 강화)
+
+4. **시간의 심판관** (discipline 계열, tier 2):
+   - 설명: 흐트러진 욕망과 시간을 심판하는 규율의 집행자
+   - 해금 조건: 침묵의 수도자 보유 + (habit/mind 퀘스트 180회 OR 숏폼제한/명상 중 하나 90회)
+   - 효과: habit XP +8%, mind XP +8%
+   - 1차 대비 보너스: 5% → 8% (1.6배 강화)
+
+5. **운명의 조율자** (balance 계열, tier 2):
+   - 설명: 모든 성장의 흐름을 조율해 자신의 운명을 다시 쓰는 각성자
+   - 해금 조건: 무명의 각성자 보유 + 5개 이상 카테고리에서 각각 50회 이상
+   - 효과: career/study/workout/health/habit/mind XP +4%
+   - 1차 대비 보너스: 2% → 4% (2배 강화)
+
+**2차 각성 조건 구현**:
+- 1차 직업 보유 필수 (`unlockedJobIds.includes(tier1JobId)`)
+- 추가 조건 달성 (퀘스트 누적, 특수 카운터 등)
+- 조건 충족 시 `unlockJob(tier2JobId)` 호출
+
+**2차 각성 자동 장착 규칙**:
+- 현재 장착 직업이 해당 1차 직업 → 2차 직업 자동 장착 (진화 느낌)
+- 현재 장착 직업이 다른 라인 → 해금만 하고 자동 장착 안 함
+- 미각성자 상태 → 자동 장착 (거의 발생하지 않음)
+
+**2차 각성 SystemMessage**:
+- 제목: "── SYSTEM ── 2차 각성 발생"
+- 내용: "[금안의 점술사]이(가) [황금안의 예언자]로 진화했습니다." (자동 장착 시)
+- 내용: "새 직업 [황금안의 예언자]을 획득했습니다." (해금만 시)
+
+**JobPanel 표시**:
+- tier 2 직업 카드 자동 표시 (JOB_DEFINITIONS 기반)
+- 티어 표시: "2차 각성" (purple 색상)
+- 미해금 2차 직업: 잠김 상태 + 해금 조건 표시
+- 해금된 2차 직업: 전환 가능
+- 장착 중 2차 직업: 장착 중 배지 표시
+
+**XP 보너스 적용**:
+- 현재 장착한 직업 하나의 효과만 적용
+- 1차+2차 효과 중첩 안 함
+- 2차 직업 장착 시 1차 대비 1.6~2배 강화된 보너스 적용
+
+**persist 마이그레이션 (v9 → v10)**:
+- JobId 타입 확장 (tier 2 직업 5개 추가)
+- 저장 스키마 구조 변경 없음 (jobId, unlockedJobIds 필드 그대로)
+- 기존 저장 데이터 호환 (optional 필드 없음)
+
+**7차 직업/각성 시스템 1차 완성**:
+- ✅ 직업 기반 구조 (6개 직업: 미각성자 + 1차 5개)
+- ✅ 직업 선택/전환 UI (JobPanel)
+- ✅ 2차 각성 시스템 (5개 2차 직업)
+- **총 11개 직업 구현 완료** (미각성자 + 1차 5개 + 2차 5개)
+
+**이번 단계에서 구현하지 않은 것**:
+- 3차 직업 (이번 범위 아님)
+- 직업 전용 탭 (현재 JobPanel로 충분)
+- 직업 효과 과도 강화 (밸런스 유지)
+- 1차+2차 효과 중첩 (성장 속도 과도 증가 방지)
+- 게이트/전투력/보스 시스템 (아직 토론 전)
+- 장비 시스템 (아직 토론 전)
+- 랜덤 퀘스트 (아직 토론 전)
+- 칭호 시스템 수정 (이번 범위 아님)
+- XP 성장 곡선 수정 (이미 6차 완료)
+- localStorage 키 변경 (저장 데이터 깨짐 방지)
+
+**다음 단계 예정**: 8차 작업 — 랜덤 퀘스트 시스템 (긴급 의뢰).
+
+### 5차 작업 6단계 완료 (2025-05-15) — 날짜 key 표준화 + 칭호 텍스트 RPG화
+- ✅ `game.ts`: `getDateKey(date)` 함수 추가 (local YYYY-MM-DD 반환), `addDays(date, days)` helper 추가
+- ✅ `game.ts`: `todayKey()` → `getDateKey()` alias로 변경
+- ✅ `store.ts`: `getDateKey`, `addDays` import 추가, 완벽주의자 칭호 판정에 적용
+- ✅ `types.ts`: TITLE_DEFINITIONS 37개 칭호 name/description RPG화 (id/conditionText 유지)
+- ✅ persist version 11 유지 (스키마 변경 없음)
+- ✅ 빌드 통과 확인
+
+### 5차 작업 6B단계 완료 (2025-05-15) — 날짜 key 잔여 사용처 보정
+- ✅ `store.ts`: UTC 기준 날짜 key 생성 4곳 교체 완료
+- ✅ getRecentRandomQuestHistory: `getDateKey(addDays(now, -i))` 사용
+- ✅ daily streak tracking: `getDateKey(addDays(new Date(), -1))` 사용
+- ✅ hunter streak: `getDateKey(addDays(new Date(), -1))` 사용 (변수명 yesterdayKey로 통일)
+- ✅ resetDailiesIfNewDay: `getDateKey(addDays(new Date(), -1))` 사용 (변수명 yesterdayKey로 통일)
+- ✅ 전체 재검색: UTC 패턴 완전 제거 확인
+- ✅ persist version 11 유지 (스키마 변경 없음)
+- ✅ 빌드 통과 확인
+
+**날짜 key 표준화 최종 완료**:
+- ✅ 모든 날짜 key 생성이 local time 기준으로 통일됨
+- ✅ `toISOString().slice(0, 10)` 패턴 완전 제거 (문서 제외)
+- ✅ `Date.now() - 86_400_000` 패턴 완전 제거
+- ✅ `toISOString().split('T')[0]` 패턴 없음
+- ✅ 중복 로직 제거 (getDateKey + addDays로 통일)
+
+**수정된 날짜 key 사용처 (4곳)**:
+1. **getRecentRandomQuestHistory** (랜덤 퀘스트 최근 7일 history)
+   - 변경 전: `date.setDate(date.getDate() - i)` + `toISOString().slice(0, 10)`
+   - 변경 후: `getDateKey(addDays(now, -i))`
+   - 영향: 랜덤 퀘스트 weight 보정 (카테고리 등장 횟수)
+
+2. **daily streak tracking** (completeQuest 내부)
+   - 변경 전: `new Date(Date.now() - 86_400_000)` + `toISOString().slice(0, 10)`
+   - 변경 후: `getDateKey(addDays(new Date(), -1))`
+   - 영향: daily별 streak 계산 (earlyWakeBefore7, noShortsWithin30Min, meditation)
+
+3. **hunter streak** (completeQuest 내부)
+   - 변경 전: `new Date(Date.now() - 86_400_000).toISOString().slice(0, 10)`
+   - 변경 후: `getDateKey(addDays(new Date(), -1))`
+   - 영향: 헌터 전체 streak 계산 (불면불휴 칭호)
+
+4. **resetDailiesIfNewDay**
+   - 변경 전: `new Date(Date.now() - 86_400_000).toISOString().slice(0, 10)`
+   - 변경 후: `getDateKey(addDays(new Date(), -1))`
+   - 영향: streak 보호 판정, daily 리셋 로직
+
+**날짜 key 표준화**:
+- 기존: `toISOString().slice(0, 10)` (UTC 기준, 한국 로컬 날짜와 어긋남)
+- 변경: `getDateKey(date)` (브라우저 local time 기준 YYYY-MM-DD)
+- 적용 범위: dailyHistory, activeDateKeys, randomQuestHistory, daily streak, 완벽주의자 7일 체크
+- `addDays(date, days)` helper: 날짜 더하기/빼기 (DST/로컬 날짜 정확 처리)
+
+**날짜 key 정책**:
+- 모든 날짜 key는 브라우저 local time 기준 YYYY-MM-DD 사용
+- `toISOString().slice(0, 10)` 직접 사용 금지 (UTC 기준이라 한국 로컬 날짜와 어긋남)
+- daily, streak, random quest, activeDays, dailyHistory, perfect week 판정은 모두 같은 helper 사용
+- 한국 사용자가 쓰는 브라우저 로컬 날짜 기준으로 동작
+
+**칭호 텍스트 RPG화**:
+- 일반 칭호 17개 name/description 변경 (RPG 느낌 강화)
+- 히든 칭호 20개 description 변경 (몰입감 강화)
+- 칭호 id는 절대 변경 안 함 (저장 데이터 호환)
+- conditionText는 명확하게 유지 (사용자가 달성 조건을 알아야 함)
+- 해금 조건 로직은 변경 안 함
+
+**변경된 칭호 예시**:
+- first-awakening: "첫 각성" → "첫 번째 각성" / "시스템의 부름에 응답해 헌터의 길에 들어섰다."
+- trained-one: "단련된 자" → "철혈의 입문자" / "육체의 한계를 넘기 위한 첫 문턱을 넘어섰다."
+- market-eye: "시장의 눈" → "흐름을 읽는 눈" / "숫자와 기록 사이에 숨어 있는 흐름을 감지하기 시작했다."
+- steel-mental: "강철 멘탈" → "강철 정신의 수도자" / "유혹과 나태를 견디며 정신을 강철처럼 벼려냈다."
+- perfectionist: "7일 연속 모든 가용 daily를 완료했다." → "일주일 동안 단 하나의 빈틈도 허용하지 않은 완벽의 화신."
+
+**5차 칭호 시스템 최종 완성**:
+- ✅ 칭호 기반 구조 (17개 일반 칭호)
+- ✅ 칭호 컬렉션 탭 + 장착 UI
+- ✅ 히든 칭호 기록/카운터 구조 (AchievementStats)
+- ✅ 히든 칭호 구현 (20개)
+- ✅ 날짜 key 표준화 (local time 기준)
+- ✅ 칭호 텍스트 RPG화 (37개 칭호)
+- **총 37개 칭호 구현 완료** (일반 17개 + 히든 20개)
+
+**다음 단계 예정**: 8차 작업 — 랜덤 퀘스트 시스템 (긴급 의뢰).
+
+### 8차 작업 1단계 완료 (2025-05-15) — 랜덤 퀘스트 MVP 구현
+- ✅ `types.ts`: RandomQuestTemplate, ActiveRandomQuest 타입 추가
+- ✅ `seed.ts`: RANDOM_QUEST_POOL 25개 추가 (career/finance 높은 weight, mind 낮은 weight)
+- ✅ `store.ts`: activeRandomQuest, randomQuestHistory 필드 추가
+- ✅ `store.ts`: rollRandomQuestForToday, completeRandomQuest, skipRandomQuest, clearExpiredRandomQuest 액션 추가
+- ✅ `RandomQuestCard.tsx`: 새 컴포넌트 생성 (amber/orange 그라데이션, AlertTriangle 아이콘)
+- ✅ `App.tsx`: daily 탭 상단에 RandomQuestCard 표시, 앱 진입 시 roll + clear 호출
+- ✅ persist version 9 → 10 (activeRandomQuest, randomQuestHistory 필드 추가)
+- ✅ 빌드 통과 확인
+
+**랜덤 퀘스트 시스템 컨셉**:
+- "긴급 의뢰" 느낌 (RPG 게시판 의뢰)
+- 하루 30% 확률로 1개 생성
+- 당일 자정까지 유효
+- 완료 시 XP + 아이템 드롭 (일반 퀘스트와 동일 계산)
+- 스킵 가능 (패널티 없음)
+- 만료 시 자동 소멸
+
+**RANDOM_QUEST_POOL 구성 (25개)**:
+- career: 8개 (weight 3~4, 높은 확률)
+- finance: 5개 (weight 3~4, 높은 확률)
+- study: 4개 (weight 2~3, 중간 확률)
+- workout: 3개 (weight 2, 중간 확률)
+- health: 2개 (weight 2, 중간 확률)
+- habit: 2개 (weight 2, 중간 확률)
+- mind: 1개 (weight 1, 낮은 확률)
+- 난이도: easy 5개, normal 12개, hard 8개
+
+**랜덤 퀘스트 생성 로직**:
+1. 앱 진입 시 `rollRandomQuestForToday()` 호출
+2. 오늘 이미 roll했으면 스킵 (randomQuestHistory[dateKey] 존재)
+3. 이미 활성 퀘스트 있으면 스킵
+4. 30% 확률로 생성 (Math.random() < 0.3)
+5. weight 기반 선택 (totalWeight 계산 → roll)
+6. activeRandomQuest 생성 (instanceId, generatedAt, expiresAt, completed: false)
+7. randomQuestHistory[dateKey] 기록 (generatedQuestId)
+8. SystemMessage 표시 ("── SYSTEM ── 긴급 의뢰 발생")
+
+**랜덤 퀘스트 완료 로직**:
+1. RandomQuestCard에서 "완료" 버튼 클릭
+2. `completeRandomQuest()` 호출
+3. 만료 체크 (now > expiresAt → 실패)
+4. XP 계산 (baseXp * statMultiplier * (1 + jobCategoryBonus))
+5. 아이템 드롭 (일반 퀘스트보다 낮은 확률: hard 25%, normal 12%, easy 5%)
+6. categoryProgress 증가
+7. activeRandomQuest.completed = true
+8. randomQuestHistory[dateKey].completedQuestId 기록
+9. SystemMessage 표시 ("긴급 의뢰 완료")
+10. checkTitleUnlocks, checkJobAwakening 호출
+
+**랜덤 퀘스트 스킵 로직**:
+1. RandomQuestCard에서 "스킵" 버튼 클릭
+2. `skipRandomQuest()` 호출
+3. activeRandomQuest = null (패널티 없음)
+4. 다음날 다시 roll 가능
+
+**다음 단계 예정**: 9차 작업 — 장비 시스템.
+
+### 9차 작업 0~2단계 완료 (2025-05-15) — 장비 시스템 기반 구조 + 아이템풀 확장 + 장착 UI
+- ✅ `types.ts`: 장비 타입 추가 (EquipmentSlot, ItemEffectType, ItemEffect, EquipmentState)
+- ✅ `types.ts`: Item 타입에 equippable, slot, effects 필드 추가
+- ✅ `seed.ts`: ITEM_POOL 38개 장비 아이템에 equippable, slot, effects 추가
+- ✅ `store.ts`: equipment 필드 추가, equipItem, unequipItem 액션 추가
+- ✅ `Inventory.tsx`: 장비 슬롯 섹션 추가, 장착/해제 버튼 추가, 효과 표시
+- ✅ persist version 10 → 11 (equipment 필드 추가)
+- ✅ 빌드 통과 확인
+
+**장비 시스템 컨셉**:
+- 4개 슬롯: weapon (무기), armor (방어구), accessory (장신구), artifact (유물)
+- 각 슬롯에 1개씩 장착 가능
+- 장비 효과: xp_bonus (카테고리별), drop_bonus, rarity_bonus, stat_bonus
+- 장착 시 효과 즉시 적용 (다음 단계에서 구현)
+
+**ITEM_POOL 장비 구성 (38개)**:
+- Common: 5개 (weapon 2, armor 1, artifact 1, accessory 1)
+- Uncommon: 9개 (다양한 슬롯)
+- Rare: 10개 (다양한 슬롯)
+- Epic: 8개 (다양한 슬롯)
+- Legendary: 6개 (다양한 슬롯)
+
+**장비 효과 범위**:
+- xp_bonus: 0.01~0.10 (1~10%)
+- drop_bonus: 0.01~0.03 (1~3%)
+- rarity_bonus: 0.01~0.02 (1~2%)
+- stat_bonus: 1~3 (정수값)
+
+**Inventory UI 개선**:
+- 상단: 4개 장비 슬롯 표시 (장착 중 아이템 표시, 해제 버튼)
+- 하단: 보유 아이템 그리드 (장착 가능 아이템은 장착 버튼, 장착 중은 배지 표시)
+- 효과 표시: "학습 XP +5%", "드롭률 +2%", "STR +2" 등
+
+**다음 단계 예정**: 9차 작업 3단계 — 장비 효과 실제 계산 반영.
+
+### 9차 작업 3단계 완료 (2025-05-15) — 장비 효과 실제 계산 반영
+- ✅ `game.ts`: 장비 효과 계산 헬퍼 추가 (getEquippedItems, getEquipmentXpBonus, getEquipmentDropBonus, getEquipmentRarityBonus, getEquipmentStatBonuses, getEffectiveStats)
+- ✅ `store.ts`: completeQuest, progressDungeon, completeRandomQuest에 장비 효과 적용
+- ✅ `store.ts`: randomItem 함수에 장비 레어리티 보너스 반영
+- ✅ `HunterStatus.tsx`: 장비 스탯 보너스 표시 (기본 스탯 + 장비 보너스 구분, purple 색상)
+- ✅ persist version 11 유지 (스키마 변경 없음)
+- ✅ 빌드 통과 확인
+
+**장비 효과 계산 로직**:
+- XP 계산: `baseXp * statMultiplier(effective) * (1 + jobBonus) * (1 + equipmentXpBonus)`
+- 드롭률: `baseDropChance + statDropBonus(effective) + equipmentDropBonus`
+- 레어리티: `senBonus(effective) + equipmentRarityBonus`
+- 스탯: `baseStats + equipmentStatBonuses`
+
+**장비 효과 헬퍼 함수**:
+- `getEquippedItems(state)`: 현재 장착 중인 아이템 목록 반환
+- `getEquipmentXpBonus(state, category)`: 카테고리별 XP 보너스 합산
+- `getEquipmentDropBonus(state)`: 드롭률 보너스 합산
+- `getEquipmentRarityBonus(state)`: 레어리티 보너스 합산
+- `getEquipmentStatBonuses(state)`: 스탯별 보너스 합산
+- `getEffectiveStats(state)`: 기본 스탯 + 장비 보너스
+
+**HunterStatus 표시 개선**:
+- 기본 스탯: white 색상
+- 장비 보너스: purple 색상 ("+2" 형식)
+- 예시: "STR 25 +2" (기본 25, 장비 +2)
+
+**다음 단계 예정**: 9차 작업 4단계 — 장비 시스템 밸런스/UX 점검.
+
+### 9차 작업 4단계 완료 (2025-05-15) — 장비 시스템 밸런스/UX 점검
+- ✅ `game.ts`: ITEM_POOL 효과 수치 점검 (모든 XP/drop/rarity 보너스가 올바른 소수값 0.01~0.1, stat_bonus는 정수값 1~5)
+- ✅ `game.ts`: XP 보너스 cap 추가 (최대 20%, `getEquipmentXpBonus`에서 `Math.min(total, 0.2)`)
+- ✅ `game.ts`: 드롭률 보너스 cap 추가 (최대 10%, `getEquipmentDropBonus`에서 `Math.min(total, 0.1)`)
+- ✅ `game.ts`: 레어리티 보너스 cap 유지 (최대 5%, legendary 확률 최대 4%)
+- ✅ `Inventory.tsx`: 소비 아이템 문구 개선 ("소비템 · 사용 기능 예정", purple 테두리)
+- ✅ `CLAUDE.md`: 장비 시스템 1차 완료 문서화 (총 41개 아이템: 장비 38개, 소비 아이템 후보 3개)
+- ✅ 빌드 통과 확인
+
+**장비 효과 밸런스 조정**:
+- XP 보너스 cap: 최대 20% (4개 슬롯 * 평균 5% = 20%)
+- 드롭률 보너스 cap: 최대 10% (4개 슬롯 * 평균 2.5% = 10%)
+- 레어리티 보너스 cap: 최대 5% (legendary 확률 2% → 최대 4%)
+- 스탯 보너스: cap 없음 (정수값 1~5, 4개 슬롯 * 평균 2 = 8)
+
+**ITEM_POOL 구성 확인**:
+- 장비 아이템: 38개 (Common 5, Uncommon 9, Rare 10, Epic 8, Legendary 6)
+- 소비 아이템 후보: 3개 (회복 포션, 집중력 비약, 단백질 바)
+- 총 41개 아이템
+
+**소비 아이템 표시 개선**:
+- Inventory에서 "소비템 · 사용 기능 예정" 표시
+- purple 테두리 (border-purple-400/20)
+- 장착 버튼 대신 안내 문구
+
+**장비 시스템 1차 완성**:
+- ✅ 장비 기반 구조 (4개 슬롯, 효과 타입)
+- ✅ 장비 아이템풀 확장 (38개)
+- ✅ 장착/해제 UI
+- ✅ 장비 효과 실제 계산 반영
+- ✅ 밸런스 조정 (cap 추가)
+
+**다음 단계 예정**: 10차 작업 — 소모품 시스템.
+
+### 10차 작업 0~1단계 완료 (2025-05-15) — 장비 문서 보정 + 소모품 타입/아이템풀 확장
+- ✅ `CLAUDE.md`: 장비 수치 표기 보정 (0.020.03 → 0.02~0.03 형식)
+- ✅ `types.ts`: ConsumableEffectType, ConsumableEffect 타입 추가
+- ✅ `types.ts`: Item 타입에 consumable, consumableEffects 필드 추가 (optional)
+- ✅ `seed.ts`: 기존 소비 아이템 3개를 소모품으로 보정 (equippable: false, consumable: true, consumableEffects 추가)
+- ✅ `seed.ts`: 신규 소모품 12개 추가 (Common 3, Uncommon 3, Rare 3, Epic 2, Legendary 1)
+- ✅ `seed.ts`: 모든 장비 아이템에 consumable: false 추가 (Python 스크립트 실행 완료)
+- ✅ persist version 11 유지 (optional 필드 추가만, 스키마 변경 없음)
+- ✅ 빌드 통과 확인
+
+**소모품 시스템 설계**:
+- 소모품은 장비와 달리 **일회성/기간제 효과**
+- 사용 시 효과 발생 (다음 퀘스트, 오늘 하루, 다음 게이트 등)
+- 장착 불가 (equippable: false, consumable: true)
+
+**ConsumableEffectType (8종)**:
+- instant_xp: 즉시 XP 획득
+- next_quest_xp_bonus: 다음 퀘스트 XP 보너스
+- next_category_xp_bonus: 다음 특정 카테고리 퀘스트 XP 보너스
+- temporary_drop_bonus: 일시적 드롭률 보너스
+- temporary_rarity_bonus: 일시적 레어리티 보너스
+- temporary_stat_bonus: 일시적 스탯 보너스
+- gate_penalty_reduction: 게이트 패널티 감소 (미래 대비)
+- gate_success_bonus: 게이트 성공 보너스 (미래 대비)
+
+**ITEM_POOL 구성 (총 53개)**:
+- 소모품: 15개 (Common 6, Uncommon 3, Rare 3, Epic 2, Legendary 1)
+- 장비: 38개 (Common 5, Uncommon 9, Rare 10, Epic 8, Legendary 6)
+
+**소모품 목록 (15개)**:
+- Common (6): 회복 포션, 집중력 비약, 단백질 바, 맑은 물병, 작은 행운 가루, 짧은 집중 향
+- Uncommon (3): 각성의 물약, 현자의 잉크, 투사의 보급식
+- Rare (3): 행운의 룬 파편, 시장 예지의 차, 수도자의 안정향
+- Epic (2): 시스템 증폭제, 응급 붕대
+- Legendary (1): 운명의 엘릭서
+
+**소모품 효과 예시**:
+- 회복 포션: 게이트 패널티 -10% (next_gate)
+- 집중력 비약: 학습/커리어 XP +10% (next_quest)
+- 단백질 바: 운동/건강 XP +10% (next_quest)
+- 시스템 증폭제: 다음 퀘스트 XP +25%, 드롭률 +10% (next_quest)
+- 운명의 엘릭서: 다음 퀘스트 XP +35%, 레어리티 +3% (next_quest)
+
+**Inventory 표시**:
+- 소모품: "소비템 · 사용 기능 예정" 표시 (purple 테두리)
+- 장착 버튼 없음
+- 효과 표시 미구현 (다음 단계에서 처리)
+
+**이번 단계에서 구현하지 않은 것**:
+- 소모품 사용 버튼/로직 (10-2에서 구현)
+- 소모품 효과 실제 적용 (10-3에서 구현)
+- active consumable buff 상태 (10-2에서 추가)
+- 게이트 시스템 (별도 대형 작업)
+
+**다음 단계 예정**: 10차 작업 2단계 — 소모품 사용 버튼/로직 구현
+
+### 10차 작업 2단계 완료 (2025-05-15) — 소모품 사용 로직 + active buff 상태 추가
+- ✅ `types.ts`: ActiveConsumableEffect 타입 추가 (id, sourceItemId, sourceItemName, activatedAt, consumed)
+- ✅ `store.ts`: activeConsumableEffects 필드 추가, useConsumable/clearConsumedConsumableEffects/clearExpiredConsumableEffects 액션 추가
+- ✅ `store.ts`: persist version 11 → 12 (activeConsumableEffects 기본값 추가)
+- ✅ `App.tsx`: 앱 진입 시 clearExpiredConsumableEffects 호출
+- ✅ `Inventory.tsx`: 소모품 사용 버튼 추가, active buff 표시 영역 추가, 소모품 효과 표시
+- ✅ 빌드 통과 확인
+
+**ActiveConsumableEffect 구조**: id, sourceItemId, sourceItemName, activatedAt, consumed + ConsumableEffect 상속
+
+**useConsumable 동작**: items에서 제거 → activeConsumableEffects에 추가 → SystemMessage 표시
+
+**clearExpiredConsumableEffects**: duration='today' 효과 중 날짜 지난 것 제거 (getDateKey 사용)
+
+**Inventory UI**: 활성 소모품 효과 영역 (purple 테마), 소모품 사용 버튼 (Sparkles 아이콘), 효과 표시
+
+**이번 단계 미구현** (10-3 예정): XP/drop/rarity/stat 계산 반영, next_quest 소진 처리, instant_xp 적용
+
+**persist v11 → v12**: activeConsumableEffects 기본값 추가
+
+**다음 단계 예정**: 10-3 소모품 효과 실제 적용.
+
+### 9차 작업 5단계 완료 (2025-05-15) — 장비 효과 정합성 보정
+- ✅ `store.ts`: XP 계산을 곱연산에서 합연산으로 변경 (completeQuest, progressDungeon 최종 클리어, completeRandomQuest)
+- ✅ `store.ts`: 칭호 조건이 base stat 기준인지 확인 (이미 올바름)
+- ✅ `game.ts`: getEffectiveStats에 정책 주석 추가
+- ✅ `CLAUDE.md`: 장비 효과 정책 문서화 (stat_bonus 정책, XP 보너스 정책)
+- ✅ persist version 11 유지 (로직 변경만, 스키마 변경 없음)
+- ✅ 빌드 통과 확인
+
+**XP 보너스 합연산 변경**:
+- 변경 전: `baseXp * statMultiplier * (1 + jobBonus) * (1 + equipmentBonus)` (곱연산)
+- 변경 후: `baseXp * statMultiplier * (1 + jobBonus + equipmentBonus)` (합연산)
+- 이유: 곱연산은 후반 폭발, 합연산은 이해 쉽고 밸런스 예측 가능
+
+**stat_bonus 정책 확정**:
+- 장비 stat_bonus는 effective stat에만 반영 (보상/전투 계산용)
+- 칭호/업적 조건은 hunter.stats (base stats) 기준만 사용
+- checkTitleUnlocks()에서 이미 올바르게 구현되어 있음 확인
+
+**적용 위치**:
+- completeQuest: 합연산 적용 ✅
+- progressDungeon 부분 보상: 스탯 보너스만 (AGI)
+- progressDungeon 최종 클리어: 합연산 적용 ✅
+- completeRandomQuest: 합연산 적용 ✅
+
+**향후 확장**:
+- 소모품 XP 보너스도 같은 additive bucket에 합류 예정
+- `const additiveXpBonus = jobBonus + equipmentBonus + consumableBonus`
+
+**다음 단계 예정**: 10차 작업 2단계 — 소모품 사용 버튼/로직 구현
+
+### 8차 작업 2단계 완료 (2025-05-15) — 랜덤 퀘스트 weight 보강
+- ✅ `store.ts`: randomQuestHistory에 generatedCategory 필드 추가 (optional)
+- ✅ `store.ts`: 동적 weight 계산 helper 함수 4개 추가
+- ✅ `store.ts`: rollRandomQuestForToday에 동적 weight 로직 적용
+- ✅ persist version 11 유지 (optional 필드 추가만, 스키마 변경 없음)
+- ✅ 빌드 통과 확인
+
+**randomQuestHistory 보강**:
+- `generatedCategory?: Category` 필드 추가
+- 생성된 퀘스트의 카테고리 기록
+- 생성 안 된 날도 roll 기록 (undefined)
+
+**동적 weight 계산 helper 함수**:
+1. `getRecentRandomQuestHistory()` — 최근 N일 기록 조회
+2. `getRecentRandomQuestCategoryCounts()` — 카테고리별 등장 횟수 집계
+3. `getTodayDailyCategoryCounts()` — 오늘 가용 daily 카테고리 집계
+4. `calculateDynamicRandomQuestWeight()` — 동적 weight 계산
+5. `pickWeightedRandomQuest()` — weight 기반 선택
+
+**동적 weight 보정 규칙**:
+
+| 조건 | 보정 | 이유 |
+|---|---|---|
+| 최근 7일 등장 0회 | × 1.35 | 안 나온 카테고리 우선 |
+| 최근 7일 등장 1회 | × 1.15 | 약간 우선 |
+| 최근 7일 등장 2회 | × 1.0 | 중립 |
+| 최근 7일 등장 3회 이상 | × 0.75 | 과도한 반복 방지 |
+| 같은 퀘스트 최근 등장 | × 0.35 | 같은 퀘스트 반복 강력 방지 |
+| 오늘 daily 0개 | × 1.15 | 부족한 카테고리 보완 |
+| 오늘 daily 1~2개 | × 1.0 | 중립 |
+| 오늘 daily 3개 이상 | × 0.9 | 과도한 쏠림 방지 |
+| 최소 weight | Math.max(1, weight) | 안전장치 |
+
+**예시 계산**:
+- 기본 weight: 4 (career 퀘스트)
+- 최근 7일 등장 0회: 4 × 1.35 = 5.4
+- 같은 퀘스트 아님: 5.4 × 1.0 = 5.4
+- 오늘 career daily 2개: 5.4 × 1.0 = 5.4
+- 최종 weight: 5.4
+
+**기존 정책 유지**:
+- ✅ 하루 첫 접속 시 roll
+- ✅ 생성 확률 30%
+- ✅ 하루 최대 1개
+- ✅ 스킵 시 재생성 없음
+- ✅ 만료 시 패널티 없음
+- ✅ career/finance 기본 높은 weight 유지
+
+**효과**:
+- 같은 퀘스트 반복 등장 확률 대폭 감소 (× 0.35)
+- 안 나온 카테고리 우선 등장 (× 1.35)
+- 과도한 카테고리 쏠림 완화 (× 0.75)
+- daily 구성과 보완적 관계 형성
+
+**다음 단계 예정**: 5차 작업 5단계 — 히든 칭호 보류 조건 정리
+
+### 5차 작업 5단계 완료 (2025-05-15) — 히든 칭호 보류 조건 정리
+- ✅ `types.ts`: 히든 칭호 4개 메타데이터 추가 (포트폴리오 매니저, 자립한 헌터, 위생의 수호자, 완벽주의자)
+- ✅ `store.ts`: checkTitleUnlocks에 4개 히든 칭호 해금 조건 추가
+- ✅ `CLAUDE.md`: 보류 칭호 상태표 문서화
+- ✅ persist version 11 유지 (스키마 변경 없음)
+- ✅ 빌드 통과 확인
+
+**구현한 히든 칭호 (4개)**:
+
+| 칭호 | 레어리티 | 조건 | 구현 근거 |
+|---|---|---|---|
+| 📈 포트폴리오 매니저 | rare | CMA 운용 일지 6회 작성 | `special.cmaJournalCount >= 6` |
+| 🏠 자립한 헌터 | rare | 빨래 + 청소 + 분리수거 각 10회 | `dailyCompletions.byQuestId` 기반 |
+| 🏠 위생의 수호자 | epic | 자취 daily 합산 100회 | 빨래/청소/분리수거 합산 |
+| 👑 완벽주의자 | legendary | 7일 연속 모든 daily 100% 완료 | `dailyHistory.completedAllAvailableDailies` 기반 |
+
+**해금 조건 상세**:
+
+1. **포트폴리오 매니저**:
+   - `stats.special.cmaJournalCount >= 6`
+   - `dungeon-cma-journal` 진행 시 자동 증가
+   - 안정적 구현 가능
+
+2. **자립한 헌터**:
+   - `daily-laundry` 10회 이상
+   - `daily-cleaning` 10회 이상
+   - `daily-recycle` 10회 이상
+   - 각 quest id 기반 정확한 판정
+
+3. **위생의 수호자**:
+   - 자취 관련 daily 합산: `['daily-laundry', 'daily-cleaning', 'daily-recycle']`
+   - 총 100회 이상
+   - habit 전체가 아닌 명시적 quest id 목록 사용
+
+4. **완벽주의자**:
+   - 최근 7일 연속 `completedAllAvailableDailies === true`
+   - `totalDailyAvailableCount > 0`인 날만 인정
+   - streak 중단 시 즉시 실패
+
+**보류한 히든 칭호 (6개)**:
+
+| 칭호 | 보류 이유 | 필요한 기록 구조 |
+|---|---|---|
+| 태양보다 일찍 | "폰 1시간 안 보기" quest id 및 동시 완료 판정 필요 | 동시 완료 기록 구조 |
+| 자본의 추적자 | 월별 연속 달성 기록 필요 | `spendingLimitClearMonthKeys: string[]` |
+| 불사의 몸 | 단백질 + 물 + 유산소 동시 완료 30일 연속 판정 필요 | 동시 완료 연속 기록 |
+| 빙결 | 날짜 전환 시 0 daily 완료 streak 계산 필요 | `zeroDailyClearCurrentStreak` 로직 |
+| 부활 | streak 깨짐 이벤트와 다음날 all clear 기록 필요 | streak 깨짐 이벤트 기록 |
+| 5분할의 완성자 | 월간 5개 운동 던전 완료 여부 기록 필요 | `monthlyDungeonClears: Record<string, string[]>` |
+
+**보류 칭호 상세**:
+
+1. **태양보다 일찍**:
+   - 조건: 7시 전 기상 + 폰 1시간 안 보기 21일 연속
+   - 문제: `daily-sleep`과 `daily-no-phone-morning`의 동시 완료 판정 필요
+   - 필요: 날짜별 동시 완료 기록 구조
+
+2. **자본의 추적자**:
+   - 조건: 소비 제한 main 3개월 연속 달성
+   - 문제: `spendingLimitMonthlyClearCount`는 누적만 기록
+   - 필요: 월별 clear 기록 (`['2026-03', '2026-04', '2026-05']`)
+   - 단순 누적 3회로 구현하면 "연속" 조건 왜곡
+
+3. **불사의 몸**:
+   - 조건: 단백질 + 물 + 유산소 동시 30일 연속
+   - 문제: 3개 daily 동시 완료 연속 기록 필요
+   - 필요: 날짜별 동시 완료 streak 계산
+
+4. **빙결**:
+   - 조건: daily 0개 깬 날 3일 연속
+   - 문제: `zeroDailyClearCurrentStreak` 계산 로직 없음
+   - 필요: 날짜 전환 시점에 전날 dailyHistory 확인 로직
+
+5. **부활**:
+   - 조건: streak 깨진 후 다음날 모든 daily 클리어
+   - 문제: streak 깨짐 이벤트 기록 없음
+   - 필요: streak 변화 이벤트 기록 + 다음날 all clear 판정
+
+6. **5분할의 완성자**:
+   - 조건: 5개 부위 헬스 던전 한 달 모두 클리어
+   - 문제: `dungeonClears.byQuestId`는 누적만 기록
+   - 필요: 월별 clear 기록 (`monthlyDungeonClears['2026-05'] = ['dungeon-arm-monthly', ...]`)
+   - 단순 누적으로 구현하면 "한 달 모두" 조건 왜곡
+
+**칭호 총 개수**:
+- 일반 칭호: 17개
+- 히든 칭호 (5-4A): 13개
+- 메타 히든 칭호 (5-4B): 3개
+- 추가 히든 칭호 (5-5): 4개
+- **총 37개** (구현 완료)
+- 보류 칭호: 6개 (향후 구현)
+
+**다음 단계 예정**: 10차 작업 2단계 — 소모품 사용 버튼/로직 구현
+
+---
+
+---
+
+## 장비 효과 정책 (9차 작업 5단계에서 확정)
+
+### 1. stat_bonus 정책
+
+장비 `stat_bonus`는 **보상/전투 계산용 effective stat에만 반영**한다.  
+**칭호, 영구 업적, 기본 성장 조건은 `hunter.stats` (base stats) 기준으로만 판정**한다.
+
+| 사용처 | 사용 스탯 |
+|---|---|
+| 칭호 조건 (STR/INT/PER/SEN) | `hunter.stats` 기본값만 |
+| 영구 업적 조건 | `hunter.stats` 기본값만 |
+| 직업 각성 조건 중 스탯 조건 | `hunter.stats` 기본값만 |
+| 자유 스탯 배분 | `hunter.stats`만 변경 |
+| XP 보너스 계산 | 장비 포함 effective stat |
+| 드롭률 계산 | 장비 포함 effective stat |
+| 레어리티 계산 | 장비 포함 effective stat |
+| 던전 부분 보상 | 장비 포함 effective stat |
+| 향후 게이트/전투 | 장비 포함 effective stat |
+
+**이유**:
+- 장비로 칭호를 얻는 것은 영구 업적 의미를 흐린다
+- 장비 해제 시 칭호 회수 문제가 생긴다
+- 칭호/업적은 기본 성장 기준이어야 한다
+
+### 2. XP 보너스 정책
+
+**스탯 보너스**는 multiplier로 적용한다.  
+**직업 XP 보너스, 장비 XP 보너스, 향후 소모품 XP 보너스는 additive bucket으로 합산**한다.
+
+```typescript
+// 최종 XP 계산 공식
+const additiveXpBonus = jobBonus + equipmentBonus + consumableBonus // 합연산
+const finalXp = baseXp × statMultiplier × (1 + additiveXpBonus)
+```
+
+**현재 구현** (consumableBonus는 아직 미구현이므로 0):
+```typescript
+const additiveXpBonus = jobCategoryBonus + equipmentXpBonus
+const xp = Math.round(baseXp * statMultiplier * (1 + additiveXpBonus))
+```
+
+**이유**:
+- 곱연산은 후반에 보너스가 여러 개 쌓이면 폭발한다
+- 합연산은 사용자가 이해하기 쉽다
+- 밸런스 예측이 쉽다
+
+**예시**:
+- 직업 +8%, 장비 +10% = 총 +18%
+- 곱연산: 1.08 × 1.10 = 1.188배 (18.8%)
+- 합연산: 1 + 0.08 + 0.10 = 1.18배 (18%) ✅
+
+### 3. 적용 위치
+
+| 위치 | 처리 |
+|---|---|
+| `completeQuest` (daily/main 완료) | 합연산 적용 ✅ |
+| `progressDungeon` (부분 보상) | 스탯 보너스만 (AGI) |
+| `progressDungeon` (최종 클리어 보상) | 합연산 적용 ✅ |
+| `completeRandomQuest` | 합연산 적용 ✅ |
+
+### 4. 향후 확장
+
+소모품 XP 보너스는 같은 additive bucket에 합류할 예정:
+```typescript
+// Future implementation
+const consumableXpBonus = getActiveConsumableXpBonus(state, category)
+const additiveXpBonus = jobCategoryBonus + equipmentXpBonus + consumableXpBonus
+```
+
+---직**:
+1. RandomQuestCard에서 "스킵" 버튼 클릭
+2. `skipRandomQuest()` 호출
+3. activeRandomQuest 제거
+4. randomQuestHistory[dateKey].skipped = true
+5. 패널티 없음
+
+**랜덤 퀘스트 만료 로직**:
+1. 앱 진입 시 `clearExpiredRandomQuest()` 호출
+2. activeRandomQuest 존재 + now > expiresAt → activeRandomQuest 제거
+3. 자동 소멸 (SystemMessage 없음)
+
+**RandomQuestCard UI**:
+- 위치: daily 탭 상단 (퀘스트 목록 위)
+- 디자인: amber/orange 그라데이션, AlertTriangle 아이콘, 코너 브라켓
+- 표시 내용: 제목, 설명, 카테고리, 난이도, XP, 남은 시간
+- 버튼: "완료" (primary), "스킵" (secondary)
+- 완료 후: "완료됨" 배지 표시, 버튼 비활성화
+- 만료 후: 자동 소멸 (카드 미표시)
+
+**randomQuestHistory 구조**:
+```typescript
+Record<string, {
+  generatedQuestId?: string  // roll 시 생성된 quest id (30% 확률)
+  completedQuestId?: string  // 완료한 quest id
+  skipped?: boolean          // 스킵 여부
+}>
+```
+
+**persist 마이그레이션 (v9 → v10)**:
+- activeRandomQuest 기본값: undefined
+- randomQuestHistory 기본값: {}
+- 기존 저장 데이터 호환 (optional 필드)
+
+**8차 랜덤 퀘스트 시스템 1차 완성**:
+- ✅ 랜덤 퀘스트 생성 (30% 확률, 하루 1개)
+- ✅ 랜덤 퀘스트 완료 (XP + 아이템)
+- ✅ 랜덤 퀘스트 스킵 (패널티 없음)
+- ✅ 랜덤 퀘스트 만료 (자동 소멸)
+- ✅ RandomQuestCard UI (daily 탭 상단)
+- **총 25개 랜덤 퀘스트 풀 구현 완료**
+
+**이번 단계에서 구현하지 않은 것**:
+- 랜덤 퀘스트 전용 탭 (daily 탭에 표시로 충분)
+- 랜덤 퀘스트 히스토리 UI (필요 시 추가)
+- 랜덤 퀘스트 난이도 조정 (현재 풀로 충분)
+- 랜덤 퀘스트 보상 강화 (밸런스 유지)
+- 랜덤 퀘스트 연속 완료 보너스 (복잡도 증가)
+- 게이트/전투력/보스 시스템 (아직 토론 전)
+- 장비 시스템 (아직 토론 전)
+
+**다음 단계 예정**: 9차 작업 — 장비 시스템 (아이템 장착/효과 적용).
+
+### 9차 작업 1단계 완료 (2025-05-15) — 장비 타입 확장 + ITEM_POOL 개선
+- ✅ `types.ts`: EquipmentSlot, ItemEffectType, ItemEffect 타입 추가
+- ✅ `types.ts`: Item 타입에 optional 필드 추가 (equippable, slot, effects)
+- ✅ `types.ts`: EQUIPMENT_SLOT_LABEL 추가
+- ✅ `seed.ts`: ITEM_POOL 11개 → 41개로 확장 (common 8개, uncommon 9개, rare 10개, epic 8개, legendary 6개)
+- ✅ 장비 가능 아이템 38개, 소비 아이템 후보 3개
+- ✅ persist version 변경 없음 (optional 필드만 추가, 기존 아이템 호환)
+- ✅ 빌드 통과 확인
+
+**장비 시스템 타입 구조**:
+- **EquipmentSlot**: weapon (무기), armor (방어구), accessory (장신구), artifact (유물)
+- **ItemEffectType**: xp_bonus (XP 보너스), drop_bonus (드롭률 보너스), rarity_bonus (레어리티 보너스), stat_bonus (스탯 보너스)
+- **ItemEffect**: { type, category?, stat?, value }
+- **Item 확장**: equippable (장착 가능 여부), slot (장비 슬롯), effects (효과 배열)
+
+**ITEM_POOL 확장 (41개)**:
+- **common (8개)**: 장비 5개 (weapon 2, armor 1, accessory 1, artifact 1), 소비 1개
+- **uncommon (9개)**: 장비 9개 (weapon 3, armor 2, accessory 2, artifact 2)
+- **rare (10개)**: 장비 10개 (weapon 3, armor 2, accessory 3, artifact 2)
+- **epic (8개)**: 장비 7개 (weapon 2, armor 2, accessory 2, artifact 1), 소비 1개
+- **legendary (6개)**: 장비 5개 (weapon 2, armor 1, accessory 1, artifact 1), 소비 1개
+
+**장비 효과 예시**:
+- **XP 보너스**: study XP +3%, career XP +5% (카테고리별)
+- **드롭률 보너스**: 드롭률 +1%, +2% (전체)
+- **레어리티 보너스**: 레어리티 +1%, +2% (epic/legendary 확률 증가)
+- **스탯 보너스**: INT +2, STR +3, PER +2 (스탯별)
+
+**소비 아이템 후보 (3개)**:
+- 경험치 물약 (epic): equippable: false
+- 행운의 부적 (legendary): equippable: false
+- 성장의 비약 (common): equippable: false
+- 사용 기능은 나중에 구현 예정
+
+**기존 아이템 호환**:
+- equippable, slot, effects 필드가 없는 기존 아이템도 정상 동작
+- Inventory.tsx에서 equippable === true인 아이템만 장착 버튼 표시
+- equippable === false 또는 undefined인 아이템은 "장착 불가" 또는 "소비 아이템" 표시
+
+**persist version**:
+- 변경 없음 (v10 유지)
+- optional 필드만 추가했으므로 기존 저장 데이터 호환
+- 새로 드롭되는 아이템은 새 구조 적용
+
+**9차 작업 1단계 완료**:
+- ✅ 장비 타입 기반 구축
+- ✅ ITEM_POOL 대폭 확장 (11개 → 41개)
+- ✅ 장비 효과 메타데이터 정의
+- **다음 단계**: 장착/해제 로직 + Inventory UI
+
+**이번 단계에서 구현하지 않은 것**:
+- 장착/해제 로직 (9-2에서 구현)
+- 장비 효과 실제 적용 (9-3에서 구현)
+- 소비 아이템 사용 기능 (나중에)
+- 장비 강화 시스템 (나중에)
+- 중복 아이템 흡수 강화 (나중에)
+- 게이트/전투력/보스 시스템 (아직 토론 전)
+
+**다음 단계 예정**: 9차 작업 2단계 — 장착/해제 로직 + Inventory UI.
+
+### 9차 작업 2단계 완료 (2025-05-15) — 장착/해제 로직 + Inventory UI
+- ✅ `types.ts`: EquipmentState 타입 추가
+- ✅ `store.ts`: equipment 필드 추가 (Partial<Record<EquipmentSlot, string>>)
+- ✅ `store.ts`: equipItem, unequipItem 액션 구현
+- ✅ `Inventory.tsx`: 완전 재작성 (장착 슬롯 UI, 장착/해제 버튼, 효과 요약)
+- ✅ persist version 10 → 11 (equipment 필드 추가)
+- ✅ 빌드 통과 확인
+
+**equipment 상태 구조**:
+```typescript
+equipment: {
+  weapon?: string    // items 배열의 item.id
+  armor?: string
+  accessory?: string
+  artifact?: string
+}
+```
+
+**equipItem 액션**:
+- items에서 itemId로 아이템 찾기
+- equippable !== true → 장착 불가
+- slot 없음 → 장착 불가
+- 이미 다른 슬롯에 장착됨 → 중복 장착 방지 (무시)
+- 해당 slot에 기존 장비 있음 → 새 장비로 교체
+- 장착 후 SystemMessage 표시 ("장비 장착 [아이템명]을(를) 무기 슬롯에 장착했습니다.")
+
+**unequipItem 액션**:
+- 해당 slot에 장비 없음 → 무시
+- 있으면 slot을 undefined 처리 (delete newEquipment[slot])
+- 해제 후 SystemMessage 표시 ("장비 해제 [아이템명]을(를) 해제했습니다.")
+
+**Inventory.tsx 재작성**:
+- **장착 슬롯 영역** (상단):
+  - 4개 슬롯 grid (weapon, armor, accessory, artifact)
+  - 각 슬롯: 아이콘, 라벨, 장착 장비 정보 (아이콘, 이름, rarity, 효과 요약), 해제 버튼
+  - 비어 있는 슬롯: "비어 있음" 표시
+- **아이템 그리드** (하단):
+  - 기존 레어리티 정렬 유지
+  - 각 아이템 카드: 아이콘, 이름, rarity, 슬롯, 효과 요약, 설명, 장착/해제 버튼
+  - 장착 중 아이템: amber 테두리 + "장착 중" 배지
+  - 장착 가능 아이템: "장착" 버튼
+  - 소비 아이템: "소비 아이템" 표시 (버튼 없음)
+  - 기존 아이템 (equippable undefined): "장착 불가" 표시
+
+**formatItemEffects 헬퍼**:
+- ItemEffect[] → string[] 변환
+- xp_bonus: "학습 XP +3%" (CATEGORY_META 라벨 활용)
+- drop_bonus: "드롭률 +1%"
+- rarity_bonus: "레어리티 +1%"
+- stat_bonus: "INT +2"
+
+**장착/해제 흐름**:
+1. 아이템 카드에서 "장착" 버튼 클릭 → equipItem(item.id)
+2. equipment[item.slot] = item.id
+3. 장착 슬롯 UI 즉시 업데이트
+4. 아이템 카드에 "장착 중" 배지 표시
+5. 장착 슬롯에서 "해제" 버튼 클릭 → unequipItem(slot)
+6. equipment[slot] = undefined
+7. 장착 슬롯 "비어 있음" 표시
+8. 아이템 카드 "장착" 버튼 표시
+
+**중복 아이템 장착**:
+- 같은 이름 아이템이 여러 개 있어도 id 기준으로 개별 장착 가능
+- 예: "그림자 단검" 2개 보유 → 각각 다른 id → 하나만 장착 가능 (weapon 슬롯 1개)
+
+**persist 마이그레이션 (v10 → v11)**:
+- equipment 기본값: {}
+- 기존 저장 데이터 호환 (hunter, job, title, achievementStats, randomQuestHistory, items 모두 유지)
+- localStorage 키 변경 없음
+
+**9차 작업 2단계 완료**:
+- ✅ 장비 장착/해제 로직 구현
+- ✅ Inventory UI 완전 재작성
+- ✅ 장착 슬롯 UI 4개 표시
+- ✅ 장착/해제 버튼 동작
+- ✅ 효과 요약 표시
+- **다음 단계**: 장비 효과를 실제 XP/drop/rarity/stat 계산에 반영
+
+**이번 단계에서 구현하지 않은 것**:
+- 장비 효과 실제 적용 (9-3에서 구현)
+- 소비 아이템 사용 기능 (나중에)
+- 장비 강화 시스템 (나중에)
+- 중복 아이템 흡수 강화 (나중에)
+- 게이트/전투력/보스 시스템 (아직 토론 전)
+
+**다음 단계 예정**: 9차 작업 3단계 — 장비 효과 실제 적용 (XP/drop/rarity/stat 계산).
+
+### 9차 작업 3단계 완료 (2025-05-15) — 장비 효과 실제 계산 반영
+- ✅ `game.ts`: 장비 효과 계산 헬퍼 추가 (getEquippedItems, getEquipmentXpBonus, getEquipmentDropBonus, getEquipmentRarityBonus, getEquipmentStatBonuses, getEffectiveStats)
+- ✅ `game.ts`: 스탯 효과 헬퍼에 장비 반영 버전 추가 (getXpMultiplierWithEquipment, getDropChanceBonusWithEquipment, getPartialRewardMultiplierWithEquipment, getRarityWeightBonusWithEquipment)
+- ✅ `store.ts`: randomItem 함수에 장비 레어리티 보너스 적용
+- ✅ `store.ts`: completeQuest에 장비 XP/drop/rarity 보너스 적용
+- ✅ `store.ts`: progressDungeon에 장비 효과 적용 (부분 보상 + 클리어 보상)
+- ✅ `store.ts`: completeRandomQuest에 장비 효과 적용
+- ✅ `HunterStatus.tsx`: 장비 스탯 보너스 표시 (기본 스탯 + 장비 보너스 구분)
+- ✅ persist version 변경 없음 (v11 유지)
+- ✅ 빌드 통과 확인
+
+**장착 장비 조회**:
+- `getEquippedItems(items, equipment)`: equipment의 itemId들로 실제 Item 객체 조회
+- equippable === true인 아이템만 필터링
+
+**XP 보너스 적용**:
+- `getEquipmentXpBonus(equippedItems, category)`: 해당 카테고리 xp_bonus 합산
+- 계산식: `baseXp * statMultiplier * (1 + jobBonus) * (1 + equipmentXpBonus)`
+- 같은 카테고리 장비 여러 개 장착 시 합산 (예: career +3%, career +4% → +7%)
+- 일반 퀘스트, 던전 클리어, 랜덤 퀘스트 모두 적용
+
+**드롭률 보너스 적용**:
+- `getEquipmentDropBonus(equippedItems)`: 모든 drop_bonus 합산
+- 계산식: `Math.min(0.95, baseDropChance + statDropBonus + equipmentDropBonus)`
+- 최대 드롭률 95% cap (boss는 여전히 100%)
+- 일반 퀘스트, 랜덤 퀘스트 모두 적용
+
+**레어리티 보너스 적용**:
+- `getEquipmentRarityBonus(equippedItems)`: 모든 rarity_bonus 합산 (최대 0.05 cap)
+- `randomItem(hunter, equippedItems)`: SEN 스탯 보너스 + 장비 레어리티 보너스 합산
+- legendary 확률: 0.02 + totalBonus * 0.4 (최대 4% cap)
+- epic 확률: 0.08 + totalBonus * 0.6
+- 일반 퀘스트, 던전 클리어, 랜덤 퀘스트 모두 적용
+
+**stat_bonus 실제 반영**:
+- `getEquipmentStatBonuses(equippedItems)`: 모든 stat_bonus 합산
+- `getEffectiveStats(baseStats, equippedItems)`: 기본 스탯 + 장비 보너스
+- 기본 hunter.stats는 변경하지 않음 (장비 해제 시 자동 제거)
+- 스탯 효과 계산에 effective stat 사용:
+  - STR: 운동/건강 XP 보너스 (10마다 +5%)
+  - VIT: 운동/건강 드롭률 보너스 (10마다 +3%)
+  - AGI: 던전 부분 보상 보너스 (10마다 +5%)
+  - INT: 학습/커리어 XP 보너스 (10마다 +5%)
+  - PER: streak 보호 계산 (10마다 1회)
+  - SEN: 레어리티 보너스 (10마다 +1%)
+
+**HunterStatus 표시**:
+- 기본 스탯: 큰 글씨로 표시 (예: 24)
+- 장비 보너스: 작은 purple 글씨로 표시 (예: +2)
+- 최종 표시: "24 +2" 형식
+- 스탯 효과 설명은 effective stat 기준으로 계산
+
+**Random Quest 반영**:
+- XP 계산: 스탯 + 직업 + 장비 보너스 모두 적용
+- 드롭률: 스탯 + 장비 보너스 적용
+- 레어리티: SEN + 장비 보너스 적용
+
+**persist version**:
+- 변경 없음 (v11 유지)
+- 저장 스키마 변경 없음 (계산 로직만 변경)
+
+**9차 작업 3단계 완료**:
+- ✅ 장비 XP 보너스 실제 적용
+- ✅ 장비 드롭률 보너스 실제 적용
+- ✅ 장비 레어리티 보너스 실제 적용
+- ✅ 장비 스탯 보너스 실제 적용
+- ✅ HunterStatus에 장비 스탯 표시
+- ✅ Random Quest에 장비 효과 반영
+- **장비 시스템 1차 완성!**
+
+**이번 단계에서 구현하지 않은 것**:
+- 소비 아이템 사용 기능 (나중에)
+- 장비 강화 시스템 (나중에)
+- 중복 아이템 흡수 강화 (나중에)
+- 장비 세트 효과 (나중에)
+- 게이트/전투력/보스 시스템 (아직 토론 전)
+
+**다음 단계 예정**: 9차 작업 4단계 — 장비 밸런스/UX 점검 (선택사항).
+
+### 9차 작업 4단계 완료 (2025-05-15) — 장비 시스템 밸런스/UX 점검
+- ✅ `game.ts`: XP 보너스 cap 추가 (최대 20%)
+- ✅ `game.ts`: 드롭률 보너스 cap 추가 (최대 10%)
+- ✅ `Inventory.tsx`: 소비 아이템 문구 개선 ("소비템 · 사용 기능 예정")
+- ✅ ITEM_POOL 효과 수치 점검 완료 (모든 값 정상)
+- ✅ 빌드 통과 확인
+
+**장비 효과 수치 점검 결과**:
+- ✅ 모든 XP/drop/rarity 보너스가 올바른 소수값 (0.01~0.1)
+- ✅ 모든 stat_bonus가 올바른 정수값 (1~5)
+- ✅ 레어리티별 효과 수치 적절:
+  - common: XP +1%, 드롭 +1%, 스탯 +1
+  - uncommon: XP +2~3%, 드롭 +1~2%, 스탯 +2
+  - rare: XP +3~5%, 드롭 +2~3%, 스탯 +2
+  - epic: XP +5~7%, 드롭 +3~4%, 스탯 +2~3
+  - legendary: XP +8~10%, 드롭 +4~5%, 스탯 +3~5
+
+**장비 조합 밸런스**:
+- XP 보너스 cap: 특정 카테고리 최대 20% (getEquipmentXpBonus에서 cap)
+- 드롭률 보너스 cap: 최대 10% (getEquipmentDropBonus에서 cap)
+- 레어리티 보너스 cap: 최대 5% (기존 getEquipmentRarityBonus에서 cap)
+- legendary 확률 cap: 최대 4% (기존 randomItem에서 cap)
+- 최종 드롭률 cap: 95% (boss는 100% 유지)
+
+**슬롯 분포**:
+- weapon: 6개 (common 2, rare 1, epic 2, legendary 1)
+- armor: 9개 (common 1, uncommon 2, rare 2, epic 2, legendary 2)
+- accessory: 10개 (common 1, uncommon 4, rare 3, epic 1, legendary 1)
+- artifact: 13개 (common 1, uncommon 2, rare 2, epic 4, legendary 4)
+- 소비 아이템 후보: 3개 (common 3)
+- **총 41개 아이템**
+
+**소비 아이템 문구 개선**:
+- 기존: "소비 아이템" (사용 불가 이유 불명확)
+- 개선: "소비템 · 사용 기능 예정" (purple 테두리, 추후 구현 예정 명시)
+
+**장비 시스템 1차 완료 요약**:
+- ✅ 장비 타입/슬롯 시스템 (weapon/armor/accessory/artifact)
+- ✅ 장착 상태 관리 (equipment에 item.id 저장)
+- ✅ 중복 아이템 허용 (id 기준 개별 관리)
+- ✅ 장비 효과 4종 (xp_bonus, drop_bonus, rarity_bonus, stat_bonus)
+- ✅ stat_bonus 실제 계산 반영 (effective stat)
+- ✅ 장착/해제 UI (Inventory 장비 슬롯 + 아이템 카드)
+- ✅ HunterStatus 장비 스탯 표시 (기본 + 장비 보너스 구분)
+- ✅ 밸런스 cap 적용 (XP 20%, 드롭 10%, 레어리티 5%, legendary 4%)
+- ✅ ITEM_POOL 41개 (장비 38개, 소비 아이템 후보 3개)
+
+**이번 단계에서 구현하지 않은 것**:
+- 소비 아이템 사용 기능 (10차 작업 예정)
+- 장비 강화 시스템 (추후 중복 흡수 강화 후보)
+- 장비 세트 효과 (추후 확장 후보)
+- 게이트/전투력/보스 시스템 (별도 대형 작업)
+
+**다음 단계 예정**: 10차 작업 — 소모품 시스템 (소비 아이템 사용 효과 구현).
+- 랜덤 퀘스트
+
+**persist 버전**:
+- 변경 없음 (v9 유지)
+- 스키마 변경 없음 (UI만 추가)
+
+**다음 단계 예정**: 2차 각성 시스템, 직업 효과 강화, 게이트/전투력/장비/랜덤 퀘스트 (추후 논의).
+
+### 7차 작업 3단계 완료 (2025-05-15) — 2차 각성 시스템 구현
+- ✅ `types.ts`: 2차 직업 5개 추가 (JobId 확장, JOB_DEFINITIONS 확장)
+- ✅ `store.ts`: 2차 각성 조건 추가 (checkJobAwakening 확장)
+- ✅ `store.ts`: 2차 각성 자동 장착 로직 구현 (unlockJob 개선)
+- ✅ `store.ts`: 2차 각성 전용 SystemMessage 구현
+- ✅ 빌드 통과 확인
+
+**추가된 2차 직업 (5개)**:
+1. **황금안의 예언자** (golden-oracle, market 계열, tier 2):
+   - 설명: 자본의 흐름 너머에 숨은 징조를 읽어내는 예언자
+   - 해금 조건: 금안의 점술사 보유 + 시장 점검 100회 OR finance/career 퀘스트 150회
+   - 효과: finance XP +8%, career XP +8%
+
+2. **심연의 기록관** (abyss-archivist, research 계열, tier 2):
+   - 설명: 흩어진 지식과 기록의 심연에서 진실을 끌어올리는 자
+   - 해금 조건: 금서 해독자 보유 + study/career 퀘스트 180회
+   - 효과: study XP +8%, career XP +6%
+
+3. **강철심장의 투사** (steelheart-fighter, training 계열, tier 2):
+   - 설명: 흔들리지 않는 심장으로 한계를 부수는 전투형 헌터
+   - 해금 조건: 강철의 견습기사 보유 + workout/health 퀘스트 180회 OR 던전 클리어 20회
+   - 효과: workout XP +8%, health XP +8%
+
+4. **시간의 심판관** (chrono-judge, discipline 계열, tier 2):
+   - 설명: 흐트러진 욕망과 시간을 심판하는 규율의 집행자
+   - 해금 조건: 침묵의 수도자 보유 + habit/mind 퀘스트 180회 OR 숏폼 제한/명상 루틴 90회
+   - 효과: habit XP +8%, mind XP +8%
+
+5. **운명의 조율자** (fate-harmonizer, balance 계열, tier 2):
+   - 설명: 모든 성장의 흐름을 조율해 자신의 운명을 다시 쓰는 각성자
+   - 해금 조건: 무명의 각성자 보유 + 5개 이상 카테고리에서 각각 50회 이상 완료
+   - 효과: career/study/workout/health/habit/mind XP +4%
+
+**2차 각성 조건**:
+- 모든 2차 직업은 해당 1차 직업 보유가 필수 조건
+- 1차 직업 조건보다 약 2~3배 높은 누적 기록 요구
+- 예시:
+  - 금안의 점술사 (1차): 시장 점검 30회 OR finance/career 50회
+  - 황금안의 예언자 (2차): 금안의 점술사 보유 + 시장 점검 100회 OR finance/career 150회
+
+**2차 각성 자동 장착 규칙**:
+- **현재 해당 1차 직업 장착 중**: 2차 직업 해금 시 자동 장착 (진화)
+- **다른 직업 장착 중**: 2차 직업 해금만 하고 자동 장착 안 함
+- **미각성자 상태**: 2차 직업 해금 시 자동 장착 (거의 발생하지 않음)
+
+**2차 각성 SystemMessage**:
+- 1차 각성: `── SYSTEM ── 각성 발생` / `새 직업 [직업명]을 획득했습니다.`
+- 2차 각성 (자동 장착): `── SYSTEM ── 2차 각성 발생` / `[1차 직업명]이(가) [2차 직업명]로 진화했습니다.`
+- 2차 각성 (해금만): `── SYSTEM ── 2차 각성 발생` / `새 직업 [직업명]을 획득했습니다.`
+
+**XP 보너스 비교**:
+| 직업 | 1차 효과 | 2차 효과 | 증가율 |
+|------|---------|---------|--------|
+| market 계열 | finance/career +5% | finance/career +8% | 1.6배 |
+| research 계열 | study +5%, career +3% | study +8%, career +6% | 1.6~2배 |
+| training 계열 | workout/health +5% | workout/health +8% | 1.6배 |
+| discipline 계열 | habit/mind +5% | habit/mind +8% | 1.6배 |
+| balance 계열 | 6개 카테고리 +2% | 6개 카테고리 +4% | 2배 |
+
+**JobPanel 표시**:
+- 2차 직업 카드는 JOB_DEFINITIONS 기반으로 자동 표시
+- 티어 표시: `2차 각성` (purple 색상)
+- 미해금 2차 직업: 잠김 상태 + 해금 조건 표시
+- 해금된 2차 직업: 전환 버튼 표시
+- 장착 중 2차 직업: 장착 중 배지 (amber 테두리)
+
+**persist 버전**:
+- 변경 없음 (v9 유지)
+- JobId 타입 확장이지만 저장 스키마 구조는 동일
+- 기존 저장 데이터와 호환
+
+**직업 시스템 1차 완성**:
+- ✅ 미각성자 (tier 0)
+- ✅ 1차 직업 5개 (tier 1)
+- ✅ 2차 직업 5개 (tier 2)
+- ✅ 직업 해금/전환 UI
+- ✅ 직업 XP 보너스 적용
+- ✅ 자동 각성 체크
+- ✅ 2차 각성 진화 시스템
+- **총 11개 직업 구현 완료**
+
+**이번 단계에서 구현하지 않은 것**:
+- 3차 직업 (현재 계획 없음)
+- 직업 효과 추가 (스탯 보너스, 드롭률 보너스는 메타데이터만 존재)
+- 직업 전용 탭 (현재 JobPanel로 충분)
+- 게이트/전투력/보스 시스템
+- 장비 시스템
+- 랜덤 퀘스트
+
+**다음 단계 예정**: 새 시스템 도입 여부 토론 (랜덤 퀘스트, 장비, 게이트, 보스 등).
+
+### 8차 작업 1단계 완료 (2025-05-15) — 랜덤 퀘스트 MVP 구현
+- ✅ `types.ts`: RandomQuestTemplate, ActiveRandomQuest 타입 추가
+- ✅ `seed.ts`: RANDOM_QUEST_POOL 추가 (25개 긴급 의뢰)
+- ✅ `store.ts`: 랜덤 퀘스트 필드 및 액션 추가 (roll/complete/skip/clearExpired)
+- ✅ `RandomQuestCard.tsx`: 새 컴포넌트 생성 (긴급 의뢰 카드)
+- ✅ `App.tsx`: 랜덤 퀘스트 초기화 및 표시 (daily 탭 상단)
+- ✅ persist version 9 → 10
+- ✅ 빌드 통과 확인
+
+**랜덤 퀘스트 시스템 (긴급 의뢰)**:
+- **목적**: 반복 daily의 지루함 완화, 하루마다 변수 제공, 짧고 현실적인 행동 유도
+- **명칭**: UI에서는 "긴급 의뢰", 내부 타입은 RandomQuest/ActiveRandomQuest
+- **생성 규칙**:
+  - 하루 첫 접속 시 30% 확률로 생성
+  - 하루 최대 1개 제한
+  - weight 기반 랜덤 선택 (career/finance 높음, mind 낮음)
+  - 만료 시각: 오늘 23:59:59
+  - 이미 생성된 날은 재생성 안 함 (새로고침 방지)
+
+**랜덤 퀘스트 풀 (25개)**:
+- **Career / Finance (high weight)**: 시장 기류 탐지, 리포트 정찰, 종목 감응, 공시 해독, 지원자의 문장, 산업의 입구
+- **Study (medium-high weight)**: 지식 압축, 개념 회수, 일정 정찰, 한 줄 기록
+- **Workout / Health (medium weight)**: 성북천 순찰, 단백질 점검, 수분 보급, 심폐 예열, 관절 해방
+- **Habit (medium weight)**: 작전 구역 정리, 싱크대 정화, 보급품 점검, 장비 사전 배치
+- **Mind (low weight)**: 소음 차단, 불안 정찰, 단일 명령 수행, 전리품 기록
+
+**완료 규칙**:
+- XP 지급: 기존 퀘스트와 동일 (직업/스탯 보너스 적용)
+- 아이템 드롭: 낮은 확률 (easy 5%, normal 12%, hard 25%)
+- 완료 후 `activeRandomQuest.completed = true`
+- 중복 완료 방지
+- 만료 후 완료 불가
+
+**스킵 규칙**:
+- 패널티 없음
+- `activeRandomQuest = undefined`
+- `randomQuestHistory[dateKey].skipped = true`
+- 같은 날 재생성 안 됨
+
+**만료 규칙**:
+- 오늘 자정 이후 자동 제거
+- 완료되지 않은 상태로 만료되어도 패널티 없음
+- 앱 진입 시 `clearExpiredRandomQuest()` 호출
+
+**UI 표시**:
+- **위치**: daily 탭 상단 (일일 퀘스트 위)
+- **디자인**: amber/orange 그라데이션, AlertTriangle 아이콘, "── SYSTEM ALERT ──" 헤더
+- **표시 내용**: 제목, 설명, 카테고리, 난이도, 보상 XP, 제한 시간
+- **버튼**: 완료 / 넘기기
+- **상태**: 활성화 중 표시, 완료 후 숨김, 만료 시 "만료됨" 표시
+
+**SystemMessage**:
+- 생성 시: `── SYSTEM ── 긴급 의뢰 발생` / `새로운 긴급 의뢰 [제목]가 도착했습니다.`
+- 완료 시: `긴급 의뢰 완료` / `[제목] 완료. XP +N`
+- 아이템 드롭 시: 기존 아이템 메시지 로직 사용
+
+**앱 진입 시 호출 순서**:
+1. `recordAppOpen()`
+2. `clearExpiredRandomQuest()`
+3. `rollRandomQuestForToday()`
+4. `checkTitleUnlocks()`
+5. `checkJobAwakening()`
+
+**persist 버전**:
+- v9 → v10
+- 새 필드: `activeRandomQuest`, `randomQuestHistory`
+- 기존 저장 데이터 호환
+
+**이번 단계에서 구현하지 않은 것**:
+- 실패 패널티 (MVP에서는 부담 줄이기)
+- 랜덤 퀘스트 여러 개 생성 (하루 1개 제한)
+- 연쇄 퀘스트 (다음 단계)
+- 게이트/전투 시스템 (별도 작업)
+- 장비 시스템 (별도 작업)
+
+**다음 단계 예정**: 랜덤 퀘스트 확장 (연쇄 퀘스트, 난이도별 보상 차등), 장비 시스템, 게이트/보스 시스템 (추후 논의).
+
+### 9차 작업 1단계 완료 (2025-05-15) — 장비 타입 확장 + ITEM_POOL 개선
+- ✅ `types.ts`: EquipmentSlot, ItemEffectType, ItemEffect 타입 추가, Item 확장
+- ✅ `seed.ts`: ITEM_POOL 11개 → 41개로 확장 (장비 중심)
+- ✅ 빌드 통과 확인
+
+**장비 시스템 타입 추가**:
+- `EquipmentSlot`: 'weapon' | 'armor' | 'accessory' | 'artifact' (4개 슬롯)
+- `ItemEffectType`: 'xp_bonus' | 'drop_bonus' | 'rarity_bonus' | 'stat_bonus'
+- `ItemEffect`: { type, category?, stat?, value }
+- `Item` 확장 필드 (optional):
+  - `equippable?: boolean` — 장착 가능 여부
+  - `slot?: EquipmentSlot` — 장비 슬롯
+  - `effects?: ItemEffect[]` — 장비 효과 목록
+
+**ITEM_POOL 확장 (11개 → 41개)**:
+- **Common (8개)**: 소비 아이템 후보 3개 (equippable: false), 장비 5개
+  - 소비: 회복 포션, 집중력 비약, 단백질 바
+  - 장비: 낡은 단검, 수련용 목검, 초심자의 노트, 낡은 손목보호대, 작은 행운석
+- **Uncommon (9개)**: 모두 장비
+  - 강철의 책, 의지의 룬, 시장 관측자의 펜, 집중의 반지, 루틴의 팔찌, 중량 벨트, 정돈된 코트, 침묵의 부적, 견습 헌터 배지
+- **Rare (10개)**: 모두 장비
+  - 바람의 신발, 각성자의 목걸이, 금안의 렌즈, 서고의 열쇠, 분석가의 만년필, 강철 손목보호대, 고요의 반지, 시간의 모래시계, 그림자 망토, 사냥꾼의 단검
+- **Epic (8개)**: 모두 장비
+  - 검은 정장, 그림자 단검, 황금 나침반, 금서의 책갈피, 계율의 로브, 투사의 장갑, 새벽의 귀걸이, 균형의 문장
+- **Legendary (6개)**: 모두 장비
+  - 왕의 검, 시스템의 조각, 황금안의 수정구, 심연의 기록서, 시간의 회중시계, 그림자 왕관
+
+**장비 가능 아이템**: 38개 (전체 41개 중)
+**소비 아이템 후보**: 3개 (equippable: false)
+
+**장비 효과 값 기준**:
+| Rarity | XP 보너스 | 드롭률 | 레어리티 | 스탯 |
+|--------|----------|--------|---------|------|
+| common | 0.01~0.02 | 0.01 | - | +1 |
+| uncommon | 0.02~0.03 | 0.01~0.02 | 0.005 | +1~2 |
+| rare | 0.03~0.05 | 0.02~0.03 | 0.01 | +2 |
+| epic | 0.05~0.07 | 0.03~0.04 | 0.015 | +3 |
+| legendary | 0.08~0.10 | 0.04~0.05 | 0.02 | +4~5 |
+
+**장비 슬롯별 분포**:
+- **weapon**: 낡은 단검, 수련용 목검, 사냥꾼의 단검, 그림자 단검, 투사의 장갑, 왕의 검
+- **armor**: 낡은 손목보호대, 중량 벨트, 정돈된 코트, 바람의 신발, 강철 손목보호대, 그림자 망토, 검은 정장, 계율의 로브, 그림자 왕관
+- **accessory**: 작은 행운석, 의지의 룬, 집중의 반지, 루틴의 팔찌, 침묵의 부적, 각성자의 목걸이, 금안의 렌즈, 고요의 반지, 새벽의 귀걸이, 시간의 회중시계
+- **artifact**: 초심자의 노트, 강철의 책, 시장 관측자의 펜, 견습 헌터 배지, 서고의 열쇠, 분석가의 만년필, 시간의 모래시계, 황금 나침반, 금서의 책갈피, 균형의 문장, 시스템의 조각, 황금안의 수정구, 심연의 기록서
+
+**카테고리별 장비 분포**:
+- **career**: 정돈된 코트, 견습 헌터 배지, 서고의 열쇠, 분석가의 만년필, 사냥꾼의 단검, 검은 정장, 균형의 문장, 왕의 검, 심연의 기록서, 그림자 왕관
+- **finance**: 시장 관측자의 펜, 금안의 렌즈, 분석가의 만년필, 황금 나침반, 황금안의 수정구
+- **study**: 초심자의 노트, 강철의 책, 견습 헌터 배지, 서고의 열쇠, 금서의 책갈피, 균형의 문장, 심연의 기록서, 그림자 왕관
+- **workout**: 수련용 목검, 중량 벨트, 견습 헌터 배지, 바람의 신발, 강철 손목보호대, 투사의 장갑, 균형의 문장, 왕의 검, 그림자 왕관
+- **health**: 낡은 손목보호대, 새벽의 귀걸이
+- **habit**: 낡은 단검, 루틴의 팔찌, 정돈된 코트, 사냥꾼의 단검, 시간의 모래시계, 그림자 단검, 계율의 로브, 균형의 문장, 시간의 회중시계, 그림자 왕관
+- **mind**: 침묵의 부적, 고요의 반지, 시간의 모래시계, 그림자 단검, 새벽의 귀걸이, 시간의 회중시계
+
+**기존 저장 데이터 호환**:
+- Item 타입의 새 필드는 모두 optional
+- persist version 변경 없음 (스키마 구조 변경 없음)
+- 기존 아이템에 새 필드가 없어도 정상 렌더링
+
+**이번 단계에서 구현하지 않은 것**:
+- 장착/해제 로직 (9-2에서 진행)
+- equipment store 필드 (9-2에서 진행)
+- Inventory 장착 버튼 (9-2에서 진행)
+- XP/drop/rarity 효과 실제 적용 (9-3에서 진행)
+- 소비 아이템 사용 기능 (나중에 별도)
+- 소비 아이템 종류 대량 확장 (나중에 별도)
+
+**다음 단계 예정**: 9차 작업 2단계 — 장비 장착/해제 UI 및 로직 구현.
+
+
+### 10차 작업 3단계 완료 (2025-05-15) — 소모품 효과 실제 계산 반영
+- ✅ `game.ts`: `getEffectiveStats` 함수 확장 (consumableStatBonuses 파라미터 추가)
+- ✅ `game.ts`: 모든 stat-driven helper 함수에 consumableStatBonuses 파라미터 추가
+  - `getXpMultiplierWithEquipment`
+  - `getDropChanceBonusWithEquipment`
+  - `getPartialRewardMultiplierWithEquipment`
+  - `getRarityWeightBonusWithEquipment`
+- ✅ `store.ts`: `completeQuest`에 consumable stat bonuses 적용
+  - XP 계산: consumableStatBonuses 추가
+  - 드롭률 계산: consumableStatBonuses 추가
+  - 레어리티 계산: consumableRarityBonus 이미 적용됨
+  - next_quest consumed 처리: 이미 구현됨
+- ✅ `store.ts`: `completeRandomQuest`에 consumable 효과 적용
+  - XP 보너스: consumableXpBonus 추가
+  - 드롭률 보너스: consumableDropBonus 추가
+  - 레어리티 보너스: consumableRarityBonus 추가
+  - Stat bonuses: consumableStatBonuses 추가
+  - next_quest consumed 처리: consumeNextQuestEffects 호출
+- ✅ `store.ts`: `progressDungeon`에 consumable 효과 적용
+  - 부분 진행: consumableStatBonuses 추가 (AGI 기반 보상)
+  - 최종 클리어: consumableStatBonuses 추가 (XP 계산)
+  - 최종 클리어: next_quest consumed 처리 추가
+- ✅ persist version 12 유지 (스키마 변경 없음)
+- ✅ 빌드 통과 확인
+
+**구현된 소모품 효과 적용**:
+1. **instant_xp**: 사용 즉시 XP 지급 (10-2에서 구현 완료)
+2. **next_quest_xp_bonus**: 다음 퀘스트 1회 XP 보너스 (합연산)
+3. **next_category_xp_bonus**: 다음 해당 카테고리 퀘스트 1회 XP 보너스 (합연산)
+4. **temporary_drop_bonus**: 다음 퀘스트 1회 드롭률 보너스 (합연산, cap 15%)
+5. **temporary_rarity_bonus**: 다음 퀘스트 1회 레어리티 보너스 (합연산, cap 5%)
+6. **temporary_stat_bonus**: effective stat에 반영 (XP/drop/rarity/dungeon 계산에 적용)
+7. **gate_penalty_reduction**: 저장만 유지 (게이트 시스템 전까지 미적용)
+8. **gate_success_bonus**: 저장만 유지 (게이트 시스템 전까지 미적용)
+
+**소모품 효과 적용 위치**:
+- `completeQuest` (daily/main): XP, drop, rarity, stat bonuses, next_quest consumed
+- `completeRandomQuest`: XP, drop, rarity, stat bonuses, next_quest consumed
+- `progressDungeon` 부분 진행: stat bonuses (AGI 기반 보상)
+- `progressDungeon` 최종 클리어: XP, stat bonuses, next_quest consumed
+
+**소모품 효과 계산 정책**:
+- **XP 보너스**: 직업 + 장비 + 소모품 (합연산)
+- **드롭률 보너스**: 스탯 + 장비 + 소모품 (합연산, cap 95%)
+- **레어리티 보너스**: 스탯 + 장비 + 소모품 (합연산, legendary cap 4%)
+- **스탯 보너스**: effective stat에만 반영 (hunter.stats 변경 금지)
+- **칭호/업적 조건**: base stat만 사용 (소모품 영향 없음)
+- **PER/streak protection**: 소모품 임시 PER 반영하지 않음 (안전)
+
+**next_quest 효과 consumed 처리**:
+- 던전 부분 진행: next_quest 소모하지 않음
+- 던전 최종 클리어: next_quest 소모
+- daily/main/random quest 완료: next_quest 소모
+- next_category_xp_bonus: category 일치 시에만 소모
+- consumed 후 즉시 activeConsumableEffects에서 제거
+
+**temporary_stat_bonus 적용 범위**:
+- ✅ STR 기반 workout/health XP multiplier
+- ✅ VIT 기반 drop bonus
+- ✅ AGI 기반 dungeon partial reward
+- ✅ INT 기반 study/career XP multiplier
+- ✅ SEN 기반 rarity bonus
+- ❌ PER 기반 streak protection (안전상 미적용)
+
+**미구현 항목**:
+- gate 효과 (gate_penalty_reduction, gate_success_bonus): 게이트 시스템 전까지 저장만 유지
+- PER streak protection에 소모품 임시 PER 반영: 안전상 미적용
+
+**10차 소모품 시스템 1차 완성**:
+- ✅ 10-1: 소모품 타입/아이템풀 추가
+- ✅ 10-2: 소모품 사용 버튼 + activeConsumableEffects 저장
+- ✅ 10-3: 소모품 효과 실제 계산 반영
+- **게이트 전투 연결 준비 완료**
+
+**다음 단계 예정**: 11차 작업 — 게이트/전투 도메인 설계 문서 작성.
+
+### 11차 작업 0단계 완료 (2026-05-15) — 게이트/전투 설계 문서 작성
+- ✅ `docs/GATE_COMBAT_DESIGN.md`: 게이트/전투 시스템 구현의 단일 기준 문서 생성
+- ✅ 확정 정책 기록: 자동 전투 + 사전 세팅, 턴별 로그, victory/defeat/draw 결과, stamina/부상/회복 정책
+- ✅ 도메인 모델 초안 작성: GateDefinition, ActiveGate, MonsterDefinition, SkillDefinition, SkillEffect, ActiveCombatEffect, PlayerCombatStats, BattleTurn, CombatLog, GateStatus, GateRewardTable, GatePenalty
+- ✅ 전투 공식 정리: PlayerCombatStats, Combat Power, Gate Risk, 비율 기반 방어 감소식, 명중/회피/치명타 판정 순서
+- ✅ 스킬 자동 사용 정책 정리: `scoreSkill` 기반 자동 선택, cooldown 후보 필터, 동점 처리, 향후 프리셋 확장 방향
+- ✅ buff/debuff refresh 정책 기록: 같은 대상 + 같은 stat 효과는 누적하지 않고 새 효과로 덮어쓰기
+- ✅ 게이트 운영 정책 기록: 동시 활성 게이트 1개, active gate 존재 시 새 트리거 무시, 큐 없음, 사용자 알림 없음
+- ✅ 보상 정책 기록: daily는 XP 성장 중심, gate는 장비/아이템 파밍 중심, draw는 보상 없음
+- ✅ 소모품 연동 정책 기록: next_gate/today/next_quest 처리, draw 시 next_gate 소모품 consumed
+- ✅ 손계산 3건 포함: E/E, E/D, D/C 가상 전투 계산 및 밸런싱 메모
+- ✅ 시뮬레이션 계획 기록: 100회 전투, 승률/무승부율/패배율, 평균 턴, 평균 잔여 HP, combatPower ratio와 victoryRate R² 0.85 목표
+- ✅ 구현 단계 정리: 11-1 타입/데이터 구조 → 11-7 밸런스 점검
+
+**중요 설계 결정**:
+- `PlayerCombatStats`는 저장값이 아니라 유도값. base hunter stats + equipment stat_bonus + job modifiers + consumable temporary_stat_bonus + skill modifiers로 계산.
+- 칭호/영구 업적은 base stat만 사용. 장비/소모품 stat은 업적 조건에 반영하지 않음.
+- `accuracy`는 전투력 공식에서 제외. 대부분 0.95~0.99 범위라 변별력이 낮고 고정 가산점처럼 작동할 수 있기 때문.
+- `dateKey`는 기존 `getDateKey()` local YYYY-MM-DD helper 사용. `toISOString().slice(0, 10)` 금지.
+- draw는 active gate를 유지하며 보상/패널티 없음. 단, 전투 시도이므로 next_gate 소모품은 consumed 처리.
+- 부상 회복 카운트는 부상 발생 이후 daily/main/random 퀘스트 완료만 포함. 초기 구현에서는 던전 부분 진행과 던전 최종 클리어 제외.
+
+**손계산 관찰**:
+- 요청 예시 수치 기준 E/D, D/C 케이스도 플레이어가 비교적 쉽게 승리.
+- 전투 공식 자체보다 게이트 rank별 몬스터 HP/ATK, 다수 몬스터, 스킬 power, recommendedPower 테이블 튜닝이 중요.
+- 11-7에서 100회 시뮬레이션으로 ratio별 승률을 검증해야 함.
+
+**persist 버전**:
+- 변경 없음 (문서 작업만 진행)
+- 코드/타입/store/UI 변경 없음
+
+**다음 단계 예정**: 11차 작업 1단계 — 게이트/전투 타입 및 데이터 구조 구현.
+
+### 11차 작업 1단계 완료 (2026-05-15) — 게이트/전투 타입 + 초기 데이터 구조 추가
+- ✅ `types.ts`: 게이트/전투 타입 추가
+  - `GateRank`
+  - `GateDefinition`
+  - `ActiveGate`
+  - `MonsterCombatStats`
+  - `MonsterDefinition`
+  - `SkillOwnerType`
+  - `SkillType`
+  - `SkillEffect`
+  - `SkillDefinition`
+  - `ActiveCombatEffect`
+  - `PlayerCombatStats`
+  - `BattleTurn`
+  - `CombatLog`
+  - `GateStatus`
+  - `GateReward`
+  - `GateRewardTable`
+  - `GatePenalty`
+- ✅ `types.ts`: 11-0 설계 정책 주석 추가
+  - recommendedLevel은 안내용, recommendedPower가 실제 위험도/밸런싱 기준
+  - 동시 active gate는 1개, active gate 존재 시 새 출현 트리거 무시
+  - draw는 보상/패널티 없이 active gate 유지
+  - 스킬 cooldown은 턴 기반
+  - buff/debuff는 같은 대상 + 같은 stat 기준 누적하지 않고 refresh
+  - PlayerCombatStats는 저장값이 아니라 유도값
+  - 칭호/영구 업적은 base stat만 사용
+- ✅ `seed.ts`: 초기 게이트/전투 seed 데이터 추가
+  - `SKILL_DEFINITIONS`: common 1개, job 5개, equipment 1개, monster 4개
+  - `MONSTER_DEFINITIONS`: E 2개, D 2개, C 1개
+  - `GATE_DEFINITIONS`: E 2개, D 1개, C 1개
+  - `GATE_REWARD_TABLES`: E/D/C 기본 보상 테이블
+  - `GATE_PENALTIES`: 기본 게이트 패널티
+- ✅ `store.ts`: 게이트 저장 상태 뼈대 추가
+  - `gateStatus: GateStatus`
+  - `activeGate?: ActiveGate`
+  - `combatLogs: CombatLog[]`
+- ✅ `store.ts`: 최소 관리 액션 추가
+  - `setActiveGate(gate)`
+  - `clearExpiredGate()`
+  - `addCombatLog(log)`
+  - `clearCombatLogs()`
+- ✅ `store.ts`: 초기값 추가
+  - stamina 100
+  - maxStamina 100
+  - recoveryQuestProgress 0
+  - recoveryQuestRequired 3
+  - lastStaminaRecoveredAt ISO string
+  - activeGate undefined
+  - combatLogs []
+- ✅ `store.ts`: persist version 12 → 13
+- ✅ `store.ts`: migrate에서 기존 저장 데이터에 `gateStatus`, `activeGate`, `combatLogs` 기본값 보강
+- ✅ `App.tsx`: 앱 진입 시 `clearExpiredGate()` 호출 추가
+- ✅ 빌드 통과 확인
+
+**초기 게이트 데이터**:
+- E급: `gate-rift-alley` (균열의 골목), `gate-rift-backstreet` (뒤틀린 뒷골목)
+- D급: `gate-lair-of-sloth` (나태의 소굴)
+- C급: `gate-archive-of-forgetting` (망각의 서고)
+
+**초기 몬스터 데이터**:
+- E급: `rift-rat`, `rift-stray`
+- D급: `lazy-goblin`, `sloth-brute`
+- C급: `forgetting-warden`
+
+**이번 단계에서 구현하지 않은 것**:
+- 전투 스탯 계산
+- 전투력 계산
+- 데미지 계산
+- 자동 전투 시뮬레이터
+- 게이트 출현 roll
+- Gate UI
+- 보상/패널티 적용
+- 소모품 gate 효과 적용
+- victory/defeat/draw 처리 로직
+
+**persist 버전**:
+- v12 → v13
+- localStorage key는 `levelup-save` 유지
+
+**다음 단계 예정**: 11차 작업 2단계 — 전투 스탯/전투력/위험도/데미지 계산 함수 구현.
+
+### 11차 작업 2단계 완료 (2026-05-15) — 전투 계산 순수 함수 구현
+- ✅ `game.ts`: `calculatePlayerCombatStats()` 추가
+  - 입력: level, base stats, equippedItems, activeConsumableEffects, jobId
+  - base stat을 mutate하지 않고 `getEffectiveStats()`를 재사용해 장비 stat_bonus와 게이트 적용 소모품 stat_bonus를 반영
+  - `temporary_stat_bonus` 중 `today` / `next_gate` / duration 없음만 전투 스탯에 반영
+  - `next_quest` 소모품은 게이트 전투 스탯에 반영하지 않음
+  - jobId는 인자로 받지만 11-2에서는 전투 보정 미적용, TODO로 유지
+- ✅ `game.ts`: `calculateCombatPower()` 추가
+  - 공식: atk * 3 + maxHp * 0.5 + def * 2 + speed * 1.5 + critRate * 100 + evasionRate * 100 + skillTotalPower * 1.5
+  - `accuracy`는 공식에서 제외
+- ✅ `game.ts`: `estimateGateRisk()` 추가
+  - ratio >= 1.3 → low
+  - ratio >= 1.0 → normal
+  - ratio >= 0.7 → high
+  - 그 외 extreme
+  - recommendedPower <= 0이면 extreme
+- ✅ `game.ts`: `calculateDamage()` 추가
+  - 비율 기반 방어 감소식 사용
+  - defenderDef, attackerAtk, skillPower, randomFactor 안전 처리
+  - critical 시 1.5배
+- ✅ `game.ts`: 판정 helper 추가
+  - `didHit(accuracy, roll)`
+  - `didEvade(evasionRate, roll)`
+  - `didCrit(critRate, roll)`
+  - 판정 기준값은 0~1로 clamp
+- ✅ `game.ts`: `BattleSkillContext`와 `scoreSkill()` 추가
+  - attack: `(power ?? 1) * 100`
+  - heal: HP 40% 미만이면 200, 아니면 0
+  - buff: 3턴 이하 150, 이후 50
+  - debuff: 80
+- ✅ 빌드 통과 확인
+
+**계산 검증 예시**:
+- Lv5, STR 15, VIT 12, AGI 10, INT 8, PER 8, SEN 8
+- `maxHp = 245`
+- `atk = 50`
+- `def = 24.4`
+- `speed = 25`
+- `critRate = 0.064`
+- `evasionRate = 0.064`
+- `accuracy = 0.958`
+- `combatPower = 372`
+- `calculateDamage({ attackerAtk: 50, defenderDef: 8 }) = 46`
+
+**이번 단계에서 구현하지 않은 것**:
+- 자동 전투 시뮬레이터
+- `simulateGateBattle`
+- `resolveTurn`
+- Gate UI
+- 게이트 출현 roll
+- 보상/패널티 적용
+- 전투 로그 생성
+- activeGate 상태 변경
+- persist version 변경
+
+**persist 버전**:
+- 변경 없음 (v13 유지)
+
+**다음 단계 예정**: 11차 작업 3단계 — 자동 전투 시뮬레이터 구현.
+
+### 11차 작업 3단계 완료 (2026-05-15) — 자동 전투 시뮬레이터 순수 함수 구현
+- ✅ `game.ts`: `RngFn` 타입과 `createSeededRng(seed)` 추가
+  - LCG 기반 seeded RNG
+  - 같은 seed로 같은 전투 판정 흐름 재현 가능
+- ✅ `game.ts`: `BattleActorState` 추가
+  - 1 player vs 1 monster 전투용 local actor state
+  - hp, atk, def, speed, critRate, accuracy, evasionRate, skillIds, cooldowns 포함
+- ✅ `game.ts`: `simulateGateBattle()` 추가
+  - 입력: playerStats, monster, skills, maxTurns, seed/rng, gateInstanceId, battleId
+  - store/activeGate/stamina/reward를 변경하지 않는 순수 CombatLog 반환 함수
+  - 기본 maxTurns 30
+  - victory: monster HP 0
+  - defeat: player HP 0
+  - draw: maxTurns 도달 시 생존
+  - rewards는 11-6 전까지 `[]`
+  - penaltyApplied는 11-6 전까지 `undefined`
+- ✅ `game.ts`: `chooseSkill()` 추가
+  - actor.skillIds에 포함되고 cooldown이 0 이하인 스킬만 후보
+  - `scoreSkill()` 점수 우선
+  - 동점이면 power 높은 스킬 우선
+  - 그래도 같으면 정의 순서 우선
+  - 점수 0 또는 후보 없음이면 `basic-attack` fallback
+- ✅ `game.ts`: `resolveAction()` 추가
+  - 판정 순서: 명중 → 회피 → 치명타 → 데미지 → 효과
+  - attack: 비율 기반 방어 감소식 + randomFactor 0.9~1.1
+  - debuff: 명중/회피 판정 후 효과 적용
+  - buff: 즉시 효과 적용
+  - heal: maxHp 비율 회복 구조 지원
+  - BattleTurn 로그 메시지 생성
+- ✅ `game.ts`: `applyOrRefreshCombatEffect()` 추가
+  - 같은 targetId + 같은 stat이면 누적하지 않고 새 효과로 덮어쓰기
+  - remainingTurns refresh
+- ✅ `game.ts`: `getEffectiveBattleActorStats()` 추가
+  - activeEffects를 원본 actor state에 mutate 없이 반영
+  - atk/def/speed는 0 미만 방지
+  - critRate/accuracy/evasionRate는 0~1 clamp
+- ✅ cooldown 처리 구현
+  - actor 행동 시작 시 cooldown을 1 감소
+  - 스킬 사용 후 해당 스킬의 cooldownTurns를 저장
+  - basic attack은 cooldown 0
+- ✅ activeEffects duration 처리 구현
+  - 초기 구현은 라운드 종료 시 모든 active effect remainingTurns -1
+  - remainingTurns <= 0이면 제거
+- ✅ 턴 순서 구현
+  - 각 라운드 시작 시 activeEffects가 반영된 speed 기준
+  - speed가 같으면 player 우선
+  - 한 라운드에 player와 monster가 각각 1회 행동
+  - 중간에 한쪽 HP가 0 이하이면 즉시 종료
+- ✅ 빌드 통과 확인
+
+**전투 정책 구현 메모**:
+- 전투 방식: 자동 전투
+- 스킬 사용: scoreSkill 기반
+- 판정 순서: 명중 → 회피 → 치명타 → 데미지 → 효과
+- draw 처리: CombatLog result만 `draw`, 보상/패널티 없음
+- buff/debuff refresh: 같은 대상 + 같은 stat은 누적 없이 refresh
+- seed 재현성: `seed`가 있으면 `createSeededRng(seed)` 사용
+
+**이번 단계에서 구현하지 않은 것**:
+- store activeGate 변경
+- stamina 감소
+- injury 적용
+- reward 지급
+- item 생성
+- Gate UI
+- gate spawn
+- activeConsumableEffects consumed 처리
+- persist version 변경
+- 여러 몬스터 전투
+
+**테스트 결과**:
+- `npm run build` 통과
+- 별도 테스트 러너/TS 실행기는 없어서 런타임 호출 테스트는 추가 파일 없이 수행하지 않음
+- TypeScript 컴파일로 CombatLog, BattleTurn, MonsterDefinition, SkillDefinition 타입 정합성 확인
+
+**persist 버전**:
+- 변경 없음 (v13 유지)
+
+**다음 단계 예정**: 11차 작업 4단계 — 게이트 출현/관리 구현 또는 11차 작업 5단계 — Gate UI 구현.
+
+### 11차 작업 4단계 완료 (2026-05-15) — 게이트 출현/관리 로직 구현
+- ✅ `types.ts`: `GateStatus.lastDailyGateRollDate?: string` 추가
+  - 하루 첫 접속 게이트 출현 roll을 local dateKey 기준 하루 1회로 제한
+- ✅ `store.ts`: 게이트 출현/관리 액션 추가
+  - `rollGateSpawn(source)`
+  - `spawnGate(gateId, source)`
+  - `recoverGateStamina()`
+  - `recoverGateInjuryByQuest()`
+  - `clearGateInjuryIfExpired()`
+- ✅ `store.ts`: activeGate 1개 정책 적용
+  - active gate가 있으면 새 출현 트리거 무시
+  - 보류 큐 없음
+  - active gate 때문에 무시된 트리거는 사용자에게 알리지 않음
+- ✅ `store.ts`: daily_open 하루 1회 제한 구현
+  - `getDateKey()` local dateKey 사용
+  - roll 성공/실패와 무관하게 `lastDailyGateRollDate` 기록
+  - 새로고침으로 재roll되지 않음
+- ✅ `store.ts`: 출현 확률 구현
+  - `daily_open`: 5%
+  - `dungeon_clear`: 15%
+  - `hard_dungeon_clear`: 25%
+- ✅ `store.ts`: 게이트 후보 선택 구현
+  - daily_open: E급
+  - dungeon_clear: E~D급
+  - hard_dungeon_clear: D~C급
+  - 후보가 비어 있으면 E급 또는 전체 fallback
+- ✅ `store.ts`: `spawnGate()` 구현
+  - `GATE_DEFINITIONS`에서 gateId 조회
+  - `expiresInHours` 기준 expiresAt 계산
+  - ActiveGate 생성
+  - `게이트 출현` SystemMessage 표시
+- ✅ `store.ts`: `clearExpiredGate()` 보강
+  - active gate의 expiresAt이 지났으면 status `expired`
+  - `게이트 만료` SystemMessage 표시
+- ✅ `store.ts`: stamina 자연 회복 구현
+  - 시간당 +10
+  - 완전한 시간 단위만 회복
+  - `lastStaminaRecoveredAt`은 계산에 사용한 시간만큼만 이동
+  - stamina가 max면 timestamp를 now로 갱신
+- ✅ `store.ts`: 퀘스트 완료 stamina +5 구현
+  - daily/main 완료 시 적용
+  - random quest 완료 시 적용
+  - dungeon 부분 진행/최종 클리어는 제외
+- ✅ `store.ts`: 부상 회복 조건 일부 구현
+  - `injuredUntil` 시간이 지났으면 부상 해제
+  - 부상 중 daily/main/random 완료 시 `recoveryQuestProgress +1`
+  - `recoveryQuestProgress >= recoveryQuestRequired`이면 부상 해제
+  - dungeon 부분 진행/최종 클리어는 회복 카운트 제외
+- ✅ `store.ts`: dungeon 최종 클리어 gate roll 연결
+  - 부분 진행에서는 roll 없음
+  - 최종 클리어에서만 roll
+  - `resetCycle: monthly` 또는 elite/apex/boss 난이도는 `hard_dungeon_clear`
+- ✅ `App.tsx`: 앱 진입 초기화 흐름 보강
+  - `recoverGateStamina()`
+  - `clearGateInjuryIfExpired()`
+  - `clearExpiredGate()`
+  - `rollGateSpawn('daily_open')`
+- ✅ `store.ts`: persist version 13 → 14
+  - 기존 `gateStatus`에 `lastDailyGateRollDate`가 없으면 `undefined`로 보강
+  - localStorage key `levelup-save` 유지
+- ✅ 빌드 통과 확인
+
+**초기화 순서 메모**:
+1. `resetDailiesIfNewDay()`
+2. `recordAppOpen()`
+3. `recoverGateStamina()`
+4. `clearGateInjuryIfExpired()`
+5. `clearExpiredConsumableEffects()`
+6. `clearExpiredRandomQuest()`
+7. `clearExpiredGate()`
+8. `rollGateSpawn('daily_open')`
+9. `rollRandomQuestForToday()`
+10. title/job unlock check
+
+**이번 단계에서 구현하지 않은 것**:
+- 전투 시작 버튼
+- `simulateGateBattle` store 연결
+- victory/defeat/draw 결과 처리
+- 게이트 보상 지급
+- stamina 패널티 적용
+- injury 발생 적용
+- Gate UI
+- 여러 activeGate
+- 보류 gate queue
+
+**persist 버전**:
+- v13 → v14
+
+**다음 단계 예정**: 11차 작업 5단계 — Gate UI 구현.
+
+### 11차 작업 5단계 완료 (2026-05-15) — Gate UI / 게이트 상황판 구현
+- ✅ `GatePanel.tsx` 신규 생성
+  - activeGate 없음 상태 표시
+  - activeGate 상세 상황판 표시
+  - gateStatus/stamina 표시
+  - injury 상태와 회복 조건 표시
+  - 현재 장비/소모품 기준 combat stats 계산
+  - 내 전투력과 위험도 표시
+  - 몬스터 정보 표시
+  - reward table 요약 표시
+  - 실패 패널티 표시
+  - draw 정책 안내 표시
+  - 전투 버튼은 disabled 상태로 표시
+- ✅ `App.tsx`: `gate` 탭 추가
+  - lucide `Swords` 아이콘 사용
+  - 탭 제목: 게이트
+  - 렌더링: `GatePanel`
+  - `AddQuestModal` type fallback 조정: gate/inventory/titles는 daily fallback
+- ✅ `GatePanel.tsx`: activeGate 없음 상태
+  - "열린 게이트 없음" 표시
+  - daily 첫 접속 5%, 던전 클리어 15%, 고난도 25% 안내
+  - 동시에 하나의 게이트만 활성화된다는 정책 안내
+- ✅ `GatePanel.tsx`: activeGate 표시
+  - 게이트명, 랭크, 설명
+  - 출현 source
+  - 남은 시간
+  - 권장 레벨
+  - 권장 전투력
+  - 내 전투력
+  - 위험도
+- ✅ `GatePanel.tsx`: combatPower/risk 계산
+  - `getEquippedItems(items, equipment)`
+  - `calculatePlayerCombatStats({ level, stats, equippedItems, activeConsumableEffects, jobId })`
+  - `calculateCombatPower(combatStats)`
+  - `estimateGateRisk(playerPower, gate.recommendedPower)`
+- ✅ `GatePanel.tsx`: gateStatus/stamina 표시
+  - Gate Stamina / maxStamina
+  - 입장 비용 20
+  - 자연 회복 시간당 +10
+  - 퀘스트 완료 +5
+  - stamina 부족/부상 중이면 입장 불가 표시
+- ✅ `GatePanel.tsx`: injury 표시
+  - injuredUntil이 있으면 부상 중 표시
+  - 회복 조건: 6시간 경과 또는 퀘스트 3개 완료
+  - 남은 시간과 progress 표시
+- ✅ `GatePanel.tsx`: monster 표시
+  - name/rank/description
+  - HP/ATK/DEF/SPD
+  - CRIT/ACC/EVA
+- ✅ `GatePanel.tsx`: reward 표시
+  - XP
+  - itemDropChance
+  - rarityBias
+  - victory 시 reward table 기반 지급 예정 안내
+  - draw는 보상 없음 안내
+- ✅ `GatePanel.tsx`: penalty 표시
+  - staminaCost
+  - injuryHours
+- ✅ `GatePanel.tsx`: active gate consumable effect 표시
+  - today/next_gate 효과만 표시
+- ✅ 빌드 통과 확인
+
+**중요 정책 준수**:
+- `simulateGateBattle` 호출 없음
+- activeGate 상태 변경 없음
+- stamina 차감 없음
+- 보상 지급 없음
+- 부상 적용 없음
+- 전투 결과 생성 없음
+- persist version 변경 없음
+
+**테스트 결과**:
+- `npm run build` 통과
+- 기존 CSS `@import` 위치 경고는 계속 표시되지만 이번 변경과 무관
+
+**persist 버전**:
+- 변경 없음 (v14 유지)
+
+**다음 단계 예정**: 11차 작업 6단계 — 전투 실행 연결 + 결과 처리 + 보상/패널티 적용.
+
+### 11차 작업 6단계 완료 (2026-05-15) — 게이트 전투 실행 연결 + 결과 처리
+- ✅ `store.ts`: `startGateBattle()` 액션 추가
+  - activeGate 존재 + status active 확인
+  - gate definition 조회
+  - stamina/부상 입장 조건 확인
+  - 1번째 monster 기준 조회
+  - 현재 hunter/equipment/consumable 기준 `calculatePlayerCombatStats()` 호출
+  - `simulateGateBattle()` 호출
+  - CombatLog 저장
+  - next_gate 소모품 consumed 처리
+- ✅ `store.ts`: 입장 조건 구현
+  - stamina >= 20
+  - injuredUntil이 현재보다 미래면 입장 불가
+  - 부상 시간이 지났으면 내부에서 회복 상태로 방어 처리
+  - 입장 불가 시 SystemMessage 표시
+- ✅ `store.ts`: player skill 구성 구현
+  - `basic-attack` 기본 포함
+  - jobId 기반 일부 job skill 매핑
+  - `그림자 단검` 장착 시 `skill-shadow-edge` 임시 연결
+  - monster skill은 monster.skillIds 기준 포함
+- ✅ `store.ts`: victory 처리
+  - rewardTable.xp 지급
+  - 기존 `applyXp()` 재사용으로 레벨업/랭크/자동 스탯 분배 일관성 유지
+  - itemDropChance와 rarityBias 기반 아이템 드롭
+  - stamina -20
+  - activeGate.status = `cleared`
+  - CombatLog.rewards 보강
+  - SystemMessage 표시
+  - 보상 후 `checkTitleUnlocks()` / `checkJobAwakening()` 호출
+- ✅ `store.ts`: defeat 처리
+  - 보상 없음
+  - stamina penalty 적용
+  - injuredUntil = now + injuryHours
+  - recoveryQuestProgress = 0
+  - recoveryQuestRequired = 3
+  - activeGate.status = `failed`
+  - CombatLog.penaltyApplied 보강
+  - SystemMessage 표시
+- ✅ `store.ts`: draw 처리
+  - 보상 없음
+  - stamina 감소 없음
+  - 부상 없음
+  - activeGate.status = `active` 유지
+  - CombatLog 저장
+  - SystemMessage 표시
+- ✅ `store.ts`: gate reward item helper 추가
+  - rewardTable.rarityBias 기반 rarity weighted roll
+  - ITEM_POOL에서 해당 rarity 후보 선택
+  - id/acquiredAt 부여
+- ✅ `store.ts`: gate penalty reduction 적용
+  - `gate_penalty_reduction`은 defeat stamina penalty에만 적용
+  - cap 50%
+  - victory 입장 비용 -20에는 적용하지 않음
+- ✅ `store.ts`: next_gate 소모품 처리
+  - victory/defeat/draw 모두 전투 시도이므로 next_gate consumed
+  - today 효과 유지
+  - next_quest 효과 유지
+- ✅ `GatePanel.tsx`: 게이트 도전 버튼 활성화
+  - active gate + stamina 충분 + 부상 없음이면 클릭 가능
+  - stamina 부족/부상 중이면 disabled
+- ✅ `GatePanel.tsx`: 최근 전투 결과 표시 추가
+  - result
+  - totalTurns
+  - playerHpRemaining
+  - rewards
+  - penalty
+  - 최근 턴 로그 5줄
+- ✅ 빌드 통과 확인
+
+**job combat skill mapping (초기)**:
+- `golden-eye-diviner`, `golden-oracle` → `skill-golden-eye-insight`
+- `grimoire-decoder`, `abyss-archivist` → `skill-grimoire-focus`
+- `iron-squire`, `steelheart-fighter` → `skill-iron-charge`
+- `silent-monk`, `chrono-judge` → `skill-silent-guard`
+- `nameless-awakened`, `fate-harmonizer` → `skill-fate-balance`
+
+**gate_success_bonus 처리**:
+- 11-6에서는 직접 적용하지 않음.
+- 성공률 직접 보정은 자동 전투 시뮬레이터 철학과 충돌할 수 있어, 향후 전투력 보정/첫 턴 버프/전용 skill 효과 중 하나로 설계 후 연결 예정.
+
+**이번 단계에서 구현하지 않은 것**:
+- 다수 몬스터 전투
+- 전투 결과 모달
+- 상세 로그 접기/펼치기
+- gate_success_bonus 직접 적용
+- 전투 밸런스 튜닝
+- 게이트 출현 확률 변경
+- persist version 변경
+
+**persist 버전**:
+- 변경 없음 (v14 유지)
+
+**테스트 결과**:
+- `npm run build` 통과
+- 기존 CSS `@import` 위치 경고는 계속 표시되지만 이번 변경과 무관
+
+**다음 단계 예정**: 11차 작업 후속 — `skillTotalPower` 반영, 전투 로그 UX 개선, 다수 몬스터/스킬 확장 검토.
+
+### 11차 작업 7단계 완료 (2026-05-15) — 게이트 밸런스 점검 / 100회 시뮬레이션 검증
+- `game.ts`: `GateBattleSimulationSummary`, `SummarizeGateBattleSimulationsParams`, `summarizeGateBattleSimulations()` 추가
+  - `simulateGateBattle()`을 반복 호출하는 순수 검증 helper
+  - `seedBase + index` 방식으로 100회 결과 재현 가능
+  - victory/defeat/draw, 평균 턴 수, 평균 남은 HP 집계
+- `seed.ts`: 공식 변경 없이 monster stats / recommendedPower만 소폭 조정
+  - `rift-rat`: HP 80 → 125, ATK 20 → 24, DEF 8 → 10
+  - `lazy-goblin`: HP 160 → 340, ATK 35 → 78, DEF 20 → 30
+  - `forgetting-warden`: HP 320 → 560, ATK 55 → 86, DEF 35 → 44
+  - `gate-rift-alley`: recommendedPower 220 → 285
+  - `gate-lair-of-sloth`: recommendedPower 480 → 620
+  - `gate-archive-of-forgetting`: recommendedPower 850 → 830
+- 공식 유지
+  - `calculatePlayerCombatStats()`, `calculateCombatPower()`, `calculateDamage()`, `scoreSkill()` 변경 없음
+  - store / UI / persist version 변경 없음
+
+#### 11-7 게이트 밸런스 검증 결과
+
+| Case | Build | Gate | Player Power | Recommended Power | Ratio | Risk | Victory | Defeat | Draw | Avg Turns | Avg HP | 판단 |
+|---|---|---|---:|---:|---:|---|---:|---:|---:|---:|---:|---|
+| 1 | A | 균열의 골목 | 372 | 285 | 1.31 | low | 100% | 0% | 0% | 5.3 | 211.3 | 입문 E급으로 적절. 쉬움이지만 턴 수가 5턴대로 개선됨 |
+| 2 | A | 나태의 소굴 | 372 | 620 | 0.60 | extreme | 1% | 99% | 0% | 9.5 | 0.7 | 무리한 상위 도전으로 적절 |
+| 3 | B | 나태의 소굴 | 516 | 620 | 0.83 | high | 75% | 25% | 0% | 12.6 | 50.1 | D급 진입권으로 적절. 위험 표시에 비해 승률은 약간 높음 |
+| 4 | C | 망각의 서고 | 639 | 830 | 0.77 | high | 26% | 74% | 0% | 16.4 | 15.0 | 위험하지만 가능. 평균 턴은 목표보다 약간 김 |
+| 5 | D | 망각의 서고 | 685 | 830 | 0.83 | high | 82% | 18% | 0% | 14.6 | 87.0 | 장비/스킬 가정 빌드의 개선 효과 확인 |
+
+#### 검증 빌드 메모
+- Build A: Lv5, STR 15, VIT 12, AGI 10, INT 8, PER 8, SEN 8, 장비/소모품 없음
+- Build B: Lv10, STR 20, VIT 18, AGI 15, INT 12, PER 12, SEN 12, 장비/소모품 없음
+- Build C: Lv15, STR 25, VIT 22, AGI 18, INT 14, PER 15, SEN 14, 장비/소모품 없음
+- Build D: Lv15 가정 빌드. STR 29, VIT 24, AGI 20, INT 14, PER 18, SEN 16 + `skill-iron-charge`
+
+#### 11-7 판단
+- drawRate는 모든 케이스 0%로 정상.
+- 평균 턴은 대부분 5~15턴 목표에 들어왔고, Case 4만 16.4턴으로 약간 길다.
+- A/E는 100% 승리지만 입문 E급 게이트이므로 허용 가능한 쉬움으로 판단.
+- A/D는 1% 승리로 상위 게이트 도전 위험성이 명확해짐.
+- D/C는 장비/스킬 가정 때문에 승률이 크게 오른다. 현재 `calculatePlayerCombatStats()`의 `skillTotalPower`가 0이라 combatPower가 실제 공격 스킬 가치를 충분히 반영하지 못하는 점은 다음 밸런스 개선 후보.
+- 5개 케이스 기준 ratio-victoryRate R²는 약 0.65로 목표 0.85 미만. 원인은 표본 수가 작고 Build D의 스킬 영향이 combatPower에 반영되지 않기 때문으로 판단. 11-7에서는 공식 변경 없이 기록만 남김.
+- `gate_success_bonus`는 계속 미적용. 향후 전투력 보정, 첫 턴 버프, 명중/치명 보정 중 하나로 별도 설계 필요.
+
+#### 테스트 결과
+- `npm run build` 통과
+- 기존 CSS `@import` 위치 경고는 계속 표시되며, 이번 변경과 무관
+
+### 11차 작업 10단계 완료 (2026-05-15) — scoreSkill 상황 기반 개선
+- `game.ts`: `BattleSkillContext` 확장
+  - `enemyHpRatio`, `selfAtk`, `selfDef`, `selfSpeed`, `enemyAtk`, `enemyDef`, `enemySpeed`, `isPlayer` optional 필드 추가
+  - 기존 호출부가 깨지지 않도록 optional 유지
+- `game.ts`: `scoreSkill()` 상황 기반 개선
+  - attack: `power * 100 - cooldown * 3`으로 안정적 우선순위 부여
+  - heal: HP 25/40/60% 구간별 점수화
+  - buff: stat별 점수 분리
+    - 공격형 buff는 적 HP가 충분할 때만 제한적으로 사용
+    - 방어형 buff는 초반 풀피 남발 방지, HP 저하/적 공격 우위에서 점수 증가
+    - accuracy buff는 낮게 평가
+  - debuff: 적 방어/공격이 충분히 높거나 전투 초반일 때만 가치 증가
+  - 적 HP가 낮으면 buff/debuff 낭비 방지
+- `game.ts`: chooseSkill context 보강
+  - `buildBattleSkillContext()` 추가
+  - actor/target의 activeEffects 반영 effective stats를 scoreSkill에 전달
+  - hpRatio는 0~1 clamp 및 maxHp 0 방어
+- 변경하지 않은 것
+  - 전투 공식, damage 공식, combatPower 공식, skillTotalPower 공식, 몬스터 스탯, 보상/stamina/draw 정책, persist version
+
+#### 11-10 재검증 결과
+
+| Case | Build | Job | Gate | Power | Rec | Ratio | Risk | Victory | Defeat | Draw | Avg Turns | Avg HP | 판단 |
+|---|---|---|---|---:|---:|---:|---|---:|---:|---:|---:|---:|---|
+| 1 | A | `unawakened` | 균열의 골목 | 372 | 300 | 1.24 | normal | 100% | 0% | 0% | 5.6 | 207.8 | 변화 거의 없음 |
+| 2 | A | `unawakened` | 나태의 소굴 | 372 | 650 | 0.57 | extreme | 0% | 100% | 0% | 9.1 | 0.0 | 변화 거의 없음 |
+| 3 | B | `grimoire-decoder` | 나태의 소굴 | 527 | 650 | 0.81 | high | 55% | 45% | 0% | 12.4 | 30.4 | D 진입권 회복. 낮은 방어 적에게 debuff 낭비 감소 |
+| 4 | C | `silent-monk` | 망각의 서고 | 652 | 870 | 0.75 | high | 5% | 95% | 0% | 16.9 | 4.2 | 방어 buff 초반 남발은 줄었지만 C급 기준 여전히 매우 위험 |
+| 5 | D | `fate-harmonizer` | 망각의 서고 | 694 | 870 | 0.80 | high | 31% | 69% | 0% | 17.0 | 14.2 | 약한 atk buff 반복 낭비 감소. 승률은 일부 회복 |
+
+#### R² 변화
+- 11-8: 약 0.79
+- 11-9: 약 0.83
+- 11-10: 약 0.88
+- 목표 0.85 이상 달성. 다만 이것은 직업별 승률이 모두 오른 결과가 아니라, 위험한 빌드를 더 정확히 위험하게 판정한 효과도 포함한다.
+
+#### 로그/패턴 확인
+- `silent-monk`: 풀피 초반에는 `basic-attack`을 먼저 사용하고, HP가 약 75% 아래로 내려간 뒤 `skill-silent-guard`를 사용한다.
+- `fate-harmonizer`: `skill-fate-alignment`는 적 HP가 충분히 남은 초반에만 제한적으로 사용하고, 적 HP가 낮으면 basic attack을 우선한다.
+- `grimoire-decoder`: D급처럼 방어가 아주 높지 않은 적에게는 `skill-archive-analysis` 남발이 줄어든다.
+
+#### 남은 한계 / TODO
+- 방어형 스킬은 1v1 단일 전투에서 공격 턴 손실을 완전히 상쇄하기 어렵다.
+- `skill-silent-guard`는 피해 감소/반격/회복과 연계되면 직업 정체성이 더 살아날 수 있다.
+- `skill-fate-alignment`의 +ATK 버프는 현재 수치상 한 턴을 쓰기에는 효율이 낮다. 향후 2차 스킬 또는 multi-hit/장기전 구조에서 재평가.
+
+#### 테스트 결과
+- `npm run build` 통과
+- 기존 CSS `@import` 위치 경고는 계속 표시되며, 이번 변경과 무관
+
+### 11차 작업 9단계 완료 (2026-05-15) — 직업별 전투 스킬 매핑 확대
+- `seed.ts`: 직업 대표 스킬 추가
+  - research: `skill-archive-analysis` / 방어식 해체
+  - balance: `skill-fate-alignment` / 운명의 조율
+- `game.ts`: `JOB_COMBAT_SKILL_IDS` 매핑 갱신
+  - market: `golden-eye-diviner`, `golden-oracle` → `skill-golden-eye-insight`
+  - research: `grimoire-decoder`, `abyss-archivist` → `skill-archive-analysis`
+  - training: `iron-squire`, `steelheart-fighter` → `skill-iron-charge`
+  - discipline: `silent-monk`, `chrono-judge` → `skill-silent-guard`
+  - balance: `nameless-awakened`, `fate-harmonizer` → `skill-fate-alignment`
+  - `unawakened`는 `basic-attack`만 사용
+- 정책
+  - 1차/2차 직업은 같은 라인의 대표 스킬을 공유
+  - 2차 전용 강화 스킬은 향후 TODO
+  - 장비 액티브 스킬 구조화는 향후 TODO
+  - 전투 공식, 데미지 공식, 몬스터 스탯, 게이트 recommendedPower 변경 없음
+
+#### 추가/매핑한 스킬
+- market: `skill-golden-eye-insight`
+  - 치명타 감각 버프
+- research: `skill-archive-analysis`
+  - 적 방어력 -8, 3턴, cooldown 4
+- training: `skill-iron-charge`
+  - power 1.35 공격, cooldown 3
+- discipline: `skill-silent-guard`
+  - 방어력 +12, 3턴, cooldown 5
+- balance: `skill-fate-alignment`
+  - 공격력 +5, 3턴, cooldown 5
+
+#### skill value 확인
+
+| Skill | Value | 판단 |
+|---|---:|---|
+| `basic-attack` | 0.00 | 정상 |
+| `skill-golden-eye-insight` | 3.50 | 낮지만 치명타 보정으로 적절 |
+| `skill-archive-analysis` | 7.00 | research 대표 디버프로 적절 |
+| `skill-iron-charge` | 17.07 | 공격 스킬로 가장 높지만 과도하지 않음 |
+| `skill-silent-guard` | 9.16 | 방어형 스킬로 적절 |
+| `skill-fate-alignment` | 5.73 | balance 범용 버프로 적절 |
+
+#### 11-9 재검증 결과
+
+| Case | Build | Job | Gate | Power | Rec | Ratio | Risk | Victory | Defeat | Draw | Avg Turns | Avg HP | 판단 |
+|---|---|---|---|---:|---:|---:|---|---:|---:|---:|---:|---:|---|
+| 1 | A | `unawakened` | 균열의 골목 | 372 | 300 | 1.24 | normal | 100% | 0% | 0% | 5.7 | 206.9 | 입문 유지 |
+| 2 | A | `unawakened` | 나태의 소굴 | 372 | 650 | 0.57 | extreme | 0% | 100% | 0% | 8.9 | 0.0 | 상위 도전 위험 유지 |
+| 3 | B | `grimoire-decoder` | 나태의 소굴 | 527 | 650 | 0.81 | high | 57% | 43% | 0% | 12.8 | 34.7 | research 스킬 반영, D 진입권 유지 |
+| 4 | C | `silent-monk` | 망각의 서고 | 652 | 870 | 0.75 | high | 7% | 93% | 0% | 16.3 | 3.8 | 방어형 버프는 초반 공격 턴 손실이 있어 1:1 DPS 레이스에서 약함 |
+| 5 | D | `fate-harmonizer` | 망각의 서고 | 694 | 870 | 0.80 | high | 54% | 46% | 0% | 18.3 | 44.2 | balance 스킬 반영, 장기전 성향 |
+
+#### R² 변화
+- 11-7: 약 0.65
+- 11-7B: 약 0.76
+- 11-8: 약 0.79
+- 11-9: 약 0.83
+- 목표 0.85에 거의 접근했지만 아직 미달. 직업 스킬이 더 많은 케이스에 반영되며 상관은 개선됨.
+
+#### 남은 한계 / TODO
+- `skill-silent-guard` 같은 방어형 buff는 `scoreSkill()` 정책상 초반 공격 기회를 소비한다.
+  - 향후 방어형 스킬은 도발/피해감소/반격/회복과 연계하거나, scoreSkill에 상황 기반 조건을 추가할 필요가 있다.
+- 2차 직업 전용 강화 스킬 후보
+  - 황금안의 예언자: 예언된 일격
+  - 심연의 기록관: 심연 주석
+  - 강철심장의 투사: 심장 강타
+  - 시간의 심판관: 시간 지연
+  - 운명의 조율자: 균형의 축복
+- 장비 액티브 스킬은 현재 `그림자 단검 -> skill-shadow-edge` 임시 연결만 있음.
+
+#### 테스트 결과
+- `npm run build` 통과
+- 기존 CSS `@import` 위치 경고는 계속 표시되며, 이번 변경과 무관
+
+### 11차 작업 8단계 완료 (2026-05-15) — skillTotalPower 산정 개선 + 전투력 신뢰도 재검증
+- `game.ts`: 스킬 전투 가치 helper 추가
+  - `calculateSkillCombatValue(skill)`
+  - `calculateSkillTotalPower(skills)`
+  - `getPlayerCombatSkills({ jobId, equippedItems, allSkills })`
+- `calculatePlayerCombatStats()` 확장
+  - `skills?: SkillDefinition[]` 인자 추가
+  - `skillTotalPower`를 실제 사용 가능한 player skill 목록 기반으로 산정
+  - 기본 공격만 있으면 `skillTotalPower = 0`
+  - cap은 120으로 제한
+- `GatePanel.tsx`: 내 전투력 계산 시 `getPlayerCombatSkills()` 결과를 전달
+- `store.ts`: `startGateBattle()`도 같은 `getPlayerCombatSkills()` helper를 사용
+  - UI 전투력 계산과 실제 전투 스킬 목록을 통일
+- 몬스터/게이트 수치, player stat 공식, damage 공식, combatPower 가중치, stamina/부상/draw 정책 변경 없음
+
+#### skill value 정책
+- attack
+  - `(power - 1) * 100 * cooldownFactor`
+  - 기본 공격 power 1.0은 추가 가치 0
+  - `skill-iron-charge`는 약 17.07
+- buff/debuff
+  - `effect value * stat weight * duration * 0.35 * cooldownFactor`
+  - `accuracy`는 combatPower 공식과 동일하게 0 가중치
+  - 긴 지속시간은 최대 5턴까지만 반영
+- heal
+  - `healPower * 80 * cooldownFactor`
+- cooldownFactor
+  - `1 / (1 + cooldown * 0.35)`
+- cap
+  - `calculateSkillTotalPower()`는 최대 120
+
+#### 11-8 재검증 결과
+
+| Case | Build | Gate | Power | Rec | Ratio | Risk | Victory | Defeat | Draw | Avg Turns | Avg HP | 판단 |
+|---|---|---|---:|---:|---:|---|---:|---:|---:|---:|---:|---|
+| 1 | A | 균열의 골목 | 372 | 300 | 1.24 | normal | 100% | 0% | 0% | 5.7 | 208.4 | basic only라 변화 없음 |
+| 2 | A | 나태의 소굴 | 372 | 650 | 0.57 | extreme | 0% | 100% | 0% | 9.5 | 0.0 | basic only라 변화 없음 |
+| 3 | B | 나태의 소굴 | 516 | 650 | 0.79 | high | 55% | 45% | 0% | 12.7 | 31.2 | basic only라 변화 없음 |
+| 4 | C | 망각의 서고 | 639 | 870 | 0.73 | high | 20% | 80% | 0% | 16.3 | 10.5 | basic only라 변화 없음 |
+| 5 | D | 망각의 서고 | 711 | 870 | 0.82 | high | 76% | 24% | 0% | 15.1 | 71.2 | `skill-iron-charge` 가치 반영으로 Power 상승 |
+
+#### R² 변화
+- 11-7: 약 0.65
+- 11-7B: 약 0.76
+- 11-8: 약 0.79
+- 목표 0.85에는 아직 미달하지만, 실제 스킬 보유 빌드의 전투력 표시는 더 정직해졌다.
+
+#### 남은 한계
+- 5개 검증 케이스 중 4개가 basic only라 R² 개선 폭이 제한적이다.
+- 일부 직업은 combat skill이 매핑되어 있지만, 실제 플레이 검증 케이스에는 아직 충분히 반영되지 않았다.
+- 장비 액티브 스킬은 현재 `그림자 단검 -> skill-shadow-edge` 임시 연결만 있다.
+- buff/debuff 가치는 시뮬레이션 기반 기대값이 아니라 근사치다.
+
+#### 테스트 결과
+- `npm run build` 통과
+- 기존 CSS `@import` 위치 경고는 계속 표시되며, 이번 변경과 무관
+
+### 11차 작업 7B단계 완료 (2026-05-15) — 게이트 난이도 소폭 상향 + 전투 로그 UX 개선
+- `seed.ts`: 11-7 결과를 기준으로 몬스터 HP/ATK/DEF만 소폭 상향
+  - `rift-rat`: HP 125 → 133, ATK 24 → 25, DEF 10 유지
+  - `lazy-goblin`: HP 340 → 350, ATK 78 → 80, DEF 30 → 31
+  - `forgetting-warden`: HP 560 → 575, ATK 86 → 88, DEF 44 → 46
+- `seed.ts`: recommendedPower 소폭 조정
+  - `gate-rift-alley`: 285 → 300
+  - `gate-lair-of-sloth`: 620 → 650
+  - `gate-archive-of-forgetting`: 830 → 870
+- `game.ts`: BattleTurn.message 문구 개선
+  - 일반 hit: 공격을 "날렸다", 몬스터는 "거칠게 달려들었다" 톤으로 분리
+  - critical: "급소를 꿰뚫었다" 문구로 강화
+  - miss/evade: "허공을 갈랐다", "몸을 비틀어 피해냈다"로 개선
+  - buff/debuff: 전장의 흐름, 감각 각성, 무거운 저주 느낌 강화
+  - heal: "호흡을 가다듬었다"로 정비 느낌 추가
+- `GatePanel.tsx`: 최근 전투 결과 설명 문구 추가
+  - draw: 시간초과, 보상/패널티 없음, active gate 유지, 세팅 변경 후 재도전 가능을 명시
+  - victory/defeat도 짧은 결과 설명 추가
+- 공식 유지
+  - player stat 공식, combatPower 공식, damage 공식, stamina/부상/draw 정책 변경 없음
+  - persist version 변경 없음
+
+#### 7B 재검증 결과
+
+| Case | Build | Gate | Power | Rec | Ratio | Risk | Victory | Defeat | Draw | Avg Turns | Avg HP | 판단 |
+|---|---|---|---:|---:|---:|---|---:|---:|---:|---:|---:|---|
+| 1 | A | 균열의 골목 | 372 | 300 | 1.24 | normal | 100% | 0% | 0% | 5.7 | 208.4 | 입문 가능 유지 |
+| 2 | A | 나태의 소굴 | 372 | 650 | 0.57 | extreme | 0% | 100% | 0% | 9.5 | 0.0 | 상위 도전 위험 명확 |
+| 3 | B | 나태의 소굴 | 516 | 650 | 0.79 | high | 55% | 45% | 0% | 12.7 | 31.2 | D급 진입권 하한선. 적절 |
+| 4 | C | 망각의 서고 | 639 | 870 | 0.73 | high | 20% | 80% | 0% | 16.3 | 10.5 | 위험하지만 가능. C급은 추가 상향 금지 |
+| 5 | D | 망각의 서고 | 685 | 870 | 0.79 | high | 76% | 24% | 0% | 15.1 | 71.2 | 장비/스킬 효과 유지 |
+
+#### Combat Power 신뢰도 TODO
+- 11-7 밸런스 검증에서 combatPower ratio와 실제 victoryRate의 R²는 약 0.65로 목표 0.85에 미달했다.
+- 7B 재검증 기준 R²는 약 0.76으로 개선되었지만 여전히 목표 미만이다.
+- 현재 원인 후보
+  - `skillTotalPower`가 실제 전투 내 스킬 가치와 정확히 대응하지 않음
+  - buff/debuff/cooldown/생존력/몬스터 스킬 영향이 단순 전투력 공식에 충분히 반영되지 않음
+  - 현재 케이스 수가 적어 통계적으로 불안정함
+- 정책
+  - 현재 단계에서는 `calculateCombatPower()` 공식을 변경하지 않는다.
+  - 당분간 recommendedPower와 monster stats를 통해 밸런스를 맞춘다.
+  - 더 많은 전투 케이스가 쌓인 뒤 `skillTotalPower` 재정의 또는 combatPower 공식 보정을 검토한다.
+
+#### 테스트 결과
+- `npm run build` 통과
+- 기존 CSS `@import` 위치 경고는 계속 표시되며, 이번 변경과 무관
+### 11차 작업 11단계 완료 (2026-05-15) — 방어형 스킬 재설계
+- `types.ts`: `CombatEffectKind` 추가 (`stat`, `damage_reduction`, `counter`)
+- `types.ts`: `SkillEffect` 확장
+  - `kind`
+  - `counterRate`
+  - `counterPower`
+- `types.ts`: `SkillDefinition.effects[]` 지원
+  - 기존 `effect` 단일 구조는 유지
+  - 신규 스킬은 `effect`와 `effects`를 함께 또는 따로 사용할 수 있음
+- `types.ts`: `ActiveCombatEffect` 확장
+  - `kind`
+  - optional `stat`
+  - `counterRate`
+  - `counterPower`
+- `seed.ts`: `skill-silent-guard` 재설계
+  - 이름: `침묵의 반격식`
+  - 피해감소: 15%, 3턴
+  - 반격: 45%, counterPower 0.55, 3턴
+  - cooldownTurns: 4
+- `game.ts`: `getSkillEffects()` 추가
+  - 기존 `effect`와 신규 `effects[]`를 모두 전투 처리 대상으로 합침
+- `game.ts`: active combat effect refresh key 보강
+  - stat effect: `targetId + stat`
+  - damage_reduction: `targetId + damage_reduction`
+  - counter: `targetId + counter`
+  - 같은 효과는 누적하지 않고 refresh
+- `game.ts`: damage_reduction 처리
+  - 기본 damage 계산 이후 적용
+  - 최대 피해감소 cap 50%
+- `game.ts`: counter 처리
+  - 실제 공격 피해를 받은 뒤 target이 생존했을 때 확률 반격
+  - 반격은 다시 반격을 유발하지 않음
+  - 기존 BattleTurn message에 반격 피해를 함께 표시
+- `game.ts`: `scoreSkill()` 반영
+  - damage_reduction/counter 효과를 방어형 buff로 평가
+  - 풀피 초반 무조건 사용은 억제
+  - HP 85% 이하 또는 강한 적 공격 앞에서는 더 빨리 사용
+- `game.ts`: `calculateSkillCombatValue()` 보강
+  - `effects[]` 합산
+  - damage_reduction/counter 가치 반영
+
+#### 11-11 skill value 확인
+
+| Skill | Value | 판단 |
+|---|---:|---|
+| `skill-silent-guard` / 침묵의 반격식 | 22.97 | 권장 범위 10~25 안쪽. 방어형 정체성 강화에 적절 |
+
+#### 11-11 재검증 결과
+
+| Case | Build | Job | Gate | Power | Rec | Ratio | Risk | Victory | Defeat | Draw | Avg Turns | Avg HP | 판단 |
+|---|---|---|---|---:|---:|---:|---|---:|---:|---:|---:|---:|---|
+| 1 | A | `unawakened` | 균열의 골목 | 372 | 300 | 1.24 | normal | 100% | 0% | 0% | 5.9 | 200.2 | 입문 E급 유지 |
+| 2 | A | `unawakened` | 나태의 소굴 | 372 | 650 | 0.57 | extreme | 0% | 100% | 0% | 9.3 | 0.0 | 상위 도전 위험 유지 |
+| 3 | B | `grimoire-decoder` | 나태의 소굴 | 527 | 650 | 0.81 | high | 54% | 46% | 0% | 12.6 | 35.0 | D 진입권 유지 |
+| 4 | C | `silent-monk` | 망각의 서고 | 673 | 870 | 0.77 | high | 16% | 84% | 0% | 17.8 | 6.5 | 5%대에서 개선. 여전히 C급 고위험 도전 |
+| 5 | D | `fate-harmonizer` | 망각의 서고 | 694 | 870 | 0.80 | high | 28% | 72% | 0% | 17.2 | 17.0 | 큰 변화 없음. balance 계열 기존 위험도 유지 |
+
+#### R² 변화
+- 11-10: 약 0.88
+- 11-11: 약 0.908
+- drawRate: 전 케이스 0%
+
+#### 11-11 메모
+- `skill-silent-guard`는 단순 DEF buff에서 피해감소 + 반격형 스킬로 바뀌었다.
+- 초기 권장안의 반격 확률 35%는 Case 4 승률이 약 10~11%에 머물러 목표 하한에 부족했다.
+- 몬스터/공식/보상 정책은 건드리지 않고 스킬 설계 안에서 counterRate만 45%로 소폭 조정했다.
+- 향후 2차 직업 전용 스킬을 추가할 때 `damage_reduction`, `counter` 효과를 재사용할 수 있다.
+- persist version 변경 없음.
+- `npm run build` 통과. 기존 CSS `@import` 위치 경고는 계속 표시되며 이번 변경과 무관.
+### 11차 작업 12단계 완료 (2026-05-15) — 전투 결과/로그 UX 개선 + JobPanel 접기
+- `GatePanel.tsx`: 최근 전투 결과 카드를 결과별 카드로 개선
+  - victory: `게이트 클리어`
+  - defeat: `공략 실패`
+  - draw: `시간초과`
+  - 결과별 border/background 색상 분리
+- `GatePanel.tsx`: 보상/패널티 표시 정리
+  - XP 보상: `XP +N`
+  - 아이템 보상: `전리품: 아이템명 (rarity)`
+  - defeat: stamina penalty + injuryHours + 회복 조건 표시
+  - victory: `게이트 입장 비용: 스태미나 -20` 표시
+  - draw: `보상 없음`, `패널티 없음` 명확히 표시
+- `GatePanel.tsx`: 전투 로그 접기/펼치기 추가
+  - 기본: 최근 5줄 표시
+  - 펼침: 전체 로그 표시
+  - 버튼: `전체 로그 보기` / `로그 접기`
+- `GatePanel.tsx`: outcome 배지 추가
+  - 타격, 치명, 빗나감, 회피, 강화, 약화, 회복
+- `GatePanel.tsx`: 반격/피해감소 로그 강조
+  - message에 `반격`, `흘려`, `침묵의 반격식` 포함 시 amber 계열 강조
+- `GatePanel.tsx`: draw 후 active gate 상태에서 버튼 문구를 `게이트 재도전`으로 표시
+- `JobPanel.tsx`: 직업 목록 기본 접힘 처리
+  - 현재 장착 직업 요약은 항상 표시
+  - 해금한 직업 수 표시
+  - `직업 목록 펼치기` / `직업 목록 접기` 버튼 추가
+  - 전체 직업 카드 목록은 펼쳤을 때만 표시
+
+#### 11-12 유지 정책
+- 전투 공식 변경 없음
+- damage 공식 변경 없음
+- combatPower 공식 변경 없음
+- 몬스터 스탯 변경 없음
+- 보상/stamina/draw 정책 변경 없음
+- 게이트 출현 정책 변경 없음
+- persist version 변경 없음
+
+#### 11-12 테스트 결과
+- `npm run build` 통과
+- 기존 CSS `@import` 위치 경고는 계속 표시되며 이번 변경과 무관.
+### 11차 작업 13단계 완료 (2026-05-15) — 장비 액티브/전투 스킬 구조화
+- `types.ts`: `Item.combatSkillIds?: string[]` optional 필드 추가
+  - 장착 중일 때 플레이어가 사용할 수 있는 전투 스킬 ID 목록
+  - 기존 저장 데이터와 호환되므로 persist version 변경 없음
+- `seed.ts`: 장비 전용 전투 스킬 추가
+  - `equip-shadow-slash`: 그림자 베기
+  - `equip-kings-command`: 왕의 명령
+  - `equip-system-pulse`: 시스템 펄스
+  - `equip-black-suit-guard`: 흐트러짐 없는 자세
+- `seed.ts`: 일부 epic/legendary 장비에 `combatSkillIds` 부여
+  - 검은 정장 → 흐트러짐 없는 자세
+  - 그림자 단검 → 그림자 베기
+  - 왕의 검 → 왕의 명령
+  - 시스템의 조각 → 시스템 펄스
+- `game.ts`: `getPlayerCombatSkills()`가 장착 장비의 `combatSkillIds`를 합산하도록 변경
+  - 직업 스킬 + 장착 장비 스킬 + 기본 공격을 Set으로 중복 제거
+  - 보유만 한 장비는 스킬 제공하지 않음
+  - 기존 `그림자 단검` 이름 기반 임시 연결 제거
+- `Inventory.tsx`: 장비 카드와 장착 슬롯에 제공 전투 스킬명 표시
+- `GatePanel.tsx`: 현재 사용 가능 전투 스킬 목록 표시
+  - 기존 `getPlayerCombatSkills()` helper를 그대로 사용하므로 UI 전투력과 실제 전투 스킬 목록이 일치
+- `store.ts`: 이미 `startGateBattle()`에서 `getPlayerCombatSkills()`를 사용 중이므로 별도 변경 없음
+
+#### 11-13 장비 스킬 value
+
+| 장비 | 스킬 | Value | 판단 |
+|---|---|---:|---|
+| 그림자 단검 | 그림자 베기 | 12.20 | 공격형 epic 스킬로 적절 |
+| 왕의 검 | 왕의 명령 | 8.40 | 안정적인 legendary 버프. 폭증 없음 |
+| 시스템의 조각 | 시스템 펄스 | 4.58 | 보조 debuff로 보수적 |
+| 검은 정장 | 흐트러짐 없는 자세 | 4.36 | 방어 보조로 보수적 |
+
+#### 11-13 간단 검증 결과
+
+기준: Lv15 C급 가정 빌드, C급 `망각의 파수꾼` 100회 간이 시뮬레이션.
+
+| 조건 | Power | skillTotalPower | Victory | Defeat | Draw | Avg Turns | Avg HP | 판단 |
+|---|---:|---:|---:|---:|---:|---:|---:|---|
+| 장비 없음 | 639 | 0 | 21% | 79% | 0% | 16.0 | 10.6 | 기준선 |
+| 그림자 단검 | 657 | 12 | 35% | 65% | 0% | 15.6 | 18.8 | 공격 스킬 효과 확인 |
+| 왕의 검 | 651 | 8 | 12% | 88% | 0% | 16.3 | 3.3 | 전투력 반영은 되나 단독 버프 효율은 제한적 |
+| 시스템의 조각 | 646 | 5 | 11% | 89% | 0% | 16.4 | 3.0 | debuff 단독 효율은 제한적 |
+| 검은 정장 | 645 | 4 | 9% | 91% | 0% | 16.8 | 4.7 | 피해감소 단독 효율은 제한적 |
+
+#### 11-13 메모
+- 장비 스킬 하나만으로 승률이 과도하게 폭증하지 않는 것은 확인했다.
+- 공격형 장비 스킬은 즉시 체감이 크고, 순수 buff/debuff/피해감소 장비는 현재 `scoreSkill`/1:1 DPS 구조에서는 단독 효율이 낮다.
+- 다음 밸런스 후보:
+  - 장비 buff/debuff 스킬의 scoreSkill 평가 보정
+  - 장비 스킬을 2차 직업/다수 몬스터 구조와 함께 재평가
+  - legendary 장비 전용 액티브 스킬 강화
+- 전투 공식, 몬스터 스탯, 보상/stamina/draw 정책 변경 없음.
+- `npm run build` 통과. 기존 CSS `@import` 위치 경고는 계속 표시되며 이번 변경과 무관.
+### 11차 작업 14단계 완료 (2026-05-15) — 다수 몬스터 / 웨이브 전투 확장
+- `types.ts`: `BattleTurn`에 optional wave 정보 추가
+  - `waveNumber?: number`
+  - `waveLabel?: string`
+- `types.ts`: `CombatLog`에 optional wave 요약 추가
+  - `totalWaves?: number`
+  - `clearedWaves?: number`
+- `game.ts`: `simulateGateWaveBattle()` 추가
+  - 기존 `simulateGateBattle()` 1v1 함수는 유지
+  - `monsters: MonsterDefinition[]`를 순차 wave로 처리
+  - `monsterIds` 1개인 기존 게이트도 같은 흐름에서 정상 처리 가능
+- `game.ts`: `summarizeGateWaveBattleSimulations()` 추가
+  - seedBase 기반 100회 검증용 helper
+- `game.ts`: `resolveAction()` 로그에 optional wave 정보 전달
+- `store.ts`: `startGateBattle()`이 `gate.monsterIds` 전체를 읽고 `simulateGateWaveBattle()` 호출
+  - monster skill은 모든 wave monster의 skillIds를 합산
+  - victory/defeat/draw 후 처리, reward, penalty, stamina, injury 정책은 기존 그대로 유지
+- `seed.ts`: 신규 웨이브 게이트 2개 추가
+  - E급 `gate-rift-nest` / 균열의 둥지: `rift-rat` → `rift-stray`
+  - D급 `gate-sloth-patrol` / 나태의 순찰로: `rift-rat` → `lazy-goblin`
+- `GatePanel.tsx`: 웨이브/몬스터 표시 개선
+  - 몬스터 카드에 `Wave N` 배지 표시
+  - 전체 wave 수 표시
+  - 최근 전투 결과 카드에 `clearedWaves / totalWaves` 표시
+  - 전투 로그에 `W1`, `W2` wave 배지 표시
+
+#### 11-14 웨이브 정책
+- 동시 다수 몬스터 전투가 아니라 순차 웨이브 전투.
+- 플레이어 HP는 웨이브 사이에 유지된다.
+- cooldown과 activeEffects는 웨이브 사이에 유지된다.
+- maxTurns는 전체 전투 기준 30턴.
+- victory: 모든 wave 클리어.
+- defeat: 어느 wave든 플레이어 HP 0.
+- draw: 전체 maxTurns 초과.
+- draw는 보상/패널티 없음, active gate 유지.
+
+#### 11-14 간단 검증 결과
+
+간이 100회 검증. 공식/몬스터 스탯/보상은 변경하지 않음.
+
+| Case | Gate | Waves | Victory | Defeat | Draw | Avg Turns | 판단 |
+|---|---|---:|---:|---:|---:|---:|---|
+| 기존 E 1v1 | 균열의 골목 | 1 | 100% | 0% | 0% | 5.5 | 기존 입문 난이도 유지 |
+| 기존 D 1v1 | 나태의 소굴 | 1 | 0% | 100% | 0% | 9.4 | Lv5 기준 상위 도전 위험 유지 |
+| 신규 E wave | 균열의 둥지 | 2 | 100% | 0% | 0% | 10.6 | 단일 E보다 길지만 입문 가능 |
+| 신규 D wave | 나태의 순찰로 | 2 | 57% | 43% | 0% | 16.9 | D급 진입권 기준 위험하지만 가능 |
+
+#### 11-14 메모
+- 동시 다수 전투, 광역 스킬, wave별 보상은 구현하지 않음.
+- 웨이브 게이트 rewardTable은 기존 E/D 보상을 재사용한다.
+- 웨이브 보상량과 maxTurns는 11-16 종합 밸런스에서 재검토 후보.
+- 전투 공식, 몬스터 스탯, 보상/stamina/draw 정책, persist version 변경 없음.
+- `npm run build` 통과. 기존 CSS `@import` 위치 경고는 계속 표시되며 이번 변경과 무관.
+### 11차 작업 15단계 완료 (2026-05-15) - gate_success_bonus 연결
+- `game.ts`: `getActiveGateSuccessBonus()`와 `createGateSuccessCombatEffects()`를 추가했다.
+- `game.ts`: `simulateGateBattle()`과 `simulateGateWaveBattle()`이 `initialActiveEffects`를 받을 수 있게 확장했다.
+- `store.ts`: `startGateBattle()`에서 `activeConsumableEffects`의 `gate_success_bonus`를 전투 시작 버프로 변환해 시뮬레이터에 전달한다.
+- `GatePanel.tsx`: 적용 중인 게이트 보조 효과를 `ATK/DEF +N`, 전투 시작 후 3턴으로 별도 표시한다.
+- `Inventory.tsx`: `gate_success_bonus` 표시 문구를 성공률 직접 보정이 아니라 게이트 전투 보조 효과로 정리했다.
+
+#### 11-15 정책
+- `gate_success_bonus`는 victory 확률을 직접 올리지 않는다.
+- 전투 결과를 강제로 victory로 바꾸지 않는다.
+- 기본 combatPower 숫자에는 반영하지 않는다.
+- `next_gate`와 `today` duration만 게이트에 적용한다.
+- `next_quest` duration은 게이트에 적용하지 않는다.
+- 총 bonus는 0.3 cap을 적용한다.
+- bonus 0.1당 대략 `ATK/DEF +5`로 변환한다.
+- 지속 시간은 전투 시작 후 3턴이다.
+- `next_gate` 소모품은 victory/defeat/draw 결과와 관계없이 전투 시도 후 consumed 처리한다.
+- `today` 효과는 전투 후에도 유지한다.
+
+#### 11-15 간단 검증 결과
+
+D급 웨이브에 가까운 기준 전투를 100회씩 비교했다. 전투 공식, 몬스터 스탯, 보상/stamina/draw 정책은 변경하지 않았다.
+
+| 조건 | Stat Bonus | Victory | Defeat | Draw | Avg Turns | Avg HP | 판단 |
+|---|---:|---:|---:|---:|---:|---:|---|
+| bonus 없음 | +0 | 33% | 67% | 0% | 16.6 | 25.3 | 기준 |
+| bonus 0.1 | +5 | 63% | 37% | 0% | 15.7 | 47.6 | 아슬아슬한 전투에서 체감되는 보조 효과 |
+| bonus 0.3 cap | +15 | 96% | 4% | 0% | 14.2 | 90.9 | 강하지만 cap 적용 |
+| bonus 0.5 입력 | +15 | 96% | 4% | 0% | 14.2 | 90.9 | 0.3 cap 확인 |
+
+#### 11-15 메모
+- `gate_success_bonus`는 전투 시작 시 player 대상 `stat` active effect 2개로 변환된다.
+  - `atk +statBonus`
+  - `def +statBonus`
+- 초기 효과도 기존 activeEffects와 같은 duration 감소 정책을 따른다.
+- 웨이브 전투에서는 기존 정책대로 activeEffects가 웨이브 사이에 유지된다.
+- `npm run build` 통과. 기존 CSS `@import` 위치 경고는 계속 표시되며 이번 변경과 무관하다.
+### 11차 작업 16단계 완료 (2026-05-15) - 게이트/전투 종합 시뮬레이션 + 최종 밸런스 점검
+
+#### 11-16 검증 목적
+- 직업별 승률 편차 확인
+- 장비/장비 스킬 영향 확인
+- `gate_success_bonus` 0.1 / 0.3 / cap 영향 확인
+- 웨이브 게이트 난이도 확인
+- 보상 기대값 점검
+- stamina/부상 흐름 점검
+- recommendedPower와 risk 표시 신뢰도 점검
+
+#### 11-16 종합 시뮬레이션 조건
+- 빌드 수: 6개
+- 게이트 수: 6개
+- 반복 수: 각 조합 100회
+- 총 시뮬레이션 수: 3,600전
+- 장비 빌드는 실제 `ITEM_POOL` 장비를 기반으로 mock `id/acquiredAt`만 부여했다.
+- 소모품 빌드는 저장 상태를 변경하지 않는 mock `ActiveConsumableEffect`를 사용했다.
+
+#### 11-16 게이트 종합 시뮬레이션 결과
+
+| Build | Gate | Rank | Waves | Power | Rec | Ratio | Risk | Victory | Defeat | Draw | Avg Turns | Avg HP | 판단 |
+|---|---|---|---:|---:|---:|---:|---|---:|---:|---:|---:|---:|---|
+| A 초급 무각성 | 균열의 골목 | E | 1 | 372 | 300 | 1.24 | normal | 100% | 0% | 0% | 5.7 | 205.1 | E급 입문 정상 |
+| A 초급 무각성 | 뒤틀린 뒷골목 | E | 1 | 372 | 300 | 1.24 | normal | 100% | 0% | 0% | 5.2 | 203.0 | E급 입문 정상 |
+| A 초급 무각성 | 균열의 둥지 | E | 2 | 372 | 420 | 0.89 | high | 100% | 0% | 0% | 11.1 | 168.8 | E wave는 길지만 입문 가능 |
+| A 초급 무각성 | 나태의 소굴 | D | 1 | 372 | 650 | 0.57 | extreme | 0% | 100% | 0% | 9.1 | 0.0 | 상위 랭크 도전 위험 정상 |
+| A 초급 무각성 | 나태의 순찰로 | D | 2 | 372 | 780 | 0.48 | extreme | 0% | 100% | 0% | 13.4 | 0.0 | D wave 진입 불가 정상 |
+| A 초급 무각성 | 망각의 서고 | C | 1 | 372 | 870 | 0.43 | extreme | 0% | 100% | 0% | 9.2 | 0.0 | C급 도전 불가 정상 |
+| B D급 진입 공격형 | 균열의 골목 | E | 1 | 542 | 300 | 1.81 | low | 100% | 0% | 0% | 3.1 | 315.8 | 하위 게이트 압도 정상 |
+| B D급 진입 공격형 | 뒤틀린 뒷골목 | E | 1 | 542 | 300 | 1.81 | low | 100% | 0% | 0% | 2.9 | 311.9 | 하위 게이트 압도 정상 |
+| B D급 진입 공격형 | 균열의 둥지 | E | 2 | 542 | 420 | 1.29 | normal | 100% | 0% | 0% | 6.4 | 297.6 | E wave 안정 |
+| B D급 진입 공격형 | 나태의 소굴 | D | 1 | 542 | 650 | 0.83 | high | 81% | 19% | 0% | 11.3 | 52.8 | 공격형 기준 다소 쉬움, 관찰 |
+| B D급 진입 공격형 | 나태의 순찰로 | D | 2 | 542 | 780 | 0.69 | extreme | 68% | 32% | 0% | 14.4 | 42.8 | 표시가 보수적, 관찰 |
+| B D급 진입 공격형 | 망각의 서고 | C | 1 | 542 | 870 | 0.62 | extreme | 1% | 99% | 0% | 13.8 | 0.1 | C급 고위험 정상 |
+| C D급 분석형 | 균열의 골목 | E | 1 | 534 | 300 | 1.78 | low | 100% | 0% | 0% | 4.5 | 316.1 | 하위 게이트 안정 |
+| C D급 분석형 | 뒤틀린 뒷골목 | E | 1 | 534 | 300 | 1.78 | low | 100% | 0% | 0% | 3.3 | 318.4 | 하위 게이트 안정 |
+| C D급 분석형 | 균열의 둥지 | E | 2 | 534 | 420 | 1.27 | normal | 100% | 0% | 0% | 7.7 | 299.6 | E wave 안정 |
+| C D급 분석형 | 나태의 소굴 | D | 1 | 534 | 650 | 0.82 | high | 61% | 39% | 0% | 12.6 | 41.1 | D급 진입권 정상 |
+| C D급 분석형 | 나태의 순찰로 | D | 2 | 534 | 780 | 0.68 | extreme | 48% | 52% | 0% | 16.5 | 28.4 | D wave 위험하지만 가능 |
+| C D급 분석형 | 망각의 서고 | C | 1 | 534 | 870 | 0.61 | extreme | 0% | 100% | 0% | 13.6 | 0.0 | C급 도전 불가 정상 |
+| D 방어형 | 균열의 골목 | E | 1 | 676 | 300 | 2.25 | low | 100% | 0% | 0% | 3.1 | 403.2 | 하위 게이트 압도 |
+| D 방어형 | 뒤틀린 뒷골목 | E | 1 | 676 | 300 | 2.25 | low | 100% | 0% | 0% | 2.9 | 398.9 | 하위 게이트 압도 |
+| D 방어형 | 균열의 둥지 | E | 2 | 676 | 420 | 1.61 | low | 100% | 0% | 0% | 6.3 | 385.0 | E wave 압도 |
+| D 방어형 | 나태의 소굴 | D | 1 | 676 | 650 | 1.04 | normal | 88% | 12% | 0% | 14.8 | 128.3 | 방어형 생존성 확인, 약간 강함 |
+| D 방어형 | 나태의 순찰로 | D | 2 | 676 | 780 | 0.87 | high | 91% | 9% | 0% | 18.8 | 95.5 | 방어형이 D wave에 강함, 장기전 주의 |
+| D 방어형 | 망각의 서고 | C | 1 | 676 | 870 | 0.78 | high | 2% | 97% | 1% | 19.8 | 2.6 | C급은 여전히 매우 위험 |
+| E 장비 공격형 | 균열의 골목 | E | 1 | 682 | 300 | 2.27 | low | 100% | 0% | 0% | 3.1 | 382.1 | 장비 공격형 압도 |
+| E 장비 공격형 | 뒤틀린 뒷골목 | E | 1 | 682 | 300 | 2.27 | low | 100% | 0% | 0% | 1.0 | 394.8 | 장비 스킬 체감 큼 |
+| E 장비 공격형 | 균열의 둥지 | E | 2 | 682 | 420 | 1.62 | low | 100% | 0% | 0% | 5.5 | 372.8 | E wave 압도 |
+| E 장비 공격형 | 나태의 소굴 | D | 1 | 682 | 650 | 1.05 | normal | 100% | 0% | 0% | 8.8 | 207.9 | 장비 공격형 기준 쉬움 |
+| E 장비 공격형 | 나태의 순찰로 | D | 2 | 682 | 780 | 0.87 | high | 100% | 0% | 0% | 12.0 | 187.7 | 장비 스킬 영향 큼 |
+| E 장비 공격형 | 망각의 서고 | C | 1 | 682 | 870 | 0.78 | high | 57% | 43% | 0% | 15.2 | 41.9 | C급 고위험 도전으로 적절 |
+| F 소모품 고위험 도전 | 균열의 골목 | E | 1 | 660 | 300 | 2.20 | low | 100% | 0% | 0% | 5.6 | 359.6 | 하위 게이트 안정 |
+| F 소모품 고위험 도전 | 뒤틀린 뒷골목 | E | 1 | 660 | 300 | 2.20 | low | 100% | 0% | 0% | 4.9 | 365.6 | 하위 게이트 안정 |
+| F 소모품 고위험 도전 | 균열의 둥지 | E | 2 | 660 | 420 | 1.57 | low | 100% | 0% | 0% | 8.1 | 348.8 | E wave 안정 |
+| F 소모품 고위험 도전 | 나태의 소굴 | D | 1 | 660 | 650 | 1.02 | normal | 98% | 2% | 0% | 12.0 | 135.2 | D 1v1에는 강함 |
+| F 소모품 고위험 도전 | 나태의 순찰로 | D | 2 | 660 | 780 | 0.85 | high | 99% | 1% | 0% | 15.6 | 135.0 | D wave에는 강함 |
+| F 소모품 고위험 도전 | 망각의 서고 | C | 1 | 660 | 870 | 0.76 | high | 9% | 91% | 0% | 16.8 | 4.3 | C급은 여전히 위험 |
+
+#### 11-16 gate_success_bonus 검증
+
+동일 seedBase로 bonus만 바꿔 200회씩 비교했다. 기본 combatPower 숫자는 변하지 않고, 전투 시작 active effect만 달라진다.
+
+| Gate | 조건 | Stat Bonus | Victory | Defeat | Draw | Avg Turns | Avg HP | 판단 |
+|---|---|---:|---:|---:|---:|---:|---:|---|
+| 나태의 순찰로 | bonus 없음 | +0 | 98% | 2% | 0% | 15.8 | 133.7 | 이미 유리한 전투 |
+| 나태의 순찰로 | bonus 0.1 | +5 | 98% | 2% | 0% | 15.8 | 136.1 | 평균 HP 소폭 개선 |
+| 나태의 순찰로 | bonus 0.3 | +15 | 98% | 2% | 0% | 15.8 | 140.5 | 더 안정적, 과잉 승률 보정 아님 |
+| 나태의 순찰로 | bonus 0.5 입력 | +15 | 98% | 2% | 0% | 15.8 | 140.5 | 0.3 cap 확인 |
+| 망각의 서고 | bonus 없음 | +0 | 12% | 89% | 0% | 16.3 | 5.0 | 고위험 전투 |
+| 망각의 서고 | bonus 0.1 | +5 | 12% | 89% | 0% | 16.4 | 5.5 | 평균 HP 소폭 개선 |
+| 망각의 서고 | bonus 0.3 | +15 | 13% | 88% | 0% | 16.6 | 6.3 | 극단 난이도를 뒤집지는 않음 |
+| 망각의 서고 | bonus 0.5 입력 | +15 | 13% | 88% | 0% | 16.6 | 6.3 | 0.3 cap 확인 |
+
+#### 11-16 보상 기대값 점검
+
+| Reward Table | XP | DropChance | RarityBias | 판단 |
+|---|---:|---:|---|---|
+| E급 게이트 기본 보상 | 80 | 35% | common 60%, uncommon 30%, rare 10% | 입문 파밍 보상으로 적절 |
+| D급 게이트 기본 보상 | 140 | 45% | common 30%, uncommon 40%, rare 25%, epic 5% | D급 진입 보상으로 적절 |
+| C급 게이트 기본 보상 | 220 | 55% | uncommon 25%, rare 50%, epic 20%, legendary 5% | C급 위험도 대비 적절, legendary는 낮은 확률 |
+
+메모:
+- 웨이브 게이트는 현재 같은 랭크의 기본 rewardTable을 재사용한다.
+- E wave는 입문 가능하고 D wave는 더 길고 위험하므로, 11-16 이후 전용 wave rewardTable을 검토할 수 있다.
+- 이번 단계에서는 보상 수치를 변경하지 않았다.
+
+#### 11-16 stamina / 부상 흐름 평가
+- stamina 100 기준으로 victory만 반복하면 5회 도전 가능하다.
+- defeat는 stamina -50과 부상을 함께 주므로 연속 실패 억제 장치로 충분히 강하다.
+- draw는 보상/패널티 없음과 active 유지 정책이 유지되어 세팅 변경 후 재도전 흐름이 자연스럽다.
+- 시간 회복 +10/hour, daily/main/random 퀘스트 완료 +5는 게이트를 보조 콘텐츠로 유지하는 데 적절하다.
+- 부상은 6시간 또는 퀘스트 3개 완료로 회복되어 영구 손실 없이 제약만 만든다.
+- 이번 단계에서는 stamina/부상 정책을 변경하지 않았다.
+
+#### 11-16 recommendedPower / risk 점검
+- 전체 매트릭스에서 drawRate는 0~1%로 안정적이다.
+- risk bucket 평균 승률은 low 100%, normal 98%, high 65%, extreme 15% 수준이다.
+- `normal` bucket에 이미 강한 빌드가 포함되어 평균 승률이 높게 나온다.
+- `high` bucket은 빌드에 따라 2~100%까지 넓게 분포한다. 장비/직업/스킬 상성이 강하게 반영되는 것으로 판단한다.
+- D급 1v1과 D급 wave는 공격형/방어형 고성장 빌드에 다소 쉽게 나온다.
+- C급 `망각의 서고`는 장비 공격형 외에는 매우 가혹하다.
+- 이번 단계에서는 recommendedPower를 변경하지 않고, 11-16 이후 더 많은 실사용 로그가 쌓인 뒤 D/C 경계 보정을 검토한다.
+
+#### 11-16 조정한 항목
+- recommendedPower: 변경 없음
+- rewardTable: 변경 없음
+- monster stats: 변경 없음
+- skill 수치: 변경 없음
+- 전투 공식: 변경 없음
+- persist version: 변경 없음
+
+#### 11-16 최종 판단
+- 게이트/전투 1차 완성 가능 여부: 가능
+- E급 입문, D급 진입, C급 고위험, 장비/소모품 영향, 웨이브 전투, draw 억제, stamina/부상 제약이 모두 기능적으로 작동한다.
+- 즉시 수정할 붕괴성 이슈는 없다.
+- 추가 개선 필요 항목:
+  - D급 게이트가 특정 고성장 빌드에 너무 쉬운지 실사용 로그로 재확인
+  - C급 게이트가 공격형 장비 빌드 외에 너무 좁은 관문인지 재확인
+  - 웨이브 게이트 전용 rewardTable 검토
+  - recommendedPower가 상성/장비 스킬까지 충분히 표현하는지 장기 데이터로 보정
+
+#### 11-16 다음 추천 작업
+- 11-17: 웨이브 게이트 전용 보상 테이블 또는 Gate 결과 UX 미세 개선
+- 이후 후보: C급 게이트 추가, 장비 액티브 스킬 추가, 전투 로그 하이라이트 강화
+## 12차 작업 1단계 - 장기 성장 밸런스 패치
+
+### 변경 이유
+- daily 보상이 과해 단기간 성장 속도가 빠르게 느껴질 수 있었다.
+- 스탯이 정수 단위로 올라 퀘스트 1개 완료의 성장 체감이 너무 급격했다.
+- daily/main/dungeon/gate 난이도 대비 보상 역할 차이를 더 명확히 할 필요가 있었다.
+- HunterStatus 플레이어 카드의 scan-line 장식이 흰색 깨진 선처럼 보일 수 있어 제거했다.
+
+### 변경 내용
+- `game.ts`에 장기 성장용 보상 helper를 추가했다.
+  - `getBalancedQuestXp()`
+  - `getBalancedDungeonStepXp()`
+  - `getBalancedQuestDropChance()`
+  - `getBalancedQuestStatRewards()`
+  - `getBalancedRandomQuestXp()`
+  - `getBalancedRandomQuestDropChance()`
+  - `formatStat()`
+  - `formatStatReward()`
+- regular quest 완료 로직은 raw seed 보상을 직접 더하지 않고, type/difficulty 기반 balanced reward를 적용한다.
+- random quest XP와 drop chance도 완료/표시 단계에서 하향 보정한다.
+- 스탯 증가는 소수점 누적을 허용하고, 저장 구조는 기존 `number` 그대로 유지한다.
+- 스탯 표시는 소수 둘째 자리까지 보여준다.
+- 장비/소모품 stat bonus도 `+1.00` 형태로 표시한다.
+- `QuestCard`, `RandomQuestCard`, `AddQuestModal`의 보상 표시를 실제 적용 보상과 맞췄다.
+- `HunterStatus` 최상단 카드에서 `scan-line` 클래스를 제거하고 `overflow-hidden`만 유지해 깨진 선처럼 보이는 장식을 정리했다.
+
+### 밸런스 정책
+- daily는 장기 누적용 작은 보상.
+- random은 daily보다 약간 높은 변수 보상.
+- main은 의미 있는 중기 목표 보상.
+- dungeon은 큰 클리어 보상.
+- gate는 기존처럼 XP 보조, 장비/아이템 중심 보상.
+- 기존 저장 데이터는 migrate 없이 그대로 사용한다.
+- persist version 변경 없음.
+
+### 12-1 손계산 비교
+
+| 항목 | 기존 | 변경 후 | 판단 |
+|---|---:|---:|---|
+| daily easy 5개 XP | 75 | 35 | daily XP 크게 하향 |
+| daily easy 5개 stat | +5.00 | +0.30 | 장기 누적형으로 전환 |
+| daily normal 5개 XP | 150 | 50 | daily 과성장 억제 |
+| daily normal 5개 stat | +5.00 | +0.50 | 1일 성장 폭 완화 |
+| daily hard raw 2 보상 5개 XP | 300 | 80 | hard daily도 장기형 유지 |
+| daily hard raw 2 보상 5개 stat | +10.00 | +0.80 | 하루 +1 이상 폭증 방지 |
+| random normal XP 40 | 40 | 28 | random XP 약 70% 수준 |
+| main boss raw 6+4 stat 총합 | +10.00 | +1.50 | main은 daily보다 의미 있게 유지 |
+| dungeon apex raw 6+3 stat 총합 | +9.00 | +1.08 | dungeon clear 보상은 큼 |
+
+### 드랍률 기준
+- daily easy: 1.5%
+- daily normal: 3%
+- daily hard: 5%
+- random easy: 3.5%
+- random normal: 6%
+- random hard: 10%
+- main: difficulty별 5~35%
+- dungeon clear: 기존 구조상 클리어 보상 아이템 유지
+- gate: 기존 rewardTable 유지
+
+### 메모
+- `DIFFICULTY_META.xp`는 난이도 메타 데이터로 유지하지만, 퀘스트 완료/표시는 balanced helper를 사용한다.
+- title 조건은 기존 base stat 기준 비교를 유지한다.
+- 전투 계산은 `number` 기반이라 소수점 스탯에서도 정상 동작한다.
+- 자유 스탯 포인트는 기존처럼 +1 단위 유지.
+
+## 12차 작업 1B단계 - Main/Dungeon 대형 목표 보상 재정의
+
+### 변경 이유
+- 12-1에서 main boss stat 총합이 약 +1.5, dungeon apex clear stat이 약 +1.08로 떨어졌다.
+- main quest는 자격증 합격/대형 프로젝트(1~2개월)이고 dungeon은 월 단위 누적 목표인데, 보상이 daily 수준에 가까워 동기부여가 약했다.
+- daily는 12-1 수준 그대로 두고, main/dungeon은 대형 목표에 맞는 정수 단위 후한 보상으로 재정의한다.
+
+### 12-1B 보상 역할 재정의
+
+- **daily**: 매일 반복 가능한 작은 루틴. XP/stat/item drop 모두 낮게 유지 (12-1 수치 그대로). 장기 누적 성장용.
+- **random**: daily보다 약간 특별한 이벤트성 보상. base × 0.7 유지.
+- **main**: 자격증 합격/대형 프로젝트/장기 목표. 정수 단위 후한 스탯 보상 허용. boss = 학회 가입급.
+- **dungeon**: 월 5회 운동/독서 8권/CMA 일지 12회 등 월 단위 누적 목표. clear 시 후한 스탯/XP.
+- **gate**: 장비/아이템/전투 콘텐츠. XP/stat 직접 성장보다 장비/아이템과 전투 재미 중심.
+
+### 변경 내용
+- `game.ts > BALANCED_XP_BY_TYPE`: main/dungeon XP 대폭 상향. daily 유지.
+- `game.ts > STAT_REWARD_MULTIPLIER_BY_TYPE`: main apex/boss 0.18/0.15 → 1.0, elite 0.18 → 0.65 등 main 전반 상향. dungeon apex 0.12 → 0.9, elite 0.12 → 0.55 등 상향.
+- `game.ts > DROP_CHANCE_BY_TYPE`: main/dungeon 드롭 확률 상향. daily 유지.
+- `game.ts > formatStatReward`: 정수 보상은 `+5`로, 소수 보상은 `+0.08`/`+5.20`로 표시. main/dungeon 정수 보상 가독성 개선.
+
+### 12-1B 손계산 비교
+
+| 항목 | 12-1 | 12-1B | 판단 |
+|---|---:|---:|---|
+| daily easy 5개 XP | 35 | 35 | 유지 |
+| daily easy 5개 stat | +0.30 | +0.30 | 유지 |
+| daily hard 5개 stat | +0.80 | +0.80 | 유지 |
+| daily 평균 drop | 1.5%~5% | 1.5%~5% | 유지 |
+| main-club boss XP | 215 | 1000 | 학회 가입급 |
+| main-club boss stat 총합 (raw 10) | +1.50 | **+10.0** | 정수 단위 후한 보상 |
+| main-kbi-cert apex XP | 155 | 750 | 자격증급 |
+| main-kbi-cert apex stat 총합 (raw 7) | +1.26 | **+7.0** | 정수 단위 |
+| main-cut elite XP | 105 | 450 | 큰 main |
+| main-cut elite stat 총합 (raw 8) | +1.44 | +5.2 | 큰 main 범위 |
+| main-spend-monthly elite stat (raw 6) | +1.08 | +3.9 | 월간 main |
+| dungeon-reports apex XP | 210 | 1100 | 월 단위 대형 |
+| dungeon-reports apex stat 총합 (raw 9) | +1.08 | **+8.1** | 정수 단위 |
+| dungeon-finance-books apex stat (raw 8) | +0.96 | **+7.2** | 정수 단위 |
+| dungeon-cma-journal elite stat (raw 7) | +0.84 | +3.85 | 월간 dungeon |
+| 헬스 monthly elite stat (raw 6) | +0.72 | +3.3 | 월간 dungeon |
+| main boss drop | 35% | 100% | 보장 |
+| main apex drop | 28% | 85% | 거의 보장 |
+| dungeon apex drop | 90% | 100% | 보장 |
+| dungeon elite drop | 75% | 95% | 거의 보장 |
+
+### XP 보상 표
+
+| 콘텐츠 | 12-1 | 12-1B |
+|---|---:|---:|
+| daily E~S | 7/10/16/35/45/60 | 유지 |
+| main E~S | 22/38/65/105/155/215 | 100/180/300/450/750/1000 |
+| dungeon E~S | 30/55/90/140/210/300 | 150/280/500/700/1100/1500 |
+
+### Stat reward multiplier 표
+
+| 콘텐츠 | 12-1 | 12-1B |
+|---|---|---|
+| daily E/D/C/B/A/S | 0.06/0.10/0.08/0.08/0.08/0.08 | 유지 |
+| main E/D/C/B/A/S | 0.20/0.25/0.30/0.18/0.18/0.15 | 0.35/0.45/0.60/0.65/1.00/1.00 |
+| dungeon E/D/C/B/A/S | 0.15/0.18/0.20/0.12/0.12/0.12 | 0.35/0.45/0.55/0.55/0.90/1.00 |
+
+### 드롭 확률 표
+
+| 콘텐츠 | 12-1 | 12-1B |
+|---|---|---|
+| daily E~S | 1.5/3/5/8/10/12% | 유지 |
+| main E~S | 5/8/12/20/28/35% | 25/40/55/70/85/100% |
+| dungeon E~S | 35/45/60/75/90/100% | 50/70/90/95/100/100% |
+
+### Gate/Monster 재점검 (이번 단계는 변경 없음)
+
+#### 정성적 평가 (시뮬레이션 미실행, 보수적 판단)
+
+| Build (가정) | 변화 | E급 | D급 | D wave | C급 | 판단 |
+|---|---|---|---|---|---|---|
+| Lv 5 무빌드 (11-7 Build A 동일) | 변화 없음 | low | extreme | extreme | extreme | 입문 구간 정상 |
+| Lv 10 daily만 1개월 | daily stat 누적 ~+5-8 | low | high | extreme | extreme | 큰 변화 없음 |
+| Lv 15 + main 1개 + dungeon 1개 | main +7~10, dungeon +7~8 | 압도 | normal-low | high | high | D급이 약간 쉬워질 가능성 |
+| Lv 20 + main 2개 + dungeon 3개 | stat 총합 +25-35 | 압도 | low | normal | high | D급 의미 약화 가능성 |
+
+#### 조정한 항목
+- **recommendedPower**: 변경 없음 (E 300, D 650, D wave 780, C 870)
+- **monster stats**: 변경 없음
+- **rewardTable**: 변경 없음
+
+#### 조정하지 않은 이유
+- 12-1B 시점에서는 실제 플레이 데이터가 없어 시뮬레이션 결과를 검증할 수 없다.
+- main/dungeon 보상 폭증이 실제로 D급을 무너뜨리는지는 1~2개월 실사용 후 확인이 더 정확하다.
+- 우선순위 정책상 "E급은 건드리지 않음 / D급은 너무 어렵게 만들지 않음"이라 보수적으로 유지.
+- 향후 D급 ratio가 일관되게 1.5 이상으로 뜨거나 평균 승률이 90%+로 굳어지면 그때 recommendedPower 보정 (예: D 650 → 750~800, C 870 → 950) 또는 C급 몬스터 소폭 상향 후보.
+
+### formatStatReward 정수 처리
+- 변경 전: `+5.00`, `+0.06`
+- 변경 후: `+5` (정수), `+0.06`/`+5.20` (소수)
+- 효과: main/dungeon apex/boss 보상이 자연스럽게 `+10 +7` 형태로 표시되어 가독성 개선. daily/elite는 기존처럼 소수점 표시.
+
+### 미변경 / 유지
+- daily XP/stat/drop: 12-1 수치 그대로
+- random XP/drop: 12-1 그대로 (base × 0.7)
+- gate rewardTable: 기존 유지
+- persist version: 변경 없음 (스키마 동일, helper 값만 조정)
+- title 조건: base stat 기준 (장비/소모품 미반영) 정책 그대로
+
+### 메모
+- main boss `완료` 1회 = 학회 가입 같은 1년 단위 대형 목표 → +10 stat / 1000 XP / 100% 드롭은 적절
+- dungeon apex `clear` 1회 = 학회 리포트 10편 / 책 8권 같은 월 단위 → +7-8 stat / 1100 XP는 적절
+- daily는 30일간 매일 hard 깨도 stat 총합 ~+5 수준 → main 1개 = daily 한 달치라는 균형
+- 12-1과 마찬가지로 자유 스탯 포인트는 +1 정수 단위 그대로
+
+## 12차 작업 1C단계 - Main 추가 상향 + Dungeon XP 등급 표준화
+
+### 변경 이유
+- 12-1B에서도 main 보상이 대형 목표(자격증/학회 가입/큰 프로젝트, 1~2개월)답게 충분히 후하지 않다는 피드백.
+- Dungeon XP가 UI에서 등급별로 뒤섞여 보임 — 사용자가 같은 B급 dungeon인데 `+49`와 `+82`로 다르게 표시되는 것 발견. A급인데도 `+39`로 B급보다 낮게 보이는 케이스도 있음.
+- 원인 진단: 표시되던 값은 모두 **per-step partial XP**. 단계 수가 다르면 per-step 값도 달라지는 수학 자체는 정상이지만, UI에 "이게 클리어 보상인지 단계 보상인지" 라벨이 없어 혼란 발생.
+  - elite 5-step: 700 × 0.35 / 5 = **49** (상체 운동)
+  - elite 3-step: 700 × 0.35 / 3 = **82** (하체 운동)
+  - apex 10-step: 1100 × 0.35 / 10 = **39** (산업 리포트)
+
+### 변경 내용
+
+#### `game.ts` reward 테이블 업데이트
+- `BALANCED_XP_BY_TYPE.main`: 100/180/300/450/750/1000 → **150/280/500/800/1300/2000**
+- `BALANCED_XP_BY_TYPE.dungeon`: 150/280/500/700/1100/1500 → **300/600/1000/1600/2400/3500**
+- `STAT_REWARD_MULTIPLIER_BY_TYPE.main`: 0.35/0.45/0.60/0.65/1.00/1.00 → **0.60/0.80/1.00/1.20/1.60/2.00**
+- `STAT_REWARD_MULTIPLIER_BY_TYPE.dungeon`: 0.35/0.45/0.55/0.55/0.90/1.00 → **0.70/0.90/1.20/1.50/2.00/2.50**
+- `DROP_CHANCE_BY_TYPE`: 12-1B 그대로 (이미 충분)
+
+#### `game.ts` partial step ratio 조정
+- partial budget: clear의 35% → **25%**로 축소. clear 보상을 더 크게 보이게.
+- min step XP: 2 → 5 (clear XP가 폭증해 partial floor도 의미 있게)
+- `getBalancedDungeonStepXp(difficulty, totalSteps)` 공식: `Math.max(5, Math.round(clearXp * 0.25 / totalSteps))`
+
+#### `game.ts` 신규 helper alias
+- `getBalancedDungeonClearXp(difficulty)`: `getBalancedQuestXp('dungeon', difficulty)`의 명확한 이름 alias. UI/store 코드 가독성용.
+
+#### `QuestCard.tsx` 표시 분리
+- Dungeon 카드: **"클리어 +N XP" 메인** + **"· 단계 +M XP" 보조** + clear stat rewards.
+- 같은 등급 dungeon은 step 수와 상관없이 **동일한 클리어 XP**가 메인 숫자로 표시됨.
+- daily/main 카드: 기존 표시 (단일 XP + stat rewards) 그대로.
+
+### 12-1C 손계산 비교
+
+| 항목 | 12-1B | 12-1C | 판단 |
+|---|---:|---:|---|
+| **Main XP** | | | |
+| main XP E/D/C/B/A/S | 100/180/300/450/750/1000 | **150/280/500/800/1300/2000** | 대형 목표 |
+| main-club boss (raw INT 6+PER 4=10) | +10 | **+20** | 학회 가입급 |
+| main-kbi-cert apex (raw INT 4+PER 3=7) | +7 | **+11.2** | 자격증 |
+| main-gpa apex (raw 7) | +7 | **+11.2** | 학점 |
+| main-cut elite (raw VIT 4+PER 4=8) | +5.2 | **+9.6** | 큰 main |
+| main-spend-monthly elite (raw PER 4+SEN 2=6) | +3.9 | **+7.2** | 월간 main |
+| **Dungeon XP** | | | |
+| dungeon XP E/D/C/B/A/S | 150/280/500/700/1100/1500 | **300/600/1000/1600/2400/3500** | 월 단위 대형 |
+| dungeon-reports apex (raw INT 6+PER 3=9) | +8.1 | **+18** | 월간 대형 |
+| dungeon-finance-books apex (raw 8) | +7.2 | **+16** | 월간 대형 |
+| dungeon-cma-journal elite (raw INT 4+SEN 3=7) | +3.85 | **+10.5** | 월간 |
+| 헬스 monthly elite raw 6 (arm/back/chest/shoulder) | +3.3 | **+9** | 월간 헬스 |
+| dungeon-leg-monthly elite (raw STR 5+VIT 2=7) | +3.85 | **+10.5** | 월간 헬스 |
+| **Dungeon partial step XP** | | | |
+| elite 5-step (상체/등/가슴/어깨) | 49/step | **80/step** | clear의 25%/5단계 |
+| elite 3-step (하체) | 82/step | **133/step** | clear의 25%/3단계 |
+| apex 10-step (리포트) | 39/step | **60/step** | clear의 25%/10단계 |
+| apex 8-step (책) | 48/step | **75/step** | clear의 25%/8단계 |
+| elite 12-step (CMA 일지) | 20/step | **33/step** | clear의 25%/12단계 |
+
+### Helper 명명 정리
+| Helper | 용도 |
+|---|---|
+| `getBalancedQuestXp(type, difficulty)` | daily/main/dungeon 통합 XP 조회 |
+| `getBalancedDungeonClearXp(difficulty)` | dungeon clear 전용 alias (가독성) |
+| `getBalancedDungeonStepXp(difficulty, totalSteps)` | dungeon 단계당 partial XP |
+| `getBalancedQuestStatRewards(quest)` | clear/complete 시 적용되는 stat 보상 |
+| `getBalancedQuestDropChance(type, difficulty)` | 아이템 드롭 확률 |
+| `getBalancedRandomQuestXp(baseXp)` | random quest XP (base × 0.7) |
+| `getBalancedRandomQuestDropChance(difficulty)` | random quest 드롭 |
+| `formatStatReward(value)` | 정수면 `+5`, 소수면 `+0.06`/`+5.20` |
+
+### UI 표시 / 실제 지급 일치 검증
+| 위치 | 표시 | 실제 지급 (store.ts) | 일치 여부 |
+|---|---|---|---|
+| Dungeon card (활성) | `getBalancedDungeonClearXp` + `getBalancedDungeonStepXp` | progressDungeon 부분: `getBalancedDungeonStepXp`; clear: `getBalancedQuestXp('dungeon', ...)` | ✓ |
+| Dungeon card 완료 | clear XP | (해당 없음) | — |
+| Dungeon clear SystemMessage | `getBalancedQuestStatRewards` | `getBalancedQuestStatRewards` + `roundStatValue` | ✓ |
+| Dungeon partial SystemMessage | step XP | step XP × AGI/장비/소모품 mult | ✓ |
+| Main card | `getBalancedQuestXp('main', ...)` + statRewards | 동일 | ✓ |
+| Main complete SystemMessage | 실제 적용된 XP/stat | 동일 | ✓ |
+| Daily card | daily 12-1 값 유지 | 동일 | ✓ |
+| AddQuestModal preview | `getBalancedQuestXp(type, d)` | 동일 | ✓ |
+
+### Gate / Monster 점검
+- **이번 단계는 변경 없음.** 12-1D에서 별도 정량 점검 예정.
+- 12-1D 점검 항목:
+  - main 1개 완료 후 빌드로 D/D-wave/C gate 100회 시뮬레이션
+  - dungeon 1개 클리어 후 빌드로 동일
+  - main+dungeon 1~2개월 누적 가정 빌드
+  - D급 평균 승률 / risk 표시 일관성 확인
+  - 필요 시 recommendedPower 보정 (E 유지, D 보수적, C 가능)
+
+### 미변경 / 유지
+- daily XP/stat/drop 12-1 그대로
+- random XP/drop 12-1B 그대로 (base × 0.7)
+- gate rewardTable, monster stats, recommendedPower 12-1B 그대로
+- 전투 공식, XP 곡선 그대로
+- persist version 변경 없음 (스키마 동일)
+- localStorage key `levelup-save` 유지
+- title 조건 base stat 기준 정책 유지
+
+### 메모
+- daily 30일 누적 stat 총합(~+5) vs main 1개 자격증(+11.2) → main 1개 = daily 약 2.2개월치
+- dungeon 1개 월간 클리어(~+10 elite, ~+18 apex) → dungeon 1개 = daily 2~3.5개월치
+- 자주 완료되지 않는 콘텐츠이므로 폭주 위험 낮음
+- 장기 시뮬레이션은 12-1D 또는 별도 패치에서
+
+## 12차 작업 1D단계 - Dungeon 보상 Main 대비 1/3 재조정
+
+### 변경 이유
+- 12-1C에서 dungeon XP/stat이 main보다 커지는 위계 역전 발생.
+- 사용자 결정: 보상 위계는 `main > dungeon > daily`.
+- dungeon은 월 단위 누적 목표지만, 자격증 합격/대형 프로젝트 같은 main보다는 낮아야 함.
+- main 보상은 12-1C 수치 유지. dungeon만 main 대비 ~1/3 수준으로 재조정.
+
+### 변경 내용
+
+#### `game.ts > BALANCED_XP_BY_TYPE.dungeon`
+12-1C: 300/600/1000/1600/2400/3500 → **12-1D: 50/90/170/270/430/670**
+
+#### `game.ts > STAT_REWARD_MULTIPLIER_BY_TYPE.dungeon`
+12-1C: 0.70/0.90/1.20/1.50/2.00/2.50 → **12-1D: 0.20/0.27/0.35/0.40/0.55/0.70**
+
+### 12-1D 보상 위계 정리
+
+| Rank | Main XP | Dungeon XP | Ratio | Main Stat Mult | Dungeon Stat Mult | Ratio |
+|---|---:|---:|---:|---:|---:|---:|
+| E | 150 | 50 | 33% | 0.60 | 0.20 | 33% |
+| D | 280 | 90 | 32% | 0.80 | 0.27 | 34% |
+| C | 500 | 170 | 34% | 1.00 | 0.35 | 35% |
+| B | 800 | 270 | 34% | 1.20 | 0.40 | 33% |
+| A | 1300 | 430 | 33% | 1.60 | 0.55 | 34% |
+| S | 2000 | 670 | 34% | 2.00 | 0.70 | 35% |
+
+### 12-1C → 12-1D 손계산 비교
+
+| 항목 | 12-1C | 12-1D | 판단 |
+|---|---:|---:|---|
+| **Dungeon XP (clear)** | | | |
+| dungeon-reports apex | 2400 XP | **430 XP** | 월간 대형, main 대비 1/3 |
+| dungeon-finance-books apex | 2400 XP | **430 XP** | 동일 |
+| dungeon-cma-journal elite | 1600 XP | **270 XP** | 월간, B급 표준 |
+| 헬스 monthly (arm/back/chest/shoulder) elite | 1600 XP | **270 XP** | 동일 |
+| dungeon-leg-monthly elite | 1600 XP | **270 XP** | 동일 |
+| **Dungeon stat (clear)** | | | |
+| dungeon-reports apex (raw INT 6+PER 3=9) | +18 | **+4.95** | 4.95 = 9×0.55 |
+| dungeon-finance-books apex (raw 8) | +16 | **+4.40** | 4.40 = 8×0.55 |
+| dungeon-cma-journal elite (raw 7) | +10.5 | **+2.80** | 2.80 = 7×0.40 |
+| 헬스 arm elite (raw 6) | +9 | **+2.40** | 2.40 = 6×0.40 |
+| 헬스 leg elite (raw 7) | +10.5 | **+2.80** | 2.80 = 7×0.40 |
+| **Dungeon partial XP/step** (`clear × 0.25 / steps`, min 5) | | | |
+| elite 5-step (상체/등/가슴/어깨) | 80/step | **14/step** | 270×0.25/5 = 13.5 |
+| elite 3-step (하체) | 133/step | **23/step** | 270×0.25/3 = 22.5 |
+| elite 12-step (CMA 일지) | 33/step | **6/step** | 270×0.25/12 = 5.6 |
+| apex 10-step (리포트) | 60/step | **11/step** | 430×0.25/10 = 10.75 |
+| apex 8-step (책) | 75/step | **13/step** | 430×0.25/8 = 13.4 |
+
+### 미변경
+- **main reward**: XP 150/280/500/800/1300/2000, stat mult 0.60~2.00 그대로
+- **daily reward**: 12-1 그대로 (XP 7~60, stat mult 0.06~0.10, drop 1.5~12%)
+- **random reward**: 12-1B 그대로 (base × 0.7)
+- **dungeon drop chance**: 50/70/90/95/100/100% 그대로 — dungeon의 차별점은 "main보다 낮은 성장 보상 + 높은 전리품 확률"
+- **gate rewardTable / monster / recommendedPower**: 변경 없음
+- **partial step 공식**: `clear × 0.25 / totalSteps`, 하한 5 그대로
+- **persist version**: v14 유지 (스키마 동일)
+- **UI**: QuestCard "클리어 +N XP · 단계 +M XP" 표시 구조 그대로 (helper 결과만 작아짐)
+- **title 조건, 전투 공식, XP 곡선**: 모두 그대로
+
+### 보상 위계 검증
+| 콘텐츠 | apex/B/elite stat 1회 | apex XP 1회 | 비고 |
+|---|---:|---:|---|
+| daily 30일 누적 hard (5×30) | ~+5 stat | ~480 XP | 매일 |
+| main-kbi-cert apex (raw 7) | **+11.2 stat** | **1300 XP** | 자격증 |
+| dungeon-reports apex (raw 9) | +4.95 stat | 430 XP | 월간 대형 |
+| dungeon-cma-journal elite (raw 7) | +2.80 stat | 270 XP | 월간 |
+
+→ main > dungeon > daily 위계 회복. main 1개 ≈ dungeon 2~3개 ≈ daily 2~3개월치.
+
+### Gate / Monster 점검
+- **이번 단계는 변경 없음.** 12-1E에서 정량 점검 예정.
+- 12-1E 점검 항목:
+  - 12-1D 보상 위계 기준 성장 가정 빌드 (daily 1개월, main 1개, dungeon 1개, main+dungeon 누적)
+  - D/D-wave/C 100회 시뮬레이션
+  - 현재 recommendedPower(E 300, D 650, D wave 780, C 870)의 적정성 재검증
+  - 필요 시 recommendedPower 보정 (E 유지, D 보수적, C 가능)
+
+### 테스트
+- `npm run build`: 통과 (3.31s → 6.51s, 1948 modules, 419.66 KB JS / 32.72 KB CSS). 타입 에러 0, 경고 0.
+- 수동 확인 권장:
+  1. main 탭 — 12-1C와 동일 보상 표시 (학회 +20 INT+PER, 자격증 +11.2 등)
+  2. dungeon 탭 — B급 운동(상/등/가슴/어깨/하) 모두 **"클리어 +270 XP"** 동일
+  3. B급 5-step: "단계 +14 XP"
+  4. B급 3-step: "단계 +23 XP"
+  5. A급 리포트: **"클리어 +430 XP · 단계 +11 XP"** (B급보다 크지만 main apex 1300보다 작음)
+  6. 완료 SystemMessage XP/stat이 카드 표시와 일치
+
+## 12차 작업 1E단계 - Gate/Monster 난이도 정량 재점검
+
+### 변경 이유
+- 12-1D 보상 위계 정리 후, main/dungeon 누적 빌드가 C급 게이트를 무력화하는지 정량 확인 필요.
+- 시뮬레이션 결과 Build E (main+dungeon+장비) 가 C급 망각의 서고 **97% 승률** → C급 고위험 정체성 손상.
+
+### 시뮬레이션 방식
+- 도구: `scripts/sim-12-1e.ts` (tsx 일회성 스크립트, app 빌드와 무관)
+- helper: `summarizeGateWaveBattleSimulations()` 100회/조합 (seedBase=1로 결정론적)
+- 가정 빌드 6개 × 게이트 6개 = 36 조합 × 100회 = 3,600 전투
+- C급 조정 후 동일 스크립트 재실행으로 검증
+
+### 가정 빌드
+| Build | Level | Job | 핵심 스탯 | 장비/소모품 |
+|---|---:|---|---|---|
+| A 초급 무빌드 | 5 | unawakened | STR 15 VIT 12 AGI 10 INT 8 PER 8 SEN 8 | — |
+| B daily 1개월 | 10 | iron-squire | STR 21 VIT 19 AGI 16 INT 13 PER 13 SEN 13 | — |
+| C main 1개 (자격증) | 15 | grimoire-decoder | STR 22 VIT 20 AGI 17 INT 30 PER 22 SEN 15 | — |
+| D dungeon 1개 | 14 | silent-monk | STR 24 VIT 27 AGI 19 INT 15 PER 17 SEN 14 | — |
+| E main+dungeon 누적 | 20 | steelheart-fighter | STR 34 VIT 30 AGI 23 INT 28 PER 24 SEN 18 | 그림자 단검 |
+| F + gate_success_bonus 0.1 | 20 | fate-harmonizer | STR 32 VIT 29 AGI 23 INT 26 PER 24 SEN 18 | 그림자 단검 + bonus 0.1 |
+
+### 조정 항목
+
+**1. 망각의 서고 (C급 게이트)** recommendedPower 870 → **1000**
+- 이유: Build E ratio 867/870 = 1.00 → risk 'high'로 표시되지만 실제 90% 승률 → 라벨/실측 mismatch.
+- 1000으로 올려 ratio 0.87 → high risk 라벨 유지하면서 실제 위험도와 정합.
+
+**2. forgetting-warden (C급 몬스터)** 스탯 상향
+- HP **575 → 780** (+36%)
+- ATK **88 → 105** (+19%)
+- DEF **46 → 58** (+26%)
+- 이유: recommendedPower만으로는 실제 승률 불변. monster 강화로 Build E의 C급 승률을 90% → 57%로 조정.
+- 사용자 가이드 "소폭"보다 큰 변경이지만, 12-1D 보상 위계로 Build E가 +40% 강해진 만큼 C급 몬스터도 비례 강화 필요했음.
+
+**3. 그 외 미변경**
+- D / D wave / E급 게이트 recommendedPower 그대로 (E 300, D 650, D wave 780, E wave 420)
+- D/E급 몬스터 스탯 그대로
+- gate_success_bonus 정책 그대로 (cap 0.3, 3턴 ATK/DEF +5)
+- gate rewardTable / 게이트 만료 / stamina / 부상 정책 그대로
+
+### 최종 결과 (조정 후)
+
+| Build | Gate | Rank | Waves | Power | Rec | Ratio | Risk | Victory | Defeat | Draw | Avg Turns | Avg HP | 판단 |
+|---|---|---|---:|---:|---:|---:|---|---:|---:|---:|---:|---:|---|
+| A 초급 무빌드 | 균열의 골목 | E | 1 | 372 | 300 | 1.24 | normal | 100% | 0% | 0% | 5.0 | 205.5 | 입문 정상 |
+| A 초급 무빌드 | 뒤틀린 뒷골목 | E | 1 | 372 | 300 | 1.24 | normal | 100% | 0% | 0% | 3.2 | 221.0 | 입문 정상 |
+| A 초급 무빌드 | 균열의 둥지 | E | 2 | 372 | 420 | 0.89 | high | 100% | 0% | 0% | 8.4 | 182.6 | E wave 입문 가능 |
+| A 초급 무빌드 | 나태의 소굴 | D | 1 | 372 | 650 | 0.57 | extreme | 0% | 100% | 0% | 9.4 | 0.0 | 진입 불가 |
+| A 초급 무빌드 | 나태의 순찰로 | D | 2 | 372 | 780 | 0.48 | extreme | 0% | 100% | 0% | 14.2 | 0.0 | 진입 불가 |
+| A 초급 무빌드 | 망각의 서고 | C | 1 | 372 | 1000 | 0.37 | extreme | 0% | 100% | 0% | 8.4 | 0.0 | C급 불가 |
+| B daily 1개월 | 균열의 골목 | E | 1 | 559 | 300 | 1.86 | low | 100% | 0% | 0% | 3.0 | 321.6 | 입문 정상 |
+| B daily 1개월 | 뒤틀린 뒷골목 | E | 1 | 559 | 300 | 1.86 | low | 100% | 0% | 0% | 3.0 | 321.3 | 입문 정상 |
+| B daily 1개월 | 균열의 둥지 | E | 2 | 559 | 420 | 1.33 | low | 100% | 0% | 0% | 6.2 | 301.9 | 입문 정상 |
+| B daily 1개월 | 나태의 소굴 | D | 1 | 559 | 650 | 0.86 | high | 62% | 38% | 0% | 13.0 | 49.0 | D 진입권 정상 |
+| B daily 1개월 | 나태의 순찰로 | D | 2 | 559 | 780 | 0.72 | high | 51% | 49% | 0% | 15.8 | 38.8 | 위험하지만 가능 |
+| B daily 1개월 | 망각의 서고 | C | 1 | 559 | 1000 | 0.56 | extreme | 0% | 100% | 0% | 11.9 | 0.0 | C급 불가 |
+| C main 1개 | 균열의 골목 | E | 1 | 617 | 300 | 2.06 | low | 100% | 0% | 0% | 2.9 | 359.1 | 입문 정상 |
+| C main 1개 | 뒤틀린 뒷골목 | E | 1 | 617 | 300 | 2.06 | low | 100% | 0% | 0% | 1.7 | 368.9 | 입문 정상 |
+| C main 1개 | 균열의 둥지 | E | 2 | 617 | 420 | 1.47 | low | 100% | 0% | 0% | 5.8 | 342.4 | 입문 정상 |
+| C main 1개 | 나태의 소굴 | D | 1 | 617 | 650 | 0.95 | high | 96% | 4% | 0% | 10.5 | 156.9 | D 매우 쉬움 (성장 후) |
+| C main 1개 | 나태의 순찰로 | D | 2 | 617 | 780 | 0.79 | high | 93% | 7% | 0% | 14.6 | 119.1 | D wave 진입권 |
+| C main 1개 | 망각의 서고 | C | 1 | 617 | 1000 | 0.62 | extreme | 0% | 100% | 0% | 14.3 | 0.0 | C급 불가 (장비 없으면) |
+| D dungeon 1개 | 균열의 골목 | E | 1 | 697 | 300 | 2.32 | low | 100% | 0% | 0% | 2.9 | 424.6 | 입문 정상 |
+| D dungeon 1개 | 뒤틀린 뒷골목 | E | 1 | 697 | 300 | 2.32 | low | 100% | 0% | 0% | 1.5 | 436.1 | 입문 정상 |
+| D dungeon 1개 | 균열의 둥지 | E | 2 | 697 | 420 | 1.66 | low | 100% | 0% | 0% | 5.7 | 409.6 | 입문 정상 |
+| D dungeon 1개 | 나태의 소굴 | D | 1 | 697 | 650 | 1.07 | normal | 100% | 0% | 0% | 9.6 | 248.1 | D 매우 쉬움 |
+| D dungeon 1개 | 나태의 순찰로 | D | 2 | 697 | 780 | 0.89 | high | 100% | 0% | 0% | 13.0 | 230.1 | D wave 매우 쉬움 |
+| D dungeon 1개 | 망각의 서고 | C | 1 | 697 | 1000 | 0.70 | extreme | 0% | 100% | 0% | 17.5 | 0.0 | C급 불가 (장비 없으면) |
+| E main+dungeon | 균열의 골목 | E | 1 | 867 | 300 | 2.89 | low | 100% | 0% | 0% | 1.2 | 498.5 | 입문 정상 |
+| E main+dungeon | 뒤틀린 뒷골목 | E | 1 | 867 | 300 | 2.89 | low | 100% | 0% | 0% | 1.0 | 499.6 | 입문 정상 |
+| E main+dungeon | 균열의 둥지 | E | 2 | 867 | 420 | 2.06 | low | 100% | 0% | 0% | 2.3 | 497.9 | 입문 정상 |
+| E main+dungeon | 나태의 소굴 | D | 1 | 867 | 650 | 1.33 | low | 100% | 0% | 0% | 6.7 | 377.8 | D 매우 쉬움 (성장 후) |
+| E main+dungeon | 나태의 순찰로 | D | 2 | 867 | 780 | 1.11 | normal | 100% | 0% | 0% | 7.8 | 383.3 | D wave 매우 쉬움 |
+| **E main+dungeon** | **망각의 서고** | **C** | **1** | **867** | **1000** | **0.87** | **high** | **57%** | **43%** | **0%** | **19.9** | **45.5** | **C급 고위험 도전 ✓** |
+| F + bonus 0.1 | 균열의 골목 | E | 1 | 831 | 300 | 2.77 | low | 100% | 0% | 0% | 1.1 | 489.1 | 입문 정상 |
+| F + bonus 0.1 | 뒤틀린 뒷골목 | E | 1 | 831 | 300 | 2.77 | low | 100% | 0% | 0% | 1.0 | 489.6 | 입문 정상 |
+| F + bonus 0.1 | 균열의 둥지 | E | 2 | 831 | 420 | 1.98 | low | 100% | 0% | 0% | 2.2 | 488.5 | 입문 정상 |
+| F + bonus 0.1 | 나태의 소굴 | D | 1 | 831 | 650 | 1.28 | normal | 100% | 0% | 0% | 6.6 | 371.6 | D 매우 쉬움 |
+| F + bonus 0.1 | 나태의 순찰로 | D | 2 | 831 | 780 | 1.07 | normal | 100% | 0% | 0% | 7.7 | 376.2 | D wave 매우 쉬움 |
+| **F + bonus 0.1** | **망각의 서고** | **C** | **1** | **831** | **1000** | **0.83** | **high** | **47%** | **53%** | **0%** | **20.0** | **34.9** | **C급 매우 위험 ✓** |
+
+### 결론
+- **E급**: 모든 빌드 100% 승률 / 입문 구간 정상 유지 ✓
+- **E wave (균열의 둥지)**: 초급(372)에서도 100% 가능, 평균 8.4턴으로 약간 길지만 입문 가능
+- **D급 (나태의 소굴)**: Build B (daily 1개월) 62% 진입권. Build C+ 성장 후 자연스럽게 쉬워짐. 의도된 동작.
+- **D wave (나태의 순찰로)**: Build B 51% (위험하지만 가능). 성장 후 매우 쉬움.
+- **C급 (망각의 서고)**: Build C/D(장비 없음) 0%, Build E(장비) 57%, Build F(장비+bonus) 47% — **고위험 도전 정체성 회복**
+- **draw**: 모든 조합 0% — 안정적
+- **gate_success_bonus 0.1**: Build F는 Build E보다 base stat이 약간 낮지만 bonus +5 ATK/DEF (3턴) 적용 → 비슷한 영역에서 약 10%p 보정. 단독 효과 분리 측정은 어렵지만 의미 있는 보조로 작동.
+- **main/dungeon 보상 위계 + C급 난이도**: 두 시스템이 정합하게 작동 — 성장은 보람 있되 C급은 여전히 도전 콘텐츠.
+
+### 시뮬레이션 도구
+- `scripts/sim-12-1e.ts` 유지 — 향후 게이트/몬스터 추가/조정 시 재실행 가능.
+- 실행: `npx tsx scripts/sim-12-1e.ts > sim-result.md`
+- 빌드/런타임과 무관 (app dist에 포함되지 않음).
+
+### 미변경 / 유지
+- daily/main/dungeon/random 보상 helper: 12-1D 그대로
+- gate rewardTable / penalty / stamina / 부상 정책: 그대로
+- 전투 공식 (`calculatePlayerCombatStats`, `calculateDamage` 등): 그대로
+- player stat 공식: 그대로
+- E/D 게이트 몬스터 스탯 + recommendedPower: 그대로 (E 300, E wave 420, D 650, D wave 780)
+- persist version: v14 유지 (스키마 동일)
+- UI / store / types: 변경 없음 (seed 수치만 조정)
+
+### 특이사항 / 다음 단계
+- 12-1E로 12차 1단계 안정화 작업 마무리. main > dungeon > daily 보상 위계 + 게이트 고위험 정체성 확보 완료.
+- **C급 게이트 다양화 (backlog)**: 현재 망각의 서고 1개 → 추후 분야별 C급 추가 (체력/사회/창의 등)
+- **B급 이상 게이트 (장기 backlog)**: 현재 시드에 B/A/S 게이트 없음. C급 추가 후 진행 검토.
+- **상위 빌드 (Lv 25+ / 3개월+ 누적)**: 12-1E 시뮬레이션은 Lv 5~20 범위. 더 높은 레벨 빌드의 C급 trivialization은 별도 추적 필요. 필요 시 C급 mob 추가 상향 또는 B급 게이트 추가로 해결.
+- **gate_success_bonus 효과 정량 측정**: Build F vs Build E 비교는 stat 차이가 섞여 있어 순수 bonus 효과만 분리 측정은 어려움. 동일 stat builds로 with/without bonus 비교 시뮬레이션이 향후 필요. (→ 12-2A에서 해소)
+
+## 12차 작업 2A단계 - C급 게이트 다양화
+
+### 변경 이유
+- 12-1E에서 C급 밸런스가 잡혔지만 게이트는 `망각의 서고` 1개뿐.
+- C급 콘텐츠 다양화 — 같은 난이도 철학을 유지하면서 3개 추가.
+- 컨셉: 방어형 / wave / 공격형 — 3가지 다른 전투 양상.
+
+### 신규 몬스터 (4개)
+
+| ID | 이름 | Rank | HP | ATK | DEF | SPD | Crit | Acc | Eva | Skills |
+|---|---|---|---:|---:|---:|---:|---:|---:|---:|---|
+| `fatigue-warden` | 피로의 간수 | C | 850 | 88 | 72 | 14 | 0.05 | 0.92 | 0.04 | rift-scratch, lazy-curse |
+| `memory-tracker` | 기억 추적자 | C | 540 | 88 | 40 | 17 | 0.06 | 0.90 | 0.05 | bite, memory-fog |
+| `memory-scout` | 기억 정찰자 | C | 450 | 105 | 35 | 22 | 0.08 | 0.91 | 0.06 | bite, rift-scratch |
+| `greed-warden` | 탐욕의 파수꾼 | C | 680 | 120 | 45 | 22 | 0.10 | 0.92 | 0.07 | rift-scratch, bite |
+
+비교 (기존 `forgetting-warden`): HP 780, ATK 105, DEF 58 — 새 4개와 분명한 정체성 차이.
+
+### 신규 게이트 (3개)
+
+| ID | 이름 | Rank | Type | Monsters | Rec Power | 컨셉 |
+|---|---|---|---|---|---:|---|
+| `gate-corridor-of-fatigue` | 피로의 회랑 | C | 1v1 | fatigue-warden | 980 | 방어형 — HP/DEF 높음, ATK 낮음. 화력 부족하면 시간 끌림 |
+| `gate-rift-training-grounds` | 균열의 훈련장 | C | wave×2 | memory-tracker → memory-scout | 1050 | wave — 약한 둘이 누적 피해, 첫 wave는 mid-HP, 둘째는 빠른 glass |
+| `gate-greed-vault` | 탐욕의 금고 | C | 1v1 | greed-warden | 1050 | 공격형 — ATK 높음, HP 낮음. 짧지만 한 방에 죽을 수 있음 |
+
+기존 `gate-archive-of-forgetting` 망각의 서고 (recommendedPower 1000, forgetting-warden HP 780)는 그대로 유지.
+
+### 보상 / 페널티
+- 모든 신규 C 게이트는 `reward-gate-c-basic` + `penalty-gate-basic` 재사용 → 보상 구조 변경 없음.
+- `expiresInHours: 24` 일관.
+
+### 시뮬레이션 결과 (Build E 기준)
+
+| Build | Gate | Power | Rec | Ratio | Victory | Defeat | Draw | Avg Turns | Avg HP | 판정 |
+|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---|
+| E main+dungeon | 망각의 서고 | 867 | 1000 | 0.87 | **57%** | 43% | 0% | 19.9 | 45.5 | C 고위험 ✓ |
+| E main+dungeon | 피로의 회랑 | 867 | 980 | 0.88 | **43%** | 57% | 0% | 23.2 | 38.4 | C 매우 위험 ✓ |
+| E main+dungeon | 균열의 훈련장 | 867 | 1050 | 0.83 | **52%** | 48% | 0% | 22.0 | 46.7 | C 고위험 ✓ |
+| E main+dungeon | 탐욕의 금고 | 867 | 1050 | 0.83 | **47%** | 53% | 0% | 15.7 | 44.3 | C 매우 위험 ✓ |
+| F + bonus 0.1 | 망각의 서고 | 831 | 1000 | 0.83 | 47% | 53% | 0% | 20.0 | 34.9 | 매우 위험 |
+| F + bonus 0.1 | 피로의 회랑 | 831 | 980 | 0.85 | 34% | 65% | 1% | 23.4 | 27.6 | 매우 위험 |
+| F + bonus 0.1 | 균열의 훈련장 | 831 | 1050 | 0.79 | 41% | 59% | 0% | 22.0 | 36.5 | 매우 위험 |
+| F + bonus 0.1 | 탐욕의 금고 | 831 | 1050 | 0.79 | 42% | 58% | 0% | 15.7 | 38.6 | 매우 위험 |
+
+**Build A/B/C/D 모두 새 C 게이트 0% 승률** (draw 1~2% 일부 발생 — 장비 없는 빌드는 C 불가 정체성 유지).
+
+E/D 게이트 회귀 영향 없음 (수치 그대로).
+
+### 조정 이력 (2단계 iteration)
+
+| 몬스터 | 1차안 | 2차안 (최종) | 이유 |
+|---|---|---|---|
+| fatigue-warden | HP 920, DEF 82 | HP 850, DEF 72 | 1차 Build E 16% / draw 3% → DEF/HP 완화로 43% 달성 |
+| memory-tracker | HP 460, ATK 80 | HP 540, ATK 88 | 1차 wave Build E 90% → 누적 피해 강화로 52% |
+| memory-scout | HP 380, ATK 95 | HP 450, ATK 105 | 2차 wave도 누적 강화 |
+| greed-warden | HP 700, ATK 130 | HP 680, ATK 120 | 1차 Build E 28% → ATK 살짝 완화로 47% |
+
+게이트 recommendedPower는 1차안 유지 (980 / 1050 / 1050) — 라벨 정합 OK.
+
+### gate_success_bonus A/B 테스트 (동일 Build E stats, bonus 0 vs 0.1)
+
+| Gate | bonus 0 victory | bonus 0.1 victory | Δ | bonus 0 avgHP | bonus 0.1 avgHP |
+|---|---:|---:|---:|---:|---:|
+| 망각의 서고 | 57% | 62% | **+5%p** | 45.5 | 51.4 |
+| 피로의 회랑 | 43% | 48% | **+5%p** | 38.4 | 42.8 |
+| 균열의 훈련장 | 52% | 56% | **+4%p** | 46.7 | 54.5 |
+| 탐욕의 금고 | 47% | 45% | -2%p | 44.3 | 47.6 |
+
+- 4개 중 3개에서 +4~5%p 일관 개선 — bonus 0.1이 "소폭 보조" 정책에 부합.
+- 탐욕의 금고는 짧은 전투(15.7턴) + 빠른 적 특성상 RNG variance가 ATK/DEF buff 효과를 일부 가림. avgHP는 +3.3으로 buff 자체는 작동 (시간 부족으로 final outcome flip이 안 됨).
+- 12-1E "F의 base stat이 낮아서 비교 어려움" 한계를 동일 stat A/B로 해소 — bonus 0.1은 실제로 작동하며 borderline 게이트에서 의미 있음.
+
+### 미변경 / 유지
+- 전투 공식, player stat 공식, gate_success_bonus 수치 (cap 0.3, 3턴 ATK/DEF +50%×bonus) 모두 그대로
+- 보상 helper / rewardTable / penalty / stamina / 부상 / draw 정책: 그대로
+- E/D 게이트 + 망각의 서고: 그대로
+- persist version: v14 유지 (스키마 변경 없음, seed array에 entry 추가만)
+- localStorage key, store, UI: 변경 없음
+
+### 시뮬레이션 도구
+- `scripts/sim-12-2a.ts` — 12-1E 스크립트 기반 확장. 신규 C 게이트 회귀 + bonus A/B 포함.
+- 실행: `npx tsx scripts/sim-12-2a.ts`
+- 결정론적 (seedBase=1).
+
+### 결과 요약
+- **C급 게이트 4개 다양화 완료**: 망각의 서고(균형) / 피로의 회랑(방어 attrition) / 균열의 훈련장(wave) / 탐욕의 금고(고위험 공격)
+- Build E 기준 모두 43~57% 승률 (목표 35~70%)
+- Build F (bonus 0.1) 34~47% — 모두 "매우 위험" 라벨, 보조 효과로 +4~5%p 의미 있음
+- Build A~D는 새 C 게이트 전부 0% — C는 장비+직업+성장 필수 콘텐츠 정체성 유지
+- E/D 게이트 회귀 영향 0%
+
+### 다음 추천 작업
+- **12-2B**: B/A/S급 게이트 신설 (C급 완료 → 상위 콘텐츠 확장). 단, recommendedPower / monster stats 가 어떻게 스케일링할지 시뮬레이션 후 결정.
+- **C급 보상 차등**: 현재 4개 C 게이트가 동일 `reward-gate-c-basic` 사용. 컨셉별 보상 차등 검토 (예: 공격형은 epic+ 드롭 확률 상향, 방어형은 XP 보너스 등). 별건 patch.
+- **순수 bonus 효과 측정 완료**: 12-1E TODO 해소. 향후 다른 소모품 효과 측정도 동일 패턴 적용 가능.
+- **실사용 1~2주 관찰**: 새 C 게이트 컨셉이 게임플레이상 변별력 있는지 확인.
+
+## 12차 작업 0단계 - CSS @import 경고 정리
+
+수정:
+- `src/index.css`의 Pretendard 폰트 `@import`를 CSS 표준에 맞게 파일 최상단으로 이동했다.
+- Tailwind directives 순서는 `@tailwind base`, `@tailwind components`, `@tailwind utilities`로 유지했다.
+- 일반 CSS selector와 `@layer components`의 스타일 값/클래스명은 변경하지 않았다.
+
+결과:
+- `npm run build` 성공.
+- 기존 `[vite:css] @import must precede all other statements` 경고 제거.
+- UI 기능 변경 없음.
+
+## 11차 게이트/전투 시스템 1차 완성 요약
+
+### 완료 상태
+
+게이트/전투 시스템은 11-16 종합 시뮬레이션 기준으로 1차 완성 가능 상태로 판단한다.
+
+완료된 핵심 기능:
+- 게이트 설계 문서 작성
+- 게이트/몬스터/스킬/전투 로그 타입 추가
+- 초기 게이트/몬스터/스킬 seed 구축
+- 전투 스탯 / 전투력 / 위험도 / 데미지 계산
+- 자동 전투 시뮬레이터
+- victory / defeat / draw 결과 처리
+- draw 정책: 보상 없음, 패널티 없음, active 유지, 재도전 가능
+- 게이트 출현/관리
+- Gate UI
+- 게이트 보상/패널티 적용
+- stamina / 부상 / 회복 구조
+- 직업별 전투 스킬
+- skillTotalPower 개선
+- 방어형 스킬 피해감소 + 반격 구조
+- 전투 결과/로그 UX 개선
+- JobPanel 기본 접힘 UI
+- 장비 전투 스킬 구조
+- 웨이브 전투
+- gate_success_bonus 전투 시작 버프 연결
+- 11-16 종합 시뮬레이션 검증
+
+### 확정 정책
+
+#### 전투 방식
+- 자동 전투 + 사전 세팅 방식
+- 사용자는 직업/장비/소모품을 세팅하고 전투는 자동 진행
+- 전투 결과와 턴 로그를 보여준다
+
+#### 전투 결과
+
+| 결과 | 보상 | 패널티 | 게이트 상태 |
+|---|---:|---:|---|
+| victory | O | stamina -20 | cleared |
+| defeat | X | stamina -50 + 부상 | failed |
+| draw | X | X | active 유지 |
+
+#### draw 정책
+- 전체 maxTurns 초과 시 draw
+- draw는 클리어로 인정하지 않음
+- XP/아이템/장비/소모품 보상 없음
+- stamina 감소 없음
+- 부상 없음
+- active gate 유지
+- 장비/직업/소모품 세팅 변경 후 재도전 가능
+- 단, next_gate 소모품은 전투 시도에 사용된 것으로 보고 consumed 처리
+
+#### stamina / 부상
+- maxStamina = 100
+- gate entry cost = 20
+- victory 시 stamina -20
+- defeat 시 stamina -50 + injury
+- draw 시 stamina 변화 없음
+- stamina 자연 회복: 시간당 +10
+- daily/main/random 퀘스트 완료 시 stamina +5
+- 부상 회복: 6시간 경과 또는 부상 이후 daily/main/random 퀘스트 3개 완료
+
+#### 게이트 출현
+- 하루 첫 접속: 5%
+- 일반 던전 최종 클리어: 15%
+- 월간/고난도 던전 최종 클리어: 25%
+- 동시 active gate는 1개
+- active gate가 있으면 새 출현 트리거는 무시
+- 보류 큐 없음
+- active gate 무시 알림 없음
+
+#### 전투력 / 위험도
+- recommendedLevel은 안내용
+- recommendedPower가 실제 위험도 기준
+- playerPower / recommendedPower ratio로 risk 계산
+- combatPower 공식은 현재 유지
+- 11-16 기준 전투력 신뢰도는 실사용 가능한 수준
+- 실사용 중 risk 표시와 체감 난이도가 어긋나면 우선 recommendedPower로 보정한다
+
+#### 보상
+- daily/main/dungeon은 기본 성장
+- gate는 장비/아이템 파밍 성격
+- XP는 보조 보상
+- 장비/아이템 드롭이 핵심 보상
+
+### 11-16 종합 시뮬레이션 결론
+
+검증 규모:
+- 빌드 6개
+- 게이트 6개
+- 각 조합 100회
+- 총 3,600전
+
+핵심 결과:
+
+| 구간 | 판단 |
+|---|---|
+| E급 1v1 | 초급 무각성도 100%, 입문 구간 정상 |
+| E급 wave | 초급 무각성도 100%, 평균 턴 증가로 단일 E보다 긴 전투 |
+| D급 1v1 | 진입 공격형/분석형 기준 작동. 공격형은 약간 쉬움 |
+| D급 wave | 위험하지만 가능 |
+| C급 1v1 | 장비 공격형 외에는 대부분 고위험 |
+| drawRate | 대부분 0%, 방어형 vs C급만 1% |
+| gate_success_bonus | cap 정상, 확정승 보정 아님 |
+| stamina/부상 | 전략적 제약으로 작동 |
+| 보상 | 당장 문제 없음 |
+
+최종 판단:
+- 게이트/전투 시스템은 1차 완성 가능
+- 추가 개선 후보는 backlog로 분리
+- 11차 게이트/전투 작업은 기능적으로 닫고, 이후 작업은 별도 개선 티켓으로 다룬다
+
+## 게이트/전투 이후 개선 Backlog
+
+### 우선순위 A - 가까운 개선 후보
+
+1. D/C 경계 recommendedPower 소폭 보정
+   - D급 공격형 빌드가 다소 쉽게 느껴질 수 있음
+   - 전투 수치가 아니라 위험도 표시 보정 중심으로 검토
+
+2. 웨이브 전용 rewardTable 추가
+   - 웨이브 게이트는 단일 게이트보다 길고 위험함
+   - 현재 같은 랭크 rewardTable 공유
+   - 추후 wave 전용 XP/dropChance 소폭 보정 검토
+
+3. C급 게이트 다양화
+   - 현재 C급 콘텐츠가 적음
+   - C급 1v1 / C급 wave / C급 특수 몬스터 추가 후보
+
+### 우선순위 B - 전투 재미 확장
+
+4. 2차 직업 전용 강화 스킬
+   - 현재 1차/2차 직업은 같은 라인 대표 스킬 공유
+   - 2차 직업에 전용 강화 스킬 추가 가능
+   - 예: 예언된 일격, 심연 주석, 심장 강타, 시간 지연, 균형의 축복
+
+5. 장비 전투 스킬 추가 확장
+   - 현재 일부 epic/legendary 장비만 combatSkillIds 보유
+   - 추후 더 많은 장비에 전투 스킬 추가 가능
+   - 단, 대량 추가 전 밸런스 검증 필요
+
+6. 장비 세트 효과
+   - 같은 계열 장비 2개/4개 장착 시 추가 효과
+   - 예: 금안 세트, 그림자 세트, 시스템 세트
+
+### 우선순위 C - 장기 확장
+
+7. 동시 다수 몬스터 전투
+   - 현재는 순차 웨이브
+   - 동시 다수 전투는 광역 스킬/타겟팅/밸런스 복잡도가 커서 후순위
+
+8. 광역 스킬
+   - 동시 다수 전투 또는 웨이브 특화 스킬로 확장 가능
+
+9. 보스 게이트
+   - B/A/S급 고난도 콘텐츠
+   - 패턴형 보스, 특수 보상, 보스 전용 로그 가능
+
+10. 현실 보상권 시스템
+   - 구현은 나중
+   - 발동 대상: daily/main/random/dungeon/gate 등 완료 이벤트
+   - 확률: 0.3%
+   - 제한: 주 1회
+   - 보상:
+     - PC방 2시간
+     - 비싼 배달 1회
+   - 통제된 희귀 보상으로 설계
+
+## Known Issues / 주의사항
+
+### CSS @import 경고
+- 12차 작업 0단계에서 `src/index.css`의 `@import` 위치를 최상단으로 정리해 해결했다.
+- `npm run build` 기준 `[vite:css] @import must precede all other statements` 경고는 더 이상 표시되지 않는다.
+- 스타일 값/클래스명 변경 없이 순서만 정리했다.
+
+### Combat Power 한계
+- 11-10 이후 R²는 목표치를 충족했지만, combatPower는 여전히 근사치
+- skill value, buff/debuff, cooldown, 웨이브 구조를 완벽히 설명하지는 못함
+- 실사용 중 risk 표시와 체감 난이도가 어긋나면 recommendedPower 중심으로 조정
+
+### gate_success_bonus
+- 0.3 cap은 강력함
+- 현재는 확정승 보정은 아니지만, 0.3 효과는 희귀 소모품 전용으로 유지하는 것이 좋음
+- 흔하게 지급하지 말 것
+
+### 웨이브 보상
+- 웨이브 게이트는 현재 같은 랭크 rewardTable을 공유
+- 길고 위험한 웨이브 게이트는 추후 전용 rewardTable 검토 필요
+
+### 방어형 직업
+- silent-monk 계열은 피해감소/반격으로 개선되었지만 공격형보다 느림
+- 의도된 역할 차이
+- 너무 약하다고 판단되면 반격률/반격 power보다 2차 전용 스킬로 보완하는 것을 추천
+
+### 저장 데이터
+- 게이트 작업 중 persist version은 필요한 시점에만 증가
+- optional 필드 추가는 기존 데이터 호환 방식으로 처리
+- localStorage key는 유지
+
+## 다음 작업 추천
+
+현재 게이트/전투는 1차 완성 처리한다.
+
+즉시 대형 확장보다는 다음 순서 추천:
+
+1. 며칠 실제 사용하면서 불편한 점 기록
+2. 작은 UX/문구/보상 체감 문제 수정
+3. 필요 시 D/C recommendedPower 또는 wave rewardTable 소폭 보정
+4. 이후 장비 중복 흡수 강화 또는 2차 직업 전용 스킬 중 선택
+5. 프로젝트 전체 완성 판단 후, 사용자가 요청할 때 GitHub -> Vercel 배포 진행
+
+배포는 사용자가 “프로젝트 완성, 배포하자”고 명시하기 전까지 진행하지 않는다.
