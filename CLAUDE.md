@@ -6323,3 +6323,101 @@ Build E/F: 안정권 유지
 - B/A/S급 게이트
 - 몬스터 패턴/텔레그래프
 - 회복형 전투 소모품
+
+## 12-13B: 그림자 잠금/즐겨찾기 + 실수 방지 UX
+
+### 목표
+12-13에서 강화/분해 시스템이 추가되었으나, 좋은 그림자나 주력 그림자를 실수로 분해하거나 재료로 소모할 위험이 있다. 잠금/즐겨찾기 UX를 추가하여 실수를 방지하고 그림자 관리를 개선한다.
+
+### 변경 원칙
+- 그림자 강화/분해 기능은 그대로 유지
+- 전투 수치 변경 금지
+- 그림자 강화 공식 변경 금지
+- localStorage key 변경 금지
+- B/A/S급 게이트 추가 금지
+
+### 작업 1. 잠금/즐겨찾기 필드 추가 (`src/lib/types.ts`)
+
+`OwnedShadow`에 선택적 필드 추가:
+- `isLocked?: boolean` — 잠금 상태 (없으면 false)
+- `isFavorite?: boolean` — 즐겨찾기 상태 (없으면 false)
+
+### 작업 2. store 액션 (`src/lib/store.ts`)
+
+- `toggleShadowLock(instanceId)` — 잠금/해제 토글
+- `toggleShadowFavorite(instanceId)` — 즐겨찾기 토글
+- 둘 다 전투/보상/스탯에 영향 없음
+
+### 작업 3. 흡수/분해 보호 로직
+
+`getShadowAbsorbMaterialCount` (`src/lib/shadows.ts`):
+- 재료에서 **잠긴 그림자** 제외
+- 재료에서 **성취 네임드** 제외 (기존)
+
+`canDecomposeShadow` (`src/lib/shadows.ts`):
+- **잠긴 그림자** 분해 불가 추가
+- 장착 중, 성취 네임드는 기존처럼 불가
+
+`absorbShadow` (`src/lib/store.ts`):
+- 재료 findIndex에서 `!shadow.isLocked && !shadow.isAchievementNamed` 조건 추가
+
+잠긴 그림자의 대상 강화는 그대로 가능:
+- 사용자는 주력 그림자를 잠금한 채, 다른 중복을 재료로 사용하여 강화 가능
+
+### 작업 4. ShadowPanel UI 개선
+
+카드 상태 배지:
+- 출전 중: amber 배지
+- 잠금: rose 배지
+- 즐겨찾기: yellow 배지
+
+버튼:
+- 흡수 버튼: 재료 수 표시 (잠긴 그림자는 재료에서 제외되어 반영)
+- 분해 버튼: 잠긴 그림자는 disabled, tooltip "잠금 중: 분해 불가"
+- 잠금 버튼: 잠금 시 rose 스타일, 해제 시 기본 스타일
+- 즐겨찾기 버튼: 즐겨찾기 시 yellow 스타일
+
+정렬:
+- 기본 (obtained): 출전 중 → 즐겨찾기 → 잠금 → 희귀도 → 강화 → 획득순
+- 즐겨찾기순, 잠금순 추가
+
+분해 confirm:
+- 잠금 상태 분해 시: confirm 대신 잠금 해제 안내 메시지
+
+### 작업 5. 도감 개선
+
+도감 카드에 보유 정보 추가:
+- 보유 수
+- 최고 강화 레벨
+- 출전 중 여부
+
+### 작업 6. 저장 데이터 호환성
+
+- 기존 ownedShadows에 isLocked/isFavorite 없음 → `?? false` fallback (getShadowEffects/canDecomposeShadow에서 처리)
+- persist version v14 유지
+
+### 작업 7. 검증
+
+- `npm run build` → ✅ 통과
+- `npx tsx scripts/sim-shadow-battle-balance.ts` → ✅ 통과 (Build D C-gate 69% — 변화 없음)
+- `npx tsx scripts/sim-gate-current.ts` → ✅ 통과
+- `npx tsx scripts/sim-manual-battle-balance.ts` → ✅ 통과
+
+### 수정한 파일
+| 파일 | 변경 내용 |
+|---|---|
+| `src/lib/types.ts` | OwnedShadow에 isLocked, isFavorite 추가 |
+| `src/lib/shadows.ts` | getShadowAbsorbMaterialCount에서 잠금 제외, canDecomposeShadow에서 잠금 제외 |
+| `src/lib/store.ts` | toggleShadowLock, toggleShadowFavorite 액션, absorbShadow 재료 필터에 잠금 추가 |
+| `src/components/ShadowPanel.tsx` | 잠금/즐겨찾기 버튼, 상태 배지, 정렬 개선, 도감 보유 정보 |
+
+### persist version 변경 여부
+- **변경 없음** (v14 유지)
+
+### 남은 TODO
+- 일괄 분해/자동 정리
+- 그림자 레벨업/진화
+- 그림자 시너지
+- B/A/S급 게이트
+- 몬스터 패턴/텔레그래프
+- 회복형 전투 소모품

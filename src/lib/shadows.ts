@@ -392,7 +392,7 @@ export const getShadowAbsorbMaterialCount = (
 ): number => {
   const equippedSet = new Set(equippedShadowIds ?? [])
   return (ownedShadows ?? []).filter(
-    s => s.definitionId === target.definitionId && s.instanceId !== target.instanceId && !equippedSet.has(s.instanceId)
+    s => s.definitionId === target.definitionId && s.instanceId !== target.instanceId && !equippedSet.has(s.instanceId) && !s.isLocked && !s.isAchievementNamed
   ).length
 }
 
@@ -413,5 +413,6 @@ export const canDecomposeShadow = (
   const equippedSet = new Set(equippedShadowIds ?? [])
   if (equippedSet.has(shadow.instanceId)) return false
   if (shadow.isAchievementNamed) return false
+  if (shadow.isLocked) return false
   return true
 }

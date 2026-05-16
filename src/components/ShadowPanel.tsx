@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { motion } from 'framer-motion'
-import { Eclipse, Lock, Shield, Swords, X } from 'lucide-react'
+import { Eclipse, Lock, Shield, Star, Swords, X } from 'lucide-react'
 import { useGame } from '../lib/store'
 import {
   SHADOW_DEFINITIONS,
@@ -20,7 +20,7 @@ import {
 import type { OwnedShadow, ShadowRole } from '../lib/types'
 
 type FilterKey = 'all' | 'normal' | 'gate_named' | 'achievement_named' | ShadowRole
-type SortKey = 'obtained' | 'rarity' | 'rank' | 'name' | 'enhancement'
+type SortKey = 'obtained' | 'rarity' | 'rank' | 'name' | 'enhancement' | 'favorite' | 'locked'
 
 const rarityStyle: Record<string, string> = {
   common: 'text-zinc-200 border-zinc-500/35 bg-zinc-500/10',
@@ -50,14 +50,41 @@ const sourceText = (shadow: OwnedShadow): string => {
   return def?.sourceGateRank ? `${def.sourceGateRank}급 게이트 추출` : '게이트 추출'
 }
 
-const sortShadows = (shadows: OwnedShadow[], sort: SortKey): OwnedShadow[] => {
+const sortShadows = (shadows: OwnedShadow[], sort: SortKey, equippedIds: string[]): OwnedShadow[] => {
   const rarityScore = (shadow: OwnedShadow) => SHADOW_RARITY_ORDER.indexOf(shadow.rarity)
   const rankScore = (shadow: OwnedShadow) => ['lesser', 'soldier', 'elite', 'knight', 'marshal', 'monarch', 'named'].indexOf(shadow.rank)
+  const equippedSet = new Set(equippedIds)
+  const priority = (s: OwnedShadow): number => {
+    if (sort === 'rarity') return rarityScore(s)
+    if (sort === 'rank') return rankScore(s)
+    if (sort === 'name') return 0
+    if (sort === 'enhancement') return s.enhancementLevel ?? 0
+    if (sort === 'favorite') return (s.isFavorite ? 1 : 0)
+    if (sort === 'locked') return (s.isLocked ? 1 : 0)
+    return 0
+  }
   return [...shadows].sort((a, b) => {
+    // explicit sort override
     if (sort === 'rarity') return rarityScore(b) - rarityScore(a)
     if (sort === 'rank') return rankScore(b) - rankScore(a)
     if (sort === 'name') return a.name.localeCompare(b.name)
     if (sort === 'enhancement') return (b.enhancementLevel ?? 0) - (a.enhancementLevel ?? 0)
+    if (sort === 'favorite') return Number(b.isFavorite) - Number(a.isFavorite)
+    if (sort === 'locked') return Number(b.isLocked) - Number(a.isLocked)
+    // default composite: equipped > favorite > locked > rarity > enhancement > obtained
+    const aEquip = equippedSet.has(a.instanceId) ? 1 : 0
+    const bEquip = equippedSet.has(b.instanceId) ? 1 : 0
+    if (aEquip !== bEquip) return bEquip - aEquip
+    const aFav = a.isFavorite ? 1 : 0
+    const bFav = b.isFavorite ? 1 : 0
+    if (aFav !== bFav) return bFav - aFav
+    const aLock = a.isLocked ? 1 : 0
+    const bLock = b.isLocked ? 1 : 0
+    if (aLock !== bLock) return bLock - aLock
+    const aRar = rarityScore(b) - rarityScore(a)
+    if (aRar !== 0) return aRar
+    const aEnh = (b.enhancementLevel ?? 0) - (a.enhancementLevel ?? 0)
+    if (aEnh !== 0) return aEnh
     return new Date(b.obtainedAt).getTime() - new Date(a.obtainedAt).getTime()
   })
 }
@@ -71,6 +98,8 @@ function ShadowCard({
   materialCount,
   onAbsorb,
   onDecompose,
+  onToggleLock,
+  onToggleFavorite,
 }: {
   shadow: OwnedShadow
   equipped: boolean
@@ -80,6 +109,8 @@ function ShadowCard({
   materialCount: number
   onAbsorb: () => void
   onDecompose: () => void
+  onToggleLock: () => void
+  onToggleFavorite: () => void
 }) {
   const effects = getShadowEffects(shadow).map(formatShadowEffect)
   return (
@@ -97,11 +128,23 @@ function ShadowCard({
             계급: {SHADOW_RANK_LABEL[shadow.rank]} · 역할: {SHADOW_ROLE_LABEL[shadow.role]}
           </div>
         </div>
-        {equipped && (
-          <span className="text-[10px] system-text px-2 py-0.5 rounded border border-amber-400/35 bg-amber-400/10 text-amber-200">
-            출전 중
-          </span>
-        )}
+        <div className="flex flex-col items-end gap-1">
+          {equipped && (
+            <span className="text-[10px] system-text px-2 py-0.5 rounded border border-amber-400/35 bg-amber-400/10 text-amber-200">
+              출전 중
+            </span>
+          )}
+          {shadow.isLocked && (
+            <span className="text-[10px] system-text px-2 py-0.5 rounded border border-rose-400/35 bg-rose-400/10 text-rose-200 flex items-center gap-1">
+              <Lock className="w-2.5 h-2.5" /> 잠금
+            </span>
+          )}
+          {shadow.isFavorite && (
+            <span className="text-[10px] system-text px-2 py-0.5 rounded border border-yellow-400/35 bg-yellow-400/10 text-yellow-200 flex items-center gap-1">
+              <Star className="w-2.5 h-2.5" /> 즐겨찾기
+            </span>
+          )}
+        </div>
       </div>
 
       {shadow.traits.length > 0 && (
@@ -118,6 +161,12 @@ function ShadowCard({
       {(shadow.enhancementLevel ?? 0) > 0 && (
         <div className="mt-1 text-[10px] text-amber-200/70">
           강화 {shadow.enhancementLevel}/{MAX_SHADOW_ENHANCEMENT_LEVEL} · 흡수 {(shadow.absorbedCount ?? 0)}회
+        </div>
+      )}
+      {(shadow.isLocked || shadow.isFavorite) && (
+        <div className="mt-1 text-[10px] text-white/30 flex gap-2">
+          {shadow.isLocked && <span className="text-rose-200/60">잠금 중: 분해/재료 사용 불가</span>}
+          {shadow.isFavorite && <span className="text-yellow-200/60">즐겨찾기</span>}
         </div>
       )}
 
@@ -145,11 +194,31 @@ function ShadowCard({
           <button
             type="button"
             onClick={onDecompose}
-            disabled={equipped || shadow.isAchievementNamed}
+            disabled={equipped || shadow.isAchievementNamed || shadow.isLocked}
             className="flex-1 btn text-[10px] border-rose-400/25 bg-rose-400/10 text-rose-100 disabled:opacity-40 disabled:cursor-not-allowed"
-            title={shadow.isAchievementNamed ? '성취 네임드는 분해 불가' : equipped ? '장착 중' : `정수 +${SHADOW_DECOMPOSE_ESSENCE[shadow.rarity] ?? 1}`}
+            title={shadow.isAchievementNamed ? '성취 네임드는 분해 불가' : shadow.isLocked ? '잠금 중: 분해 불가' : equipped ? '장착 중' : `정수 +${SHADOW_DECOMPOSE_ESSENCE[shadow.rarity] ?? 1}`}
           >
             분해 (+{SHADOW_DECOMPOSE_ESSENCE[shadow.rarity] ?? 1})
+          </button>
+        </div>
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={onToggleLock}
+            className={`flex-1 btn text-[10px] ${shadow.isLocked ? 'border-rose-400/35 bg-rose-400/15 text-rose-100' : 'border-white/10 bg-ink-900/45 text-white/50'}`}
+            title={shadow.isLocked ? '잠금 해제' : '잠금 (분해/재료 방지)'}
+          >
+            <Lock className="w-2.5 h-2.5 inline mr-1" />
+            {shadow.isLocked ? '잠금 해제' : '잠금'}
+          </button>
+          <button
+            type="button"
+            onClick={onToggleFavorite}
+            className={`flex-1 btn text-[10px] ${shadow.isFavorite ? 'border-yellow-400/35 bg-yellow-400/15 text-yellow-100' : 'border-white/10 bg-ink-900/45 text-white/50'}`}
+            title={shadow.isFavorite ? '즐겨찾기 해제' : '즐겨찾기'}
+          >
+            <Star className="w-2.5 h-2.5 inline mr-1" />
+            {shadow.isFavorite ? '즐겨찾기 해제' : '즐겨찾기'}
           </button>
         </div>
       </div>
@@ -157,7 +226,7 @@ function ShadowCard({
   )
 }
 
-function CodexCard({ definition, owned }: { definition: (typeof SHADOW_DEFINITIONS)[number]; owned: boolean }) {
+function CodexCard({ definition, owned, ownedCount, maxEnhancement, isEquipped }: { definition: (typeof SHADOW_DEFINITIONS)[number]; owned: boolean; ownedCount: number; maxEnhancement: number; isEquipped: boolean }) {
   const effects = definition.effects.map(formatShadowEffect)
   const hidden = !owned && definition.hiddenUntilObtained
   return (
@@ -171,7 +240,14 @@ function CodexCard({ definition, owned }: { definition: (typeof SHADOW_DEFINITIO
             계급: {SHADOW_RANK_LABEL[definition.rank]} · 역할: {SHADOW_ROLE_LABEL[definition.role]}
           </div>
         </div>
-        {owned ? <Eclipse className="w-4 h-4 text-cyan-200" /> : <Lock className="w-4 h-4 text-white/35" />}
+        <div className="flex flex-col items-end gap-1">
+          {owned ? <Eclipse className="w-4 h-4 text-cyan-200" /> : <Lock className="w-4 h-4 text-white/35" />}
+          {owned && (
+            <div className="text-[10px] text-white/40 text-right">
+              보유 {ownedCount}{maxEnhancement > 0 ? ` · 최고 +${maxEnhancement}` : ''}{isEquipped ? ' · 출전' : ''}
+            </div>
+          )}
+        </div>
       </div>
       <div className="mt-3 text-[11px] text-white/55 leading-relaxed">
         {hidden ? '해금 후 공개' : definition.description}
@@ -202,6 +278,8 @@ export function ShadowPanel() {
   const shadowEssence = useGame(s => s.shadowEssence ?? 0)
   const absorbShadow = useGame(s => s.absorbShadow)
   const decomposeShadow = useGame(s => s.decomposeShadow)
+  const toggleShadowLock = useGame(s => s.toggleShadowLock)
+  const toggleShadowFavorite = useGame(s => s.toggleShadowFavorite)
 
   const filteredOwned = useMemo(() => {
     const list = ownedShadows.filter(shadow => {
@@ -211,8 +289,8 @@ export function ShadowPanel() {
       if (filter === 'achievement_named') return Boolean(shadow.isAchievementNamed)
       return shadow.role === filter
     })
-    return sortShadows(list, sort)
-  }, [filter, ownedShadows, sort])
+    return sortShadows(list, sort, equippedShadowIds)
+  }, [filter, ownedShadows, sort, equippedShadowIds])
 
   const codexDefs = SHADOW_DEFINITIONS.filter(def => {
     if (filter === 'all') return true
@@ -274,11 +352,13 @@ export function ShadowPanel() {
           {filters.map(item => <option key={item.key} value={item.key}>{item.label}</option>)}
         </select>
         <select value={sort} onChange={event => setSort(event.target.value as SortKey)} className="bg-ink-900/80 border border-white/10 rounded-md px-3 py-2 text-xs text-white/70">
-          <option value="obtained">획득순</option>
+          <option value="obtained">기본순 (출전·즐겨찾기·잠금)</option>
           <option value="rarity">희귀도순</option>
           <option value="rank">계급순</option>
           <option value="name">이름순</option>
           <option value="enhancement">강화순</option>
+          <option value="favorite">즐겨찾기순</option>
+          <option value="locked">잠금순</option>
         </select>
       </div>
 
@@ -302,13 +382,18 @@ export function ShadowPanel() {
                 }}
                 onDecompose={() => {
                   const isRare = ['rare', 'epic', 'legendary'].includes(shadow.rarity)
-                  const msg = isRare
-                    ? `[${SHADOW_RARITY_LABEL[shadow.rarity]}] ${shadow.name}을(를) 분해합니다.\n그림자 정수 +${SHADOW_DECOMPOSE_ESSENCE[shadow.rarity] ?? 1} 획득.\n이 작업은 되돌릴 수 없습니다. 계속할까요?`
-                    : `[${shadow.name}]을(를) 분해하여 그림자 정수 ${SHADOW_DECOMPOSE_ESSENCE[shadow.rarity] ?? 1} 획득합니다. 계속할까요?`
-                  if (window.confirm(msg)) {
+                  const isLocked = shadow.isLocked
+                  const msg = isLocked
+                    ? `[${shadow.name}]은(는) 잠금 상태입니다.\n분해하려면 먼저 잠금을 해제하세요.`
+                    : isRare
+                      ? `[${SHADOW_RARITY_LABEL[shadow.rarity]}] ${shadow.name}을(를) 분해합니다.\n그림자 정수 +${SHADOW_DECOMPOSE_ESSENCE[shadow.rarity] ?? 1} 획득.\n이 작업은 되돌릴 수 없습니다. 계속할까요?`
+                      : `[${shadow.name}]을(를) 분해하여 그림자 정수 ${SHADOW_DECOMPOSE_ESSENCE[shadow.rarity] ?? 1} 획득합니다. 계속할까요?`
+                  if (!isLocked && window.confirm(msg)) {
                     decomposeShadow(shadow.instanceId)
                   }
                 }}
+                onToggleLock={() => toggleShadowLock(shadow.instanceId)}
+                onToggleFavorite={() => toggleShadowFavorite(shadow.instanceId)}
               />
             )
           })}
@@ -321,9 +406,21 @@ export function ShadowPanel() {
         </div>
       ) : (
         <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-3">
-          {codexDefs.map(def => (
-            <CodexCard key={def.id} definition={def} owned={ownedDefinitionIds.has(def.id)} />
-          ))}
+          {codexDefs.map(def => {
+            const instances = ownedShadows.filter(s => s.definitionId === def.id)
+            const maxEnh = Math.max(0, ...instances.map(s => s.enhancementLevel ?? 0))
+            const isEquipped = instances.some(s => equippedShadowIds.includes(s.instanceId))
+            return (
+              <CodexCard
+                key={def.id}
+                definition={def}
+                owned={ownedDefinitionIds.has(def.id)}
+                ownedCount={instances.length}
+                maxEnhancement={maxEnh}
+                isEquipped={isEquipped}
+              />
+            )
+          })}
         </div>
       )}
     </div>

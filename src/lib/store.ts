@@ -213,6 +213,8 @@ interface GameState {
   grantAchievementNamedShadows: () => void
   absorbShadow: (targetInstanceId: string) => void
   decomposeShadow: (shadowInstanceId: string) => void
+  toggleShadowLock: (shadowInstanceId: string) => void
+  toggleShadowFavorite: (shadowInstanceId: string) => void
 
   // achievements
   recordAppOpen: () => void
@@ -3062,10 +3064,10 @@ export const useGame = create<GameState>()(
         if (!canAbsorbShadow(target, ownedShadows, equippedShadowIds)) return {}
         const currentLevel = target.enhancementLevel ?? 0
         const nextLevel = Math.min(MAX_SHADOW_ENHANCEMENT_LEVEL, currentLevel + 1)
-        // consume one material (same definitionId, not equipped, not self)
+        // consume one material (same definitionId, not equipped, not self, not locked, not achievement named)
         const equippedSet = new Set(equippedShadowIds)
         const materialIndex = ownedShadows.findIndex(
-          shadow => shadow.definitionId === target.definitionId && shadow.instanceId !== target.instanceId && !equippedSet.has(shadow.instanceId)
+          shadow => shadow.definitionId === target.definitionId && shadow.instanceId !== target.instanceId && !equippedSet.has(shadow.instanceId) && !shadow.isLocked && !shadow.isAchievementNamed
         )
         if (materialIndex === -1) return {}
         const material = ownedShadows[materialIndex]
@@ -3105,6 +3107,22 @@ export const useGame = create<GameState>()(
             createdAt: todayISO(),
           }],
         }
+      }),
+
+      toggleShadowLock: (shadowInstanceId) => set((s) => {
+        const ownedShadows = s.ownedShadows ?? []
+        const nextOwned = ownedShadows.map(shadow =>
+          shadow.instanceId === shadowInstanceId ? { ...shadow, isLocked: !shadow.isLocked } : shadow
+        )
+        return { ownedShadows: nextOwned }
+      }),
+
+      toggleShadowFavorite: (shadowInstanceId) => set((s) => {
+        const ownedShadows = s.ownedShadows ?? []
+        const nextOwned = ownedShadows.map(shadow =>
+          shadow.instanceId === shadowInstanceId ? { ...shadow, isFavorite: !shadow.isFavorite } : shadow
+        )
+        return { ownedShadows: nextOwned }
       }),
 
       addQuest: (q) => set((s) => ({

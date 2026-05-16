@@ -401,6 +401,8 @@ export interface OwnedShadow {
   isAchievementNamed?: boolean
   enhancementLevel?: number
   absorbedCount?: number
+  isLocked?: boolean
+  isFavorite?: boolean
 }
 
 export interface ShadowExtractResult {
