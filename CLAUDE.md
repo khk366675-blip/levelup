@@ -6421,3 +6421,156 @@ Build E/F: 안정권 유지
 - B/A/S급 게이트
 - 몬스터 패턴/텔레그래프
 - 회복형 전투 소모품
+
+## 12-14: 그림자 레벨업/진화 시스템
+
+### 목표
+그림자에게 장기 육성 축을 추가한다. 출전한 그림자가 전투 경험치를 얻고 레벨업하며, 특정 조건에서 진화할 수 있게 한다.
+
+### 변경 원칙
+- 그림자 강화/분해/잠금/즐겨찾기 정책 그대로 유지
+- 전투 수치 변경 금지 (레벨 multiplier는 낮게)
+- localStorage key 변경 금지
+- B/A/S급 게이트 추가 금지
+
+### 작업 1. 레벨/XP 구조
+
+`OwnedShadow` 기존 `level`/`xp` 필드 사용 (이미 있었음).
+추가 필드:
+- `evolutionStage?: number` — 진화 단계
+- `evolvedFromDefinitionId?: string` — 진화 전 definitionId
+
+`ShadowDefinition`에 추가:
+- `evolutionTargetDefinitionId?: string` — 진화 대상 definitionId
+
+### 작업 2. XP 테이블 (`src/lib/shadows.ts`)
+
+Helper 추가:
+- `getShadowMaxLevel(shadow)`: 일반 20, 게이트 네임드 25, 성취 네임드 30
+- `getShadowXpForNextLevel(level)`: `round(20 * level^1.35)`
+- `addShadowXp(shadow, amount)`: 레벨업 처리, maxLevel 도달 시 xp=0
+
+XP 예시:
+- Lv1→2: 20
+- Lv5→6: 170
+- Lv10→11: 450
+- Lv20: 여러 번 게이트 클리어 필요
+
+### 작업 3. 전투 XP 지급 (`src/lib/store.ts`)
+
+`getShadowXpReward(gateRank, outcome)`:
+| 등급 | 승리 | 패배 | 무승부 |
+|---|---|---|---|
+| E | 12 | 4 | 0 |
+| D | 22 | 7 | 0 |
+| C | 38 | 12 | 0 |
+| B | 60 | 18 | 0 |
+| A | 90 | 25 | 0 |
+| S | 130 | 35 | 0 |
+
+지급 위치:
+- `createGateBattleOutcomeUpdate`: 수동/전환 전투 결과 처리 시 출전 그림자 XP 지급
+- `startGateBattle`: 자동 전투 결과 처리 시 동일하게 지급
+- draw/cancel: 0 XP
+- defeat: 소량 XP
+
+레벨업 시 시스템 메시지: `[그림자 이름] Lv.N`.
+
+### 작업 4. 레벨 효과 multiplier (`src/lib/shadows.ts`)
+
+`getShadowEffects`에 추가:
+- combat level multiplier: `1 + (level - 1) * 0.01`
+- utility level multiplier: `1 + (level - 1) * 0.005`
+
+최종 효과 = enhancement multiplier × level multiplier
+- +3 Lv1: 전투 1.18×
+- +3 Lv10: 전투 1.18 × 1.09 = 약 1.29×
+- +5 Lv20: 전투 1.30 × 1.19 = 약 1.55×
+
+### 작업 5. 진화 시스템 1차
+
+진화 조건:
+- definition에 `evolutionTargetDefinitionId` 존재
+- level >= 10
+- enhancementLevel >= 2
+- shadowEssence 비용 (common 10, uncommon 25, rare 60)
+- 성취 네임드는 진화 보류
+
+진화 대상 계열:
+| 출발 | 진화 | 희귀도 |
+|---|---|---|
+| 그림자 쥐 | 그림자 정찰병 | common→uncommon |
+| 그림자 보병 | 어둠의 처형병 | common→uncommon |
+| 망각의 기록병 | 망각의 서기관 | uncommon→rare |
+| 피로의 수호병 | 피로의 방패병 | uncommon→rare |
+| 탐욕의 사냥개 | 탐욕의 수집가 | uncommon→rare |
+
+진화 후 처리:
+- definitionId → target, 이름/희귀도/계급/역할 변경
+- level: 1로 리셋, xp: 0
+- enhancementLevel: 유지
+- absorbedCount: 유지
+- traits: 유지
+- isLocked/isFavorite: 유지
+- instanceId: 유지
+- `evolutionStage` +1, `evolvedFromDefinitionId` 기록
+
+### 작업 6. ShadowPanel UI (`src/components/ShadowPanel.tsx`)
+
+레벨/XP 표시:
+- `Lv N/MAX` + XP bar (작은 progress bar)
+- maxLevel 도달 시 "MAX"
+
+진화 표시:
+- "진화 가능" emerald 배지 (조건 충족 시)
+- 진화 대상명 + 정수 비용 표시
+- 진화 버튼 (disabled 시 사유 표시)
+- confirm: 레벨 초기화 안내
+
+### 작업 7. 시뮬레이션 업데이트
+
+`scripts/sim-shadow-battle-balance.ts`:
+- `shadowLevel` 추가
+- 케이스 추가: `common_shadow_plus3_lvl10`, `rare_shadow_plus3_lvl10`, `gate_named_shadow_plus3_lvl10`, `mixed_trained`
+- seedBase에 `shadowLevel * 5000` 추가하여 충돌 방지
+
+### 작업 8. 검증 결과
+
+- `npm run build` → ✅ 통과
+- `npx tsx scripts/sim-shadow-battle-balance.ts` → ✅ 통과
+- `npx tsx scripts/sim-gate-current.ts` → ✅ 통과
+- `npx tsx scripts/sim-manual-battle-balance.ts` → ✅ 통과
+
+Build D / C급 주요 결과:
+- no_shadow: 59-77%
+- common +3: 64-80%
+- common +3 Lv10: 67-74% (소폭 상승)
+- rare +3 Lv10: 69-74% (소폭 상승)
+- gate_named +3 Lv10: 70-81% (소폭 상승)
+- mixed_trained (3개 +3 Lv10): 81-89% (체감 상승)
+
+Build C / C급: **0%** (변화 없음 ✓)
+
+### 수정한 파일
+| 파일 | 변경 내용 |
+|---|---|
+| `src/lib/types.ts` | ShadowDefinition에 evolutionTargetDefinitionId, OwnedShadow에 evolutionStage/evolvedFromDefinitionId |
+| `src/lib/shadows.ts` | getShadowEffects에 level multiplier, XP 테이블 helper, 진화 helper, 5개 definition에 진화 대상 추가 |
+| `src/lib/store.ts` | toggleShadowLock/Favorite 다음에 evolveShadow 액션, auto/manual 전투 결과에 shadow XP 지급 |
+| `src/components/ShadowPanel.tsx` | Lv/XP bar, 진화 가능 배지/버튼, 진화 조건 표시 |
+| `scripts/sim-shadow-battle-balance.ts` | shadowLevel 케이스 추가, seedBase 변경 |
+| `CLAUDE.md` | 12-14 기록 추가 |
+
+### persist version 변경 여부
+- **변경 없음** (v14 유지)
+- 기존 ownedShadows level/xp 없음 → `?? 1` / `?? 0` fallback
+- evolutionStage/evolvedFromDefinitionId 없음 → `?? 0` / undefined fallback
+
+### 남은 TODO
+- 일괄 분해/자동 정리
+- 그림자 고급 진화 (2차, 3차)
+- 네임드 전용 진화
+- 그림자 시너지
+- B/A/S급 게이트
+- 몬스터 패턴/텔레그래프
+- 회복형 전투 소모품

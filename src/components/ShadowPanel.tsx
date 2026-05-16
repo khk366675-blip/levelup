@@ -8,12 +8,15 @@ import {
   SHADOW_RARITY_LABEL,
   SHADOW_RARITY_ORDER,
   SHADOW_ROLE_LABEL,
+  canEvolveShadow,
   formatShadowEffect,
   getEquippedShadows,
   getShadowAbsorbMaterialCount,
   getShadowDefinition,
   getShadowEffects,
+  getShadowMaxLevel,
   getShadowSlotCount,
+  getShadowXpForNextLevel,
   MAX_SHADOW_ENHANCEMENT_LEVEL,
   SHADOW_DECOMPOSE_ESSENCE,
 } from '../lib/shadows'
@@ -100,6 +103,8 @@ function ShadowCard({
   onDecompose,
   onToggleLock,
   onToggleFavorite,
+  onEvolve,
+  shadowEssence,
 }: {
   shadow: OwnedShadow
   equipped: boolean
@@ -111,8 +116,16 @@ function ShadowCard({
   onDecompose: () => void
   onToggleLock: () => void
   onToggleFavorite: () => void
+  onEvolve: () => void
+  shadowEssence: number
 }) {
   const effects = getShadowEffects(shadow).map(formatShadowEffect)
+  const level = shadow.level ?? 1
+  const maxLevel = getShadowMaxLevel(shadow)
+  const xp = shadow.xp ?? 0
+  const xpNeeded = getShadowXpForNextLevel(level)
+  const xpPct = level >= maxLevel ? 100 : Math.min(100, Math.round((xp / xpNeeded) * 100))
+  const evolutionCheck = canEvolveShadow(shadow, shadowEssence)
   return (
     <motion.div
       initial={{ opacity: 0, y: 4 }}
@@ -144,11 +157,24 @@ function ShadowCard({
               <Star className="w-2.5 h-2.5" /> 즐겨찾기
             </span>
           )}
+          {evolutionCheck.canEvolve && (
+            <span className="text-[10px] system-text px-2 py-0.5 rounded border border-emerald-400/35 bg-emerald-400/10 text-emerald-200">
+              진화 가능
+            </span>
+          )}
         </div>
       </div>
 
+      <div className="mt-2 flex items-center gap-2">
+        <span className="text-[10px] text-white/60">Lv {level}/{maxLevel}</span>
+        <div className="flex-1 h-1.5 bg-white/10 rounded-full overflow-hidden">
+          <div className="h-full bg-cyan-400/60 rounded-full transition-all" style={{ width: `${xpPct}%` }} />
+        </div>
+        <span className="text-[10px] text-white/40">{level >= maxLevel ? 'MAX' : `${xp}/${xpNeeded}`}</span>
+      </div>
+
       {shadow.traits.length > 0 && (
-        <div className="mt-3 text-[11px] text-purple-100/80">
+        <div className="mt-2 text-[11px] text-purple-100/80">
           특성: {shadow.traits.map(trait => trait.name).join(' / ')}
         </div>
       )}
@@ -167,6 +193,14 @@ function ShadowCard({
         <div className="mt-1 text-[10px] text-white/30 flex gap-2">
           {shadow.isLocked && <span className="text-rose-200/60">잠금 중: 분해/재료 사용 불가</span>}
           {shadow.isFavorite && <span className="text-yellow-200/60">즐겨찾기</span>}
+        </div>
+      )}
+      {evolutionCheck.targetDefinition && (
+        <div className="mt-1 text-[10px] text-white/40">
+          진화: {shadow.name} → {evolutionCheck.targetDefinition.name} ({evolutionCheck.cost} 정수)
+          {!evolutionCheck.canEvolve && evolutionCheck.reason && (
+            <span className="text-white/30 ml-1">· {evolutionCheck.reason}</span>
+          )}
         </div>
       )}
 
@@ -221,6 +255,17 @@ function ShadowCard({
             {shadow.isFavorite ? '즐겨찾기 해제' : '즐겨찾기'}
           </button>
         </div>
+        {evolutionCheck.targetDefinition && (
+          <button
+            type="button"
+            onClick={onEvolve}
+            disabled={!evolutionCheck.canEvolve}
+            className={`w-full btn text-[10px] ${evolutionCheck.canEvolve ? 'border-emerald-400/35 bg-emerald-400/15 text-emerald-100' : 'border-white/10 bg-ink-900/45 text-white/40'} disabled:opacity-40 disabled:cursor-not-allowed`}
+            title={evolutionCheck.reason ?? `진화: ${evolutionCheck.targetDefinition.name}`}
+          >
+            {evolutionCheck.canEvolve ? `진화 → ${evolutionCheck.targetDefinition.name}` : `진화 불가 · ${evolutionCheck.reason}`}
+          </button>
+        )}
       </div>
     </motion.div>
   )
@@ -280,6 +325,7 @@ export function ShadowPanel() {
   const decomposeShadow = useGame(s => s.decomposeShadow)
   const toggleShadowLock = useGame(s => s.toggleShadowLock)
   const toggleShadowFavorite = useGame(s => s.toggleShadowFavorite)
+  const evolveShadow = useGame(s => s.evolveShadow)
 
   const filteredOwned = useMemo(() => {
     const list = ownedShadows.filter(shadow => {
@@ -394,6 +440,15 @@ export function ShadowPanel() {
                 }}
                 onToggleLock={() => toggleShadowLock(shadow.instanceId)}
                 onToggleFavorite={() => toggleShadowFavorite(shadow.instanceId)}
+                onEvolve={() => {
+                  const check = canEvolveShadow(shadow, shadowEssence)
+                  if (check.canEvolve && check.targetDefinition) {
+                    if (window.confirm(`[${shadow.name}]을(를) [${check.targetDefinition.name}](으)로 진화합니다.\n그림자 정수 ${check.cost} 소모.\n레벨이 1로 초기화되고 강화는 유지됩니다. 계속할까요?`)) {
+                      evolveShadow(shadow.instanceId)
+                    }
+                  }
+                }}
+                shadowEssence={shadowEssence}
               />
             )
           })}

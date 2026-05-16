@@ -70,7 +70,7 @@ export const SHADOW_TRAITS: ShadowTrait[] = [
 const e = (type: ShadowEffectType, value: number, extra: Partial<ShadowEffect> = {}): ShadowEffect => ({ type, value, ...extra })
 
 export const SHADOW_DEFINITIONS: ShadowDefinition[] = [
-  { id: 'shadow-rat', name: '그림자 쥐', description: '틈새를 파고드는 작은 하급 그림자.', rarity: 'common', rank: 'lesser', role: 'scout', sourceType: 'gate_extract', sourceGateRank: 'E', basePower: 18, effects: [e('extra_attack_chance', 0.03)] },
+  { id: 'shadow-rat', name: '그림자 쥐', description: '틈새를 파고드는 작은 하급 그림자.', rarity: 'common', rank: 'lesser', role: 'scout', sourceType: 'gate_extract', sourceGateRank: 'E', basePower: 18, effects: [e('extra_attack_chance', 0.03)], evolutionTargetDefinitionId: 'shadow-scout' },
   { id: 'rift-remnant', name: '균열의 잔영', description: '전투 시작을 아주 조금 안정시키는 잔류 마력.', rarity: 'common', rank: 'lesser', role: 'support', sourceType: 'gate_extract', sourceGateRank: 'E', basePower: 16, effects: [e('wave_start_bonus', 0.03)] },
   { id: 'shadow-sentry', name: '그림자 보초', description: '첫 피격을 받아내는 하급 수비 그림자.', rarity: 'common', rank: 'lesser', role: 'guard', sourceType: 'gate_extract', sourceGateRank: 'E', basePower: 17, effects: [e('damage_reduction', 0.015)] },
   { id: 'shadow-scout', name: '그림자 정찰병', description: '초반 명중을 돕는 병사 그림자.', rarity: 'uncommon', rank: 'soldier', role: 'scout', sourceType: 'gate_extract', sourceGateRank: 'E', basePower: 24, effects: [e('first_turn_accuracy', 0.025)] },
@@ -83,7 +83,7 @@ export const SHADOW_DEFINITIONS: ShadowDefinition[] = [
   { id: 'rook-backstreet', name: '골목의 그림자 루크', description: '뒤틀린 골목을 지키던 수비형 네임드.', rarity: 'legendary', rank: 'named', role: 'guard', sourceType: 'gate_named', sourceGateRank: 'E', sourceGateId: 'gate-rift-backstreet', basePower: 50, effects: [e('damage_reduction', 0.04), e('guard_counter', 0.04), e('first_turn_evasion', 0.02)], hiddenUntilObtained: true, isGateNamed: true, quote: '비켜서지 마십시오.' },
   { id: 'lark-nest-fang', name: '둥지의 송곳니 라크', description: 'wave 전환을 사냥 신호로 받아들이는 네임드.', rarity: 'legendary', rank: 'named', role: 'assault', sourceType: 'gate_named', sourceGateRank: 'E', sourceGateId: 'gate-rift-nest', basePower: 54, effects: [e('wave_start_bonus', 0.06), e('extra_attack_chance', 0.04), e('execute_damage', 0.04)], hiddenUntilObtained: true, isGateNamed: true, quote: '다음 먹잇감은 어디입니까.' },
 
-  { id: 'shadow-infantry', name: '그림자 보병', description: '일정 주기로 전열을 밀어붙이는 병사.', rarity: 'common', rank: 'soldier', role: 'assault', sourceType: 'gate_extract', sourceGateRank: 'D', basePower: 38, effects: [e('extra_attack_chance', 0.035)] },
+  { id: 'shadow-infantry', name: '그림자 보병', description: '일정 주기로 전열을 밀어붙이는 병사.', rarity: 'common', rank: 'soldier', role: 'assault', sourceType: 'gate_extract', sourceGateRank: 'D', basePower: 38, effects: [e('extra_attack_chance', 0.035)], evolutionTargetDefinitionId: 'dark-executor' },
   { id: 'sloth-spawn', name: '나태의 종자', description: '방어 자세에 힘을 보탠다.', rarity: 'common', rank: 'soldier', role: 'guard', sourceType: 'gate_extract', sourceGateRank: 'D', basePower: 36, effects: [e('damage_reduction', 0.025)] },
   { id: 'shadow-spearman', name: '그림자 창병', description: '얇게 적 방어를 찌른다.', rarity: 'common', rank: 'soldier', role: 'assault', sourceType: 'gate_extract', sourceGateRank: 'D', basePower: 40, effects: [e('enemy_defense_down', 0.025)] },
   { id: 'sloth-guard', name: '나태의 파수병', description: '꾸준한 피해 감소를 제공한다.', rarity: 'uncommon', rank: 'elite', role: 'guard', sourceType: 'gate_extract', sourceGateRank: 'D', basePower: 48, effects: [e('damage_reduction', 0.025)] },
@@ -96,10 +96,10 @@ export const SHADOW_DEFINITIONS: ShadowDefinition[] = [
   { id: 'gorn-sloth-captain', name: '나태의 파수장 고른', description: '나태의 소굴 깊은 곳에서 방패를 들던 네임드.', rarity: 'legendary', rank: 'named', role: 'guard', sourceType: 'gate_named', sourceGateRank: 'D', sourceGateId: 'gate-lair-of-sloth', basePower: 82, effects: [e('damage_reduction', 0.055), e('guard_counter', 0.06), e('low_hp_defense', 0.06)], hiddenUntilObtained: true, isGateNamed: true, quote: '무너지지 않는 것이 전술입니다.' },
   { id: 'shark-black-chaser', name: '검은 추격자 샤크', description: '나태의 순찰로에서 선공을 빼앗던 네임드.', rarity: 'legendary', rank: 'named', role: 'scout', sourceType: 'gate_named', sourceGateRank: 'D', sourceGateId: 'gate-sloth-patrol', basePower: 78, effects: [e('first_turn_accuracy', 0.04), e('enemy_evasion_down', 0.035), e('extraction_bonus', 0.025)], hiddenUntilObtained: true, isGateNamed: true, quote: '도망치는 길을 먼저 지우겠습니다.' },
 
-  { id: 'forgetting-recorder', name: '망각의 기록병', description: '적 방어 구조를 기록하고 흔든다.', rarity: 'uncommon', rank: 'elite', role: 'analyst', sourceType: 'gate_extract', sourceGateRank: 'C', basePower: 58, effects: [e('enemy_defense_down', 0.03)] },
-  { id: 'fatigue-guardian', name: '피로의 수호병', description: '장기전에서 피해 누적을 줄인다.', rarity: 'uncommon', rank: 'elite', role: 'guard', sourceType: 'gate_extract', sourceGateRank: 'C', basePower: 60, effects: [e('damage_reduction', 0.03)] },
+  { id: 'forgetting-recorder', name: '망각의 기록병', description: '적 방어 구조를 기록하고 흔든다.', rarity: 'uncommon', rank: 'elite', role: 'analyst', sourceType: 'gate_extract', sourceGateRank: 'C', basePower: 58, effects: [e('enemy_defense_down', 0.03)], evolutionTargetDefinitionId: 'forgetting-scribe' },
+  { id: 'fatigue-guardian', name: '피로의 수호병', description: '장기전에서 피해 누적을 줄인다.', rarity: 'uncommon', rank: 'elite', role: 'guard', sourceType: 'gate_extract', sourceGateRank: 'C', basePower: 60, effects: [e('damage_reduction', 0.03)], evolutionTargetDefinitionId: 'fatigue-shieldman' },
   { id: 'rift-trainee', name: '균열 훈련병', description: '기본 공격의 틈에 추가타를 넣는다.', rarity: 'uncommon', rank: 'elite', role: 'assault', sourceType: 'gate_extract', sourceGateRank: 'C', basePower: 62, effects: [e('extra_attack_chance', 0.04)] },
-  { id: 'greed-hound', name: '탐욕의 사냥개', description: '전리품과 그림자의 냄새를 동시에 쫓는다.', rarity: 'uncommon', rank: 'elite', role: 'hunter', sourceType: 'gate_extract', sourceGateRank: 'C', basePower: 54, effects: [e('drop_bonus', 0.01), e('extraction_bonus', 0.01)] },
+  { id: 'greed-hound', name: '탐욕의 사냥개', description: '전리품과 그림자의 냄새를 동시에 쫓는다.', rarity: 'uncommon', rank: 'elite', role: 'hunter', sourceType: 'gate_extract', sourceGateRank: 'C', basePower: 54, effects: [e('drop_bonus', 0.01), e('extraction_bonus', 0.01)], evolutionTargetDefinitionId: 'greed-collector' },
   { id: 'forgetting-scribe', name: '망각의 서기관', description: '주기적으로 적의 방어와 명중을 흔든다.', rarity: 'rare', rank: 'knight', role: 'analyst', sourceType: 'gate_extract', sourceGateRank: 'C', basePower: 72, effects: [e('enemy_defense_down', 0.04), e('enemy_evasion_down', 0.02)] },
   { id: 'fatigue-shieldman', name: '피로의 방패병', description: '방어 행동에 추가 안정성을 준다.', rarity: 'rare', rank: 'knight', role: 'guard', sourceType: 'gate_extract', sourceGateRank: 'C', basePower: 74, effects: [e('damage_reduction', 0.04)] },
   { id: 'rift-instructor', name: '균열의 교관', description: '장착 그림자들의 움직임을 정렬한다.', rarity: 'rare', rank: 'knight', role: 'support', sourceType: 'gate_extract', sourceGateRank: 'C', basePower: 70, effects: [e('bonus_damage', 0.025), e('wave_start_bonus', 0.025)] },
@@ -163,11 +163,15 @@ const COMBAT_EFFECT_TYPES: Set<ShadowEffectType> = new Set([
 export const getCombatEnhancementMultiplier = (level: number): number => 1 + level * 0.06
 export const getUtilityEnhancementMultiplier = (level: number): number => 1 + level * 0.03
 
+export const getCombatLevelMultiplier = (level: number): number => 1 + (level - 1) * 0.01
+export const getUtilityLevelMultiplier = (level: number): number => 1 + (level - 1) * 0.005
+
 export const getShadowEffects = (shadow: OwnedShadow): ShadowEffect[] => {
   const def = getShadowDefinition(shadow.definitionId)
-  const lvl = shadow.enhancementLevel ?? 0
-  const combatMul = getCombatEnhancementMultiplier(lvl)
-  const utilMul = getUtilityEnhancementMultiplier(lvl)
+  const enh = shadow.enhancementLevel ?? 0
+  const lv = shadow.level ?? 1
+  const combatMul = getCombatEnhancementMultiplier(enh) * getCombatLevelMultiplier(lv)
+  const utilMul = getUtilityEnhancementMultiplier(enh) * getUtilityLevelMultiplier(lv)
   const applyMul = (effects: ShadowEffect[]): ShadowEffect[] => effects.map(effect => ({
     ...effect,
     value: COMBAT_EFFECT_TYPES.has(effect.type)
@@ -415,4 +419,74 @@ export const canDecomposeShadow = (
   if (shadow.isAchievementNamed) return false
   if (shadow.isLocked) return false
   return true
+}
+
+export const getShadowMaxLevel = (shadow: OwnedShadow): number => {
+  if (shadow.isAchievementNamed) return 30
+  if (shadow.isGateNamed) return 25
+  return 20
+}
+
+export const getShadowXpForNextLevel = (level: number): number => {
+  if (level < 1) return getShadowXpForNextLevel(1)
+  return Math.max(1, Math.round(20 * Math.pow(level, 1.35)))
+}
+
+export const addShadowXp = (shadow: OwnedShadow, amount: number): { shadow: OwnedShadow; leveledUp: boolean; newLevel: number } => {
+  const maxLevel = getShadowMaxLevel(shadow)
+  let level = shadow.level ?? 1
+  let xp = (shadow.xp ?? 0) + amount
+  let leveledUp = false
+
+  while (level < maxLevel) {
+    const required = getShadowXpForNextLevel(level)
+    if (xp < required) break
+    xp -= required
+    level += 1
+    leveledUp = true
+  }
+
+  if (level >= maxLevel) {
+    level = maxLevel
+    xp = 0
+  }
+
+  return { shadow: { ...shadow, level, xp }, leveledUp, newLevel: level }
+}
+
+export const getShadowXpReward = (gateRank: string, outcome: 'victory' | 'defeat' | 'draw'): number => {
+  const base: Record<string, { victory: number; defeat: number; draw: number }> = {
+    E: { victory: 12, defeat: 4, draw: 0 },
+    D: { victory: 22, defeat: 7, draw: 0 },
+    C: { victory: 38, defeat: 12, draw: 0 },
+    B: { victory: 60, defeat: 18, draw: 0 },
+    A: { victory: 90, defeat: 25, draw: 0 },
+    S: { victory: 130, defeat: 35, draw: 0 },
+  }
+  return base[gateRank]?.[outcome] ?? 0
+}
+
+const EVOLUTION_COST: Record<string, number> = {
+  common: 10,
+  uncommon: 25,
+  rare: 60,
+}
+
+export const getEvolutionCost = (shadow: OwnedShadow): number => {
+  return EVOLUTION_COST[shadow.rarity] ?? 0
+}
+
+export const canEvolveShadow = (shadow: OwnedShadow, shadowEssence: number = 0): { canEvolve: boolean; reason?: string; cost?: number; targetDefinition?: ShadowDefinition } => {
+  const def = getShadowDefinition(shadow.definitionId)
+  if (!def?.evolutionTargetDefinitionId) return { canEvolve: false, reason: '진화 대상 없음' }
+  if (shadow.isAchievementNamed) return { canEvolve: false, reason: '성취 네임드는 진화 보류' }
+  const target = getShadowDefinition(def.evolutionTargetDefinitionId)
+  if (!target) return { canEvolve: false, reason: '진화 대상 정보 없음' }
+  const maxLevel = getShadowMaxLevel(shadow)
+  const level = shadow.level ?? 1
+  if (level < 10) return { canEvolve: false, reason: '레벨 10 이상 필요' }
+  if ((shadow.enhancementLevel ?? 0) < 2) return { canEvolve: false, reason: '강화 +2 이상 필요' }
+  const cost = getEvolutionCost(shadow)
+  if (shadowEssence < cost) return { canEvolve: false, reason: `그림자 정수 ${cost} 필요`, cost, targetDefinition: target }
+  return { canEvolve: true, cost, targetDefinition: target }
 }

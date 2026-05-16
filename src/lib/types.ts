@@ -380,6 +380,7 @@ export interface ShadowDefinition {
   hiddenUntilObtained?: boolean
   isGateNamed?: boolean
   isAchievementNamed?: boolean
+  evolutionTargetDefinitionId?: string
 }
 
 export interface OwnedShadow {
@@ -403,6 +404,8 @@ export interface OwnedShadow {
   absorbedCount?: number
   isLocked?: boolean
   isFavorite?: boolean
+  evolutionStage?: number
+  evolvedFromDefinitionId?: string
 }
 
 export interface ShadowExtractResult {

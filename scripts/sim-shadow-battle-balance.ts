@@ -50,18 +50,22 @@ const GATE_IDS = [
   'gate-greed-vault',
 ]
 
-const CASES: Array<{ id: string; shadowIds: string[]; enhanceLevel?: number }> = [
+const CASES: Array<{ id: string; shadowIds: string[]; enhanceLevel?: number; shadowLevel?: number }> = [
   { id: 'no_shadow', shadowIds: [] },
   { id: 'common_shadow', shadowIds: ['shadow-infantry'] },
   { id: 'common_shadow_plus3', shadowIds: ['shadow-infantry'], enhanceLevel: 3 },
+  { id: 'common_shadow_plus3_lvl10', shadowIds: ['shadow-infantry'], enhanceLevel: 3, shadowLevel: 10 },
   { id: 'rare_shadow', shadowIds: ['black-shieldman'] },
   { id: 'rare_shadow_plus3', shadowIds: ['black-shieldman'], enhanceLevel: 3 },
+  { id: 'rare_shadow_plus3_lvl10', shadowIds: ['black-shieldman'], enhanceLevel: 3, shadowLevel: 10 },
   { id: 'gate_named_shadow', shadowIds: ['organ-fatigue-shield'] },
   { id: 'gate_named_shadow_plus3', shadowIds: ['organ-fatigue-shield'], enhanceLevel: 3 },
+  { id: 'gate_named_shadow_plus3_lvl10', shadowIds: ['organ-fatigue-shield'], enhanceLevel: 3, shadowLevel: 10 },
   { id: 'achievement_named_shadow', shadowIds: ['verk-steel-knight'] },
   { id: 'mixed_2_slots', shadowIds: ['shadow-infantry', 'sloth-hunter'] },
   { id: 'mixed_3_slots', shadowIds: ['raban-rift-instructor', 'forgetting-scribe', 'greed-collector'] },
   { id: 'mixed_enhanced', shadowIds: ['shadow-infantry', 'black-shieldman', 'organ-fatigue-shield'], enhanceLevel: 3 },
+  { id: 'mixed_trained', shadowIds: ['shadow-infantry', 'black-shieldman', 'organ-fatigue-shield'], enhanceLevel: 3, shadowLevel: 10 },
 ]
 
 const makeItem = (spec: BuildItemSpec): Item => {
@@ -75,10 +79,10 @@ const makeItem = (spec: BuildItemSpec): Item => {
   }
 }
 
-const makeShadows = (ids: string[], enhanceLevel?: number): OwnedShadow[] => ids.map(id => {
+const makeShadows = (ids: string[], enhanceLevel?: number, shadowLevel?: number): OwnedShadow[] => ids.map(id => {
   const def = SHADOW_DEFINITIONS.find(item => item.id === id)
   if (!def) throw new Error(`Unknown shadow in sim case: ${id}`)
-  return { ...createOwnedShadow(def, () => 0.42), enhancementLevel: enhanceLevel ?? 0 }
+  return { ...createOwnedShadow(def, () => 0.42), enhancementLevel: enhanceLevel ?? 0, level: shadowLevel ?? 1 }
 })
 
 const applyShadowStatBonuses = (stats: Record<StatKey, number>, shadows: OwnedShadow[]): Record<StatKey, number> => {
@@ -95,7 +99,7 @@ const monsterSkillsFor = (monsters: MonsterDefinition[]) => {
   return SKILL_DEFINITIONS.filter(skill => skill.ownerType === 'monster' && ids.has(skill.id))
 }
 
-console.log('# 12-13 Shadow Battle Balance (with enhancement)')
+console.log('# 12-14 Shadow Battle Balance (with enhancement + level)')
 console.log(`iterations: ${ITERATIONS}`)
 console.log('')
 console.log('| Build | Case | Gate | Rank | Power | Victory | Defeat | Draw | AvgTurns | AvgHP | Notes |')
@@ -104,7 +108,7 @@ console.log('|---|---|---|---|---:|---:|---:|---:|---:|---:|---|')
 for (const build of BUILDS) {
   const equippedItems = (build.items ?? []).map(makeItem)
   for (const testCase of CASES) {
-    const shadows = makeShadows(testCase.shadowIds, testCase.enhanceLevel)
+    const shadows = makeShadows(testCase.shadowIds, testCase.enhanceLevel, testCase.shadowLevel)
     const skills = getPlayerCombatSkills({ jobId: build.jobId, equippedItems, allSkills: SKILL_DEFINITIONS })
     const playerStats = calculatePlayerCombatStats({
       level: build.level,
@@ -128,12 +132,13 @@ for (const build of BUILDS) {
         skills: [...skills, ...monsterSkillsFor(monsters)],
         equippedShadows: shadows,
         gateInstanceId: `sim-shadow-${build.id}-${testCase.id}-${gate.id}`,
-        seedBase: SEED_BASE + build.id.charCodeAt(0) * 10_000 + testCase.id.length * 100 + gate.id.length + (testCase.enhanceLevel ?? 0) * 1_000,
+        seedBase: SEED_BASE + build.id.charCodeAt(0) * 10_000 + testCase.id.length * 100 + gate.id.length + (testCase.enhanceLevel ?? 0) * 1_000 + (testCase.shadowLevel ?? 0) * 5_000,
       })
       const notes: string[] = []
       if (build.id === 'C' && gate.rank === 'C' && summary.victoryRate > 0.35) notes.push('Build C C-gate too easy')
       if (build.id === 'D' && gate.rank === 'C' && summary.victoryRate >= 0.95) notes.push('Build D C-gate high')
       if (build.id === 'D' && gate.rank === 'C' && testCase.enhanceLevel && summary.victoryRate >= 0.98) notes.push('D C-gate enhanced too high')
+      if (build.id === 'D' && gate.rank === 'C' && testCase.shadowLevel && summary.victoryRate >= 0.98) notes.push('D C-gate trained too high')
       if (gate.rank === 'E' && build.id === 'A' && summary.victoryRate < 0.6) notes.push('E entry hard')
 
       console.log(

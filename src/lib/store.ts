@@ -108,8 +108,10 @@ import {
 } from './game'
 import {
   ACHIEVEMENT_SHADOWS_BY_QUEST_ID,
+  addShadowXp,
   canAbsorbShadow,
   canDecomposeShadow,
+  canEvolveShadow,
   createOwnedShadow,
   getEquippedShadowCategoryXpBonus,
   getEquippedShadowDropBonus,
@@ -118,6 +120,7 @@ import {
   getShadowAbsorbMaterialCount,
   getShadowDefinition,
   getShadowSlotCount,
+  getShadowXpReward,
   MAX_SHADOW_ENHANCEMENT_LEVEL,
   rollShadowExtraction,
   SHADOW_DECOMPOSE_ESSENCE,
@@ -215,6 +218,7 @@ interface GameState {
   decomposeShadow: (shadowInstanceId: string) => void
   toggleShadowLock: (shadowInstanceId: string) => void
   toggleShadowFavorite: (shadowInstanceId: string) => void
+  evolveShadow: (shadowInstanceId: string) => void
 
   // achievements
   recordAppOpen: () => void
@@ -1063,6 +1067,20 @@ const createGateBattleOutcomeUpdate = (
   let penaltyApplied: GatePenalty | undefined
   let shouldCheckUnlocks = false
   const equippedShadows = getEquippedShadows(s.ownedShadows, s.equippedShadowIds, s.hunter)
+  const xpAmount = getShadowXpReward(gate.rank, combatLog.result as 'victory' | 'defeat' | 'draw')
+  let nextOwnedShadows = s.ownedShadows ?? []
+  const shadowLevelUps: string[] = []
+  if (xpAmount > 0 && equippedShadows.length > 0) {
+    for (const es of equippedShadows) {
+      const idx = nextOwnedShadows.findIndex(sh => sh.instanceId === es.instanceId)
+      if (idx === -1) continue
+      const result = addShadowXp(nextOwnedShadows[idx], xpAmount)
+      nextOwnedShadows = nextOwnedShadows.map((sh, i) => i === idx ? result.shadow : sh)
+      if (result.leveledUp) {
+        shadowLevelUps.push(`${es.name} Lv.${result.newLevel}`)
+      }
+    }
+  }
 
   if (combatLog.result === 'victory') {
     nextGateStatus = {
@@ -1131,17 +1149,28 @@ const createGateBattleOutcomeUpdate = (
     penaltyApplied,
   }
 
+  const finalMessages = shadowLevelUps.length > 0
+    ? [...s.messages, {
+        id: uid(),
+        kind: 'shadow' as const,
+        title: '그림자 성장',
+        lines: [`출전 그림자들이 ${xpAmount} XP를 획득했습니다.`, ...shadowLevelUps],
+        createdAt: todayISO(),
+      }]
+    : s.messages
+
   return {
     finalLog,
     shouldCheckUnlocks,
     state: {
       hunter: nextHunter,
       items: nextItems,
+      ownedShadows: nextOwnedShadows,
       gateStatus: nextGateStatus,
       activeGate: nextActiveGate,
       activeConsumableEffects: nextConsumables,
       combatLogs: [finalLog, ...s.combatLogs].slice(0, 20),
-      messages: s.messages,
+      messages: finalMessages,
       manualBattleSession: undefined,
     },
   }
@@ -2411,6 +2440,26 @@ export const useGame = create<GameState>()(
           })
         }
 
+        const xpAmount = getShadowXpReward(gate.rank, combatLog.result as 'victory' | 'defeat' | 'draw')
+        let nextOwnedShadows = s.ownedShadows ?? []
+        if (xpAmount > 0 && equippedShadows.length > 0) {
+          for (const es of equippedShadows) {
+            const idx = nextOwnedShadows.findIndex(sh => sh.instanceId === es.instanceId)
+            if (idx === -1) continue
+            const result = addShadowXp(nextOwnedShadows[idx], xpAmount)
+            nextOwnedShadows = nextOwnedShadows.map((sh, i) => i === idx ? result.shadow : sh)
+            if (result.leveledUp) {
+              newMessages.push({
+                id: uid(),
+                kind: 'shadow' as const,
+                title: '그림자 성장',
+                lines: [`[${es.name}]이(가) Lv.${result.newLevel}이(가) 되었습니다.`],
+                createdAt: todayISO(),
+              })
+            }
+          }
+        }
+
         const finalLog: CombatLog = {
           ...combatLog,
           rewards: gateRewards,
@@ -2420,13 +2469,14 @@ export const useGame = create<GameState>()(
         set({
           hunter: nextHunter,
           items: nextItems,
+          ownedShadows: nextOwnedShadows,
           gateStatus: nextGateStatus,
           activeGate: nextActiveGate,
           activeConsumableEffects: nextConsumables,
           combatLogs: [finalLog, ...s.combatLogs].slice(0, 20),
           // Gate battle outcome is revealed in GatePanel one log line at a time.
           // Pushing result modals here would spoil the combat reveal immediately.
-          messages: s.messages,
+          messages: [...s.messages, ...newMessages],
         })
 
         if (combatLog.result === 'victory') {
@@ -3123,6 +3173,43 @@ export const useGame = create<GameState>()(
           shadow.instanceId === shadowInstanceId ? { ...shadow, isFavorite: !shadow.isFavorite } : shadow
         )
         return { ownedShadows: nextOwned }
+      }),
+
+      evolveShadow: (shadowInstanceId) => set((s) => {
+        const ownedShadows = s.ownedShadows ?? []
+        const shadow = ownedShadows.find(sh => sh.instanceId === shadowInstanceId)
+        if (!shadow) return {}
+        const check = canEvolveShadow(shadow, s.shadowEssence ?? 0)
+        if (!check.canEvolve || !check.targetDefinition) return {}
+        const cost = check.cost ?? 0
+        const targetDef = check.targetDefinition
+        const nextOwned = ownedShadows.map(sh =>
+          sh.instanceId === shadowInstanceId
+            ? {
+                ...sh,
+                definitionId: targetDef.id,
+                name: targetDef.name,
+                rarity: targetDef.rarity,
+                rank: targetDef.rank,
+                role: targetDef.role,
+                level: 1,
+                xp: 0,
+                evolutionStage: (sh.evolutionStage ?? 0) + 1,
+                evolvedFromDefinitionId: sh.definitionId,
+              }
+            : sh
+        )
+        return {
+          ownedShadows: nextOwned,
+          shadowEssence: (s.shadowEssence ?? 0) - cost,
+          messages: [...s.messages, {
+            id: uid(),
+            kind: 'shadow' as const,
+            title: '그림자 진화',
+            lines: [`[${shadow.name}]이(가) [${targetDef.name}](으)로 진화했습니다.`],
+            createdAt: todayISO(),
+          }],
+        }
       }),
 
       addQuest: (q) => set((s) => ({
