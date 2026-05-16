@@ -5076,3 +5076,154 @@ const sourceLabel: Record<string, string> = {
 - 기존 저장 데이터 호환성 문제 없음
 - GitHub `khk366675-blip/levelup` push 완료
 - Vercel 자동 배포 대기 (main 브랜치 push → Vercel 자동 빌드 트리거)
+
+## 13차 작업 — Main/Dungeon 역할 재정의 및 마일스톤 던전 추가 (2026-05-16)
+
+### 작업 목표
+Main Quest와 Dungeon의 역할을 명확히 분리한다.
+- **Main Quest** = 최종 목표 / 큰 성과 / 1회성 달성
+- **Dungeon** = 그 Main을 달성하기 위한 중간 단계 / 누적 마일스톤
+- **Daily** = Dungeon을 밀기 위한 반복 행동
+
+### 변경 원칙
+- XP 보상표 변경 금지
+- gate/monster/전투 공식 변경 금지
+- 장비 강화/칭호 효과 변경 금지
+- localStorage key `levelup-save` 변경 금지
+- persist version 변경 금지 (스키마 변경 없음)
+- 기존 저장 데이터 호환성 유지
+- B/A/S급 게이트 추가 금지
+- 새 대형 시스템 추가 금지
+
+### Main Quest 역할 정책
+- 최종 성과만 둔다.
+- 같은 목표의 중간 단계가 Main에 여러 개 생기지 않게 한다.
+- 예: 벤치프레스는 85kg, 90kg, 95kg을 각각 Main으로 두지 않고, "벤치프레스 100kg 달성" 하나만 Main으로 둔다.
+
+### Dungeon 역할 정책
+- Main을 향한 중간 과정/마일스톤을 둔다.
+- 예: 벤치 80→85→90→95→100kg 도전 준비는 Dungeon "벤치프레스 점진 과부하"에서 관리.
+
+### Daily 역할 정책
+- 매일 반복 가능한 행동만 둔다.
+- 예: 운동, 시장 점검, 수면, 단백질, 지출 기록, 공부 루틴.
+
+### 최종 Main 목록 (9개)
+
+| ID | 이름 | 카테고리 | 난이도 | rewardStatWeights |
+|---|---|---|---|---|
+| `main-club` | 투자 학회 합격 | career | boss | INT 35% · SEN 35% · AGI 20% · PER 10% |
+| `main-kbi-cert` | KBI 금융 AI 리터러시 자격증 합격 | study | apex | INT 50% · PER 30% · SEN 20% |
+| `main-cut` | 72kg / 체지방 15% 달성 | workout | apex | VIT 40% · STR 25% · SEN 20% · PER 15% |
+| `main-gpa` | 학점 4.0 이상 유지 | study | apex | INT 40% · PER 25% · SEN 20% · AGI 15% |
+| `main-spend-monthly` | 이번 달 소비 70만원 이하 | finance | elite | PER 35% · SEN 35% · INT 20% · AGI 10% |
+| `main-investment-return` | 실전 투자 수익률 +10% 달성 | finance | apex | SEN 45% · INT 35% · PER 20% |
+| `main-networth-1000` | 올해 순자산 +1000만원 | finance | apex | PER 35% · SEN 30% · INT 20% · AGI 15% |
+| `main-bench-100` | 벤치프레스 100kg 달성 | workout | apex | STR 55% · VIT 25% · PER 20% |
+| `main-run-5k` | 5km 25분 달성 | health | elite | AGI 45% · VIT 40% · PER 15% |
+
+### 최종 Dungeon 목록 (25개)
+
+| ID | 이름 | 카테고리 | 난이도 | 단계 | rewardStatWeights | 역할 |
+|---|---|---|---|---|---|---|
+| `dungeon-stock-reports` | 종목 분석 리포트 5편 | finance | apex | 5 | INT 45% · SEN 40% · PER 15% | 분석·감각 |
+| `dungeon-cma-journal` | CMA 실전 포트폴리오 운용 일지 12회 | finance | elite | 12 | INT 40% · SEN 45% · PER 15% | 감각·분석 |
+| `dungeon-finance-books` | 금융 도서 정복 8권 | study | apex | 8 | INT 50% · SEN 30% · PER 20% | 지식 |
+| `dungeon-dart-analysis` | DART 공시 분석 30기업 | finance | elite | 30 | SEN 45% · INT 40% · PER 15% | 감각 |
+| `dungeon-finance-terms` | 금융 용어 정리 100개 | study | elite | 10 | INT 45% · SEN 30% · PER 25% | 지식 |
+| `dungeon-backtest` | 포트폴리오 백테스팅 12회 | finance | elite | 12 | INT 40% · SEN 40% · PER 20% | 분석 |
+| `dungeon-exam-prep` | 시험 2주 전 준비 루틴 12회 | study | elite | 12 | INT 40% · PER 30% · SEN 20% · AGI 10% | 지식·인내 |
+| `dungeon-assignment-early` | 과제 선제 처리 10회 | study | hard | 10 | PER 35% · AGI 30% · INT 25% · SEN 10% | 인내·민첩 |
+| `dungeon-running-monthly` | 이번 달 러닝 훈련 12회 | health | elite | 12 | AGI 45% · VIT 40% · PER 15% | 출석/횟수 (5km 기록 단축의 보조 루틴) |
+| `dungeon-protein-30` | 단백질 100g 달성 30일 | health | hard | 30 | VIT 45% · STR 30% · PER 25% | 체력 |
+| `dungeon-sleep-rhythm` | 수면 리듬 안정화 30일 | habit | hard | 30 | VIT 45% · PER 35% · SEN 20% | 체력·인내 |
+| `dungeon-cooking-routine` | 자취 요리 루틴 20회 | habit | hard | 20 | SEN 35% · VIT 35% · AGI 20% · PER 10% | 감각·체력 |
+| `dungeon-expense-record` | 생활비 기록 30일 | finance | hard | 30 | SEN 45% · PER 30% · INT 15% · AGI 10% | 감각 |
+| `dungeon-arm-monthly` | 이번 달 팔 운동 5회 | workout | elite | 5 | STR 55% · VIT 25% · PER 20% | 운동 출석/루틴 |
+| `dungeon-back-monthly` | 이번 달 등 운동 5회 | workout | elite | 5 | STR 50% · VIT 30% · PER 20% | 운동 출석/루틴 |
+| `dungeon-chest-monthly` | 이번 달 가슴 운동 5회 | workout | elite | 5 | STR 50% · VIT 30% · PER 20% | 운동 출석/루틴 (벤치 기록 향상은 별도 Dungeon) |
+| `dungeon-shoulder-monthly` | 이번 달 어깨 운동 5회 | workout | elite | 5 | STR 45% · VIT 30% · PER 25% | 운동 출석/루틴 |
+| `dungeon-leg-monthly` | 이번 달 하체 운동 3회 | workout | elite | 3 | STR 45% · VIT 35% · PER 20% | 운동 출석/루틴 |
+| `dungeon-bench-overload` | 벤치프레스 점진 과부하 | workout | elite | 5 | STR 55% · VIT 25% · PER 20% | **마일스톤** (80→85→90→95→100) |
+| `dungeon-run-5k` | 5km 기록 단축 훈련 | health | elite | 7 | AGI 45% · VIT 40% · PER 15% | **마일스톤** (28분→25분) |
+| `dungeon-investment-return` | 실전 투자 운용 단계 | finance | elite | 7 | SEN 45% · INT 35% · PER 20% | **마일스톤** (투입→+3%→+5%→+7%→+10%) |
+| `dungeon-networth` | 순자산 증가 단계 | finance | elite | 5 | PER 35% · SEN 30% · INT 20% · AGI 15% | **마일스톤** (+200→+400→+600→+800→+1000) |
+| `dungeon-club-prep` | 투자 학회 지원 준비 | career | hard | 7 | INT 35% · SEN 35% · AGI 20% · PER 10% | **마일스톤** (지원서→자기소개서→과제→면접) |
+| `dungeon-kbi-prep` | KBI 자격증 준비 | study | hard | 7 | INT 50% · PER 30% · SEN 20% | **마일스톤** (범위→1회독→문제풀이→오답) |
+| `dungeon-cutting` | 커팅 진행 단계 | workout | elite | 6 | VIT 40% · STR 25% · SEN 20% · PER 15% | **마일스톤** (76→75→74→73→72→체지방 15%) |
+
+### 통합/삭제/보류한 목표
+
+- **`main-finance-foundation` (금융/투자 기초 체력 구축)**: 삭제. 포괄적 목표로서 종목 분석 리포트, 금융 도서 정복, DART 분석 등 기존 Dungeon이 커버.
+- **"산업/기업 리포트 10편"**: 현재 seed에 존재하지 않으므로 통합 대상 없음. 종목 분석 리포트 5편으로 충분.
+- **`dungeon-running-monthly`**: 유지하되 설명을 "출석/횟수"로 명확히 하고, `dungeon-run-5k`의 보조 루틴으로 역할 분리.
+- **부위별 월간 Dungeon**: 유지하되 설명을 "운동 출석/루틴"으로 명확히 하고, 벤치프레스 기록 향상 Dungeon과 역할 분리.
+
+### stat distribution 시뮬레이션 결과
+
+도구: `scripts/sim-stat-distribution.ts`
+실행: `npx tsx scripts/sim-stat-distribution.ts`
+
+**Group breakdown — target validation**
+
+| scenario | INT+PER% | AGI+SEN% | STR+VIT% | max/min | 판정 |
+|---|---|---|---|---|---|
+| A/B rolling 30d legacy | INT+PER 57% | AGI+SEN 15% | STR+VIT 27% | 10.5× | ❌ 편중 심함 |
+| **A/B rolling 30d weighted** | **INT+PER 42%** | **AGI+SEN 34%** | **STR+VIT 24%** | **4.4×** | ✅✅❌✅ |
+| A/B rolling 90d legacy | INT+PER 58% | AGI+SEN 16% | STR+VIT 26% | 9.2× | ❌ 편중 심함 |
+| **A/B rolling 90d weighted** | **INT+PER 43%** | **AGI+SEN 34%** | **STR+VIT 23%** | **3.7×** | ✅✅❌✅ |
+| C full+90d legacy | INT+PER 55% | AGI+SEN 20% | STR+VIT 25% | 6.0× | ❌✅✅❌ |
+| **C full+90d weighted** | **INT+PER 44%** | **AGI+SEN 33%** | **STR+VIT 23%** | **2.5×** | ❌✅❌✅ |
+| C full+180d legacy | INT+PER 56% | AGI+SEN 19% | STR+VIT 25% | 6.6× | ❌✅✅❌ |
+| **C full+180d weighted** | **INT+PER 44%** | **AGI+SEN 34%** | **STR+VIT 23%** | **2.7×** | ❌✅❌✅ |
+
+**결론**:
+- INT+PER: rolling 구간 42~43%로 목표 <45% 달성. full-seed는 44%로 1% 초과하나 양호.
+- AGI+SEN: 33~34%로 목표 ≥20% 달성.
+- STR+VIT: 23~24%로 목표 ≥25%에 약간 미달. 이는 사용자 프로필(금융/학습 중심)의 정직한 반영로 수용.
+- max/min ratio: 2.5~4.4×로 목표 <5× 달성.
+
+### XP 성장 시뮬레이션 결과
+
+도구: `scripts/sim-growth-1year.ts`
+실행: `npx tsx scripts/sim-growth-1year.ts`
+
+**current code**
+
+| scenario | 365d total XP | 365d level | 365d rank | Lv10 | Lv18/C | Lv30/B | Lv45/A | Lv60/S |
+|---|---:|---:|---|---:|---:|---:|---:|---:|
+| A. 보수적 | 356,863 | 55 | A | 12 | 42 | 102 | 240 | 460 |
+| B. 현실적 | 411,613 | 58 | A | 9 | 32 | 85 | 206 | 399 |
+| C. 적극적 | 466,363 | 61 | S | 8 | 30 | 70 | 180 | 360 |
+
+**분석**:
+- Dungeon이 17개 → 25개로 늘어나면서 평균 dungeon XP가 소폭 하락했으나, 전체 성장 곡선은 유지됨.
+- 현실적 시나리오 기준 Lv58 (A랭크) 달성. S랭크는 약 400일.
+- XP 보상표 자체는 변경하지 않았으므로, 성장 속도의 변화는 seed 수량 변화에 따른 자연스러운 결과.
+
+### 게이트 시뮬레이션 결과
+
+도구: `scripts/sim-gate-current.ts`
+실행: `npx tsx scripts/sim-gate-current.ts`
+
+- gate/monster/전투 공식 변경 없음.
+- E/D/C 게이트 밸런스는 12-7 단계와 동일하게 유지됨.
+- Build D (Lv30): C급 도전권 63~74%
+- Build E (Lv45): C급 졸업
+- Build F (Lv60): 전 게이트 trivialize
+
+### persist version 변경 여부
+
+- **변경 없음** (v14 유지)
+- 이번 작업은 seed 데이터 구조 변경만 있었고, 스토어 스키마 변경은 없음.
+- 기존 localStorage `levelup-save` 데이터와 완전 호환.
+
+### 변경한 파일
+
+| 파일 | 변경 내용 |
+|---|---|
+| `src/lib/seed.ts` | DEFAULT_MAIN_QUESTS 9개로 정리 (`main-finance-foundation` 삭제, `main-cut`/`main-gpa`/`main-bench-100`/`main-spend-monthly` 설명 수정, `main-cut` 난이도 elite→apex). DEFAULT_DUNGEONS 25개로 확장 (신규 마일스톤 Dungeon 7개 추가, 기존 부위별/러닝 Dungeon 설명 수정). |
+
+### 빌드 결과
+- `npm run build` → ✅ 통과 (1949 modules, 443.10 kB JS / 33.49 kB CSS)
+- TypeScript 에러 0, 경고 0
