@@ -957,31 +957,31 @@ export const resolveShadowSupportActions = (params: {
       ? Math.min(0.12, effects.filter(effect => effect.type === 'guard_counter').reduce((sum, effect) => sum + effect.value, 0))
       : 0
 
-    let chance = 0.04
-    if (shadow.role === 'assault') chance += 0.09
-    if (shadow.role === 'scout') chance += 0.055
-    if (shadow.role === 'analyst') chance += 0.045
-    if (shadow.role === 'support') chance += 0.035
-    if (shadow.role === 'guard') chance += params.phase === 'player_defend' ? 0.1 : 0.025
-    if (shadow.role === 'hunter') chance += 0.02
+    let chance = 0.10
+    if (shadow.role === 'assault') chance += 0.15
+    if (shadow.role === 'scout') chance += 0.12
+    if (shadow.role === 'analyst') chance += 0.10
+    if (shadow.role === 'support') chance += 0.08
+    if (shadow.role === 'guard') chance += params.phase === 'player_defend' ? 0.15 : 0.08
+    if (shadow.role === 'hunter') chance += 0.06
     chance += extraAttackChance + waveStartBonus + skillDamageBonus + guardCounter
 
-    if (params.rng() > Math.min(0.42, chance)) continue
+    if (params.rng() > Math.min(0.55, chance)) continue
 
     const rolePower =
-      shadow.role === 'assault' ? 0.22 :
-      shadow.role === 'guard' ? 0.16 :
-      shadow.role === 'scout' ? 0.15 :
-      shadow.role === 'analyst' ? 0.14 :
-      shadow.role === 'support' ? 0.12 :
-      0.08
+      shadow.role === 'assault' ? 0.28 :
+      shadow.role === 'guard' ? 0.20 :
+      shadow.role === 'scout' ? 0.22 :
+      shadow.role === 'analyst' ? 0.20 :
+      shadow.role === 'support' ? 0.14 :
+      0.10
     const rarityPower =
-      shadow.rarity === 'legendary' ? 1.45 :
-      shadow.rarity === 'epic' ? 1.25 :
-      shadow.rarity === 'rare' ? 1.1 :
-      shadow.rarity === 'uncommon' ? 1 :
+      shadow.rarity === 'legendary' ? 1.55 :
+      shadow.rarity === 'epic' ? 1.35 :
+      shadow.rarity === 'rare' ? 1.15 :
+      shadow.rarity === 'uncommon' ? 1.0 :
       0.9
-    const rankPower = shadow.rank === 'named' ? 1.25 : shadow.rank === 'knight' ? 1.12 : shadow.rank === 'elite' ? 1.05 : 1
+    const rankPower = shadow.rank === 'named' ? 1.3 : shadow.rank === 'knight' ? 1.15 : shadow.rank === 'elite' ? 1.05 : 1
     const power = rolePower * rarityPower * rankPower * (1 + bonusDamage + executeDamage + waveStartBonus + skillDamageBonus + guardCounter)
     const damage = calculateDamage({
       attackerAtk: playerStats.atk,
@@ -990,6 +990,37 @@ export const resolveShadowSupportActions = (params: {
       randomFactor: 0.9 + params.rng() * 0.2,
       isCritical: false,
     })
+
+    let message = ''
+    if (shadow.role === 'assault') {
+      message = `[${shadow.name}]이(가) 빈틈을 찔렀다. ${damage} 피해.`
+    } else if (shadow.role === 'guard') {
+      const guardReduction = Math.min(0.12, effects.filter(effect => effect.type === 'damage_reduction').reduce((sum, effect) => sum + effect.value, 0))
+      if (guardReduction > 0) {
+        activeEffects = applyOrRefreshCombatEffect(activeEffects, {
+          sourceSkillId: `shadow-guard-${shadow.instanceId}`,
+          kind: 'damage_reduction',
+          value: guardReduction,
+          remainingTurns: 2,
+          targetId: 'player',
+        })
+      }
+      message = `[${shadow.name}]이(가) 방어 태세를 보조했다. ${damage} 피해.` + (guardReduction > 0 ? ` 받는 피해 ${Math.round(guardReduction * 100)}% 감소.` : '')
+    } else if (shadow.role === 'scout') {
+      message = `[${shadow.name}]이(가) 적의 움직임을 읽었다. ${damage} 피해.`
+    } else if (shadow.role === 'analyst') {
+      message = `[${shadow.name}]이(가) 약점을 분석했다. ${damage} 피해.`
+    } else if (shadow.role === 'support') {
+      const cooldownSupport = Math.min(0.06, effects.filter(effect => effect.type === 'cooldown_support').reduce((sum, effect) => sum + effect.value, 0))
+      if (cooldownSupport > 0 && params.playerUsedSkill) {
+        message = `[${shadow.name}]이(가) 집중을 유지시켰다. ${damage} 피해. 스킬 쿨타운 가속.`
+      } else {
+        message = `[${shadow.name}]이(가) 집중을 유지시켰다. ${damage} 피해.`
+      }
+    } else {
+      message = `[${shadow.name}]이(가) 전리품의 냄새를 추적했다. ${damage} 피해.`
+    }
+
     monster = { ...monster, hp: Math.max(0, monster.hp - damage) }
     logs.push(createShadowLog({
       shadow,
@@ -998,7 +1029,7 @@ export const resolveShadowSupportActions = (params: {
       turnNumber: params.turnNumber,
       waveNumber: params.waveNumber,
       waveLabel: params.waveLabel,
-      message: `[${shadow.name}]이(가) 그림자 보조 행동을 수행했습니다. ${damage} 피해.`,
+      message,
     }))
 
     const defenseDown = Math.min(0.04, effects.filter(effect => effect.type === 'enemy_defense_down').reduce((sum, effect) => sum + effect.value, 0))

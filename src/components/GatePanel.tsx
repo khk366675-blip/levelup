@@ -21,6 +21,7 @@ import {
   estimateGateRisk,
   getEquippedItems,
   getPlayerCombatSkills,
+  isShadowCombatLog,
   type GateRisk,
 } from '../lib/game'
 import type { ActiveConsumableEffect, CombatLog, Item, MonsterDefinition, StatKey } from '../lib/types'
@@ -663,9 +664,9 @@ function ManualBattlePanel({
 
       <div className="flex items-center justify-between gap-3 mb-3">
         <div className="system-text text-[11px] text-cyan-300/70">
-          BATTLE LOG {showFullLog ? `(${session.logs.length})` : '(최근 8줄)'}
+          BATTLE LOG {showFullLog ? `(${session.logs.length})` : '(최근 6줄)'}
         </div>
-        {session.logs.length > 8 && (
+        {session.logs.length > 6 && (
           <button
             type="button"
             onClick={() => setShowFullLog(prev => !prev)}
@@ -759,7 +760,7 @@ function ManualBattlePanelV2({
   const actionCount = session.logs.filter(log => log.skillId !== 'system-manual-battle').length
   const totalWaves = session.waveIndex + 1 + session.remainingMonsterIds.length
   const result = session.result ? resultMeta[session.result] : undefined
-  const visibleLogs = showFullLog ? session.logs : session.logs.slice(-8)
+  const visibleLogs = showFullLog ? session.logs : session.logs.slice(-6)
   const combatConsumables = items.filter(item =>
     item.consumable &&
     item.consumableEffects?.some(effect =>
@@ -977,9 +978,9 @@ function ManualBattlePanelV2({
 
       <div className="flex items-center justify-between gap-3 mb-3">
         <div className="system-text text-[11px] text-cyan-300/70">
-          BATTLE LOG {showFullLog ? `(${session.logs.length})` : '(최근 8줄)'}
+          BATTLE LOG {showFullLog ? `(${session.logs.length})` : '(최근 6줄)'}
         </div>
-        {session.logs.length > 8 && (
+        {session.logs.length > 6 && (
           <button
             type="button"
             onClick={() => setShowFullLog(prev => !prev)}
@@ -991,7 +992,7 @@ function ManualBattlePanelV2({
         )}
       </div>
 
-      <div className="space-y-2">
+      <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
         {visibleLogs.length === 0 && (
           <div className="rounded-lg border border-cyan-400/20 bg-cyan-400/5 px-3 py-3 text-xs text-cyan-100/60 system-text">
             행동을 선택하면 전투가 진행됩니다.
@@ -1000,20 +1001,27 @@ function ManualBattlePanelV2({
         {visibleLogs.map((turn, index) => {
           const outcome = outcomeMeta[turn.outcome]
           const isSystemLog = turn.skillId === 'system-manual-battle'
+          const isShadowLog = isShadowCombatLog(turn)
+          const isLast = index === visibleLogs.length - 1
           return (
             <div
               key={`${turn.turnNumber}-${turn.actorId}-${index}`}
               className={`rounded-lg border px-3 py-2 text-xs leading-relaxed ${
-                isSystemLog
-                  ? 'border-amber-400/25 bg-amber-400/10 text-amber-50/85'
-                  : 'border-white/10 bg-ink-900/35 text-white/65'
-              }`}
+                isShadowLog
+                  ? 'border-purple-400/25 bg-purple-400/10 text-purple-50/85'
+                  : isSystemLog
+                    ? 'border-amber-400/25 bg-amber-400/10 text-amber-50/85'
+                    : 'border-white/10 bg-ink-900/35 text-white/65'
+              } ${isLast ? 'ring-1 ring-cyan-400/20' : ''}`}
             >
               <div className="flex items-center gap-2 mb-1">
-                <span className="text-cyan-300/50 system-text">#{turn.turnNumber}</span>
+                <span className={`system-text ${isLast ? 'text-cyan-200' : 'text-cyan-300/50'}`}>#{turn.turnNumber}</span>
                 {turn.waveNumber && <span className="text-[9px] system-text px-1.5 py-0.5 rounded border border-cyan-400/25 bg-cyan-400/10 text-cyan-200">W{turn.waveNumber}</span>}
-                <span className={`text-[9px] system-text px-1.5 py-0.5 rounded border ${isSystemLog ? 'text-amber-200 border-amber-400/25 bg-amber-400/10' : outcome.className}`}>
-                  {isSystemLog ? 'SYSTEM' : outcome.label}
+                <span className={`text-[9px] system-text px-1.5 py-0.5 rounded border ${
+                  isShadowLog ? 'text-purple-200 border-purple-400/25 bg-purple-400/10' :
+                  isSystemLog ? 'text-amber-200 border-amber-400/25 bg-amber-400/10' : outcome.className
+                }`}>
+                  {isShadowLog ? 'SHADOW' : isSystemLog ? 'SYSTEM' : outcome.label}
                 </span>
               </div>
               <p>{turn.message}</p>

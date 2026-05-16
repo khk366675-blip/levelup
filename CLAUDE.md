@@ -5981,3 +5981,121 @@ Build E/F / C급: 99~100%
 - B/A/S급 게이트
 - 몬스터 패턴/텔레그래프
 - 회복형 전투 소모품
+
+## 12-11B: 그림자 전투 행동 연동 + 군단 슬롯 + 게이트 출현률 + 수동 전투 로그 UX 개선
+
+### 문제
+12-11에서 그림자 보유/도감/추출/장착은 작동했지만, 실제 전투에서 그림자 보조 행동이 체감되지 않았다. 로그 메시지가 기계적이었고 발동 확률이 너무 낮았다. 또한 "군단" 컨셉에 비해 슬롯이 너무 늦게/적게 열렸고, 게이트 출현 빈도가 낮아 추출 기회가 부족했다. 수동 전투 로그도 한 화면에 잘 보이지 않았다.
+
+### 변경 원칙
+- 그림자 시스템 처음부터 다시 만들지 않음
+- types/shadows/game/store/UI 구조 재사용
+- XP 보상표 변경 금지
+- Main/Dungeon 목표 변경 금지
+- 장비 강화 공식 변경 금지
+- 칭호 효과 변경 금지
+- localStorage key 변경 금지
+- persist version 변경 금지
+- B/A/S급 게이트 추가 금지
+- 그림자 레벨업/진화/시너지 추가 금지
+
+### 원인
+`resolveShadowSupportActions`는 이미 자동/수동 전투에 연결되어 있었으나:
+- 발동 확률이 기본 4% + role bonus로 너무 낮았음 (assault도 13% 수준)
+- rolePower가 0.08~0.22로 데미지가 약했음
+- 로그 메시지가 `[이름]이(가) 그림자 보조 행동을 수행했습니다. N 피해.`로 역할 감이 없었음
+- 수동 전투 UI에서 그림자 로그가 시스템/일반 로그와 구분되지 않았음
+
+### 수정 내용
+
+**1. 그림자 보조 행동 강화 (`src/lib/game.ts`)**
+- 발동 확률: 기본 4% → 10%, role bonus 대폭 상향 (assault +15%, scout +12%, analyst +10%, support +8%, guard +8~15%, hunter +6%)
+- max clamp: 42% → 55%
+- rolePower: 0.08~0.22 → 0.10~0.28
+- rarityPower: common 0.9 → 0.9, rare 1.1 → 1.15, epic 1.25 → 1.35, legendary 1.45 → 1.55
+- role별 맞춤 메시지 추가:
+  - assault: "[이름]이(가) 빈틈을 찔렀다. N 피해."
+  - guard: "[이름]이(가) 방어 태세를 보조했다. N 피해. 받는 피해 X% 감소."
+  - scout: "[이름]이(가) 적의 움직임을 읽었다. N 피해."
+  - analyst: "[이름]이(가) 약점을 분석했다. N 피해."
+  - support: "[이름]이(가) 집중을 유지시켰다. N 피해."
+  - hunter: "[이름]이(가) 전리품의 냄새를 추적했다. N 피해."
+- guard의 damage_reduction 효과를 activeEffects에 적용 (2턴 지속)
+
+**2. 군단 슬롯 정책 상향 (`src/lib/shadows.ts`)**
+- 기존: 직업 티어 기반 (미각성 0, 1차 1, 2차 2) + Lv30/45/60 보너스
+- 변경: 레벨 기반 단순 정책
+  - Lv 1~9: 1슬롯
+  - Lv 10~19: 2슬롯
+  - Lv 20~29: 3슬롯
+  - Lv 30~44: 4슬롯
+  - Lv 45+: 5슬롯
+- 이유: 빠른 시점부터 "군단" 느낌을 주기 위해
+- ShadowPanel UI에 현재 슬롯 수 명확히 표시 유지
+
+**3. 게이트 출현 확률 상향 (`src/lib/store.ts`)**
+- daily_open: 7% → 10%
+- daily_completion: 3% → 5%
+- random_completion: 5% → 7%
+- dungeon_clear: 25% → 30%
+- hard_dungeon_clear: 30% → 35%
+- main_completion: 50% → 60%
+- active gate 1개 제한은 유지
+
+**4. 수동 전투 로그 UI 개선 (`src/components/GatePanel.tsx`)**
+- isShadowCombatLog import 추가
+- 최근 로그: 8줄 → 6줄 (모바일 가시성)
+- 로그 영역에 `max-h-48 overflow-y-auto` 추가 (스크롤 가능)
+- 그림자 로그를 보라색 계열로 구분 (`border-purple-400/25 bg-purple-400/10 text-purple-50/85`)
+- shadow 로그 label: 'SHADOW' (보라색 배지)
+- 가장 최근 로그에 `ring-1 ring-cyan-400/20` 강조
+- 전투/시스템/그림자 로그 3종 구분
+
+### 자동/수동 전투 연동 확인
+- 자동 전투 `simulateGateWaveBattle`: 헌터 행동 이후 `resolveShadowSupportActions` 호출 확인
+- 수동 전투 `performManualBattleAction`: 헌터 행동 이후 동일 helper 호출 확인
+- wave 전환 시 그림자 행동이 꼬이지 않음
+- 시스템/보조 로그는 maxTurns 계산에서 제외 (기존 12-10B 정책 유지)
+
+### 수정한 파일
+| 파일 | 변경 내용 |
+|---|---|
+| `src/lib/game.ts` | resolveShadowSupportActions 발동 확률/데미지 상향, role별 맞춤 메시지, guard damage_reduction activeEffects 적용 |
+| `src/lib/shadows.ts` | getShadowSlotCount를 레벨 기반 단순 정책으로 변경 (1~5슬롯) |
+| `src/lib/store.ts` | rollGateSpawn 확률 전 source 상향 |
+| `src/components/GatePanel.tsx` | isShadowCombatLog import, 수동 전투 로그 6줄/스크롤/shadow 보라색 구분/최근 강조 |
+
+### 밸런스 시뮬레이션 결과 (조정 후)
+
+Build D / C급:
+- no_shadow: 59~77% (목표 55~75% ✓)
+- common_shadow: 71~79% (목표 60~80% ✓)
+- rare_shadow: 59~74% ✓
+- gate_named_shadow: 68~84% (named는 희귀 → 허용)
+- achievement_named_shadow: 81~87% (named는 희귀 → 허용)
+- mixed_2_slots: 61~76% ✓
+- mixed_3_slots: 78~84% (슬롯 3개 사용 시)
+
+Build C / C급: 0% (목표 0~15% ✓)
+Build E / C급: 96~100% (목표 85~100% ✓)
+Build F / C급: 100% ✓
+
+### sim-gate-current / sim-manual-battle-balance
+- `npx tsx scripts/sim-gate-current.ts` → ✅ 통과
+- `npx tsx scripts/sim-manual-battle-balance.ts` → ✅ 통과
+
+### 검증
+- `npm run build` → ✅ 통과 (1951 modules, 511.92 kB JS / 36.80 kB CSS)
+- `npx tsx scripts/sim-shadow-battle-balance.ts` → ✅ 통과
+- `npx tsx scripts/sim-gate-current.ts` → ✅ 통과
+- `npx tsx scripts/sim-manual-battle-balance.ts` → ✅ 통과
+
+### persist version 변경 여부
+- **변경 없음** (v14 유지)
+
+### 남은 TODO
+- 12-12 C급 게이트 밸런스 재조정 (이미 완료, 12-12 기록 참조)
+- 그림자 레벨업/진화
+- 중복 활용
+- 시너지
+- 몬스터 패턴/텔레그래프

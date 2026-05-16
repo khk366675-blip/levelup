@@ -133,16 +133,12 @@ export const getShadowDefinition = (definitionId: string): ShadowDefinition | un
   SHADOW_DEFINITIONS.find(def => def.id === definitionId)
 
 export const getShadowSlotCount = (hunter: HunterState): number => {
-  const jobTier = hunter.jobId === 'unawakened'
-    ? 0
-    : hunter.unlockedJobIds.some(id => id !== 'unawakened' && id !== hunter.jobId)
-      ? 1
-      : 1
-  const equippedJobTier = hunter.jobId === 'unawakened' ? 0 : hunter.jobId.includes('oracle') || hunter.jobId.includes('archivist') || hunter.jobId.includes('fighter') || hunter.jobId.includes('judge') || hunter.jobId.includes('harmonizer') ? 2 : jobTier
-  let slots = equippedJobTier >= 2 ? 2 : equippedJobTier >= 1 ? 1 : 0
+  // 12-11B: level-based simple policy for "legion" feel
+  let slots = 1
+  if (hunter.level >= 10) slots += 1
+  if (hunter.level >= 20) slots += 1
   if (hunter.level >= 30) slots += 1
   if (hunter.level >= 45) slots += 1
-  if (hunter.level >= 60) slots += 1
   return Math.min(5, slots)
 }
 
