@@ -445,6 +445,49 @@ export interface ActiveCombatEffect {
   counterPower?: number
 }
 
+export interface CombatantState {
+  name: string
+  maxHp: number
+  hp: number
+  atk: number
+  def: number
+  spd: number
+  critRate?: number
+  accuracy?: number
+  evasion?: number
+}
+
+export type ManualBattleResult = 'victory' | 'defeat' | 'draw'
+
+export interface ManualBattleSession {
+  gateId: string
+  gateName: string
+  gateInstanceId: string
+  waveIndex: number
+  turn: number
+  maxTurns: number
+  player: CombatantState
+  monster: CombatantState
+  remainingMonsterIds: string[]
+  cooldowns: Record<string, number>
+  monsterCooldowns: Record<string, number>
+  activeEffects: ActiveCombatEffect[]
+  consumableEffects: ActiveConsumableEffect[]
+  usedConsumableItemIds: string[]
+  usedConsumableEffectTypes: ConsumableEffectType[]
+  consumableUseCount: number
+  logs: CombatLog['turns']
+  result?: ManualBattleResult
+  startedAt: string
+}
+
+export type ManualBattleAction =
+  | { type: 'basic_attack' }
+  | { type: 'defend' }
+  | { type: 'skill'; skillId: string }
+  | { type: 'auto_finish' }
+  | { type: 'use_consumable'; itemId: string }
+
 export interface PlayerCombatStats {
   maxHp: number
   atk: number

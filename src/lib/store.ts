@@ -2,11 +2,15 @@ import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import type {
   AchievementStats,
+  ActiveCombatEffect,
   ActiveConsumableEffect,
   ActiveGate,
   ActiveRandomQuest,
+  BattleTurn,
   Category,
   CombatLog,
+  ConsumableEffect,
+  ConsumableEffectType,
   EquipmentSlot,
   EquipmentState,
   GatePenalty,
@@ -16,6 +20,8 @@ import type {
   HunterState,
   Item,
   JobId,
+  ManualBattleAction,
+  ManualBattleSession,
   MonsterDefinition,
   Quest,
   RandomQuestTemplate,
@@ -81,8 +87,20 @@ import {
   getTitleXpMultiplier,
   MAX_ITEM_ENHANCEMENT_LEVEL,
   getPlayerCombatSkills,
+  BASIC_ATTACK_SKILL,
+  BattleActorState,
+  applyOrRefreshCombatEffect,
+  buildBattleSkillContext,
+  chooseSkill,
+  createMonsterBattleActor,
+  createPlayerBattleActor,
+  decrementCooldowns,
+  ensureBasicAttack,
+  getEffectiveBattleActorStats,
+  resolveAction,
   roundStatValue,
   simulateGateWaveBattle,
+  tickRoundEffects,
 } from './game'
 
 interface GameState {
@@ -104,6 +122,7 @@ interface GameState {
   gateStatus: GateStatus
   activeGate?: ActiveGate
   combatLogs: CombatLog[]
+  manualBattleSession?: ManualBattleSession
   initialized: boolean
 
   // hunter
@@ -158,6 +177,10 @@ interface GameState {
   addCombatLog: (log: CombatLog) => void
   clearCombatLogs: () => void
   startGateBattle: () => void
+  startManualGateBattle: (gateId?: string) => void
+  performManualBattleAction: (action: ManualBattleAction) => void
+  cancelManualGateBattle: () => void
+  switchManualBattleToAuto: () => void
 
   // achievements
   recordAppOpen: () => void
@@ -646,6 +669,411 @@ const applyXp = (
 const formatStatGains = (gains: Partial<Record<StatKey, number>>): string =>
   Object.entries(gains).map(([k, v]) => `${k}${formatStatReward(v ?? 0)}`).join(' ')
 
+const toManualCombatant = (actor: BattleActorState): ManualBattleSession['player'] => ({
+  name: actor.name,
+  maxHp: actor.maxHp,
+  hp: actor.hp,
+  atk: actor.atk,
+  def: actor.def,
+  spd: actor.speed,
+  critRate: actor.critRate,
+  accuracy: actor.accuracy,
+  evasion: actor.evasionRate,
+})
+
+const toBattleActor = (
+  combatant: ManualBattleSession['player'],
+  type: BattleActorState['type'],
+  id: string,
+  skillIds: string[],
+  cooldowns: Record<string, number>
+): BattleActorState => ({
+  type,
+  id,
+  name: combatant.name,
+  maxHp: combatant.maxHp,
+  hp: combatant.hp,
+  atk: combatant.atk,
+  def: combatant.def,
+  speed: combatant.spd,
+  critRate: combatant.critRate ?? 0,
+  accuracy: combatant.accuracy ?? 0.9,
+  evasionRate: combatant.evasion ?? 0,
+  skillIds,
+  cooldowns,
+})
+
+const createDefendLog = (
+  actor: BattleActorState,
+  target: BattleActorState,
+  turnNumber: number,
+  waveNumber: number
+): BattleTurn => ({
+  turnNumber,
+  waveNumber,
+  waveLabel: `Wave ${waveNumber}`,
+  actorType: 'player',
+  actorId: actor.id,
+  actorName: actor.name,
+  targetType: 'monster',
+  targetId: target.id,
+  targetName: target.name,
+  skillId: 'manual-defend',
+  skillName: '방어',
+  outcome: 'buff',
+  remainingHp: actor.hp,
+  message: `[${actor.name}]이 방어 태세를 취했습니다. 이번 턴 받는 피해가 40% 감소합니다.`,
+})
+
+const createManualSystemLog = (
+  message: string,
+  turnNumber: number,
+  waveNumber: number,
+  target: BattleActorState
+): BattleTurn => ({
+  turnNumber,
+  waveNumber,
+  waveLabel: `Wave ${waveNumber}`,
+  actorType: 'player',
+  actorId: 'system',
+  actorName: 'SYSTEM',
+  targetType: 'monster',
+  targetId: target.id,
+  targetName: target.name,
+  skillId: 'system-manual-battle',
+  skillName: '전투 흐름',
+  outcome: 'buff',
+  remainingHp: target.hp,
+  message,
+})
+
+const createManualConsumableUseLog = (
+  actor: BattleActorState,
+  target: BattleActorState,
+  message: string,
+  turnNumber: number,
+  waveNumber: number
+): BattleTurn => ({
+  turnNumber,
+  waveNumber,
+  waveLabel: `Wave ${waveNumber}`,
+  actorType: 'player',
+  actorId: actor.id,
+  actorName: actor.name,
+  targetType: 'monster',
+  targetId: target.id,
+  targetName: target.name,
+  skillId: 'manual-consumable-use',
+  skillName: '소모품',
+  outcome: 'buff',
+  remainingHp: actor.hp,
+  message,
+})
+
+const isManualSystemLog = (log: BattleTurn): boolean => log.skillId === 'system-manual-battle'
+
+const getManualActionCount = (logs: BattleTurn[]): number => {
+  return logs.filter(log => !isManualSystemLog(log)).length
+}
+
+const appendManualWaveClearLogs = (params: {
+  logs: BattleTurn[]
+  monster: BattleActorState
+  waveIndex: number
+  remainingMonsterIds: string[]
+}): {
+  logs: BattleTurn[]
+  monster: BattleActorState
+  waveIndex: number
+  remainingMonsterIds: string[]
+  result?: CombatLog['result']
+} => {
+  let { logs, monster, waveIndex } = params
+  const remainingMonsterIds = [...params.remainingMonsterIds]
+
+  while (monster.hp <= 0) {
+    const clearedWaveNumber = waveIndex + 1
+    logs = [
+      ...logs,
+      createManualSystemLog(
+        `Wave ${clearedWaveNumber} 클리어. [${monster.name}]을 쓰러뜨렸습니다.`,
+        logs.length + 1,
+        clearedWaveNumber,
+        monster
+      ),
+    ]
+
+    const nextMonsterId = remainingMonsterIds.shift()
+    if (!nextMonsterId) {
+      logs = [
+        ...logs,
+        createManualSystemLog(
+          '마지막 wave를 클리어했습니다. 게이트 공략 성공!',
+          logs.length + 1,
+          clearedWaveNumber,
+          monster
+        ),
+      ]
+      return { logs, monster, waveIndex, remainingMonsterIds, result: 'victory' }
+    }
+
+    const nextMonsterDef = MONSTER_DEFINITIONS.find(item => item.id === nextMonsterId)
+    if (!nextMonsterDef) {
+      return { logs, monster, waveIndex, remainingMonsterIds, result: 'draw' }
+    }
+
+    waveIndex += 1
+    monster = createMonsterBattleActor(nextMonsterDef)
+    logs = [
+      ...logs,
+      createManualSystemLog(
+        `Wave ${waveIndex + 1} 시작. [${monster.name}]이 나타났습니다.`,
+        logs.length + 1,
+        waveIndex + 1,
+        monster
+      ),
+    ]
+  }
+
+  return { logs, monster, waveIndex, remainingMonsterIds }
+}
+
+const MANUAL_CONSUMABLE_MAX_USES = 2
+
+const isManualBattleConsumableEffect = (effect: ConsumableEffect): boolean => {
+  if (effect.type === 'gate_penalty_reduction') return true
+  if (effect.type !== 'temporary_stat_bonus') return false
+  return effect.stat !== undefined && effect.stat !== 'INT'
+}
+
+const getManualConsumableFailureReason = (
+  session: ManualBattleSession,
+  item: Item | undefined
+): string | undefined => {
+  if (!item || !item.consumable || !item.consumableEffects?.some(isManualBattleConsumableEffect)) {
+    return '전투 중 사용할 수 있는 소모품이 아닙니다.'
+  }
+  if (session.consumableUseCount >= MANUAL_CONSUMABLE_MAX_USES) {
+    return `한 전투에서 소모품은 최대 ${MANUAL_CONSUMABLE_MAX_USES}회만 사용할 수 있습니다.`
+  }
+  if (session.usedConsumableItemIds.includes(item.id)) {
+    return '이미 이 전투에서 같은 소모품을 사용했습니다.'
+  }
+  const effectTypes = item.consumableEffects
+    .filter(isManualBattleConsumableEffect)
+    .map(effect => effect.type)
+  if (effectTypes.some(type => session.usedConsumableEffectTypes.includes(type))) {
+    return '이미 같은 종류의 소모품 효과를 사용했습니다.'
+  }
+  if (
+    effectTypes.includes('gate_penalty_reduction') &&
+    session.consumableEffects.some(effect => !effect.consumed && effect.type === 'gate_penalty_reduction')
+  ) {
+    return '이미 패널티 감소 효과가 활성화되어 있습니다.'
+  }
+  if (
+    effectTypes.includes('temporary_stat_bonus') &&
+    session.activeEffects.some(effect => effect.sourceSkillId.startsWith('manual-consumable-stat-'))
+  ) {
+    return '이미 전투 소모품 능력치 효과가 활성화되어 있습니다.'
+  }
+  return undefined
+}
+
+const createManualConsumableActiveEffect = (effect: ConsumableEffect, item: Item): ActiveConsumableEffect => ({
+  ...effect,
+  id: `manual-consumable-${item.id}-${Date.now()}-${uid()}`,
+  sourceItemId: item.id,
+  sourceItemName: item.name,
+  activatedAt: todayISO(),
+  consumed: false,
+})
+
+const createManualConsumableCombatEffects = (
+  effect: ConsumableEffect,
+  item: Item
+): ActiveCombatEffect[] => {
+  if (effect.type !== 'temporary_stat_bonus' || !effect.stat) return []
+  const duration = effect.duration === 'today' ? 5 : 3
+  const sourceSkillId = `manual-consumable-stat-${item.id}`
+  const value = effect.value
+
+  if (effect.stat === 'STR') {
+    return [{
+      sourceSkillId,
+      kind: 'stat',
+      stat: 'atk',
+      value: Math.max(1, Math.round(value * 2)),
+      remainingTurns: duration,
+      targetId: 'player',
+    }]
+  }
+  if (effect.stat === 'VIT') {
+    return [{
+      sourceSkillId,
+      kind: 'stat',
+      stat: 'def',
+      value: Math.max(1, Math.round(value * 1.2)),
+      remainingTurns: duration,
+      targetId: 'player',
+    }]
+  }
+  if (effect.stat === 'AGI') {
+    return [{
+      sourceSkillId,
+      kind: 'stat',
+      stat: 'speed',
+      value: Math.max(1, Math.round(value * 1.5)),
+      remainingTurns: duration,
+      targetId: 'player',
+    }]
+  }
+  if (effect.stat === 'PER') {
+    return [{
+      sourceSkillId,
+      kind: 'stat',
+      stat: 'evasionRate',
+      value: Math.min(0.08, value * 0.003),
+      remainingTurns: duration,
+      targetId: 'player',
+    }]
+  }
+  if (effect.stat === 'SEN') {
+    return [
+      {
+        sourceSkillId: `${sourceSkillId}-crit`,
+        kind: 'stat',
+        stat: 'critRate',
+        value: Math.min(0.08, value * 0.008),
+        remainingTurns: duration,
+        targetId: 'player',
+      },
+      {
+        sourceSkillId: `${sourceSkillId}-accuracy`,
+        kind: 'stat',
+        stat: 'accuracy',
+        value: Math.min(0.03, value * 0.001),
+        remainingTurns: duration,
+        targetId: 'player',
+      },
+    ]
+  }
+  return []
+}
+
+const formatManualConsumableUseMessage = (item: Item, effects: ConsumableEffect[]): string => {
+  const effectText = effects.map(effect => {
+    if (effect.type === 'gate_penalty_reduction') {
+      return `패배 시 스태미나 손실이 ${Math.round(effect.value * 100)}% 감소합니다`
+    }
+    if (effect.type === 'temporary_stat_bonus') {
+      return `${effect.stat ?? '능력치'} +${effect.value} 효과가 3턴 동안 적용됩니다`
+    }
+    return '전투 효과가 적용됩니다'
+  }).join(', ')
+  return `[${item.name}]을 사용했습니다. ${effectText}.`
+}
+
+const createGateBattleOutcomeUpdate = (
+  s: GameState,
+  activeGate: ActiveGate,
+  gate: (typeof GATE_DEFINITIONS)[number],
+  gateStatus: GateStatus,
+  combatLog: CombatLog
+): { state: Partial<GameState>; finalLog: CombatLog; shouldCheckUnlocks: boolean } => {
+  const nextConsumables = consumeNextGateConsumables(s.activeConsumableEffects)
+  const rewardTable = GATE_REWARD_TABLES.find(r => r.id === gate.rewardTableId)
+  const penalty = GATE_PENALTIES.find(p => p.id === gate.failPenaltyId)
+  let nextHunter = s.hunter
+  let nextItems = s.items
+  let nextGateStatus = gateStatus
+  let nextActiveGate = activeGate
+  let gateRewards: GateReward[] = []
+  let penaltyApplied: GatePenalty | undefined
+  let shouldCheckUnlocks = false
+
+  if (combatLog.result === 'victory') {
+    nextGateStatus = {
+      ...gateStatus,
+      stamina: Math.max(0, gateStatus.stamina - GATE_ENTRY_COST),
+    }
+    nextActiveGate = { ...activeGate, status: 'cleared' }
+
+    let leveledUpOutcome: ReturnType<typeof applyXp>['outcome'] | undefined
+    if (rewardTable) {
+      const xpReward = Math.round(rewardTable.xp * getTitleXpMultiplier(s.hunter, 'challenge'))
+      const xpResult = applyXp(s.hunter, xpReward, 'challenge')
+      nextHunter = xpResult.hunter
+      leveledUpOutcome = xpResult.outcome
+      gateRewards.push({ type: 'xp', amount: xpReward })
+
+      const titleDropBonus = getTitleDropBonus(s.hunter)
+      const titleRarityBonus = getTitleRarityBonus(s.hunter)
+      const finalDropChance = Math.min(0.95, rewardTable.itemDropChance + titleDropBonus)
+      if (Math.random() < finalDropChance) {
+        const item = randomGateRewardItem(rewardTable, titleRarityBonus)
+        if (item) {
+          nextItems = [...nextItems, item]
+          gateRewards.push({
+            type: 'item',
+            itemId: item.id,
+            itemName: item.name,
+            rarity: item.rarity,
+          })
+        }
+      }
+    }
+
+    shouldCheckUnlocks = Boolean(leveledUpOutcome?.leveledUp || leveledUpOutcome?.rankChanged)
+  } else if (combatLog.result === 'defeat') {
+    const basePenalty = penalty ?? {
+      id: 'penalty-gate-basic',
+      name: '기본 게이트 패널티',
+      staminaCost: 50,
+      injuryHours: 6,
+    }
+    const penaltyReduction = getActiveGatePenaltyReduction(s.activeConsumableEffects)
+    const finalStaminaCost = Math.round(basePenalty.staminaCost * (1 - penaltyReduction))
+    const injuryHours = basePenalty.injuryHours ?? 6
+    const injuredUntil = new Date(Date.now() + injuryHours * 3_600_000).toISOString()
+
+    penaltyApplied = {
+      ...basePenalty,
+      staminaCost: finalStaminaCost,
+      injuryHours,
+    }
+    nextGateStatus = {
+      ...gateStatus,
+      stamina: Math.max(0, gateStatus.stamina - finalStaminaCost),
+      injuredUntil,
+      recoveryQuestProgress: 0,
+      recoveryQuestRequired: 3,
+    }
+    nextActiveGate = { ...activeGate, status: 'failed' }
+  }
+
+  const finalLog: CombatLog = {
+    ...combatLog,
+    rewards: gateRewards,
+    penaltyApplied,
+  }
+
+  return {
+    finalLog,
+    shouldCheckUnlocks,
+    state: {
+      hunter: nextHunter,
+      items: nextItems,
+      gateStatus: nextGateStatus,
+      activeGate: nextActiveGate,
+      activeConsumableEffects: nextConsumables,
+      combatLogs: [finalLog, ...s.combatLogs].slice(0, 20),
+      messages: s.messages,
+      manualBattleSession: undefined,
+    },
+  }
+}
+
 export const useGame = create<GameState>()(
   persist(
     (set, get) => ({
@@ -662,6 +1090,7 @@ export const useGame = create<GameState>()(
       gateStatus: createInitialGateStatus(),
       activeGate: undefined,
       combatLogs: [],
+      manualBattleSession: undefined,
       initialized: false,
 
       setHunterName: (name) => set((s) => ({ hunter: { ...s.hunter, name } })),
@@ -1921,6 +2350,514 @@ export const useGame = create<GameState>()(
         }
       },
 
+      startManualGateBattle: (gateId) => {
+        const s = get()
+        const activeGate = s.activeGate
+        if (!activeGate || activeGate.status !== 'active') return
+        if (gateId && activeGate.gateId !== gateId) return
+
+        const gate = GATE_DEFINITIONS.find(g => g.id === activeGate.gateId)
+        if (!gate) return
+
+        const gateStatus = clearExpiredGateInjury(s.gateStatus)
+        const stillInjured = Boolean(gateStatus.injuredUntil && new Date(gateStatus.injuredUntil).getTime() > Date.now())
+        if (gateStatus.stamina < GATE_ENTRY_COST) {
+          set({
+            gateStatus,
+            messages: [...s.messages, {
+              id: uid(),
+              kind: 'info',
+              title: '게이트 입장 불가',
+              lines: ['스태미나가 부족합니다.'],
+              createdAt: todayISO(),
+            }],
+          })
+          return
+        }
+        if (stillInjured) {
+          set({
+            gateStatus,
+            messages: [...s.messages, {
+              id: uid(),
+              kind: 'info',
+              title: '게이트 입장 불가',
+              lines: ['부상 회복이 필요합니다.'],
+              createdAt: todayISO(),
+            }],
+          })
+          return
+        }
+
+        const monsters = gate.monsterIds
+          .map(id => MONSTER_DEFINITIONS.find(m => m.id === id))
+          .filter((monster): monster is MonsterDefinition => Boolean(monster))
+        if (monsters.length === 0) return
+
+        const equippedItems = getEquippedItems(s.items, s.equipment)
+        const playerSkills = getPlayerCombatSkills({
+          jobId: s.hunter.jobId,
+          equippedItems,
+          allSkills: SKILL_DEFINITIONS,
+        })
+        const allPlayerSkills = ensureBasicAttack(playerSkills)
+        const playerStats = calculatePlayerCombatStats({
+          level: s.hunter.level,
+          stats: s.hunter.stats,
+          equippedItems,
+          activeConsumableEffects: s.activeConsumableEffects,
+          jobId: s.hunter.jobId,
+          skills: playerSkills,
+        })
+        const gateSuccessBonus = getActiveGateSuccessBonus(s.activeConsumableEffects)
+        const initialActiveEffects = createGateSuccessCombatEffects(gateSuccessBonus, 'player')
+        const player = createPlayerBattleActor(s.hunter.name || 'Hunter', playerStats, allPlayerSkills)
+        const monster = createMonsterBattleActor(monsters[0])
+
+        set({
+          gateStatus,
+          manualBattleSession: {
+            gateId: gate.id,
+            gateName: gate.name,
+            gateInstanceId: activeGate.instanceId,
+            waveIndex: 0,
+            turn: 1,
+            maxTurns: 30,
+            player: toManualCombatant(player),
+            monster: toManualCombatant(monster),
+            remainingMonsterIds: monsters.slice(1).map(item => item.id),
+            cooldowns: {},
+            monsterCooldowns: {},
+            activeEffects: initialActiveEffects,
+            consumableEffects: s.activeConsumableEffects,
+            usedConsumableItemIds: [],
+            usedConsumableEffectTypes: [],
+            consumableUseCount: 0,
+            logs: [],
+            startedAt: todayISO(),
+          },
+        })
+      },
+
+      performManualBattleAction: (action) => {
+        if (action.type === 'auto_finish') {
+          get().switchManualBattleToAuto()
+          return
+        }
+
+        const s = get()
+        const existingSession = s.manualBattleSession
+        const activeGate = s.activeGate
+        if (!existingSession || existingSession.result || !activeGate || activeGate.status !== 'active') return
+        let session = existingSession
+
+        const gate = GATE_DEFINITIONS.find(g => g.id === session.gateId)
+        if (!gate) return
+
+        const currentMonsterDef = MONSTER_DEFINITIONS.find(monster => monster.id === gate.monsterIds[session.waveIndex])
+        if (!currentMonsterDef) return
+
+        const equippedItems = getEquippedItems(s.items, s.equipment)
+        const playerSkills = getPlayerCombatSkills({
+          jobId: s.hunter.jobId,
+          equippedItems,
+          allSkills: SKILL_DEFINITIONS,
+        })
+        const playerSkillIds = ensureBasicAttack(playerSkills)
+          .filter(skill => skill.ownerType === 'common' || skill.ownerType === 'job' || skill.ownerType === 'equipment')
+          .map(skill => skill.id)
+        const monsterSkillIds = Array.from(new Set([BASIC_ATTACK_SKILL.id, ...currentMonsterDef.skillIds]))
+        const monsterSkills = SKILL_DEFINITIONS.filter(skill => skill.ownerType === 'monster' && monsterSkillIds.includes(skill.id))
+        const allSkills = ensureBasicAttack([...playerSkills, ...monsterSkills])
+
+        let player = decrementCooldowns(toBattleActor(session.player, 'player', 'player', playerSkillIds, session.cooldowns))
+        let monster = toBattleActor(session.monster, 'monster', currentMonsterDef.id, monsterSkillIds, session.monsterCooldowns)
+        let activeEffects: ActiveCombatEffect[] = [...session.activeEffects]
+        let logs: BattleTurn[] = [...session.logs]
+        let waveIndex = session.waveIndex
+        let remainingMonsterIds = [...session.remainingMonsterIds]
+        let nextItems = s.items
+        let result: CombatLog['result'] | undefined
+
+        if (action.type === 'use_consumable') {
+          const item = s.items.find(candidate => candidate.id === action.itemId)
+          const failureReason = getManualConsumableFailureReason(session, item)
+          if (failureReason || !item) {
+            logs.push(createManualSystemLog(
+              `소모품을 사용할 수 없습니다: ${failureReason ?? '아이템을 찾을 수 없습니다.'}`,
+              logs.length + 1,
+              waveIndex + 1,
+              monster
+            ))
+            set({
+              manualBattleSession: {
+                ...session,
+                logs,
+              },
+            })
+            return
+          }
+
+          const usableEffects = item.consumableEffects?.filter(isManualBattleConsumableEffect) ?? []
+          let nextActiveEffects = activeEffects
+          for (const effect of usableEffects) {
+            for (const combatEffect of createManualConsumableCombatEffects(effect, item)) {
+              nextActiveEffects = applyOrRefreshCombatEffect(nextActiveEffects, combatEffect)
+            }
+          }
+          activeEffects = nextActiveEffects
+          logs.push(createManualConsumableUseLog(
+            player,
+            monster,
+            formatManualConsumableUseMessage(item, usableEffects),
+            logs.length + 1,
+            waveIndex + 1
+          ))
+
+          const usedConsumableEffectTypes = Array.from(new Set([
+            ...session.usedConsumableEffectTypes,
+            ...usableEffects.map(effect => effect.type),
+          ]))
+          session = {
+            ...session,
+            consumableEffects: [
+              ...session.consumableEffects,
+              ...usableEffects
+                .filter(effect => effect.type === 'gate_penalty_reduction')
+                .map(effect => createManualConsumableActiveEffect(effect, item)),
+            ],
+            usedConsumableItemIds: [...session.usedConsumableItemIds, item.id],
+            usedConsumableEffectTypes,
+            consumableUseCount: session.consumableUseCount + 1,
+          }
+
+          nextItems = s.items.filter(candidate => candidate.id !== item.id)
+        } else if (action.type === 'defend') {
+          activeEffects = applyOrRefreshCombatEffect(activeEffects, {
+            sourceSkillId: 'manual-defend',
+            kind: 'damage_reduction',
+            value: 0.4,
+            remainingTurns: 1,
+            targetId: 'player',
+          })
+          logs.push(createDefendLog(player, monster, logs.length + 1, waveIndex + 1))
+        } else {
+          const skill = action.type === 'basic_attack'
+            ? BASIC_ATTACK_SKILL
+            : allSkills.find(item => item.id === action.skillId)
+          if (!skill || !player.skillIds.includes(skill.id) || (player.cooldowns[skill.id] ?? 0) > 0) return
+
+          const resolved = resolveAction({
+            actor: player,
+            target: monster,
+            skill,
+            activeEffects,
+            rng: Math.random,
+            turnNumber: logs.length + 1,
+            waveNumber: waveIndex + 1,
+            waveLabel: `Wave ${waveIndex + 1}`,
+          })
+          player = {
+            ...resolved.actor,
+            cooldowns: {
+              ...resolved.actor.cooldowns,
+              [skill.id]: skill.cooldownTurns ?? 0,
+            },
+          }
+          monster = resolved.target
+          activeEffects = resolved.activeEffects
+          logs.push(resolved.log)
+        }
+
+        if (player.hp <= 0) {
+          result = 'defeat'
+        }
+
+        if (!result && monster.hp <= 0) {
+          const waveUpdate = appendManualWaveClearLogs({ logs, monster, waveIndex, remainingMonsterIds })
+          logs = waveUpdate.logs
+          monster = waveUpdate.monster
+          waveIndex = waveUpdate.waveIndex
+          remainingMonsterIds = waveUpdate.remainingMonsterIds
+          result = waveUpdate.result
+        }
+
+        if (!result && getManualActionCount(logs) < session.maxTurns) {
+          const liveMonsterDef = MONSTER_DEFINITIONS.find(item => item.id === gate.monsterIds[waveIndex])
+          const liveMonsterSkillIds = Array.from(new Set([BASIC_ATTACK_SKILL.id, ...(liveMonsterDef?.skillIds ?? [])]))
+          const liveMonsterSkills = SKILL_DEFINITIONS.filter(skill => skill.ownerType === 'monster' && liveMonsterSkillIds.includes(skill.id))
+          const liveAllSkills = ensureBasicAttack([...playerSkills, ...liveMonsterSkills])
+          monster = decrementCooldowns(monster)
+          const monsterContext = buildBattleSkillContext(monster, player, activeEffects, logs.length + 1)
+          const monsterSkill = chooseSkill(
+            monster,
+            liveAllSkills.filter(skill => skill.ownerType === 'common' || skill.ownerType === 'monster'),
+            monsterContext
+          )
+          const resolved = resolveAction({
+            actor: monster,
+            target: player,
+            skill: monsterSkill,
+            activeEffects,
+            rng: Math.random,
+            turnNumber: logs.length + 1,
+            waveNumber: waveIndex + 1,
+            waveLabel: `Wave ${waveIndex + 1}`,
+          })
+          monster = {
+            ...resolved.actor,
+            cooldowns: {
+              ...resolved.actor.cooldowns,
+              [monsterSkill.id]: monsterSkill.cooldownTurns ?? 0,
+            },
+          }
+          player = resolved.target
+          activeEffects = resolved.activeEffects
+          logs.push(resolved.log)
+        }
+
+        if (!result && player.hp <= 0) result = 'defeat'
+        if (!result && getManualActionCount(logs) >= session.maxTurns) result = 'draw'
+
+        const nextGateStatus = clearExpiredGateInjury(s.gateStatus)
+        if (result) {
+          const combatLog: CombatLog = {
+            battleId: `manual-${session.gateInstanceId}-${Date.now()}`,
+            gateInstanceId: session.gateInstanceId,
+            result,
+            turns: logs,
+            totalTurns: getManualActionCount(logs),
+            playerHpRemaining: Math.max(0, player.hp),
+            rewards: [],
+            penaltyApplied: undefined,
+            totalWaves: gate.monsterIds.length,
+            clearedWaves: result === 'victory' ? gate.monsterIds.length : waveIndex,
+          }
+          const outcome = createGateBattleOutcomeUpdate(
+            { ...s, items: nextItems, activeConsumableEffects: session.consumableEffects } as GameState,
+            activeGate,
+            gate,
+            nextGateStatus,
+            combatLog
+          )
+          set(outcome.state)
+          if (outcome.shouldCheckUnlocks) {
+            setTimeout(() => {
+              get().checkTitleUnlocks()
+              get().checkJobAwakening()
+            }, 0)
+          }
+          return
+        }
+
+        set({
+          items: nextItems,
+          gateStatus: nextGateStatus,
+          activeConsumableEffects: getManualActionCount(logs) > 0
+            ? consumeNextGateConsumables(s.activeConsumableEffects)
+            : s.activeConsumableEffects,
+          manualBattleSession: {
+            ...session,
+            waveIndex,
+            turn: getManualActionCount(logs) + 1,
+            player: toManualCombatant(player),
+            monster: toManualCombatant(monster),
+            remainingMonsterIds,
+            cooldowns: player.cooldowns,
+            monsterCooldowns: monster.cooldowns,
+            activeEffects: tickRoundEffects(activeEffects),
+            logs,
+          },
+        })
+      },
+
+      cancelManualGateBattle: () => set({ manualBattleSession: undefined }),
+
+      switchManualBattleToAuto: () => {
+        const s = get()
+        const session = s.manualBattleSession
+        const activeGate = s.activeGate
+        if (!session || !activeGate || activeGate.status !== 'active') return
+
+        const gate = GATE_DEFINITIONS.find(g => g.id === session.gateId)
+        if (!gate) return
+
+        const currentMonsterDef = MONSTER_DEFINITIONS.find(monster => monster.id === gate.monsterIds[session.waveIndex])
+        if (!currentMonsterDef) return
+
+        const equippedItems = getEquippedItems(s.items, s.equipment)
+        const playerSkills = getPlayerCombatSkills({
+          jobId: s.hunter.jobId,
+          equippedItems,
+          allSkills: SKILL_DEFINITIONS,
+        })
+        const playerSkillIds = ensureBasicAttack(playerSkills)
+          .filter(skill => skill.ownerType === 'common' || skill.ownerType === 'job' || skill.ownerType === 'equipment')
+          .map(skill => skill.id)
+        const remainingMonsterDefs = [currentMonsterDef, ...session.remainingMonsterIds
+          .map(id => MONSTER_DEFINITIONS.find(monster => monster.id === id))
+          .filter((monster): monster is MonsterDefinition => Boolean(monster))]
+        const monsterSkillIds = new Set(remainingMonsterDefs.flatMap(monster => monster.skillIds))
+        const monsterSkills = SKILL_DEFINITIONS.filter(skill => skill.ownerType === 'monster' && monsterSkillIds.has(skill.id))
+        const allSkills = ensureBasicAttack([...playerSkills, ...monsterSkills])
+
+        let player = toBattleActor(session.player, 'player', 'player', playerSkillIds, session.cooldowns)
+        let monster = toBattleActor(
+          session.monster,
+          'monster',
+          currentMonsterDef.id,
+          Array.from(new Set([BASIC_ATTACK_SKILL.id, ...currentMonsterDef.skillIds])),
+          session.monsterCooldowns
+        )
+        let activeEffects: ActiveCombatEffect[] = [...session.activeEffects]
+        let logs: BattleTurn[] = [
+          ...session.logs,
+          createManualSystemLog(
+            '자동 마무리를 시작합니다. 현재 HP, cooldown, wave 상태를 이어받습니다.',
+            session.logs.length + 1,
+            session.waveIndex + 1,
+            monster
+          ),
+        ]
+        let waveIndex = session.waveIndex
+        let remainingMonsterIds = [...session.remainingMonsterIds]
+        let result: CombatLog['result'] | undefined
+
+        if (monster.hp <= 0) {
+          const waveUpdate = appendManualWaveClearLogs({ logs, monster, waveIndex, remainingMonsterIds })
+          logs = waveUpdate.logs
+          monster = waveUpdate.monster
+          waveIndex = waveUpdate.waveIndex
+          remainingMonsterIds = waveUpdate.remainingMonsterIds
+          result = waveUpdate.result
+        }
+
+        while (!result && player.hp > 0 && getManualActionCount(logs) < session.maxTurns) {
+          const effectivePlayer = getEffectiveBattleActorStats(player, activeEffects)
+          const effectiveMonster = getEffectiveBattleActorStats(monster, activeEffects)
+          const order: Array<'player' | 'monster'> = effectivePlayer.speed >= effectiveMonster.speed
+            ? ['player', 'monster']
+            : ['monster', 'player']
+
+          for (const actorType of order) {
+            if (player.hp <= 0 || monster.hp <= 0 || getManualActionCount(logs) >= session.maxTurns) break
+
+            if (actorType === 'player') {
+              player = decrementCooldowns(player)
+              const skill = chooseSkill(
+                player,
+                allSkills,
+                buildBattleSkillContext(player, monster, activeEffects, getManualActionCount(logs) + 1)
+              )
+              const resolved = resolveAction({
+                actor: player,
+                target: monster,
+                skill,
+                activeEffects,
+                rng: Math.random,
+                turnNumber: logs.length + 1,
+                waveNumber: waveIndex + 1,
+                waveLabel: `Wave ${waveIndex + 1}`,
+              })
+              player = {
+                ...resolved.actor,
+                cooldowns: {
+                  ...resolved.actor.cooldowns,
+                  [skill.id]: skill.cooldownTurns ?? 0,
+                },
+              }
+              monster = resolved.target
+              activeEffects = resolved.activeEffects
+              logs.push(resolved.log)
+            } else {
+              const liveMonsterDef = MONSTER_DEFINITIONS.find(item => item.id === gate.monsterIds[waveIndex])
+              const liveMonsterSkillIds = Array.from(new Set([BASIC_ATTACK_SKILL.id, ...(liveMonsterDef?.skillIds ?? [])]))
+              const liveMonsterSkills = SKILL_DEFINITIONS.filter(skill => skill.ownerType === 'monster' && liveMonsterSkillIds.includes(skill.id))
+              const liveAllSkills = ensureBasicAttack([...playerSkills, ...liveMonsterSkills])
+              monster = decrementCooldowns(monster)
+              const skill = chooseSkill(
+                monster,
+                liveAllSkills.filter(item => item.ownerType === 'common' || item.ownerType === 'monster'),
+                buildBattleSkillContext(monster, player, activeEffects, getManualActionCount(logs) + 1)
+              )
+              const resolved = resolveAction({
+                actor: monster,
+                target: player,
+                skill,
+                activeEffects,
+                rng: Math.random,
+                turnNumber: logs.length + 1,
+                waveNumber: waveIndex + 1,
+                waveLabel: `Wave ${waveIndex + 1}`,
+              })
+              monster = {
+                ...resolved.actor,
+                cooldowns: {
+                  ...resolved.actor.cooldowns,
+                  [skill.id]: skill.cooldownTurns ?? 0,
+                },
+              }
+              player = resolved.target
+              activeEffects = resolved.activeEffects
+              logs.push(resolved.log)
+            }
+          }
+
+          if (player.hp <= 0) {
+            result = 'defeat'
+            break
+          }
+
+          if (monster.hp <= 0) {
+            const waveUpdate = appendManualWaveClearLogs({ logs, monster, waveIndex, remainingMonsterIds })
+            logs = waveUpdate.logs
+            monster = waveUpdate.monster
+            waveIndex = waveUpdate.waveIndex
+            remainingMonsterIds = waveUpdate.remainingMonsterIds
+            result = waveUpdate.result
+          }
+
+          if (!result && getManualActionCount(logs) >= session.maxTurns) {
+            result = 'draw'
+          }
+
+          if (!result) {
+            activeEffects = tickRoundEffects(activeEffects)
+          }
+        }
+
+        if (!result) {
+          result = player.hp <= 0 ? 'defeat' : 'draw'
+        }
+
+        const nextGateStatus = clearExpiredGateInjury(s.gateStatus)
+        const combatLog: CombatLog = {
+          battleId: `manual-auto-${session.gateInstanceId}-${Date.now()}`,
+          gateInstanceId: session.gateInstanceId,
+          result,
+          turns: logs,
+          totalTurns: getManualActionCount(logs),
+          playerHpRemaining: Math.max(0, player.hp),
+          rewards: [],
+          penaltyApplied: undefined,
+          totalWaves: gate.monsterIds.length,
+          clearedWaves: result === 'victory' ? gate.monsterIds.length : waveIndex,
+        }
+        const outcome = createGateBattleOutcomeUpdate(
+          { ...s, activeConsumableEffects: session.consumableEffects } as GameState,
+          activeGate,
+          gate,
+          nextGateStatus,
+          combatLog
+        )
+        set(outcome.state)
+        if (outcome.shouldCheckUnlocks) {
+          setTimeout(() => {
+            get().checkTitleUnlocks()
+            get().checkJobAwakening()
+          }, 0)
+        }
+      },
+
       addQuest: (q) => set((s) => ({
         quests: [...s.quests, { ...q, id: uid(), createdAt: todayISO() }],
       })),
@@ -2460,12 +3397,17 @@ export const useGame = create<GameState>()(
         gateStatus: createInitialGateStatus(),
         activeGate: undefined,
         combatLogs: [],
+        manualBattleSession: undefined,
         initialized: true,
       }),
     }),
     {
       name: 'levelup-save',
       version: 14,
+      partialize: (state) => ({
+        ...state,
+        manualBattleSession: undefined,
+      }),
       onRehydrateStorage: () => {
         // Sync default quest metadata (title, description, milestones, weights) from latest seed
         // while preserving user progress (currentSteps, completed, etc.).
@@ -2535,6 +3477,7 @@ export const useGame = create<GameState>()(
         if (!persistedState.combatLogs) {
           persistedState.combatLogs = []
         }
+        persistedState.manualBattleSession = undefined
         return persistedState
       },
     }

@@ -246,12 +246,14 @@ for (const build of BUILDS) {
     const monsters = gate.monsterIds
       .map(monsterId => MONSTER_DEFINITIONS.find(monster => monster.id === monsterId))
       .filter((monster): monster is MonsterDefinition => Boolean(monster))
+    const monsterSkillIds = new Set(monsters.flatMap(monster => monster.skillIds))
+    const monsterSkills = SKILL_DEFINITIONS.filter(skill => skill.ownerType === 'monster' && monsterSkillIds.has(skill.id))
 
     const summary = summarizeGateWaveBattleSimulations({
       iterations: ITERATIONS,
       playerStats: runtime.playerStats,
       monsters,
-      skills: SKILL_DEFINITIONS,
+      skills: [...runtime.skills, ...monsterSkills],
       gateInstanceId: `sim-current-${build.id}-${gate.id}`,
       seedBase: SEED_BASE + build.id.charCodeAt(0) * 100 + gate.id.length,
     })

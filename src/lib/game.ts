@@ -1089,7 +1089,7 @@ export interface SummarizeGateWaveBattleSimulationsParams {
   seedBase?: number
 }
 
-const BASIC_ATTACK_SKILL: SkillDefinition = {
+export const BASIC_ATTACK_SKILL: SkillDefinition = {
   id: 'basic-attack',
   name: '기본 공격',
   description: '가장 기본적인 공격.',
@@ -1099,13 +1099,13 @@ const BASIC_ATTACK_SKILL: SkillDefinition = {
   cooldownTurns: 0,
 }
 
-const ensureBasicAttack = (skills: SkillDefinition[]): SkillDefinition[] => {
+export const ensureBasicAttack = (skills: SkillDefinition[]): SkillDefinition[] => {
   return skills.some(skill => skill.id === BASIC_ATTACK_SKILL.id)
     ? skills
     : [BASIC_ATTACK_SKILL, ...skills]
 }
 
-const createPlayerBattleActor = (
+export const createPlayerBattleActor = (
   playerName: string,
   playerStats: PlayerCombatStats,
   allSkills: SkillDefinition[]
@@ -1127,7 +1127,7 @@ const createPlayerBattleActor = (
   cooldowns: {},
 })
 
-const createMonsterBattleActor = (monster: MonsterDefinition): BattleActorState => ({
+export const createMonsterBattleActor = (monster: MonsterDefinition): BattleActorState => ({
   type: 'monster',
   id: monster.id,
   name: monster.name,
@@ -1143,7 +1143,7 @@ const createMonsterBattleActor = (monster: MonsterDefinition): BattleActorState 
   cooldowns: {},
 })
 
-const decrementCooldowns = (actor: BattleActorState): BattleActorState => ({
+export const decrementCooldowns = (actor: BattleActorState): BattleActorState => ({
   ...actor,
   cooldowns: Object.fromEntries(
     Object.entries(actor.cooldowns).map(([skillId, turns]) => [skillId, Math.max(0, turns - 1)])
@@ -1219,7 +1219,7 @@ const getHpRatio = (hp: number, maxHp: number): number => {
   return clamp01(hp / maxHp)
 }
 
-const buildBattleSkillContext = (
+export const buildBattleSkillContext = (
   actor: BattleActorState,
   target: BattleActorState,
   activeEffects: ActiveCombatEffect[],
@@ -1491,7 +1491,7 @@ export const resolveAction = (params: {
   }
 }
 
-const tickRoundEffects = (effects: ActiveCombatEffect[]): ActiveCombatEffect[] => {
+export const tickRoundEffects = (effects: ActiveCombatEffect[]): ActiveCombatEffect[] => {
   return effects
     .map(effect => ({ ...effect, remainingTurns: effect.remainingTurns - 1 }))
     .filter(effect => effect.remainingTurns > 0)

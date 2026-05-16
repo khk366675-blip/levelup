@@ -23,7 +23,8 @@ import {
   getPlayerCombatSkills,
   type GateRisk,
 } from '../lib/game'
-import type { ActiveConsumableEffect, CombatLog, MonsterDefinition } from '../lib/types'
+import type { ActiveConsumableEffect, CombatLog, Item, MonsterDefinition } from '../lib/types'
+import type { ManualBattleAction, ManualBattleSession, SkillDefinition } from '../lib/types'
 
 const GATE_ENTRY_COST = 20
 
@@ -479,6 +480,469 @@ function MonsterCard({ monster, waveNumber }: { monster: MonsterDefinition; wave
   )
 }
 
+function HpBar({ label, hp, maxHp, tone }: { label: string; hp: number; maxHp: number; tone: 'cyan' | 'rose' }) {
+  const ratio = maxHp > 0 ? Math.max(0, Math.min(1, hp / maxHp)) : 0
+  const barClassName = tone === 'cyan' ? 'bg-cyan-300' : 'bg-rose-300'
+
+  return (
+    <div>
+      <div className="flex items-center justify-between gap-3 text-xs mb-1">
+        <span className="font-semibold text-white/80">{label}</span>
+        <span className="system-text text-white/50">{Math.ceil(Math.max(0, hp))} / {Math.ceil(maxHp)}</span>
+      </div>
+      <div className="h-3 rounded bg-ink-950/70 border border-white/10 overflow-hidden">
+        <div
+          className={`h-full ${barClassName} transition-all`}
+          style={{ width: `${Math.round(ratio * 100)}%` }}
+        />
+      </div>
+    </div>
+  )
+}
+
+function ManualBattlePanel({
+  session,
+  skills,
+  onAction,
+  onCancel,
+}: {
+  session: ManualBattleSession
+  skills: SkillDefinition[]
+  onAction: (action: ManualBattleAction) => void
+  onCancel: () => void
+}) {
+  const [showFullLog, setShowFullLog] = useState(false)
+  const visibleLogs = showFullLog ? session.logs : session.logs.slice(-8)
+
+  return (
+    <div className="panel corner-bracket p-5 border-cyan-400/30 bg-cyan-500/5">
+      <div className="br" />
+      <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-3 mb-5">
+        <div>
+          <div className="system-text text-[11px] text-cyan-300/80 mb-1">MANUAL TURN BATTLE</div>
+          <h3 className="text-xl font-bold text-cyan-100">{session.gateName}</h3>
+          <div className="text-xs text-white/50 mt-1">
+            Wave {session.waveIndex + 1} / {session.waveIndex + 1 + session.remainingMonsterIds.length} · Turn {session.turn} / {session.maxTurns}
+          </div>
+        </div>
+        <div className="text-xs system-text border border-cyan-400/25 bg-cyan-400/10 text-cyan-200 rounded px-2.5 py-1">
+          {session.result ?? 'in progress'}
+        </div>
+      </div>
+
+      <div className="grid lg:grid-cols-2 gap-4 mb-5">
+        <div className="space-y-4 border border-white/10 rounded-lg p-4 bg-ink-900/35">
+          <HpBar label={session.player.name} hp={session.player.hp} maxHp={session.player.maxHp} tone="cyan" />
+          <div className="grid grid-cols-3 gap-2">
+            <StatPill label="ATK" value={Math.round(session.player.atk)} />
+            <StatPill label="DEF" value={Math.round(session.player.def)} />
+            <StatPill label="SPD" value={Math.round(session.player.spd)} />
+          </div>
+        </div>
+        <div className="space-y-4 border border-rose-400/20 rounded-lg p-4 bg-rose-500/5">
+          <HpBar label={session.monster.name} hp={session.monster.hp} maxHp={session.monster.maxHp} tone="rose" />
+          <div className="grid grid-cols-3 gap-2">
+            <StatPill label="ATK" value={Math.round(session.monster.atk)} />
+            <StatPill label="DEF" value={Math.round(session.monster.def)} />
+            <StatPill label="SPD" value={Math.round(session.monster.spd)} />
+          </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-2 mb-5">
+        <button type="button" onClick={() => onAction({ type: 'basic_attack' })} className="btn btn-primary text-sm min-h-11">
+          기본 공격
+        </button>
+        <button type="button" onClick={() => onAction({ type: 'defend' })} className="btn text-sm min-h-11 border-cyan-400/25 bg-cyan-400/10 text-cyan-100">
+          방어
+        </button>
+        {skills.map(skill => {
+          const cooldown = session.cooldowns[skill.id] ?? 0
+          return (
+            <button
+              key={skill.id}
+              type="button"
+              onClick={() => onAction({ type: 'skill', skillId: skill.id })}
+              disabled={cooldown > 0}
+              className="btn text-sm min-h-11 border-purple-400/25 bg-purple-400/10 text-purple-100 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <span className="block truncate">{skill.name}</span>
+              {cooldown > 0 && <span className="ml-1 text-[10px] system-text">CD {cooldown}</span>}
+            </button>
+          )
+        })}
+        <button type="button" onClick={() => onAction({ type: 'auto_finish' })} className="btn text-sm min-h-11 border-amber-400/25 bg-amber-400/10 text-amber-100">
+          자동 마무리
+        </button>
+        <button type="button" onClick={onCancel} className="btn text-sm min-h-11 border-rose-400/25 bg-rose-400/10 text-rose-100">
+          전투 포기/닫기
+        </button>
+      </div>
+
+      <div className="flex items-center justify-between gap-3 mb-3">
+        <div className="system-text text-[11px] text-cyan-300/70">
+          BATTLE LOG {showFullLog ? `(${session.logs.length})` : '(최근 8줄)'}
+        </div>
+        {session.logs.length > 8 && (
+          <button
+            type="button"
+            onClick={() => setShowFullLog(prev => !prev)}
+            className="inline-flex items-center gap-1.5 text-[10px] system-text text-cyan-200 border border-cyan-400/25 bg-cyan-400/10 rounded px-2 py-1"
+          >
+            <List className="w-3 h-3" />
+            {showFullLog ? '로그 접기' : '전체 로그'}
+          </button>
+        )}
+      </div>
+
+      <div className="space-y-2">
+        {visibleLogs.length === 0 && (
+          <div className="rounded-lg border border-cyan-400/20 bg-cyan-400/5 px-3 py-3 text-xs text-cyan-100/60 system-text">
+            행동을 선택하면 전투가 진행됩니다.
+          </div>
+        )}
+        {visibleLogs.map((turn, index) => {
+          const outcome = outcomeMeta[turn.outcome]
+          return (
+            <div key={`${turn.turnNumber}-${turn.actorId}-${index}`} className="rounded-lg border border-white/10 bg-ink-900/35 px-3 py-2 text-xs leading-relaxed text-white/65">
+              <div className="flex items-center gap-2 mb-1">
+                <span className="text-cyan-300/50 system-text">#{turn.turnNumber}</span>
+                {turn.waveNumber && <span className="text-[9px] system-text px-1.5 py-0.5 rounded border border-cyan-400/25 bg-cyan-400/10 text-cyan-200">W{turn.waveNumber}</span>}
+                <span className={`text-[9px] system-text px-1.5 py-0.5 rounded border ${outcome.className}`}>{outcome.label}</span>
+              </div>
+              <p>{turn.message}</p>
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+const manualSkillOwnerLabel: Record<SkillDefinition['ownerType'], string> = {
+  common: '기본',
+  job: '직업',
+  equipment: '장비',
+  monster: '몬스터',
+}
+
+const manualSkillTypeLabel: Record<SkillDefinition['type'], string> = {
+  attack: '공격',
+  buff: '강화',
+  debuff: '약화',
+  heal: '회복',
+}
+
+function ManualHpBar({ label, hp, maxHp, tone }: { label: string; hp: number; maxHp: number; tone: 'cyan' | 'rose' }) {
+  const ratio = maxHp > 0 ? Math.max(0, Math.min(1, hp / maxHp)) : 0
+  const percent = Math.round(ratio * 100)
+  const barClassName = ratio <= 0.25
+    ? 'bg-rose-300'
+    : ratio <= 0.5
+      ? 'bg-amber-300'
+      : tone === 'cyan'
+        ? 'bg-cyan-300'
+        : 'bg-rose-300'
+
+  return (
+    <div>
+      <div className="flex items-center justify-between gap-3 text-xs mb-1">
+        <span className="font-semibold text-white/80 truncate">{label}</span>
+        <span className="system-text text-white/50 shrink-0">{Math.ceil(Math.max(0, hp))} / {Math.ceil(maxHp)} · {percent}%</span>
+      </div>
+      <div className="h-4 rounded bg-ink-950/70 border border-white/10 overflow-hidden">
+        <div className={`h-full ${barClassName} transition-all`} style={{ width: `${percent}%` }} />
+      </div>
+    </div>
+  )
+}
+
+function ManualBattlePanelV2({
+  session,
+  skills,
+  items,
+  monsterDefinition,
+  onAction,
+  onCancel,
+}: {
+  session: ManualBattleSession
+  skills: SkillDefinition[]
+  items: Item[]
+  monsterDefinition?: MonsterDefinition
+  onAction: (action: ManualBattleAction) => void
+  onCancel: () => void
+}) {
+  const [showFullLog, setShowFullLog] = useState(false)
+  const [showConsumables, setShowConsumables] = useState(false)
+  const actionCount = session.logs.filter(log => log.skillId !== 'system-manual-battle').length
+  const totalWaves = session.waveIndex + 1 + session.remainingMonsterIds.length
+  const result = session.result ? resultMeta[session.result] : undefined
+  const visibleLogs = showFullLog ? session.logs : session.logs.slice(-8)
+  const combatConsumables = items.filter(item =>
+    item.consumable &&
+    item.consumableEffects?.some(effect =>
+      effect.type === 'gate_penalty_reduction' ||
+      (effect.type === 'temporary_stat_bonus' && effect.stat && effect.stat !== 'INT')
+    )
+  )
+  const consumableGroups = combatConsumables.reduce<Array<{ item: Item; count: number }>>((groups, item) => {
+    const key = `${item.name}:${JSON.stringify(item.consumableEffects)}`
+    const existing = groups.find(group => `${group.item.name}:${JSON.stringify(group.item.consumableEffects)}` === key)
+    if (existing) existing.count += 1
+    else groups.push({ item, count: 1 })
+    return groups
+  }, [])
+
+  const getConsumableDisabledReason = (item: Item): string | undefined => {
+    const effectTypes = item.consumableEffects
+      ?.filter(effect =>
+        effect.type === 'gate_penalty_reduction' ||
+        (effect.type === 'temporary_stat_bonus' && effect.stat && effect.stat !== 'INT')
+      )
+      .map(effect => effect.type) ?? []
+    if (session.consumableUseCount >= 2) return '사용 제한 도달'
+    if (session.usedConsumableItemIds.includes(item.id)) return '이미 사용함'
+    if (effectTypes.some(type => session.usedConsumableEffectTypes.includes(type))) return '같은 효과 사용함'
+    if (
+      effectTypes.includes('gate_penalty_reduction') &&
+      session.consumableEffects.some(effect => !effect.consumed && effect.type === 'gate_penalty_reduction')
+    ) return '패널티 감소 활성화 중'
+    if (
+      effectTypes.includes('temporary_stat_bonus') &&
+      session.activeEffects.some(effect => effect.sourceSkillId.startsWith('manual-consumable-stat-'))
+    ) return '능력치 소모품 활성화 중'
+    return undefined
+  }
+
+  const formatManualConsumableEffect = (item: Item): string => {
+    const parts = item.consumableEffects
+      ?.filter(effect =>
+        effect.type === 'gate_penalty_reduction' ||
+        (effect.type === 'temporary_stat_bonus' && effect.stat && effect.stat !== 'INT')
+      )
+      .map(effect => {
+        if (effect.type === 'gate_penalty_reduction') return `패배 패널티 -${Math.round(effect.value * 100)}%`
+        if (effect.type === 'temporary_stat_bonus') return `${effect.stat} +${effect.value} / 3턴`
+        return '전투 효과'
+      }) ?? []
+    return parts.join(', ')
+  }
+
+  return (
+    <div className={`panel corner-bracket p-4 sm:p-5 border ${result?.className ?? 'border-cyan-400/30 bg-cyan-500/5'}`}>
+      <div className="br" />
+      <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-3 mb-5">
+        <div>
+          <div className="system-text text-[11px] text-cyan-300/80 mb-1">MANUAL TURN BATTLE</div>
+          <h3 className="text-xl font-bold text-cyan-100">{session.gateName}</h3>
+          <div className="flex flex-wrap gap-2 mt-2">
+            <span className="text-[10px] system-text border border-cyan-400/25 bg-cyan-400/10 text-cyan-200 rounded px-2 py-1">
+              Wave {session.waveIndex + 1} / {totalWaves}
+            </span>
+            <span className="text-[10px] system-text border border-white/10 bg-ink-900/50 text-white/55 rounded px-2 py-1">
+              행동 {actionCount} / {session.maxTurns}
+            </span>
+            <span className="text-[10px] system-text border border-amber-400/20 bg-amber-400/10 text-amber-100/75 rounded px-2 py-1">
+              방어만으로는 클리어하기 어렵습니다
+            </span>
+          </div>
+        </div>
+        <div className="text-xs system-text border border-cyan-400/25 bg-cyan-400/10 text-cyan-200 rounded px-2.5 py-1">
+          {result?.label ?? '진행 중'}
+        </div>
+      </div>
+
+      {result && (
+        <div className="mb-5 border border-white/10 rounded-lg p-3 bg-ink-900/35">
+          <div className="text-sm font-semibold text-white/85">{result.title}</div>
+          <div className="text-xs text-white/55 leading-relaxed mt-1">{result.description}</div>
+        </div>
+      )}
+
+      <div className="grid lg:grid-cols-2 gap-3 mb-5">
+        <div className="space-y-4 border border-white/10 rounded-lg p-4 bg-ink-900/35">
+          <ManualHpBar label={session.player.name} hp={session.player.hp} maxHp={session.player.maxHp} tone="cyan" />
+          <div className="grid grid-cols-3 gap-2">
+            <StatPill label="ATK" value={Math.round(session.player.atk)} />
+            <StatPill label="DEF" value={Math.round(session.player.def)} />
+            <StatPill label="SPD" value={Math.round(session.player.spd)} />
+          </div>
+        </div>
+        <div className="space-y-4 border border-rose-400/20 rounded-lg p-4 bg-rose-500/5">
+          <ManualHpBar label={session.monster.name} hp={session.monster.hp} maxHp={session.monster.maxHp} tone="rose" />
+          <div className="grid grid-cols-3 gap-2">
+            <StatPill label="ATK" value={Math.round(session.monster.atk)} />
+            <StatPill label="DEF" value={Math.round(session.monster.def)} />
+            <StatPill label="SPD" value={Math.round(session.monster.spd)} />
+          </div>
+          {monsterDefinition && (
+            <div className="text-xs text-rose-100/65 leading-relaxed border-t border-rose-400/15 pt-3">
+              <div className="flex flex-wrap items-center gap-2 mb-1">
+                <span className="system-text text-[10px] text-rose-200/80">CURRENT MONSTER</span>
+                <span className="system-text text-[10px] border border-rose-400/25 rounded px-1.5 text-rose-100/70">
+                  {monsterDefinition.rank}-RANK
+                </span>
+              </div>
+              {monsterDefinition.description}
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div className="space-y-3 mb-5">
+        <div className="grid grid-cols-2 gap-2">
+          <button type="button" onClick={() => onAction({ type: 'basic_attack' })} className="btn btn-primary text-sm min-h-14">
+            기본 공격
+          </button>
+          <button type="button" onClick={() => onAction({ type: 'defend' })} className="btn text-sm min-h-14 border-cyan-400/25 bg-cyan-400/10 text-cyan-100">
+            <span>방어</span>
+            <span className="ml-1 text-[10px] system-text text-cyan-100/60">피해 -40%</span>
+          </button>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+          {skills.map(skill => {
+            const cooldown = session.cooldowns[skill.id] ?? 0
+            const disabledReason = cooldown > 0 ? `재사용 대기 ${cooldown}턴` : '사용 가능'
+            return (
+              <button
+                key={skill.id}
+                type="button"
+                onClick={() => onAction({ type: 'skill', skillId: skill.id })}
+                disabled={cooldown > 0}
+                title={skill.description}
+                className="min-h-[72px] rounded-md border border-purple-400/25 bg-purple-400/10 px-3 py-2 text-left text-purple-50 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-purple-400/15 transition"
+              >
+                <span className="flex items-center justify-between gap-2">
+                  <span className="text-sm font-semibold truncate">{skill.name}</span>
+                  <span className="shrink-0 text-[9px] system-text border border-purple-300/25 rounded px-1.5 py-0.5 text-purple-100/70">
+                    {manualSkillOwnerLabel[skill.ownerType]}
+                  </span>
+                </span>
+                <span className="mt-1 block text-[11px] leading-snug text-white/55 line-clamp-2">{skill.description}</span>
+                <span className="mt-1 flex flex-wrap gap-1.5 text-[10px] system-text text-purple-100/70">
+                  <span>{manualSkillTypeLabel[skill.type]}</span>
+                  <span>CD {cooldown > 0 ? cooldown : (skill.cooldownTurns ?? 0)}</span>
+                  <span className={cooldown > 0 ? 'text-amber-200' : 'text-emerald-200'}>{disabledReason}</span>
+                </span>
+              </button>
+            )
+          })}
+        </div>
+        <div className="border border-emerald-400/20 bg-emerald-400/5 rounded-lg p-3">
+          <button
+            type="button"
+            onClick={() => setShowConsumables(prev => !prev)}
+            className="w-full min-h-11 flex items-center justify-between gap-3 text-left"
+          >
+            <span>
+              <span className="block text-sm font-semibold text-emerald-100">소모품 사용</span>
+              <span className="block text-[11px] text-white/45 mt-0.5">
+                전투용 {consumableGroups.length}종 · 사용 {session.consumableUseCount} / 2
+              </span>
+            </span>
+            <span className="text-[10px] system-text text-emerald-200 border border-emerald-400/25 rounded px-2 py-1">
+              {showConsumables ? '닫기' : '열기'}
+            </span>
+          </button>
+          {showConsumables && (
+            <div className="mt-3 space-y-2">
+              <div className="text-[11px] text-emerald-100/65 leading-relaxed">
+                소모품 사용도 플레이어 행동입니다. 사용 후 몬스터가 행동하며, 전투를 포기해도 이미 쓴 소모품은 돌아오지 않습니다.
+              </div>
+              {consumableGroups.length === 0 && (
+                <div className="rounded-md border border-white/10 bg-ink-900/35 px-3 py-3 text-xs text-white/45">
+                  전투 중 사용할 수 있는 소모품이 없습니다.
+                </div>
+              )}
+              {consumableGroups.map(({ item, count }) => {
+                const disabledReason = getConsumableDisabledReason(item)
+                return (
+                  <div key={`${item.name}-${item.id}`} className="rounded-md border border-white/10 bg-ink-900/35 p-3">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="text-lg">{item.icon}</span>
+                          <span className="text-sm font-semibold text-white/85 truncate">{item.name}</span>
+                          <span className="text-[10px] system-text text-white/40">x{count}</span>
+                        </div>
+                        <div className="text-[11px] text-emerald-100/70 mt-1">{formatManualConsumableEffect(item)}</div>
+                        {disabledReason && <div className="text-[10px] text-amber-200 mt-1">{disabledReason}</div>}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => onAction({ type: 'use_consumable', itemId: item.id })}
+                        disabled={Boolean(disabledReason)}
+                        className="shrink-0 min-h-10 px-3 rounded-md border border-emerald-400/25 bg-emerald-400/10 text-xs text-emerald-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        사용
+                      </button>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-2 border-t border-white/10">
+          <button type="button" onClick={() => onAction({ type: 'auto_finish' })} className="btn text-sm min-h-12 border-amber-400/25 bg-amber-400/10 text-amber-100">
+            자동 마무리
+          </button>
+          <button type="button" onClick={onCancel} className="btn text-sm min-h-12 border-rose-400/25 bg-rose-400/10 text-rose-100">
+            전투 포기/닫기
+          </button>
+        </div>
+      </div>
+
+      <div className="flex items-center justify-between gap-3 mb-3">
+        <div className="system-text text-[11px] text-cyan-300/70">
+          BATTLE LOG {showFullLog ? `(${session.logs.length})` : '(최근 8줄)'}
+        </div>
+        {session.logs.length > 8 && (
+          <button
+            type="button"
+            onClick={() => setShowFullLog(prev => !prev)}
+            className="inline-flex items-center gap-1.5 text-[10px] system-text text-cyan-200 border border-cyan-400/25 bg-cyan-400/10 rounded px-2 py-1"
+          >
+            <List className="w-3 h-3" />
+            {showFullLog ? '로그 접기' : '전체 로그'}
+          </button>
+        )}
+      </div>
+
+      <div className="space-y-2">
+        {visibleLogs.length === 0 && (
+          <div className="rounded-lg border border-cyan-400/20 bg-cyan-400/5 px-3 py-3 text-xs text-cyan-100/60 system-text">
+            행동을 선택하면 전투가 진행됩니다.
+          </div>
+        )}
+        {visibleLogs.map((turn, index) => {
+          const outcome = outcomeMeta[turn.outcome]
+          const isSystemLog = turn.skillId === 'system-manual-battle'
+          return (
+            <div
+              key={`${turn.turnNumber}-${turn.actorId}-${index}`}
+              className={`rounded-lg border px-3 py-2 text-xs leading-relaxed ${
+                isSystemLog
+                  ? 'border-amber-400/25 bg-amber-400/10 text-amber-50/85'
+                  : 'border-white/10 bg-ink-900/35 text-white/65'
+              }`}
+            >
+              <div className="flex items-center gap-2 mb-1">
+                <span className="text-cyan-300/50 system-text">#{turn.turnNumber}</span>
+                {turn.waveNumber && <span className="text-[9px] system-text px-1.5 py-0.5 rounded border border-cyan-400/25 bg-cyan-400/10 text-cyan-200">W{turn.waveNumber}</span>}
+                <span className={`text-[9px] system-text px-1.5 py-0.5 rounded border ${isSystemLog ? 'text-amber-200 border-amber-400/25 bg-amber-400/10' : outcome.className}`}>
+                  {isSystemLog ? 'SYSTEM' : outcome.label}
+                </span>
+              </div>
+              <p>{turn.message}</p>
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
 export function GatePanel() {
   const [isBattleRevealing, setIsBattleRevealing] = useState(false)
   const hunter = useGame(s => s.hunter)
@@ -488,7 +952,11 @@ export function GatePanel() {
   const activeGate = useGame(s => s.activeGate)
   const gateStatus = useGame(s => s.gateStatus)
   const combatLogs = useGame(s => s.combatLogs)
+  const manualBattleSession = useGame(s => s.manualBattleSession)
   const startGateBattle = useGame(s => s.startGateBattle)
+  const startManualGateBattle = useGame(s => s.startManualGateBattle)
+  const performManualBattleAction = useGame(s => s.performManualBattleAction)
+  const cancelManualGateBattle = useGame(s => s.cancelManualGateBattle)
 
   const equippedItems = getEquippedItems(items, equipment)
   const playerSkills = getPlayerCombatSkills({
@@ -573,6 +1041,33 @@ export function GatePanel() {
     if (!canStart) return
     setIsBattleRevealing(true)
     startGateBattle()
+  }
+
+  const handleStartManualBattle = () => {
+    if (!canStart || !gate) return
+    setIsBattleRevealing(false)
+    startManualGateBattle(gate.id)
+  }
+
+  if (manualBattleSession?.gateInstanceId === activeGate.instanceId) {
+    return (
+      <div className="space-y-4">
+        <GateStatusPanel />
+        <ManualBattlePanelV2
+          session={manualBattleSession}
+          skills={playerSkills}
+          items={items}
+          monsterDefinition={MONSTER_DEFINITIONS.find(monster => monster.id === gate.monsterIds[manualBattleSession.waveIndex])}
+          onAction={performManualBattleAction}
+          onCancel={cancelManualGateBattle}
+        />
+        <RecentBattleResult
+          log={combatLogs[0]}
+          shouldReveal={isBattleRevealing}
+          onRevealStateChange={setIsBattleRevealing}
+        />
+      </div>
+    )
   }
 
   return (
@@ -743,14 +1238,29 @@ export function GatePanel() {
               </div>
             </div>
 
-            <button
-              type="button"
-              onClick={handleStartGateBattle}
-              disabled={!canStart}
-              className="w-full btn btn-primary text-sm disabled:opacity-60 disabled:cursor-not-allowed"
-            >
-              {actionLabel}
-            </button>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={handleStartGateBattle}
+                disabled={!canStart}
+                className="w-full btn btn-primary text-sm min-h-11 disabled:opacity-60 disabled:cursor-not-allowed"
+              >
+                자동 전투 시작
+              </button>
+              <button
+                type="button"
+                onClick={handleStartManualBattle}
+                disabled={!canStart}
+                className="w-full btn text-sm min-h-11 border-cyan-400/25 bg-cyan-400/10 text-cyan-100 disabled:opacity-60 disabled:cursor-not-allowed"
+              >
+                수동 전투 시작
+              </button>
+            </div>
+            {!canStart && (
+              <div className="text-[10px] system-text text-center text-amber-300/60">
+                {actionLabel}
+              </div>
+            )}
             <div className="text-[10px] system-text text-center text-cyan-300/45">
               draw는 보상/패널티 없이 게이트가 유지됩니다.
             </div>

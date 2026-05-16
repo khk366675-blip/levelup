@@ -5386,3 +5386,296 @@ Dungeon 카드에서 milestones가 있을 때:
 ### 빌드 결과
 - `npm run build` → ✅ 통과 (1949 modules, 445.37 kB JS / 33.76 kB CSS)
 - TypeScript 에러 0, 경고 0
+## 12차 작업 10A단계 - 게이트 수동 턴제 전투 모드
+
+### 목표
+- 기존 자동 게이트 전투는 유지하면서, 게이트 진입 시 자동 전투와 수동 턴제 전투를 선택할 수 있게 한다.
+- XP 보상표, gate/monster 기본 수치, 장비 강화 공식, 칭호 효과, `levelup-save` key는 변경하지 않는다.
+
+### 구현 정책
+- `startGateBattle()` 자동 전투 흐름은 유지한다.
+- 수동 전투는 `manualBattleSession` 런타임 상태로 별도 관리한다.
+- `manualBattleSession`은 persist 저장 대상에서 제외한다. 새로고침/이탈 시 세션은 사라질 수 있지만 `activeGate`는 유지된다.
+- persist version은 v14 유지. 저장 스키마 마이그레이션은 추가하지 않았다.
+
+### 수동 전투 세션 구조
+- `ManualBattleSession`
+  - `gateId`, `gateName`, `gateInstanceId`
+  - `waveIndex`, `turn`, `maxTurns`
+  - `player`, `monster`
+  - `remainingMonsterIds`
+  - `cooldowns`, `monsterCooldowns`
+  - `activeEffects`
+  - `consumableEffects`
+  - `logs`
+  - `result?`
+  - `startedAt`
+- `CombatantState`
+  - `name`, `maxHp`, `hp`, `atk`, `def`, `spd`, `critRate?`, `accuracy?`, `evasion?`
+
+### 수동 전투 행동
+- `basic_attack`: 기존 기본 공격 스킬과 `resolveAction()` 피해 공식을 사용한다.
+- `defend`: 이번 턴 플레이어가 받는 피해를 40% 감소시키는 `damage_reduction` 효과를 적용한다.
+- `skill`: 장착 직업/장비 전투 스킬을 사용하며, 기존 cooldown과 `resolveAction()` 스킬 효과를 사용한다.
+- `auto_finish`: 1차 버전에서는 현재 수동 상태를 자동 시뮬레이터로 이어받지 않는다. 메시지만 표시하고 TODO로 남김.
+
+### wave 처리
+- `GateDefinition.monsterIds`를 순차 wave로 해석한다.
+- 플레이어 HP, cooldown, activeEffects는 wave 사이에 유지된다.
+- 모든 wave를 클리어하면 victory.
+- 플레이어 HP가 0 이하면 defeat.
+- `maxTurns` 이상이면 draw.
+
+### 결과 처리
+- 수동 전투 종료 시 자동 전투와 같은 결과 처리 helper를 사용한다.
+- victory:
+  - gate cleared
+  - reward 지급
+  - stamina -20
+- defeat:
+  - gate failed
+  - reward 없음
+  - stamina -50 기반 패널티 + injury
+  - `gate_penalty_reduction` 소모품 반영
+- draw:
+  - active gate 유지
+  - reward 없음
+  - stamina 감소 없음
+  - injury 없음
+- `next_gate` 소모품은 수동 전투 첫 행동 이후 소비 처리된다. 결과 계산에는 전투 시작 시점의 소모품 snapshot을 사용한다.
+
+### cancel / 이탈 정책
+- `cancelManualGateBattle()`은 보상/패널티 없이 세션만 종료한다.
+- active gate는 유지된다.
+- 새로고침 시 `manualBattleSession`은 persist되지 않으므로 사라질 수 있고, active gate는 유지된다.
+- 전투 중 이탈은 defeat로 처리하지 않는다.
+
+### UI
+- `GatePanel` active gate 상태에서 `자동 전투 시작` / `수동 전투 시작` 버튼을 분리했다.
+- 수동 전투 화면:
+  - 게이트 이름
+  - wave / turn
+  - 플레이어 HP bar
+  - 몬스터 HP bar
+  - 기본 공격 / 방어 / 스킬 / 자동 마무리 / 전투 포기 버튼
+  - 최근 8줄 로그와 전체 로그 토글
+- 모바일 조작을 고려해 주요 행동 버튼에 `min-h-11`을 적용했다.
+
+### 시뮬레이션
+- `scripts/sim-manual-battle-basic.ts` 추가.
+- 전략:
+  - `basic_only`
+  - `skill_first`
+  - `defensive_under_40`
+  - `defend_only`
+- C급 기준 `skill_first`는 자동보다 약간 유리하지만 100% 승리는 아니며, `defend_only`는 대부분 draw로 보상 파밍이 되지 않는다.
+
+### TODO
+- 전투 중 소모품 사용
+- 수동 전투 스킬 UX 개선
+- 수동 전투 밸런스 조정
+- 몬스터 스킬/패턴 추가
+- 현재 수동 세션 상태를 이어받는 자동 마무리
+- B/A/S급 게이트 확장 보류
+
+## 12차 작업 10B단계 - 수동 턴제 전투 모바일 UX 개선
+
+### 목표
+- 12-10A의 수동 턴제 전투 구조는 유지하고, 모바일 실사용 기준으로 전투 화면의 이해도와 조작성을 개선한다.
+- 자동 전투, 전투 공식, 보상표, gate/monster 수치, `levelup-save`, persist version은 변경하지 않는다.
+- 그림자 시스템은 추가하지 않는다.
+
+### UI / UX 개선
+- 수동 전투 렌더링을 개선판 패널로 교체했다.
+- HP bar를 4px 높이에서 더 잘 보이는 형태로 키우고, 현재 HP/최대 HP/퍼센트를 함께 표시한다.
+- wave/행동 수를 상단 chip으로 분리해 모바일에서 빠르게 읽히게 했다.
+- 현재 몬스터 카드에 rank와 설명을 표시한다.
+- 방어 반복이 클리어 전략이 되지 않는다는 안내 chip을 추가했다.
+- 기본 공격/방어 버튼은 모바일에서 누르기 쉽도록 `min-h-14`, 자동 마무리/포기 버튼은 `min-h-12`로 조정했다.
+- 위험 행동인 전투 포기/닫기는 하단 분리 영역에 배치했다.
+
+### 스킬 버튼 UX
+- 스킬 버튼에 설명, 타입, cooldown, 사용 가능/재사용 대기 사유를 표시한다.
+- 스킬 제공 출처를 `기본/직업/장비/몬스터` label로 구분한다. 수동 UI에는 플레이어가 쓸 수 있는 직업/장비 스킬만 표시된다.
+- cooldown 중인 스킬은 disabled 상태와 `재사용 대기 N턴` 문구로 이유를 명확히 표시한다.
+
+### wave / 로그 개선
+- 수동 전투 로그에 시스템 로그를 추가했다.
+- wave 클리어 시 `Wave N 클리어` 로그가 남는다.
+- 다음 몬스터 등장 시 `Wave N 시작` 로그가 남는다.
+- 마지막 wave 클리어 시 victory 전환 로그가 남는다.
+- 시스템 로그는 실제 행동 수/최대 턴 계산에서 제외해, 로그 가독성 강화가 전투 제한 턴을 줄이지 않게 했다.
+
+### 자동 마무리
+- 자동 마무리를 구현했다.
+- 현재 `manualBattleSession`의 HP, cooldown, activeEffects, waveIndex, 현재 몬스터 HP, 남은 monsterIds를 이어받아 남은 전투를 자동 진행한다.
+- 자동 진행도 기존 `chooseSkill()`, `resolveAction()`, `tickRoundEffects()`를 사용하므로 전투 공식은 변경하지 않았다.
+- 자동 마무리 결과는 기존 자동/수동 공통 결과 처리 helper를 사용한다.
+
+### draw / defend_only
+- `scripts/sim-manual-battle-basic.ts` 기준 defend_only는 대부분 draw이며 보상 지급이 없다.
+- draw 정책은 active gate 유지, reward 없음, stamina 감소 없음, injury 없음으로 유지한다.
+
+### 검증
+- `npm run build` 통과.
+- `npx tsx scripts/sim-manual-battle-basic.ts` 통과.
+- 브라우저에서 게이트 탭 기본 렌더링 확인. 현재 로컬 저장 상태에는 열린 게이트가 없어 실제 수동 전투 시작 클릭은 브라우저에서 재현하지 못했다.
+
+### persist / 저장 데이터
+- persist version v14 유지.
+- localStorage key `levelup-save` 유지.
+- `manualBattleSession`은 persist 제외 상태 유지.
+
+### TODO
+- 실제 active gate 보유 상태에서 모바일 실기기 탭 테스트.
+- 자동 마무리 로그 길이가 너무 길어지는 경우 접힘 UX 추가 개선.
+- 전투 중 소모품 사용.
+- 수동 전투 스킬 UX 추가 개선.
+- 몬스터 스킬/패턴 추가.
+
+## 12차 작업 10C단계 - 수동 전투 중 소모품 사용
+
+### 목표
+- 12-10A/12-10B의 수동 턴제 전투 구조와 `ManualBattlePanelV2`를 유지하면서, 수동 전투 중 직접 사용할 수 있는 소모품 행동을 추가한다.
+- 자동 전투 기존 동작, 전투 공식, 보상표, gate/monster 수치, 장비 강화 공식, 칭호 효과, 그림자 시스템, `levelup-save` key는 변경하지 않는다.
+
+### 전투 중 사용 가능 소모품 타입
+- 허용:
+  - `gate_penalty_reduction`
+    - 수동 전투 중 사용 가능.
+    - 사용 시 아이템 1개를 즉시 소비하고, defeat 결과 처리 시 패널티 감소 계산에 반영한다.
+    - victory/draw/cancel이어도 아이템은 반환되지 않는다.
+  - `temporary_stat_bonus`
+    - 타입 지원.
+    - 전투 중 사용 시 수동 세션 내부 `activeEffects`에 combat stat buff로 변환해 적용한다.
+    - 현재 seed 아이템 풀에는 실사용 가능한 전투용 temporary stat 소모품이 거의/아예 없으므로, 향후 아이템 추가 시 바로 동작하는 기반이다.
+    - `INT`는 현재 전투 공식에 직접 연결되는 combat stat이 없어 1차 전투 중 사용 대상에서 제외한다.
+- 비허용:
+  - `instant_xp`
+  - `next_quest_xp_bonus`
+  - `next_category_xp_bonus`
+  - `temporary_drop_bonus`
+  - `temporary_rarity_bonus`
+- 보류:
+  - `gate_success_bonus`
+    - 전투 시작 전에 이미 활성화된 효과는 기존처럼 수동 전투 시작 시 반영한다.
+    - 전투 중 즉시 사용은 이번 단계에서 보류한다.
+
+### ManualBattleAction
+- `use_consumable` 추가.
+- 파라미터: `itemId`.
+- 전투 중 소모품 사용은 플레이어 턴 행동으로 처리한다.
+- 사용 성공 시:
+  - inventory에서 해당 item 1개 제거
+  - 수동 세션에 사용 기록 저장
+  - 효과 적용
+  - 전투 로그 추가
+  - 이후 몬스터가 행동
+- 사용 실패 시:
+  - 시스템 로그만 추가
+  - 아이템/턴/몬스터 행동은 진행하지 않음
+
+### 사용 제한 정책
+- 한 전투당 소모품 최대 2회.
+- 같은 item id 중복 사용 불가.
+- 같은 effect type 중복 사용 불가.
+- `gate_penalty_reduction`은 이미 활성화되어 있으면 추가 사용 불가.
+- `temporary_stat_bonus`는 전투 소모품 stat buff가 활성화 중이면 추가 사용 불가.
+- `ManualBattleSession`에 다음 기록을 추가:
+  - `usedConsumableItemIds`
+  - `usedConsumableEffectTypes`
+  - `consumableUseCount`
+- `manualBattleSession`은 persist 제외 상태이므로 persist version은 변경하지 않았다.
+
+### UI
+- `ManualBattlePanelV2`에 접힌 형태의 “소모품 사용” 영역을 추가했다.
+- 전투용 소모품만 표시한다.
+- 표시 정보:
+  - 이름
+  - 효과 요약
+  - 보유 개수
+  - 사용 가능/불가 상태
+  - 사용 버튼
+- 전투 중 소모품 사용 후 포기해도 반환되지 않는다는 안내를 UI에 표시했다.
+
+### cancel / 이탈 정책
+- 수동 전투 중 이미 사용한 소모품은 되돌리지 않는다.
+- `cancelManualGateBattle()`은 기존처럼 보상/패널티 없이 세션만 종료하고 active gate는 유지한다.
+- 소모품 사용 후 취소해도 inventory에서 제거된 아이템은 반환하지 않는다.
+
+### 자동 전투 영향
+- 자동 전투 `startGateBattle()` 흐름은 변경하지 않았다.
+- 기존 `activeConsumableEffects`, `next_gate`, `today`, `next_quest` 소비 정책은 유지한다.
+- 이번 작업은 수동 전투 중 선택 사용만 추가한다.
+
+### 검증
+- `npm run build` 통과.
+- `npx tsx scripts/sim-manual-battle-basic.ts` 통과.
+- defend_only는 계속 대부분 draw이며 reward가 지급되지 않는다.
+
+### TODO
+- 회복형 전투 소모품 타입/아이템 추가 여부 검토.
+- `gate_success_bonus` 전투 중 사용 여부 검토.
+- 실제 active gate + 전투용 소모품 보유 상태에서 모바일 브라우저 클릭 검증.
+- 수동 전투 밸런스 12-10D.
+- 그림자 시스템 12-11A.
+
+## 12차 작업 10D단계 - 수동 전투 밸런스 검증
+
+### 목표
+- 12-10A/B/C로 추가된 수동 턴제 전투를 자동 전투와 비교해 승률, 패배율, draw율을 점검했다.
+- 이번 단계는 시뮬레이션/검증 중심이며 XP 보상표, gate/monster 수치, 전투 공식, 장비 강화 공식, 칭호 효과, persist version, `levelup-save` key는 변경하지 않았다.
+
+### 비교 전략
+- `auto`: 앱의 기존 자동 전투 입력과 동일하게 플레이어 보유 스킬 + 해당 몬스터 스킬로 `simulateGateWaveBattle()` 실행.
+- `manual_basic_only`: 기본 공격만 반복.
+- `manual_skill_first`: 사용 가능한 공격 스킬을 우선 사용하고, 없으면 기존 `chooseSkill()` 판단으로 fallback.
+- `manual_defensive_under_40`: HP 40% 이하에서는 방어, 그 외에는 스킬 우선.
+- `manual_consumable_smart_none`: 소모품이 없는 상태의 smart 전략 fallback.
+- `manual_consumable_smart`: 임계 상황에서 전투용 `temporary_stat_bonus` / `gate_penalty_reduction` 사용을 가정. 한 전투 최대 2회, 같은 effect 중복 불가 정책 반영.
+- `manual_defend_only`: 방어만 반복해 보상 파밍 가능성을 확인.
+
+### 시뮬레이션 스크립트
+- `scripts/sim-manual-battle-balance.ts`를 추가했다.
+- 대상 게이트:
+  - 균열의 골목 E
+  - 뒤틀린 뒷골목 E
+  - 균열의 둥지 E-wave
+  - 나태의 소굴 D
+  - 나태의 순찰로 D-wave
+  - 망각의 서고 C
+  - 피로의 회랑 C
+  - 균열의 훈련장 C-wave
+  - 탐욕의 금고 C
+- Build A~F는 `scripts/sim-gate-current.ts`의 성장 빌드를 재사용했다.
+- `scripts/sim-gate-current.ts`는 검증 정확도를 위해 앱 자동 전투와 동일하게 플레이어 보유 스킬 + 몬스터 스킬만 넘기도록 수정했다. 앱 전투 로직 자체는 변경하지 않았다.
+
+### 결과 요약
+- C급 게이트 평균 기준:
+  - Build C: auto 0%, skill_first 0%, consumable_smart 0%. C급 초반 차단은 유지된다.
+  - Build D: auto 94%, basic_only 73%, skill_first 94%, defensive_under_40 32% victory / 33% draw, consumable_smart 79%.
+  - Build E/F: C급은 안정 또는 졸업 구간으로 95~100%가 나온다.
+- `manual_basic_only`는 자동보다 강하지 않았다. Build D C급에서 자동 94% 대비 73%로 오히려 불리했다.
+- `manual_skill_first`는 현재 자동 AI의 스킬 선택과 거의 동일하게 움직여 자동 대비 승률 차이가 0pp에 가까웠다.
+- `manual_defensive_under_40`는 패배 위험을 무조건 낮추기보다는 공격 기회를 잃어 draw가 늘어나는 형태였다. Build D C급 평균은 victory 32%, draw 33%였다.
+- `manual_consumable_smart`는 소모품 사용이 플레이어 턴을 소비하므로 승률 치트가 되지 않았다. Build D C급 평균 79%로 auto 94%보다 낮았고, 소모품 평균 사용량은 1.69회였다.
+- `manual_defend_only`는 전체 게이트 평균 victory 0%, defeat 27%, draw 73%였다. 보상 파밍 루프는 확인되지 않았다.
+
+### 판단
+- 수동 전투 자체가 자동보다 과도하게 강한 문제는 확인되지 않았다.
+- Build D의 C급 자동 전투 승률이 88~95%로 권장 범위 35~80%보다 높다. 다만 이는 수동 전투 추가로 생긴 문제가 아니라 앱 자동 전투 기준선 자체의 문제다.
+- 핵심 원칙상 이번 단계에서는 gate/monster 수치와 전투 공식 조정은 하지 않았다.
+- 방어 피해감소율, maxTurns, 수동 소모품 제한도 변경하지 않았다. defend_only가 victory farming으로 이어지지 않았고, 소모품도 턴 비용 때문에 과도하게 유리하지 않았기 때문이다.
+
+### 검증
+- `npx tsx scripts/sim-manual-battle-balance.ts` 통과.
+- `npx tsx scripts/sim-gate-current.ts` 통과.
+- `npm run build` 통과.
+- 실제 active gate + 전투용 소모품 보유 상태의 브라우저 클릭 검증은 12-10C와 동일하게 별도 세이브 상태 주입 helper가 필요하다. 이번 단계에서는 프로덕션 코드에 debug helper를 남기지 않기 위해 보류했다.
+
+### TODO
+- Build D C급 자동 기준선이 높은 문제를 12-10E 또는 별도 밸런스 작업에서 재검토.
+- 회복형 전투 소모품 추가 여부 검토.
+- `gate_success_bonus` 전투 중 사용 여부 검토.
+- 몬스터 패턴/텔레그래프 추가.
+- 그림자 시스템 12-11A 이후 전체 게이트 밸런스 재측정.
