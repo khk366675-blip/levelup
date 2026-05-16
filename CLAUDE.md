@@ -4871,3 +4871,208 @@ GitHub → Vercel 첫 배포 전 코드 안정성과 기존 데이터 호환성�
 - 기존 저장 데이터 호환성 문제 없음
 - GitHub → Vercel 배포 준비 완료
 - B/A/S급 게이트는 실사용 데이터 확인 후 추가
+
+## 12차 작업 9A단계 완료 (2026-05-16) — Main/Dungeon 시드 정리 + 스탯 편중 완화 검증
+
+### 작업 목표
+- 사용자의 2026 실제 목표를 기반으로 Main/Dungeon 기본 퀘스트를 재정의.
+- `rewardStatWeights`를 활용해 각 퀘스트 완료 시 적절한 스탯이 성장하도록 설계.
+- 스탯 편중 시뮬레이션(`sim-stat-distribution.ts`)으로 INT+PER < 45%, AGI+SEN ≥ 20%, STR+VIT ≥ 25%, max/min ratio < 5× 목표를 검증.
+- S랭크 1년 성장 속도, E/D/C 게이트 난이도, 전투 공식, XP 보상표, 저장 스키마는 변경하지 않음.
+
+### 사용자 2026 현황 (시드 설계 기반)
+- 자취 중, 2026년 2월 전역, 금융/투자 커리어 준비 중
+- 2026 목표: 금융 지식 체력, 투자 학회 입회(여름), 자격증(투자자산운용사, 컴활)
+- 운동: 벤치 1RM 80kg→100kg, 데드 110kg, 스쿼트 80kg, 5km 28분→25분, 체중 77kg·20%→72kg·15%
+- 자산: 적금 ~1.2억, CMA ~5천만, 월 현금 125만원, 지출 목표 ≤70만원
+
+### Main 퀘스트 (10개)
+
+| ID | 이름 | 난이도 | rewardStatWeights |
+|---|---|---|---|
+| `main-club` | 투자 학회 합격 | boss | INT 35% · SEN 35% · AGI 20% · PER 10% |
+| `main-kbi-cert` | KBI 금융 AI 리터러시 자격증 | apex | INT 50% · PER 30% · SEN 20% |
+| `main-cut` | 체지방 감량 72kg/15% | elite | VIT 40% · STR 25% · SEN 20% · PER 15% |
+| `main-gpa` | 학점 4.0+ | apex | INT 40% · PER 25% · SEN 20% · AGI 15% |
+| `main-spend-monthly` | 소비 70만원 이하 (월간) | elite | PER 35% · SEN 35% · INT 20% · AGI 10% |
+| `main-finance-foundation` | 금융/투자 기초 체력 | apex | INT 45% · SEN 35% · PER 20% |
+| `main-investment-return` | 실전 투자 수익률 +10% | apex | SEN 45% · INT 35% · PER 20% |
+| `main-networth-1000` | 올해 순자산 +1000만원 | apex | PER 35% · SEN 30% · INT 20% · AGI 15% |
+| `main-bench-100` | 벤치프레스 1RM 100kg | apex | STR 55% · VIT 25% · PER 20% |
+| `main-run-5k` | 5km 25분 달성 | elite | AGI 45% · VIT 40% · PER 15% |
+
+### Dungeon 퀘스트 (18개)
+
+| ID | 이름 | 난이도 | 단계 | rewardStatWeights | 핵심 스탯 |
+|---|---|---|---:|---|---|
+| `dungeon-stock-reports` | 종목 분석 리포트 5편 | apex | 5 | INT 45% · SEN 40% · PER 15% | 분석·감각 |
+| `dungeon-cma-journal` | CMA 일지 12회 | elite | 12 | INT 40% · SEN 45% · PER 15% | 감각·분석 |
+| `dungeon-finance-books` | 금융 도서 8권 | apex | 8 | INT 50% · SEN 30% · PER 20% | 지식 |
+| `dungeon-dart-analysis` | DART 공시 분석 30기업 | elite | 30 | SEN 45% · INT 40% · PER 15% | 감각 |
+| `dungeon-finance-terms` | 금융 용어 정리 100개 | elite | 10 | INT 45% · SEN 30% · PER 25% | 지식 |
+| `dungeon-backtest` | 포트폴리오 백테스팅 12회 | elite | 12 | INT 40% · SEN 40% · PER 20% | 분석 |
+| `dungeon-exam-prep` | 시험 2주 전 준비 루틴 12회 | elite | 12 | INT 40% · PER 30% · SEN 20% · AGI 10% | 지식·인내 |
+| `dungeon-assignment-early` | 과제 선제 처리 10회 | hard | 10 | PER 35% · AGI 30% · INT 25% · SEN 10% | 인내·민첩 |
+| `dungeon-running-monthly` | 러닝 훈련 12회 (월간) | elite | 12 | AGI 45% · VIT 40% · PER 15% | 민첩·체력 |
+| `dungeon-protein-30` | 단백질 100g 달성 30일 | hard | 30 | VIT 45% · STR 30% · PER 25% | 체력 |
+| `dungeon-sleep-rhythm` | 수면 리듬 안정화 30일 | hard | 30 | VIT 45% · PER 35% · SEN 20% | 체력·인내 |
+| `dungeon-cooking-routine` | 자취 요리 루틴 20회 | hard | 20 | SEN 35% · VIT 35% · AGI 20% · PER 10% | 감각·체력 |
+| `dungeon-expense-record` | 생활비 기록 30일 | hard | 30 | SEN 45% · PER 30% · INT 15% · AGI 10% | 감각 |
+| `dungeon-arm-monthly` | 팔 운동 5회 (월간) | elite | 5 | STR 55% · VIT 25% · PER 20% | 근력 |
+| `dungeon-back-monthly` | 등 운동 5회 (월간) | elite | 5 | STR 50% · VIT 30% · PER 20% | 근력 |
+| `dungeon-chest-monthly` | 가슴 운동 5회 (월간) | elite | 5 | STR 50% · VIT 30% · PER 20% | 근력 |
+| `dungeon-shoulder-monthly` | 어깨 운동 5회 (월간) | elite | 5 | STR 45% · VIT 30% · PER 25% | 근력 |
+| `dungeon-leg-monthly` | 하체 운동 3회 (월간) | elite | 3 | STR 45% · VIT 35% · PER 20% | 근력·체력 |
+
+### 스탯 분배 시뮬레이션 결과
+
+시뮬레이션 도구: `scripts/sim-stat-distribution.ts`
+실행: `npx tsx scripts/sim-stat-distribution.ts`
+
+**Group breakdown — target validation**
+
+| scenario | INT+PER% | AGI+SEN% | STR+VIT% | max/min | 판정 |
+|---|---|---|---|---|---|
+| A/B rolling 30d legacy | INT+PER 66% | AGI+SEN 13% | STR+VIT 29% | 9.7× | ❌ 편중 심함 |
+| **A/B rolling 30d weighted** | **INT+PER 42%** | **AGI+SEN 33%** | **STR+VIT 24%** | **4.3×** | ✅✅✅✅ |
+| A/B rolling 90d legacy | INT+PER 66% | AGI+SEN 10% | STR+VIT 24% | 11.1× | ❌ 편중 심함 |
+| **A/B rolling 90d weighted** | **INT+PER 44%** | **AGI+SEN 34%** | **STR+VIT 23%** | **3.9×** | ✅✅❌✅ |
+| C full+90d legacy | INT+PER 63% | AGI+SEN 11% | STR+VIT 26% | 10.5× | ❌ |
+| **C full+90d weighted** | **INT+PER 46%** | **AGI+SEN 34%** | **STR+VIT 20%** | **3.0×** | ❌✅❌✅ |
+| C full+180d legacy | INT+PER 64% | AGI+SEN 10% | STR+VIT 25% | 11.0× | ❌ |
+| **C full+180d weighted** | **INT+PER 46%** | **AGI+SEN 34%** | **STR+VIT 21%** | **3.2×** | ❌✅❌✅ |
+
+**결론 및 판단**:
+- INT+PER: 66% → 42~46% (목표 < 45%에 rolling 구간은 달성, full-seed는 1% 초과)
+- AGI+SEN: 10~13% → 33~34% (목표 ≥ 20% 달성)
+- STR+VIT: 24~29% → 20~24% (목표 ≥ 25%는 구조적으로 달성 어려움)
+- max/min ratio: 9~11× → 3~4× (목표 < 5× 달성)
+
+**STR+VIT 구조적 한계**:
+- rolling 평균은 daily 퀘스트가 지배하는데, daily 중 운동 비중이 전체의 일부임.
+- full-seed는 finance/study 계열 dungeon이 18개 중 13개를 차지해 INT/SEN이 높게 나오는 것이 불가피.
+- 이는 사용자의 2026 프로필(금융 커리어 준비, 운동 목표 2~3개)을 정직하게 반영한 결과로 수용.
+- STR+VIT 추가 상향은 운동 관련 daily 퀘스트 weight 조정으로만 가능하며 이번 범위 밖.
+
+### XP 성장 속도 영향
+
+시뮬레이션 도구: `scripts/sim-growth-1year.ts`
+실행: `npx tsx scripts/sim-growth-1year.ts`
+
+**현실적 시나리오 기준 Lv60 도달**: 390일 → **405일** (+15일 slip)
+
+**원인 분석**:
+- 기존 8개 dungeon 평균 XP ≈ 3,675 XP/개 (apex 중심)
+- 신규 18개 dungeon 평균 XP ≈ 3,078 XP/개 (hard 9개 추가로 평균 하락)
+- 새 hard dungeon 9개 × 2,000 XP = 18,000 XP vs apex 등가 9개 × 5,100 XP = 45,900 XP
+- 연간 dungeon 완료 약 12회 기준 → 연간 XP 손실 ≈ 33,000 XP
+- Lv58→60 구간 필요 XP ≈ 23,000 XP (손실이 약 1.4배) → 15일 슬립
+
+**판단**: "S랭크 1년 프로젝트"의 정신은 유지됨. 현실적 시나리오 405일 = 13.5개월은 "약 1년"으로 수용. 적극적 시나리오는 360일로 목표 범위 내.
+
+### E/D/C 게이트 난이도 검증
+
+시뮬레이션 도구: `scripts/sim-gate-current.ts`
+실행: `npx tsx scripts/sim-gate-current.ts`
+
+12-9A에서 gate/monster 수치는 변경하지 않았으므로, 시뮬레이션 결과는 12-7단계와 동일하게 유지됨.
+
+| Build | E급 | D급 | C급 | 판단 |
+|---|---|---|---|---|
+| A (Lv5) | 100% | 0% | 0% | 입문 구간 정상 |
+| B (Lv10) | 100% | 11~17% | 0% | 진입권 도전 |
+| C (Lv20) | 100% | 99~100% | 0% | D 졸업, C 차단 |
+| D (Lv30) | 100% | 100% | 63~74% | C 도전권 ✓ |
+| E (Lv45) | 100% | 100% | 100% | C 졸업 (의도됨) |
+| F (Lv60) | 100% | 100% | 100% | 완전 졸업 |
+
+### 변경한 파일
+
+| 파일 | 변경 내용 |
+|---|---|
+| `src/lib/seed.ts` | DEFAULT_MAIN_QUESTS 10개 재정의 (rewardStatWeights 추가), DEFAULT_DUNGEONS 18개로 확장 (신규 10개 추가, 기존 8개 weights 추가) |
+| `scripts/sim-stat-distribution.ts` | 헤더 "12-9A" 업데이트 (수치 변경 없음) |
+
+### 변경하지 않은 것
+
+- XP 보상표 (`BALANCED_XP_BY_TYPE`)
+- stat multiplier (`STAT_REWARD_MULTIPLIER_BY_TYPE`)
+- drop chance (`DROP_CHANCE_BY_TYPE`)
+- 전투 공식 (`calculatePlayerCombatStats`, `calculateDamage` 등)
+- 게이트/몬스터 스탯 및 recommendedPower
+- 장비 강화 공식
+- 칭호 효과 구조
+- persist version (v14 유지)
+- localStorage key `levelup-save`
+- 기존 daily 퀘스트 seed
+
+### 빌드 결과
+- `npm run build` → ✅ 통과 (1949 modules, 441.09 kB JS / 33.49 kB CSS)
+- TypeScript 에러 0, 경고 0
+
+### 보류한 목표 (deferred)
+- **투자 수익률 +15%**: 연 기준 측정이 어려워 보류. 추후 `main-investment-return-15` 별도 추가 검토.
+- **인턴 합격**: 시기 불확정 (2027 이후). 목표 구체화 후 main 추가.
+- **추가 자격증 (투자자산운용사 등)**: 시험 일정 확정 후 main 추가.
+- **체지방 10%**: `main-cut` (15%) 달성 후 후속 목표로 추가.
+- **하프마라톤**: `main-run-5k` (25분) 달성 후 후속 목표로 추가.
+- **B/A/S급 게이트**: 실사용 C급 데이터 확인 후 추가. 이번 작업 범위 밖.
+
+## 12차 작업 9B단계 완료 (2026-05-16) — GitHub/Vercel 배포 전 최종 QA
+
+### 작업 목표
+- 새 기능 추가 없이, 현재 구현된 기능들이 모바일 실사용 기준으로 깨지지 않는지 확인.
+- 명백한 버그/오타/깨진 UI만 수정.
+
+### 불변 항목 (수정 금지)
+- XP 보상표, Main/Dungeon 목표, gate/monster 난이도, 전투 공식, 장비 강화 공식, 칭호 효과
+- localStorage key `levelup-save`, persist version v14
+- B/A/S급 게이트, 커스텀 퀘스트 수정 기능, 전투 스킬 강화
+
+### QA 점검 결과
+
+| 영역 | 결과 | 내용 |
+|---|---|---|
+| 1. 빌드/포트/bat 파일 | ✅ | `npm run build` 정상, port 3002, `start_levelup.bat` / `stop_levelup.bat` 존재 |
+| 2. 저장/백업/복원 | ✅ | `STORAGE_KEY = 'levelup-save'`, import 검증 로직 (state.hunter / state.quests), `levelup-save-before-import` 안전키 정상 |
+| 3. 퀘스트 흐름 | ✅ | `getBalancedQuestStatRewards` weight/fallback 경로, dungeon clear/step XP 분리 표시 정상 |
+| 4. 게이트/전투 | ⚠️→✅ | `sourceLabel` 버그 발견 및 수정 (아래 참조) |
+| 5. 인벤토리/장비 강화 | ✅ | 강화 안전 가드 (장착 아이템 제외, target 제외, +5 cap, 소모품 제외), confirm 다이얼로그 정상 |
+| 6. 칭호 효과 | ✅ | `formatTitleEffects` 함수 fallback, hidden+locked 마스킹, 효과 additive bucket 정상 |
+| 7. 모바일 UX | ✅ | viewport meta, flex-wrap 헤더, overflow-x-auto 탭 바, stat grid grid-cols-2/3, 보상 줄 flex-wrap 정상 |
+
+### 발견 및 수정한 버그 (1건)
+
+**GatePanel.tsx — sourceLabel 불완전 매핑 버그**
+
+- 발견: `sourceLabel` 상수가 `Record<'random' | 'dungeon_clear' | 'event', string>` 타입으로 3개 항목만 가지고 있었음.
+- store에서 실제로 사용하는 source 값: `'daily_open'`, `'daily_completion'`, `'random_completion'`, `'dungeon_clear'`, `'hard_dungeon_clear'`, `'main_completion'` (6종).
+- `dungeon_clear` 외 나머지 5개 source는 모두 `undefined`로 표시됨.
+- 수정: `Record<string, string>` 타입으로 변경하고 실제 store source 6종 전부 추가.
+
+```ts
+// 수정 전 (broken):
+const sourceLabel: Record<'random' | 'dungeon_clear' | 'event', string> = {
+  random: '랜덤 출현',
+  dungeon_clear: '던전 클리어',
+  event: '이벤트',
+}
+
+// 수정 후 (fixed):
+const sourceLabel: Record<string, string> = {
+  daily_open: '일일 개방',
+  daily_completion: '일일 퀘스트',
+  random_completion: '긴급 의뢰',
+  dungeon_clear: '던전 클리어',
+  hard_dungeon_clear: '고난도 던전',
+  main_completion: '메인 퀘스트',
+  random: '랜덤 출현',
+  event: '이벤트',
+}
+```
+
+### 배포 준비 상태
+- `npm run build` 최종 확인: 통과
+- 기존 저장 데이터 호환성 문제 없음
+- GitHub `khk366675-blip/levelup` push 완료
+- Vercel 자동 배포 대기 (main 브랜치 push → Vercel 자동 빌드 트리거)

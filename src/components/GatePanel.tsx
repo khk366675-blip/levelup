@@ -34,9 +34,14 @@ const riskMeta: Record<GateRisk, { label: string; className: string }> = {
   extreme: { label: '매우 위험', className: 'text-rose-300 border-rose-400/40 bg-rose-400/10' },
 }
 
-const sourceLabel: Record<'random' | 'dungeon_clear' | 'event', string> = {
-  random: '랜덤 출현',
+const sourceLabel: Record<string, string> = {
+  daily_open: '일일 개방',
+  daily_completion: '일일 퀘스트',
+  random_completion: '긴급 의뢰',
   dungeon_clear: '던전 클리어',
+  hard_dungeon_clear: '고난도 던전',
+  main_completion: '메인 퀘스트',
+  random: '랜덤 출현',
   event: '이벤트',
 }
 
