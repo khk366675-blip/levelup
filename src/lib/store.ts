@@ -2041,12 +2041,12 @@ export const useGame = create<GameState>()(
         }
 
         const chance =
-          source === 'daily_open' ? 0.10 :
-          source === 'daily_completion' ? 0.05 :
-          source === 'random_completion' ? 0.07 :
-          source === 'dungeon_clear' ? 0.30 :
-          source === 'hard_dungeon_clear' ? 0.35 :
-          0.60
+          source === 'daily_open' ? 0.15 :
+          source === 'daily_completion' ? 0.18 :
+          source === 'random_completion' ? 0.10 :
+          source === 'dungeon_clear' ? 0.75 :
+          source === 'hard_dungeon_clear' ? 0.90 :
+          1.0
         if (Math.random() >= chance) return
 
         const eGates = GATE_DEFINITIONS.filter(g => g.rank === 'E')

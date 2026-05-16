@@ -6099,3 +6099,93 @@ Build F / C급: 100% ✓
 - 중복 활용
 - 시너지
 - 몬스터 패턴/텔레그래프
+
+## 12-11C: 그림자 추출 성공률 + 게이트 출현률 조정
+
+### 목표
+그림자 시스템 도입 이후 게이트가 그림자 추출/군단 성장의 핵심 진입점이 되었으나, 체감상 추출 기회와 게이트 출현이 다소 부족했다. 추출 성공률과 출현 확률을 소폭~중폭 상향하여 플레이 체감을 개선한다.
+
+### 변경 원칙
+- 그림자 추출 성공률과 게이트 출현 확률만 조정
+- 희귀도/품질 롤 변경 금지
+- 그림자 전투 효과 변경 금지
+- 그림자 슬롯 정책 변경 금지
+- gate/monster 전투 수치 변경 금지
+- XP 보상표 변경 금지
+- Main/Dungeon 목표 변경 금지
+- 장비 강화 공식 변경 금지
+- 칭호 효과 변경 금지
+- localStorage key 변경 금지
+- persist version 변경 금지
+- B/A/S급 게이트 추가 금지
+
+### 작업 1. 그림자 추출 성공률 상향 (`src/lib/shadows.ts`)
+
+| 등급 | 변경 전 base | 변경 후 base |
+|---|---|---|
+| E급 | 45% | **52%** |
+| D급 | 35% | **42%** |
+| C급 | 25% | **32%** |
+
+- SEN bonus: `Math.min(0.15, SEN * 0.0015)` 유지
+- shadow extraction bonus: `Math.min(0.08, ...)` 유지
+- 최종 cap: 75% → **80%**
+- 최종 최소값: 10% 유지
+- 희귀도/품질 롤 (`rarityWeightsByRank`) 변경 없음
+- 게이트 네임드/legendary 확률 변경 없음
+
+### 작업 2. 게이트 출현 확률 상향 (`src/lib/store.ts`)
+
+| source | 변경 전 | 변경 후 |
+|---|---|---|
+| daily_open (하루 첫 접속) | 10% | **15%** |
+| daily_completion | 5% | **18%** |
+| random_completion | 7% | **10%** |
+| dungeon_clear | 30% | **75%** |
+| hard_dungeon_clear | 35% | **90%** |
+| main_completion | 60% | **100%** |
+
+- active gate 1개 제한은 `rollGateSpawn` 진입 시 `if (s.activeGate && s.activeGate.status === 'active') return`로 그대로 유지
+- 게이트 queue/stack 추가 없음
+- main 완료 100%도 active gate가 이미 있으면 새 gate를 만들지 않음
+
+### 작업 3. 게이트 출현 기대값 간단 점검
+
+**가벼운 사용자** (daily 2개, random 0~1개, dungeon 1개/주)
+- 하루: 1 - (1-0.18)^2 ≈ **33%** 확률로 daily에서 1개
+- 주간: dungeon 1회 × 75% ≈ **0.75개**
+- 체감: 주 1~2개 정도
+
+**현실적 사용자** (daily 4개, random 1개, dungeon 2개/주)
+- 하루: 1 - (1-0.18)^4 ≈ **55%** 확률로 daily에서 1개, + random 10%
+- 주간: dungeon 2회 × 75% ≈ **1.5개**
+- 체감: 하루 0~1개, 주 2~4개
+
+**적극 사용자** (daily 6개, random 2개, dungeon 3개/주)
+- 하루: 1 - (1-0.18)^6 ≈ **69%** 확률로 daily에서 1개, + random 2회
+- 주간: dungeon 3회 × 75% ≈ **2.25개**
+- 체감: 하루 1개 안정적, 주 3~5개
+
+dungeon/main 완료 시 게이트가 확실히 보상 이벤트처럼 느껴지도록 조정. active gate 1개 제한으로 과잉 누적은 방지됨.
+
+### 작업 4. 검증
+
+- `npm run build` → ✅ 통과
+- `npx tsx scripts/sim-shadow-battle-balance.ts` → ✅ 통과 (Build C C-gate 0%, Build D C-gate 69% — 전투 밸런스 변화 없음)
+- `npx tsx scripts/sim-gate-current.ts` → ✅ 통과
+- `npx tsx scripts/sim-manual-battle-balance.ts` → ✅ 통과
+
+### 수정한 파일
+| 파일 | 변경 내용 |
+|---|---|
+| `src/lib/shadows.ts` | `getShadowExtractionChance` base/cap 상향 (E 52%, D 42%, C 32%, cap 80%) |
+| `src/lib/store.ts` | `rollGateSpawn` 확률 전 source 상향 (daily_open 15%, daily_completion 18%, random 10%, dungeon 75%, hard 90%, main 100%) |
+
+### persist version 변경 여부
+- **변경 없음** (v14 유지)
+
+### 남은 TODO
+- 그림자 레벨업/진화
+- 중복 활용
+- 시너지
+- 몬스터 패턴/텔레그래프

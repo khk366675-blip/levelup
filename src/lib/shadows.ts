@@ -222,10 +222,10 @@ const rarityWeightsByRank: Record<'E' | 'D' | 'C', Record<ShadowRarity, number>>
 }
 
 export const getShadowExtractionChance = (hunter: HunterState, gate: GateDefinition, equippedShadows: OwnedShadow[] = []): number => {
-  const base = gate.rank === 'C' ? 0.25 : gate.rank === 'D' ? 0.35 : 0.45
+  const base = gate.rank === 'C' ? 0.32 : gate.rank === 'D' ? 0.42 : 0.52
   const senBonus = Math.min(0.15, (hunter.stats.SEN ?? 0) * 0.0015)
   const shadowBonus = Math.min(0.08, getShadowEffectTotal(equippedShadows, 'extraction_bonus'))
-  return Math.max(0.1, Math.min(0.75, base + senBonus + shadowBonus))
+  return Math.max(0.1, Math.min(0.80, base + senBonus + shadowBonus))
 }
 
 const pickWeighted = <T extends string>(weights: Record<T, number>, rng: () => number): T => {
