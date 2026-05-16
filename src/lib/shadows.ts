@@ -154,10 +154,29 @@ export const getEquippedShadows = (ownedShadows: OwnedShadow[] | undefined, equi
     .filter((shadow): shadow is OwnedShadow => Boolean(shadow))
 }
 
+const COMBAT_EFFECT_TYPES: Set<ShadowEffectType> = new Set([
+  'bonus_damage', 'damage_reduction', 'first_turn_accuracy', 'first_turn_evasion',
+  'extra_attack_chance', 'enemy_defense_down', 'enemy_evasion_down',
+  'skill_damage_bonus', 'guard_counter', 'wave_start_bonus', 'low_hp_defense', 'execute_damage',
+])
+
+export const getCombatEnhancementMultiplier = (level: number): number => 1 + level * 0.06
+export const getUtilityEnhancementMultiplier = (level: number): number => 1 + level * 0.03
+
 export const getShadowEffects = (shadow: OwnedShadow): ShadowEffect[] => {
   const def = getShadowDefinition(shadow.definitionId)
-  const traitEffects = shadow.traits.map(trait => ({ type: trait.effectType, value: trait.value }))
-  return [...(def?.effects ?? []), ...traitEffects]
+  const lvl = shadow.enhancementLevel ?? 0
+  const combatMul = getCombatEnhancementMultiplier(lvl)
+  const utilMul = getUtilityEnhancementMultiplier(lvl)
+  const applyMul = (effects: ShadowEffect[]): ShadowEffect[] => effects.map(effect => ({
+    ...effect,
+    value: COMBAT_EFFECT_TYPES.has(effect.type)
+      ? effect.value * combatMul
+      : effect.value * utilMul,
+  }))
+  const baseEffects = applyMul(def?.effects ?? [])
+  const traitEffects = applyMul(shadow.traits.map(trait => ({ type: trait.effectType, value: trait.value })))
+  return [...baseEffects, ...traitEffects]
 }
 
 export const getShadowEffectTotal = (
@@ -355,3 +374,44 @@ export const ACHIEVEMENT_SHADOWS_BY_QUEST_ID: Record<string, string[]> = SHADOW_
     map[questId] = [...(map[questId] ?? []), def.id]
     return map
   }, {} as Record<string, string[]>)
+
+export const MAX_SHADOW_ENHANCEMENT_LEVEL = 5
+
+export const SHADOW_DECOMPOSE_ESSENCE: Record<ShadowRarity, number> = {
+  common: 1,
+  uncommon: 2,
+  rare: 5,
+  epic: 12,
+  legendary: 30,
+}
+
+export const getShadowAbsorbMaterialCount = (
+  target: OwnedShadow,
+  ownedShadows: OwnedShadow[] | undefined,
+  equippedShadowIds: string[] | undefined
+): number => {
+  const equippedSet = new Set(equippedShadowIds ?? [])
+  return (ownedShadows ?? []).filter(
+    s => s.definitionId === target.definitionId && s.instanceId !== target.instanceId && !equippedSet.has(s.instanceId)
+  ).length
+}
+
+export const canAbsorbShadow = (
+  target: OwnedShadow,
+  ownedShadows: OwnedShadow[] | undefined,
+  equippedShadowIds: string[] | undefined
+): boolean => {
+  if ((target.enhancementLevel ?? 0) >= MAX_SHADOW_ENHANCEMENT_LEVEL) return false
+  if (target.isAchievementNamed) return false
+  return getShadowAbsorbMaterialCount(target, ownedShadows, equippedShadowIds) > 0
+}
+
+export const canDecomposeShadow = (
+  shadow: OwnedShadow,
+  equippedShadowIds: string[] | undefined
+): boolean => {
+  const equippedSet = new Set(equippedShadowIds ?? [])
+  if (equippedSet.has(shadow.instanceId)) return false
+  if (shadow.isAchievementNamed) return false
+  return true
+}

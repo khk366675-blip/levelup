@@ -992,8 +992,10 @@ export const resolveShadowSupportActions = (params: {
     })
 
     let message = ''
+    const enhLabel = (shadow.enhancementLevel ?? 0) > 0 ? ` +${shadow.enhancementLevel}` : ''
+    const nameLabel = `[${shadow.name}${enhLabel}]`
     if (shadow.role === 'assault') {
-      message = `[${shadow.name}]이(가) 빈틈을 찔렀다. ${damage} 피해.`
+      message = `${nameLabel}이(가) 빈틈을 찔렀다. ${damage} 피해.`
     } else if (shadow.role === 'guard') {
       const guardReduction = Math.min(0.12, effects.filter(effect => effect.type === 'damage_reduction').reduce((sum, effect) => sum + effect.value, 0))
       if (guardReduction > 0) {
@@ -1005,20 +1007,20 @@ export const resolveShadowSupportActions = (params: {
           targetId: 'player',
         })
       }
-      message = `[${shadow.name}]이(가) 방어 태세를 보조했다. ${damage} 피해.` + (guardReduction > 0 ? ` 받는 피해 ${Math.round(guardReduction * 100)}% 감소.` : '')
+      message = `${nameLabel}이(가) 방어 태세를 보조했다. ${damage} 피해.` + (guardReduction > 0 ? ` 받는 피해 ${Math.round(guardReduction * 100)}% 감소.` : '')
     } else if (shadow.role === 'scout') {
-      message = `[${shadow.name}]이(가) 적의 움직임을 읽었다. ${damage} 피해.`
+      message = `${nameLabel}이(가) 적의 움직임을 읽었다. ${damage} 피해.`
     } else if (shadow.role === 'analyst') {
-      message = `[${shadow.name}]이(가) 약점을 분석했다. ${damage} 피해.`
+      message = `${nameLabel}이(가) 약점을 분석했다. ${damage} 피해.`
     } else if (shadow.role === 'support') {
       const cooldownSupport = Math.min(0.06, effects.filter(effect => effect.type === 'cooldown_support').reduce((sum, effect) => sum + effect.value, 0))
       if (cooldownSupport > 0 && params.playerUsedSkill) {
-        message = `[${shadow.name}]이(가) 집중을 유지시켰다. ${damage} 피해. 스킬 쿨타운 가속.`
+        message = `${nameLabel}이(가) 집중을 유지시켰다. ${damage} 피해. 스킬 쿨타운 가속.`
       } else {
-        message = `[${shadow.name}]이(가) 집중을 유지시켰다. ${damage} 피해.`
+        message = `${nameLabel}이(가) 집중을 유지시켰다. ${damage} 피해.`
       }
     } else {
-      message = `[${shadow.name}]이(가) 전리품의 냄새를 추적했다. ${damage} 피해.`
+      message = `${nameLabel}이(가) 전리품의 냄새를 추적했다. ${damage} 피해.`
     }
 
     monster = { ...monster, hp: Math.max(0, monster.hp - damage) }

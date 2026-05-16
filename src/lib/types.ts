@@ -399,6 +399,8 @@ export interface OwnedShadow {
   isNamed?: boolean
   isGateNamed?: boolean
   isAchievementNamed?: boolean
+  enhancementLevel?: number
+  absorbedCount?: number
 }
 
 export interface ShadowExtractResult {

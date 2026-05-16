@@ -6189,3 +6189,137 @@ dungeon/main 완료 시 게이트가 확실히 보상 이벤트처럼 느껴지�
 - 중복 활용
 - 시너지
 - 몬스터 패턴/텔레그래프
+
+## 12-13: 그림자 중복 활용/강화/분해 시스템
+
+### 목표
+12-11 그림자 시스템과 12-11C 게이트/추출 확률 상향 이후 중복 그림자가 쌓일 가능성이 커졌다. 중복 그림자를 의미 있게 활용할 수 있는 "그림자 흡수/분해/강화" 시스템을 추가한다.
+
+### 변경 원칙
+- XP 보상표 변경 금지
+- Main/Dungeon 목표 변경 금지
+- 게이트/몬스터 수치 변경 금지
+- 게이트 출현률 변경 금지
+- 그림자 추출률/희귀도 롤 변경 금지
+- 장비 강화 공식 변경 금지
+- 칭호 효과 변경 금지
+- localStorage key 변경 금지
+- B/A/S급 게이트 추가 금지
+
+### 작업 1. 그림자 강화 데이터 구조 추가
+
+`OwnedShadow`에 선택적 필드 추가:
+- `enhancementLevel?: number` — 흡수 강화 레벨 (0~5, 없으면 0)
+- `absorbedCount?: number` — 흡수 횟수 누적
+
+`GameState`에 추가:
+- `shadowEssence?: number` — 그림자 정수 currency (없으면 0)
+
+### 작업 2. 그림자 정수 currency
+
+분해 시 희귀도별 정수 획득 (`src/lib/shadows.ts`):
+| 희귀도 | 정수 |
+|---|---|
+| common | 1 |
+| uncommon | 2 |
+| rare | 5 |
+| epic | 12 |
+| legendary | 30 |
+
+### 작업 3. 흡수 강화 규칙
+
+대상: 일반/희귀/게이트 네임드/준네임드 그림자
+제외: 현실 성취 네임드 (isAchievementNamed)
+
+재료: 같은 definitionId의 미장착 중복 그림자 1개
+- 장착 중인 그림자는 재료 사용 불가
+- 성취 네임드는 재료 사용 불가
+
+강화 규칙:
+- 성공률 100%
+- 비용 없음
+- 재료 1개 소모
+- enhancementLevel +1
+- 최대 +5
+
+강화 효과 (`getShadowEffects`에서 multiplier 적용):
+- 전투 효과 (bonus_damage, damage_reduction, extra_attack_chance 등): 1 + level × 0.06
+- 유틸리티 효과 (drop_bonus, extraction_bonus, category_xp_bonus 등): 1 + level × 0.03
+- +5에서 전투 총 +30%, 유틸리티 총 +15%
+
+### 작업 4. 분해 규칙
+
+분해 가능: 일반/희귀/게이트 네임드/준네임드
+분해 불가: 장착 중 그림자, 현실 성취 네임드
+
+분해 결과:
+- shadowEssence 증가
+- 해당 OwnedShadow 제거
+
+UI confirm:
+- rare 이상은 강화 confirm 문구
+- legendary/gate named는 강한 경고
+
+### 작업 5. ShadowPanel UI 개선
+
+- 상단에 그림자 정수 표시
+- 각 카드에 `이름 +N` 강화 표시
+- 강화 정보: `강화 N/5 · 흡수 M회`
+- 흡수 버튼: 재료 수 표시, disabled 사유 tooltip
+- 분해 버튼: 획득 정수 표시, 붉은 톤
+- 정렬에 "강화순" 추가
+
+### 작업 6. 전투 로그에 강화 반영
+
+`resolveShadowSupportActions`에서 로그 메시지에 enhancementLevel 표시:
+- "[그림자 보병 +2]이(가) 빈틈을 찔렀다. 18 피해."
+
+### 작업 7. 저장 데이터 호환성
+
+- 기존 ownedShadows에 enhancementLevel 없음 → `?? 0` fallback
+- 기존 store에 shadowEssence 없음 → `?? 0` fallback
+- 장착 중 그림자 분해/재료 사용 불가로 참조 깨짐 방지
+- persist version v14 유지
+
+### 작업 8. 시뮬레이션 결과
+
+Build D / C급:
+- no_shadow: 59~77%
+- common_shadow +0: 71~79%
+- common_shadow +3: 64~80% (+3 효과 미미)
+- rare_shadow +0: 59~74%
+- rare_shadow +3: 65~76% (적절한 상향)
+- gate_named +0: 68~84%
+- gate_named +3: 70~81% (적절한 상향)
+- mixed_enhanced (3개 +3): 80~93% (3슬롯 전부 강화 시 체감)
+
+Build C / C급: 0% (강화 후에도 변화 없음 ✓)
+Build E/F: 안정권 유지
+
+### 작업 9. 검증
+
+- `npm run build` → ✅ 통과
+- `npx tsx scripts/sim-shadow-battle-balance.ts` → ✅ 통과
+- `npx tsx scripts/sim-gate-current.ts` → ✅ 통과
+- `npx tsx scripts/sim-manual-battle-balance.ts` → ✅ 통과
+
+### 수정한 파일
+| 파일 | 변경 내용 |
+|---|---|
+| `src/lib/types.ts` | OwnedShadow에 enhancementLevel, absorbedCount 추가 |
+| `src/lib/shadows.ts` | getShadowEffects에 enhancement multiplier 적용, 분해/흡수 helper 추가 |
+| `src/lib/game.ts` | resolveShadowSupportActions 로그에 +N 표시 |
+| `src/lib/store.ts` | shadowEssence 상태/초기화/마이그레이션, absorbShadow/decomposeShadow 액션 |
+| `src/components/ShadowPanel.tsx` | 정수 표시, 강화/분해 버튼, confirm, 강화순 정렬 |
+| `scripts/sim-shadow-battle-balance.ts` | +3 케이스 추가 |
+
+### persist version 변경 여부
+- **변경 없음** (v14 유지)
+
+### 남은 TODO
+- 그림자 레벨업/진화
+- 그림자 중복 자동 정리/잠금 기능
+- 그림자 시너지
+- B/A/S급 게이트
+- 몬스터 패턴/텔레그래프
+- 회복형 전투 소모품

@@ -108,14 +108,19 @@ import {
 } from './game'
 import {
   ACHIEVEMENT_SHADOWS_BY_QUEST_ID,
+  canAbsorbShadow,
+  canDecomposeShadow,
   createOwnedShadow,
   getEquippedShadowCategoryXpBonus,
   getEquippedShadowDropBonus,
   getEquippedShadowStatBonuses,
   getEquippedShadows,
+  getShadowAbsorbMaterialCount,
   getShadowDefinition,
   getShadowSlotCount,
+  MAX_SHADOW_ENHANCEMENT_LEVEL,
   rollShadowExtraction,
+  SHADOW_DECOMPOSE_ESSENCE,
   SHADOW_RARITY_LABEL,
 } from './shadows'
 
@@ -143,6 +148,7 @@ interface GameState {
   equippedShadowIds: string[]
   shadowExtractHistory?: ShadowExtractResult[]
   lastShadowExtractResult?: ShadowExtractResult
+  shadowEssence?: number
   initialized: boolean
 
   // hunter
@@ -205,6 +211,8 @@ interface GameState {
   equipShadow: (shadowId: string) => void
   unequipShadow: (shadowId: string) => void
   grantAchievementNamedShadows: () => void
+  absorbShadow: (targetInstanceId: string) => void
+  decomposeShadow: (shadowInstanceId: string) => void
 
   // achievements
   recordAppOpen: () => void
@@ -1158,6 +1166,7 @@ export const useGame = create<GameState>()(
       equippedShadowIds: [],
       shadowExtractHistory: [],
       lastShadowExtractResult: undefined,
+      shadowEssence: 0,
       initialized: false,
 
       setHunterName: (name) => set((s) => ({ hunter: { ...s.hunter, name } })),
@@ -3045,6 +3054,59 @@ export const useGame = create<GameState>()(
         }
       }),
 
+      absorbShadow: (targetInstanceId) => set((s) => {
+        const ownedShadows = s.ownedShadows ?? []
+        const equippedShadowIds = s.equippedShadowIds ?? []
+        const target = ownedShadows.find(shadow => shadow.instanceId === targetInstanceId)
+        if (!target) return {}
+        if (!canAbsorbShadow(target, ownedShadows, equippedShadowIds)) return {}
+        const currentLevel = target.enhancementLevel ?? 0
+        const nextLevel = Math.min(MAX_SHADOW_ENHANCEMENT_LEVEL, currentLevel + 1)
+        // consume one material (same definitionId, not equipped, not self)
+        const equippedSet = new Set(equippedShadowIds)
+        const materialIndex = ownedShadows.findIndex(
+          shadow => shadow.definitionId === target.definitionId && shadow.instanceId !== target.instanceId && !equippedSet.has(shadow.instanceId)
+        )
+        if (materialIndex === -1) return {}
+        const material = ownedShadows[materialIndex]
+        const nextOwned = ownedShadows.filter((_, i) => i !== materialIndex).map(shadow =>
+          shadow.instanceId === target.instanceId
+            ? { ...shadow, enhancementLevel: nextLevel, absorbedCount: (shadow.absorbedCount ?? 0) + 1 }
+            : shadow
+        )
+        return {
+          ownedShadows: nextOwned,
+          messages: [...s.messages, {
+            id: uid(),
+            kind: 'shadow' as const,
+            title: '그림자 흡수',
+            lines: [`[${SHADOW_RARITY_LABEL[target.rarity]}] ${target.name} +${nextLevel} (재료: ${material.name})`],
+            createdAt: todayISO(),
+          }],
+        }
+      }),
+
+      decomposeShadow: (shadowInstanceId) => set((s) => {
+        const ownedShadows = s.ownedShadows ?? []
+        const equippedShadowIds = s.equippedShadowIds ?? []
+        const shadow = ownedShadows.find(s => s.instanceId === shadowInstanceId)
+        if (!shadow) return {}
+        if (!canDecomposeShadow(shadow, equippedShadowIds)) return {}
+        const essence = SHADOW_DECOMPOSE_ESSENCE[shadow.rarity] ?? 1
+        const nextOwned = ownedShadows.filter(s => s.instanceId !== shadowInstanceId)
+        return {
+          ownedShadows: nextOwned,
+          shadowEssence: (s.shadowEssence ?? 0) + essence,
+          messages: [...s.messages, {
+            id: uid(),
+            kind: 'shadow' as const,
+            title: '그림자 분해',
+            lines: [`[${SHADOW_RARITY_LABEL[shadow.rarity]}] ${shadow.name}을(를) 분해하여 그림자 정수 ${essence} 획득.`],
+            createdAt: todayISO(),
+          }],
+        }
+      }),
+
       addQuest: (q) => set((s) => ({
         quests: [...s.quests, { ...q, id: uid(), createdAt: todayISO() }],
       })),
@@ -3702,6 +3764,9 @@ export const useGame = create<GameState>()(
         }
         if (!('lastShadowExtractResult' in persistedState)) {
           persistedState.lastShadowExtractResult = undefined
+        }
+        if (!('shadowEssence' in persistedState)) {
+          persistedState.shadowEssence = 0
         }
         persistedState.manualBattleSession = undefined
         return persistedState

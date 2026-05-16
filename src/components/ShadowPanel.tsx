@@ -10,14 +10,17 @@ import {
   SHADOW_ROLE_LABEL,
   formatShadowEffect,
   getEquippedShadows,
+  getShadowAbsorbMaterialCount,
   getShadowDefinition,
   getShadowEffects,
   getShadowSlotCount,
+  MAX_SHADOW_ENHANCEMENT_LEVEL,
+  SHADOW_DECOMPOSE_ESSENCE,
 } from '../lib/shadows'
 import type { OwnedShadow, ShadowRole } from '../lib/types'
 
 type FilterKey = 'all' | 'normal' | 'gate_named' | 'achievement_named' | ShadowRole
-type SortKey = 'obtained' | 'rarity' | 'rank' | 'name'
+type SortKey = 'obtained' | 'rarity' | 'rank' | 'name' | 'enhancement'
 
 const rarityStyle: Record<string, string> = {
   common: 'text-zinc-200 border-zinc-500/35 bg-zinc-500/10',
@@ -54,6 +57,7 @@ const sortShadows = (shadows: OwnedShadow[], sort: SortKey): OwnedShadow[] => {
     if (sort === 'rarity') return rarityScore(b) - rarityScore(a)
     if (sort === 'rank') return rankScore(b) - rankScore(a)
     if (sort === 'name') return a.name.localeCompare(b.name)
+    if (sort === 'enhancement') return (b.enhancementLevel ?? 0) - (a.enhancementLevel ?? 0)
     return new Date(b.obtainedAt).getTime() - new Date(a.obtainedAt).getTime()
   })
 }
@@ -64,12 +68,18 @@ function ShadowCard({
   canEquip,
   onEquip,
   onUnequip,
+  materialCount,
+  onAbsorb,
+  onDecompose,
 }: {
   shadow: OwnedShadow
   equipped: boolean
   canEquip: boolean
   onEquip: () => void
   onUnequip: () => void
+  materialCount: number
+  onAbsorb: () => void
+  onDecompose: () => void
 }) {
   const effects = getShadowEffects(shadow).map(formatShadowEffect)
   return (
@@ -82,7 +92,7 @@ function ShadowCard({
       <div className="flex items-start justify-between gap-3">
         <div>
           <div className="text-[10px] system-text opacity-70">[{SHADOW_RARITY_LABEL[shadow.rarity]}]</div>
-          <h3 className="font-bold text-white/90 mt-0.5">{shadow.name}</h3>
+          <h3 className="font-bold text-white/90 mt-0.5">{shadow.name}{(shadow.enhancementLevel ?? 0) > 0 ? ` +${shadow.enhancementLevel}` : ''}</h3>
           <div className="text-[11px] text-white/55 mt-1">
             계급: {SHADOW_RANK_LABEL[shadow.rank]} · 역할: {SHADOW_ROLE_LABEL[shadow.role]}
           </div>
@@ -105,8 +115,13 @@ function ShadowCard({
       <div className="mt-2 text-[10px] text-white/40 system-text">
         출처: {sourceText(shadow)}
       </div>
+      {(shadow.enhancementLevel ?? 0) > 0 && (
+        <div className="mt-1 text-[10px] text-amber-200/70">
+          강화 {shadow.enhancementLevel}/{MAX_SHADOW_ENHANCEMENT_LEVEL} · 흡수 {(shadow.absorbedCount ?? 0)}회
+        </div>
+      )}
 
-      <div className="mt-3">
+      <div className="mt-3 flex flex-col gap-2">
         {equipped ? (
           <button type="button" onClick={onUnequip} className="w-full btn text-xs border-rose-400/25 bg-rose-400/10 text-rose-100">
             <X className="w-3 h-3" />
@@ -117,6 +132,26 @@ function ShadowCard({
             출전
           </button>
         )}
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={onAbsorb}
+            disabled={materialCount === 0 || (shadow.enhancementLevel ?? 0) >= MAX_SHADOW_ENHANCEMENT_LEVEL || shadow.isAchievementNamed}
+            className="flex-1 btn text-[10px] border-amber-400/25 bg-amber-400/10 text-amber-100 disabled:opacity-40 disabled:cursor-not-allowed"
+            title={shadow.isAchievementNamed ? '성취 네임드는 흡수 불가' : materialCount === 0 ? '재료 없음' : (shadow.enhancementLevel ?? 0) >= MAX_SHADOW_ENHANCEMENT_LEVEL ? '최대 강화' : `재료 ${materialCount}개`}
+          >
+            흡수 +{Math.min(MAX_SHADOW_ENHANCEMENT_LEVEL, (shadow.enhancementLevel ?? 0) + 1)} ({materialCount})
+          </button>
+          <button
+            type="button"
+            onClick={onDecompose}
+            disabled={equipped || shadow.isAchievementNamed}
+            className="flex-1 btn text-[10px] border-rose-400/25 bg-rose-400/10 text-rose-100 disabled:opacity-40 disabled:cursor-not-allowed"
+            title={shadow.isAchievementNamed ? '성취 네임드는 분해 불가' : equipped ? '장착 중' : `정수 +${SHADOW_DECOMPOSE_ESSENCE[shadow.rarity] ?? 1}`}
+          >
+            분해 (+{SHADOW_DECOMPOSE_ESSENCE[shadow.rarity] ?? 1})
+          </button>
+        </div>
       </div>
     </motion.div>
   )
@@ -164,6 +199,9 @@ export function ShadowPanel() {
   const slotCount = getShadowSlotCount(hunter)
   const equippedShadows = getEquippedShadows(ownedShadows, equippedShadowIds, hunter)
   const ownedDefinitionIds = new Set(ownedShadows.map(shadow => shadow.definitionId))
+  const shadowEssence = useGame(s => s.shadowEssence ?? 0)
+  const absorbShadow = useGame(s => s.absorbShadow)
+  const decomposeShadow = useGame(s => s.decomposeShadow)
 
   const filteredOwned = useMemo(() => {
     const list = ownedShadows.filter(shadow => {
@@ -193,7 +231,7 @@ export function ShadowPanel() {
             <Eclipse className="w-5 h-5 text-cyan-300" />
             <div>
               <div className="system-text text-[11px] text-cyan-300/70">SHADOW ARMY</div>
-              <div className="text-sm text-white/55">보유 {ownedShadows.length} · 출전 {equippedShadows.length} / {slotCount}</div>
+              <div className="text-sm text-white/55">보유 {ownedShadows.length} · 출전 {equippedShadows.length} / {slotCount} · 정수 {shadowEssence}</div>
             </div>
           </div>
           {equippedShadowIds.length > slotCount && (
@@ -240,6 +278,7 @@ export function ShadowPanel() {
           <option value="rarity">희귀도순</option>
           <option value="rank">계급순</option>
           <option value="name">이름순</option>
+          <option value="enhancement">강화순</option>
         </select>
       </div>
 
@@ -255,6 +294,21 @@ export function ShadowPanel() {
                 canEquip={equipped || equippedShadowIds.length < slotCount}
                 onEquip={() => equipShadow(shadow.instanceId)}
                 onUnequip={() => unequipShadow(shadow.instanceId)}
+                materialCount={getShadowAbsorbMaterialCount(shadow, ownedShadows, equippedShadowIds)}
+                onAbsorb={() => {
+                  if (window.confirm(`[${shadow.name}] +${(shadow.enhancementLevel ?? 0) + 1} 강화합니다.\n재료로 같은 그림자 1개를 소모합니다. 계속할까요?`)) {
+                    absorbShadow(shadow.instanceId)
+                  }
+                }}
+                onDecompose={() => {
+                  const isRare = ['rare', 'epic', 'legendary'].includes(shadow.rarity)
+                  const msg = isRare
+                    ? `[${SHADOW_RARITY_LABEL[shadow.rarity]}] ${shadow.name}을(를) 분해합니다.\n그림자 정수 +${SHADOW_DECOMPOSE_ESSENCE[shadow.rarity] ?? 1} 획득.\n이 작업은 되돌릴 수 없습니다. 계속할까요?`
+                    : `[${shadow.name}]을(를) 분해하여 그림자 정수 ${SHADOW_DECOMPOSE_ESSENCE[shadow.rarity] ?? 1} 획득합니다. 계속할까요?`
+                  if (window.confirm(msg)) {
+                    decomposeShadow(shadow.instanceId)
+                  }
+                }}
               />
             )
           })}
