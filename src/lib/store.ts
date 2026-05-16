@@ -23,10 +23,12 @@ import type {
   ManualBattleAction,
   ManualBattleSession,
   MonsterDefinition,
+  OwnedShadow,
   Quest,
   RandomQuestTemplate,
   StatKey,
   SystemMessage,
+  ShadowExtractResult,
   Title,
 } from './types'
 import { TITLE_DEFINITIONS, CATEGORY_META, JOB_DEFINITIONS, EQUIPMENT_SLOT_LABEL } from './types'
@@ -100,8 +102,22 @@ import {
   resolveAction,
   roundStatValue,
   simulateGateWaveBattle,
+  resolveShadowSupportActions,
+  isShadowCombatLog,
   tickRoundEffects,
 } from './game'
+import {
+  ACHIEVEMENT_SHADOWS_BY_QUEST_ID,
+  createOwnedShadow,
+  getEquippedShadowCategoryXpBonus,
+  getEquippedShadowDropBonus,
+  getEquippedShadowStatBonuses,
+  getEquippedShadows,
+  getShadowDefinition,
+  getShadowSlotCount,
+  rollShadowExtraction,
+  SHADOW_RARITY_LABEL,
+} from './shadows'
 
 interface GameState {
   hunter: HunterState
@@ -123,6 +139,10 @@ interface GameState {
   activeGate?: ActiveGate
   combatLogs: CombatLog[]
   manualBattleSession?: ManualBattleSession
+  ownedShadows: OwnedShadow[]
+  equippedShadowIds: string[]
+  shadowExtractHistory?: ShadowExtractResult[]
+  lastShadowExtractResult?: ShadowExtractResult
   initialized: boolean
 
   // hunter
@@ -181,6 +201,10 @@ interface GameState {
   performManualBattleAction: (action: ManualBattleAction) => void
   cancelManualGateBattle: () => void
   switchManualBattleToAuto: () => void
+  attemptShadowExtraction: (gateInstanceId: string) => void
+  equipShadow: (shadowId: string) => void
+  unequipShadow: (shadowId: string) => void
+  grantAchievementNamedShadows: () => void
 
   // achievements
   recordAppOpen: () => void
@@ -770,7 +794,7 @@ const createManualConsumableUseLog = (
   message,
 })
 
-const isManualSystemLog = (log: BattleTurn): boolean => log.skillId === 'system-manual-battle'
+const isManualSystemLog = (log: BattleTurn): boolean => log.skillId === 'system-manual-battle' || isShadowCombatLog(log)
 
 const getManualActionCount = (logs: BattleTurn[]): number => {
   return logs.filter(log => !isManualSystemLog(log)).length
@@ -974,6 +998,43 @@ const formatManualConsumableUseMessage = (item: Item, effects: ConsumableEffect[
   return `[${item.name}]을 사용했습니다. ${effectText}.`
 }
 
+const buildAchievementShadowGrants = (
+  quests: Quest[],
+  ownedShadows: OwnedShadow[] | undefined
+): { shadows: OwnedShadow[]; messages: SystemMessage[] } => {
+  const ownedDefinitionIds = new Set((ownedShadows ?? []).map(shadow => shadow.definitionId))
+  const completedQuestIds = new Set(
+    quests
+      .filter(q => (q.type === 'main' && q.completed) || (q.type === 'dungeon' && q.completed))
+      .map(q => q.id)
+  )
+  const shadows: OwnedShadow[] = []
+  const messages: SystemMessage[] = []
+
+  for (const questId of completedQuestIds) {
+    for (const definitionId of ACHIEVEMENT_SHADOWS_BY_QUEST_ID[questId] ?? []) {
+      if (ownedDefinitionIds.has(definitionId)) continue
+      const definition = getShadowDefinition(definitionId)
+      if (!definition) continue
+      const shadow = createOwnedShadow(definition)
+      ownedDefinitionIds.add(definitionId)
+      shadows.push(shadow)
+      messages.push({
+        id: uid(),
+        kind: 'shadow',
+        title: '성취 네임드 영입',
+        lines: [
+          '당신의 현실 성취가 하나의 그림자를 깨웠습니다.',
+          `[${SHADOW_RARITY_LABEL[shadow.rarity]}] ${shadow.name}이(가) 군단에 합류했습니다.`,
+        ],
+        createdAt: todayISO(),
+      })
+    }
+  }
+
+  return { shadows, messages }
+}
+
 const createGateBattleOutcomeUpdate = (
   s: GameState,
   activeGate: ActiveGate,
@@ -991,6 +1052,7 @@ const createGateBattleOutcomeUpdate = (
   let gateRewards: GateReward[] = []
   let penaltyApplied: GatePenalty | undefined
   let shouldCheckUnlocks = false
+  const equippedShadows = getEquippedShadows(s.ownedShadows, s.equippedShadowIds, s.hunter)
 
   if (combatLog.result === 'victory') {
     nextGateStatus = {
@@ -1001,7 +1063,8 @@ const createGateBattleOutcomeUpdate = (
 
     let leveledUpOutcome: ReturnType<typeof applyXp>['outcome'] | undefined
     if (rewardTable) {
-      const xpReward = Math.round(rewardTable.xp * getTitleXpMultiplier(s.hunter, 'challenge'))
+      const shadowXpBonus = getEquippedShadowCategoryXpBonus(equippedShadows, 'challenge')
+      const xpReward = Math.round(rewardTable.xp * getTitleXpMultiplier(s.hunter, 'challenge') * (1 + shadowXpBonus))
       const xpResult = applyXp(s.hunter, xpReward, 'challenge')
       nextHunter = xpResult.hunter
       leveledUpOutcome = xpResult.outcome
@@ -1009,7 +1072,7 @@ const createGateBattleOutcomeUpdate = (
 
       const titleDropBonus = getTitleDropBonus(s.hunter)
       const titleRarityBonus = getTitleRarityBonus(s.hunter)
-      const finalDropChance = Math.min(0.95, rewardTable.itemDropChance + titleDropBonus)
+      const finalDropChance = Math.min(0.95, rewardTable.itemDropChance + titleDropBonus + getEquippedShadowDropBonus(equippedShadows))
       if (Math.random() < finalDropChance) {
         const item = randomGateRewardItem(rewardTable, titleRarityBonus)
         if (item) {
@@ -1091,6 +1154,10 @@ export const useGame = create<GameState>()(
       activeGate: undefined,
       combatLogs: [],
       manualBattleSession: undefined,
+      ownedShadows: [],
+      equippedShadowIds: [],
+      shadowExtractHistory: [],
+      lastShadowExtractResult: undefined,
       initialized: false,
 
       setHunterName: (name) => set((s) => ({ hunter: { ...s.hunter, name } })),
@@ -1696,6 +1763,7 @@ export const useGame = create<GameState>()(
         
         // Check unlocks after completion
         setTimeout(() => {
+          get().grantAchievementNamedShadows()
           get().checkTitleUnlocks()
           get().checkJobAwakening()
           get().rollGateSpawn('random_completion')
@@ -2159,6 +2227,12 @@ export const useGame = create<GameState>()(
         if (monsters.length === 0) return
 
         const equippedItems = getEquippedItems(s.items, s.equipment)
+        const equippedShadows = getEquippedShadows(s.ownedShadows, s.equippedShadowIds, s.hunter)
+        const shadowStatBonuses = getEquippedShadowStatBonuses(equippedShadows)
+        const combatStatsWithShadows = { ...s.hunter.stats }
+        for (const [stat, value] of Object.entries(shadowStatBonuses)) {
+          combatStatsWithShadows[stat as StatKey] = roundStatValue(combatStatsWithShadows[stat as StatKey] + (value ?? 0))
+        }
         const playerSkills = getPlayerCombatSkills({
           jobId: s.hunter.jobId,
           equippedItems,
@@ -2166,7 +2240,7 @@ export const useGame = create<GameState>()(
         })
         const playerStats = calculatePlayerCombatStats({
           level: s.hunter.level,
-          stats: s.hunter.stats,
+          stats: combatStatsWithShadows,
           equippedItems,
           activeConsumableEffects: s.activeConsumableEffects,
           jobId: s.hunter.jobId,
@@ -2184,6 +2258,7 @@ export const useGame = create<GameState>()(
           playerStats,
           monsters,
           skills,
+          equippedShadows,
           gateInstanceId: activeGate.instanceId,
           initialActiveEffects,
         })
@@ -2208,7 +2283,8 @@ export const useGame = create<GameState>()(
 
           let leveledUpOutcome: ReturnType<typeof applyXp>['outcome'] | undefined
           if (rewardTable) {
-            const xpReward = Math.round(rewardTable.xp * getTitleXpMultiplier(s.hunter, 'challenge'))
+            const shadowXpBonus = getEquippedShadowCategoryXpBonus(equippedShadows, 'challenge')
+            const xpReward = Math.round(rewardTable.xp * getTitleXpMultiplier(s.hunter, 'challenge') * (1 + shadowXpBonus))
             const xpResult = applyXp(s.hunter, xpReward, 'challenge')
             nextHunter = xpResult.hunter
             leveledUpOutcome = xpResult.outcome
@@ -2216,7 +2292,7 @@ export const useGame = create<GameState>()(
 
             const titleDropBonus = getTitleDropBonus(s.hunter)
             const titleRarityBonus = getTitleRarityBonus(s.hunter)
-            const finalDropChance = Math.min(0.95, rewardTable.itemDropChance + titleDropBonus)
+            const finalDropChance = Math.min(0.95, rewardTable.itemDropChance + titleDropBonus + getEquippedShadowDropBonus(equippedShadows))
             if (Math.random() < finalDropChance) {
               const item = randomGateRewardItem(rewardTable, titleRarityBonus)
               if (item) {
@@ -2394,6 +2470,12 @@ export const useGame = create<GameState>()(
         if (monsters.length === 0) return
 
         const equippedItems = getEquippedItems(s.items, s.equipment)
+        const equippedShadows = getEquippedShadows(s.ownedShadows, s.equippedShadowIds, s.hunter)
+        const shadowStatBonuses = getEquippedShadowStatBonuses(equippedShadows)
+        const combatStatsWithShadows = { ...s.hunter.stats }
+        for (const [stat, value] of Object.entries(shadowStatBonuses)) {
+          combatStatsWithShadows[stat as StatKey] = roundStatValue(combatStatsWithShadows[stat as StatKey] + (value ?? 0))
+        }
         const playerSkills = getPlayerCombatSkills({
           jobId: s.hunter.jobId,
           equippedItems,
@@ -2402,7 +2484,7 @@ export const useGame = create<GameState>()(
         const allPlayerSkills = ensureBasicAttack(playerSkills)
         const playerStats = calculatePlayerCombatStats({
           level: s.hunter.level,
-          stats: s.hunter.stats,
+          stats: combatStatsWithShadows,
           equippedItems,
           activeConsumableEffects: s.activeConsumableEffects,
           jobId: s.hunter.jobId,
@@ -2457,6 +2539,7 @@ export const useGame = create<GameState>()(
         if (!currentMonsterDef) return
 
         const equippedItems = getEquippedItems(s.items, s.equipment)
+        const equippedShadows = getEquippedShadows(s.ownedShadows, s.equippedShadowIds, s.hunter)
         const playerSkills = getPlayerCombatSkills({
           jobId: s.hunter.jobId,
           equippedItems,
@@ -2477,6 +2560,8 @@ export const useGame = create<GameState>()(
         let remainingMonsterIds = [...session.remainingMonsterIds]
         let nextItems = s.items
         let result: CombatLog['result'] | undefined
+        let shadowPhase: 'player_after_action' | 'player_defend' = 'player_after_action'
+        let playerUsedSkill = false
 
         if (action.type === 'use_consumable') {
           const item = s.items.find(candidate => candidate.id === action.itemId)
@@ -2532,6 +2617,7 @@ export const useGame = create<GameState>()(
 
           nextItems = s.items.filter(candidate => candidate.id !== item.id)
         } else if (action.type === 'defend') {
+          shadowPhase = 'player_defend'
           activeEffects = applyOrRefreshCombatEffect(activeEffects, {
             sourceSkillId: 'manual-defend',
             kind: 'damage_reduction',
@@ -2545,6 +2631,7 @@ export const useGame = create<GameState>()(
             ? BASIC_ATTACK_SKILL
             : allSkills.find(item => item.id === action.skillId)
           if (!skill || !player.skillIds.includes(skill.id) || (player.cooldowns[skill.id] ?? 0) > 0) return
+          playerUsedSkill = skill.id !== BASIC_ATTACK_SKILL.id
 
           const resolved = resolveAction({
             actor: player,
@@ -2566,6 +2653,24 @@ export const useGame = create<GameState>()(
           monster = resolved.target
           activeEffects = resolved.activeEffects
           logs.push(resolved.log)
+        }
+
+        if (!result && monster.hp > 0) {
+          const shadowResolved = resolveShadowSupportActions({
+            shadows: equippedShadows,
+            player,
+            monster,
+            activeEffects,
+            rng: Math.random,
+            turnNumber: logs.length + 1,
+            waveNumber: waveIndex + 1,
+            waveLabel: `Wave ${waveIndex + 1}`,
+            phase: shadowPhase,
+            playerUsedSkill,
+          })
+          monster = shadowResolved.monster
+          activeEffects = shadowResolved.activeEffects
+          logs.push(...shadowResolved.logs)
         }
 
         if (player.hp <= 0) {
@@ -2685,6 +2790,7 @@ export const useGame = create<GameState>()(
         if (!currentMonsterDef) return
 
         const equippedItems = getEquippedItems(s.items, s.equipment)
+        const equippedShadows = getEquippedShadows(s.ownedShadows, s.equippedShadowIds, s.hunter)
         const playerSkills = getPlayerCombatSkills({
           jobId: s.hunter.jobId,
           equippedItems,
@@ -2768,6 +2874,21 @@ export const useGame = create<GameState>()(
               monster = resolved.target
               activeEffects = resolved.activeEffects
               logs.push(resolved.log)
+              const shadowResolved = resolveShadowSupportActions({
+                shadows: equippedShadows,
+                player,
+                monster,
+                activeEffects,
+                rng: Math.random,
+                turnNumber: getManualActionCount(logs),
+                waveNumber: waveIndex + 1,
+                waveLabel: `Wave ${waveIndex + 1}`,
+                phase: 'player_after_action',
+                playerUsedSkill: skill.id !== BASIC_ATTACK_SKILL.id,
+              })
+              monster = shadowResolved.monster
+              activeEffects = shadowResolved.activeEffects
+              logs.push(...shadowResolved.logs)
             } else {
               const liveMonsterDef = MONSTER_DEFINITIONS.find(item => item.id === gate.monsterIds[waveIndex])
               const liveMonsterSkillIds = Array.from(new Set([BASIC_ATTACK_SKILL.id, ...(liveMonsterDef?.skillIds ?? [])]))
@@ -2857,6 +2978,72 @@ export const useGame = create<GameState>()(
           }, 0)
         }
       },
+
+      attemptShadowExtraction: (gateInstanceId) => {
+        const s = get()
+        const activeGate = s.activeGate
+        if (!activeGate || activeGate.instanceId !== gateInstanceId) return
+        const gate = GATE_DEFINITIONS.find(item => item.id === activeGate.gateId)
+        if (!gate) return
+        const victoryLog = s.combatLogs.find(log => log.gateInstanceId === gateInstanceId && log.result === 'victory')
+        if (!victoryLog) return
+        if ((s.shadowExtractHistory ?? []).some(result => result.gateInstanceId === gateInstanceId)) return
+
+        const equippedShadows = getEquippedShadows(s.ownedShadows, s.equippedShadowIds, s.hunter)
+        const rawResult = rollShadowExtraction(gate, s.hunter, equippedShadows)
+        const result: ShadowExtractResult = {
+          ...rawResult,
+          gateInstanceId,
+        }
+        const ownedShadows = result.success && result.shadow
+          ? [...(s.ownedShadows ?? []), result.shadow]
+          : (s.ownedShadows ?? [])
+        set({
+          ownedShadows,
+          lastShadowExtractResult: result,
+          shadowExtractHistory: [result, ...(s.shadowExtractHistory ?? [])].slice(0, 50),
+          messages: [...s.messages, {
+            id: uid(),
+            kind: 'shadow',
+            title: result.success ? '그림자 추출 성공' : '그림자 추출 실패',
+            lines: [result.message],
+            createdAt: todayISO(),
+          }],
+        })
+      },
+
+      equipShadow: (shadowId) => set((s) => {
+        const ownedShadows = s.ownedShadows ?? []
+        if (!ownedShadows.some(shadow => shadow.instanceId === shadowId)) return {}
+        const equippedShadowIds = s.equippedShadowIds ?? []
+        if (equippedShadowIds.includes(shadowId)) return {}
+        const slotCount = getShadowSlotCount(s.hunter)
+        if (equippedShadowIds.length >= slotCount) {
+          return {
+            messages: [...s.messages, {
+              id: uid(),
+              kind: 'shadow',
+              title: '출전 슬롯 부족',
+              lines: [`현재 출전 가능한 그림자는 ${slotCount}명입니다.`],
+              createdAt: todayISO(),
+            }],
+          }
+        }
+        return { equippedShadowIds: [...equippedShadowIds, shadowId] }
+      }),
+
+      unequipShadow: (shadowId) => set((s) => ({
+        equippedShadowIds: (s.equippedShadowIds ?? []).filter(id => id !== shadowId),
+      })),
+
+      grantAchievementNamedShadows: () => set((s) => {
+        const grants = buildAchievementShadowGrants(s.quests, s.ownedShadows)
+        if (grants.shadows.length === 0) return {}
+        return {
+          ownedShadows: [...(s.ownedShadows ?? []), ...grants.shadows],
+          messages: [...s.messages, ...grants.messages],
+        }
+      }),
 
       addQuest: (q) => set((s) => ({
         quests: [...s.quests, { ...q, id: uid(), createdAt: todayISO() }],
@@ -2999,9 +3186,15 @@ export const useGame = create<GameState>()(
 
         // ── Stat-driven XP multiplier (category-aligned) + Job bonus + Equipment bonus + Consumable bonus
         const equippedItems = getEquippedItems(s.items, s.equipment)
+        const equippedShadows = getEquippedShadows(s.ownedShadows, s.equippedShadowIds, s.hunter)
+        const shadowStatBonuses = getEquippedShadowStatBonuses(equippedShadows)
         const consumableStatBonuses = getActiveConsumableStatBonuses(s.activeConsumableEffects)
+        const combinedStatBonuses = { ...consumableStatBonuses }
+        for (const [stat, value] of Object.entries(shadowStatBonuses)) {
+          combinedStatBonuses[stat as StatKey] = (combinedStatBonuses[stat as StatKey] ?? 0) + (value ?? 0)
+        }
         const baseXp = getBalancedQuestXp(q.type, q.difficulty)
-        const statMultiplier = getXpMultiplierWithEquipment(s.hunter, q.category, equippedItems, consumableStatBonuses)
+        const statMultiplier = getXpMultiplierWithEquipment(s.hunter, q.category, equippedItems, combinedStatBonuses)
         
         // Job XP bonus
         const currentJob = JOB_DEFINITIONS.find(j => j.id === s.hunter.jobId)
@@ -3015,7 +3208,8 @@ export const useGame = create<GameState>()(
         const titleXpBonus = getTitleXpMultiplier(s.hunter, q.category) - 1
         
         // Additive XP bonus: job + equipment + consumable + equipped title
-        const additiveXpBonus = jobCategoryBonus + equipmentXpBonus + consumableXpBonus + titleXpBonus
+        const shadowXpBonus = getEquippedShadowCategoryXpBonus(equippedShadows, q.category)
+        const additiveXpBonus = jobCategoryBonus + equipmentXpBonus + consumableXpBonus + titleXpBonus + shadowXpBonus
         const xp = Math.round(baseXp * statMultiplier * (1 + additiveXpBonus))
 
         // Bump category progress BEFORE applyXp so this completion counts for level-up.
@@ -3052,10 +3246,11 @@ export const useGame = create<GameState>()(
         // ── Item drop chance with VIT-driven bonus + equipment drop bonus + consumable drop bonus
         const drops: Item[] = []
         const baseDropChance = getBalancedQuestDropChance(q.type, q.difficulty)
-        const statDropBonus = getDropChanceBonusWithEquipment(s.hunter, q.category, equippedItems, consumableStatBonuses)
+        const statDropBonus = getDropChanceBonusWithEquipment(s.hunter, q.category, equippedItems, combinedStatBonuses)
         const equipmentDropBonus = getEquipmentDropBonus(equippedItems)
+        const shadowDropBonus = getEquippedShadowDropBonus(equippedShadows)
         const consumableDropBonus = getActiveConsumableDropBonus(s.activeConsumableEffects)
-        const finalDropChance = Math.min(0.95, baseDropChance + statDropBonus + equipmentDropBonus + consumableDropBonus)
+        const finalDropChance = Math.min(0.95, baseDropChance + statDropBonus + equipmentDropBonus + shadowDropBonus + consumableDropBonus)
         
         // Get consumable rarity bonus for item generation
         const consumableRarityBonus = getActiveConsumableRarityBonus(s.activeConsumableEffects)
@@ -3166,9 +3361,16 @@ export const useGame = create<GameState>()(
         if (cur < total) {
           // ── Partial step: AGI-driven multiplier + equipment effects + consumable effects
           const equippedItems = getEquippedItems(s.items, s.equipment)
+          const equippedShadows = getEquippedShadows(s.ownedShadows, s.equippedShadowIds, s.hunter)
+          const shadowStatBonuses = getEquippedShadowStatBonuses(equippedShadows)
           const consumableStatBonuses = getActiveConsumableStatBonuses(s.activeConsumableEffects)
+          const combinedStatBonuses = { ...consumableStatBonuses }
+          for (const [stat, value] of Object.entries(shadowStatBonuses)) {
+            combinedStatBonuses[stat as StatKey] = (combinedStatBonuses[stat as StatKey] ?? 0) + (value ?? 0)
+          }
           const baseStepXp = getBalancedDungeonStepXp(q.difficulty, total)
-          const stepXp = Math.round(baseStepXp * getPartialRewardMultiplierWithEquipment(s.hunter, equippedItems, consumableStatBonuses) * getTitleXpMultiplier(s.hunter, q.category))
+          const shadowXpBonus = getEquippedShadowCategoryXpBonus(equippedShadows, q.category)
+          const stepXp = Math.round(baseStepXp * getPartialRewardMultiplierWithEquipment(s.hunter, equippedItems, combinedStatBonuses) * getTitleXpMultiplier(s.hunter, q.category) * (1 + shadowXpBonus))
           const { hunter: newHunter, outcome } = applyXp(hunterIn, stepXp, q.category)
 
           const newMessages: SystemMessage[] = [{
@@ -3216,16 +3418,23 @@ export const useGame = create<GameState>()(
         }
 
         const equippedItems = getEquippedItems(s.items, s.equipment)
+        const equippedShadows = getEquippedShadows(s.ownedShadows, s.equippedShadowIds, s.hunter)
+        const shadowStatBonuses = getEquippedShadowStatBonuses(equippedShadows)
         const consumableStatBonuses = getActiveConsumableStatBonuses(s.activeConsumableEffects)
+        const combinedStatBonuses = { ...consumableStatBonuses }
+        for (const [stat, value] of Object.entries(shadowStatBonuses)) {
+          combinedStatBonuses[stat as StatKey] = (combinedStatBonuses[stat as StatKey] ?? 0) + (value ?? 0)
+        }
         const baseXp = getBalancedQuestXp('dungeon', q.difficulty)
-        const statMultiplier = getXpMultiplierWithEquipment(s.hunter, q.category, equippedItems, consumableStatBonuses)
+        const statMultiplier = getXpMultiplierWithEquipment(s.hunter, q.category, equippedItems, combinedStatBonuses)
         const currentJob = JOB_DEFINITIONS.find(j => j.id === s.hunter.jobId)
         const jobCategoryBonus = currentJob?.effects.xpBonusByCategory?.[q.category] ?? 0
         const equipmentXpBonus = getEquipmentXpBonus(equippedItems, q.category)
         const consumableXpBonus = getActiveConsumableXpBonus(s.activeConsumableEffects, q.category)
         const titleXpBonus = getTitleXpMultiplier(s.hunter, q.category) - 1
         // Additive XP bonus: job + equipment + consumable + equipped title
-        const additiveXpBonus = jobCategoryBonus + equipmentXpBonus + consumableXpBonus + titleXpBonus
+        const shadowXpBonus = getEquippedShadowCategoryXpBonus(equippedShadows, q.category)
+        const additiveXpBonus = jobCategoryBonus + equipmentXpBonus + consumableXpBonus + titleXpBonus + shadowXpBonus
         const xp = Math.round(baseXp * statMultiplier * (1 + additiveXpBonus))
         const { hunter: newHunter, outcome } = applyXp(hunterIn, xp, q.category)
         const statRewards = getBalancedQuestStatRewards(q)
@@ -3285,6 +3494,7 @@ export const useGame = create<GameState>()(
         // Unlock shadow-hunter on first dungeon clear
         setTimeout(() => {
           get().unlockTitle('shadow-hunter')
+          get().grantAchievementNamedShadows()
           get().checkTitleUnlocks()
           get().checkJobAwakening()
           // Gate spawn is attempted only on final dungeon clear, never on partial progress.
@@ -3398,6 +3608,10 @@ export const useGame = create<GameState>()(
         activeGate: undefined,
         combatLogs: [],
         manualBattleSession: undefined,
+        ownedShadows: [],
+        equippedShadowIds: [],
+        shadowExtractHistory: [],
+        lastShadowExtractResult: undefined,
         initialized: true,
       }),
     }),
@@ -3476,6 +3690,18 @@ export const useGame = create<GameState>()(
         }
         if (!persistedState.combatLogs) {
           persistedState.combatLogs = []
+        }
+        if (!persistedState.ownedShadows) {
+          persistedState.ownedShadows = []
+        }
+        if (!persistedState.equippedShadowIds) {
+          persistedState.equippedShadowIds = []
+        }
+        if (!persistedState.shadowExtractHistory) {
+          persistedState.shadowExtractHistory = []
+        }
+        if (!('lastShadowExtractResult' in persistedState)) {
+          persistedState.lastShadowExtractResult = undefined
         }
         persistedState.manualBattleSession = undefined
         return persistedState

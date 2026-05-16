@@ -6,6 +6,7 @@ const KIND_STYLE: Record<string, { accent: string; glow: string; tag: string }> 
   quest:   { accent: 'border-cyan-400/60',  glow: 'shadow-glow-lg', tag: 'text-cyan-300' },
   item:    { accent: 'border-purple-400/60', glow: 'shadow-glow-purple', tag: 'text-purple-300' },
   title:   { accent: 'border-pink-400/60',   glow: 'shadow-[0_0_40px_rgba(244,114,182,0.4)]', tag: 'text-pink-300' },
+  shadow:  { accent: 'border-violet-400/60', glow: 'shadow-glow-purple', tag: 'text-violet-300' },
   rank:    { accent: 'border-red-400/70',    glow: 'shadow-[0_0_60px_rgba(248,113,113,0.4)]', tag: 'text-red-300' },
   info:    { accent: 'border-white/40',      glow: '', tag: 'text-white/70' },
 }

@@ -4,6 +4,7 @@ import {
   Award,
   Calendar,
   Compass,
+  Eclipse,
   Package,
   Skull,
   Swords,
@@ -20,11 +21,13 @@ import { Inventory } from './components/Inventory'
 import { TitleCollection } from './components/TitleCollection'
 import { RandomQuestCard } from './components/RandomQuestCard'
 import { GatePanel } from './components/GatePanel'
+import { ShadowPanel } from './components/ShadowPanel'
 import { BackupControls } from './components/BackupControls'
 
-type Tab = 'daily' | 'main' | 'dungeon' | 'gate' | 'inventory' | 'titles'
+type Tab = 'daily' | 'main' | 'dungeon' | 'gate' | 'shadows' | 'inventory' | 'titles'
 
 const TABS: { key: Tab; label: string; icon: typeof Calendar }[] = [
+  { key: 'shadows',   label: '군단',         icon: Eclipse },
   { key: 'daily',     label: '일일 퀘스트', icon: Calendar },
   { key: 'main',      label: '메인 퀘스트', icon: Compass },
   { key: 'dungeon',   label: '던전',        icon: Skull },
@@ -51,6 +54,7 @@ export default function App() {
   const clearGateInjuryIfExpired = useGame(s => s.clearGateInjuryIfExpired)
   const rollGateSpawn = useGame(s => s.rollGateSpawn)
   const rollRandomQuest = useGame(s => s.rollRandomQuestForToday)
+  const grantAchievementNamedShadows = useGame(s => s.grantAchievementNamedShadows)
   const initialized = useGame(s => s.initialized)
 
   useEffect(() => {
@@ -67,8 +71,9 @@ export default function App() {
     setTimeout(() => {
       checkTitles()
       checkJobs()
+      grantAchievementNamedShadows()
     }, 100)
-  }, [init, checkTitles, checkJobs, recordAppOpen, recoverGateStamina, clearGateInjuryIfExpired, clearExpiredConsumableEffects, clearExpiredRandomQuest, clearExpiredGate, rollGateSpawn, rollRandomQuest])
+  }, [init, checkTitles, checkJobs, grantAchievementNamedShadows, recordAppOpen, recoverGateStamina, clearGateInjuryIfExpired, clearExpiredConsumableEffects, clearExpiredRandomQuest, clearExpiredGate, rollGateSpawn, rollRandomQuest])
 
   const dailies = quests.filter(q => q.type === 'daily')
   const mains = quests.filter(q => q.type === 'main')
@@ -219,6 +224,12 @@ export default function App() {
             {tab === 'gate' && (
               <Section title="게이트" subtitle="출현한 균열과 전투 준비 상태">
                 <GatePanel />
+              </Section>
+            )}
+
+            {tab === 'shadows' && (
+              <Section title="군단" subtitle="그림자 도감 / 보유 / 출전 선택">
+                <ShadowPanel />
               </Section>
             )}
 

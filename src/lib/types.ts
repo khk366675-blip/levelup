@@ -299,6 +299,120 @@ export const RARITY_META: Record<ItemRarity, { label: string; color: string; rin
   legendary: { label: '전설',    color: 'text-amber-300',   ring: 'ring-amber-400/80 shadow-glow-lg' },
 }
 
+// Shadow Soldier System (12-11)
+export type ShadowRarity = 'common' | 'uncommon' | 'rare' | 'epic' | 'legendary'
+
+export type ShadowRank =
+  | 'lesser'
+  | 'soldier'
+  | 'elite'
+  | 'knight'
+  | 'marshal'
+  | 'monarch'
+  | 'named'
+
+export type ShadowRole =
+  | 'assault'
+  | 'guard'
+  | 'scout'
+  | 'analyst'
+  | 'support'
+  | 'hunter'
+
+export type ShadowSourceType =
+  | 'gate_extract'
+  | 'gate_named'
+  | 'achievement_named'
+
+export type ShadowEffectType =
+  | 'bonus_damage'
+  | 'damage_reduction'
+  | 'first_turn_accuracy'
+  | 'first_turn_evasion'
+  | 'extra_attack_chance'
+  | 'enemy_defense_down'
+  | 'enemy_evasion_down'
+  | 'drop_bonus'
+  | 'extraction_bonus'
+  | 'extraction_quality_bonus'
+  | 'category_xp_bonus'
+  | 'stat_bonus'
+  | 'skill_damage_bonus'
+  | 'cooldown_support'
+  | 'guard_counter'
+  | 'wave_start_bonus'
+  | 'low_hp_defense'
+  | 'execute_damage'
+
+export interface ShadowEffect {
+  type: ShadowEffectType
+  value: number
+  category?: Category
+  stat?: StatKey
+}
+
+export interface ShadowTrait {
+  id: string
+  name: string
+  description: string
+  effectType: ShadowEffectType
+  value: number
+  allowedRoles?: ShadowRole[]
+  allowedRarities?: ShadowRarity[]
+}
+
+export interface ShadowDefinition {
+  id: string
+  name: string
+  description: string
+  rarity: ShadowRarity
+  rank: ShadowRank
+  role: ShadowRole
+  sourceType: ShadowSourceType
+  sourceGateRank?: GateRank
+  sourceGateId?: string
+  sourceQuestId?: string
+  unlockConditionText?: string
+  basePower: number
+  effects: ShadowEffect[]
+  possibleTraits?: string[]
+  quote?: string
+  hiddenUntilObtained?: boolean
+  isGateNamed?: boolean
+  isAchievementNamed?: boolean
+}
+
+export interface OwnedShadow {
+  instanceId: string
+  definitionId: string
+  name: string
+  obtainedAt: string
+  sourceType: ShadowSourceType
+  sourceGateId?: string
+  sourceQuestId?: string
+  rarity: ShadowRarity
+  rank: ShadowRank
+  role: ShadowRole
+  traits: ShadowTrait[]
+  level?: number
+  xp?: number
+  isNamed?: boolean
+  isGateNamed?: boolean
+  isAchievementNamed?: boolean
+}
+
+export interface ShadowExtractResult {
+  gateId: string
+  gateInstanceId?: string
+  gateName: string
+  attemptedAt: string
+  success: boolean
+  chance: number
+  rolledRarity?: ShadowRarity
+  shadow?: OwnedShadow
+  message: string
+}
+
 // ── Equipment System ───────────────────────────────────────────────
 
 export type EquipmentSlot = 'weapon' | 'armor' | 'accessory' | 'artifact'
@@ -1021,7 +1135,7 @@ export interface Title {
 
 export interface SystemMessage {
   id: string
-  kind: 'levelup' | 'quest' | 'item' | 'title' | 'rank' | 'info'
+  kind: 'levelup' | 'quest' | 'item' | 'title' | 'rank' | 'info' | 'shadow'
   title: string
   lines: string[]
   createdAt: string

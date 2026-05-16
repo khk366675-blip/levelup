@@ -5679,3 +5679,196 @@ Dungeon 카드에서 milestones가 있을 때:
 - `gate_success_bonus` 전투 중 사용 여부 검토.
 - 몬스터 패턴/텔레그래프 추가.
 - 그림자 시스템 12-11A 이후 전체 게이트 밸런스 재측정.
+
+## 15차 작업 — 12-11: 그림자 병사 시스템 1차 완성
+
+### 목표
+그림자 병사 시스템을 1차 완성 상태로 만든다. 단순 전투 보조가 아니라, 사용자의 현실 성취와 게이트 전투가 "나만의 군단"으로 축적되는 시스템.
+
+### 변경 원칙
+- XP 보상표 변경 금지
+- gate/monster/전투 공식 변경 금지
+- 장비 강화 공식 변경 금지
+- 칭호 효과 변경 금지
+- localStorage key `levelup-save` 변경 금지
+- persist version v14 유지
+- B/A/S급 게이트 추가 금지
+- 그림자 레벨업/진화/스킬트리/시너지는 이번 작업에서 제외하고 TODO로 남김
+
+### 그림자 타입/상태 구조
+
+`src/lib/types.ts`에 추가:
+- `ShadowRarity`: common | uncommon | rare | epic | legendary
+- `ShadowRank`: lesser | soldier | elite | knight | marshal | monarch | named
+- `ShadowRole`: assault | guard | scout | analyst | support | hunter
+- `ShadowSourceType`: gate_extract | gate_named | achievement_named
+- `ShadowEffectType`: 18종 (bonus_damage, damage_reduction, first_turn_accuracy, first_turn_evasion, extra_attack_chance, enemy_defense_down, enemy_evasion_down, drop_bonus, extraction_bonus, extraction_quality_bonus, category_xp_bonus, stat_bonus, skill_damage_bonus, cooldown_support, guard_counter, wave_start_bonus, low_hp_defense, execute_damage)
+- `ShadowEffect`, `ShadowTrait`, `ShadowDefinition`, `OwnedShadow`, `ShadowExtractResult`
+
+Store 상태에 추가:
+- `ownedShadows: OwnedShadow[]`
+- `equippedShadowIds: string[]`
+- `shadowExtractHistory?: ShadowExtractResult[]`
+- `lastShadowExtractResult?: ShadowExtractResult`
+
+### 그림자 분류
+
+**일반/희귀 그림자** (`sourceType: 'gate_extract'`):
+- E급: 쥐, 잔영, 보초, 정찰병, 송곳니, 척후, 발톱, 추적자 (8종)
+- D급: 보병, 종자, 창병, 파수병, 추격병, 처형병, 방패병, 사냥꾼, 궁수, 기사 (10종)
+- C급: 기록병, 수호병, 훈련병, 사냥개, 서기관, 방패병, 교관, 수집가, 감시자, 성벽, 투사, 포식자 (12종)
+
+**게이트 네임드** (`sourceType: 'gate_named'`):
+- E급: 첫 균열의 네르, 골목의 그림자 루크, 둥지의 송곳니 라크
+- D급: 나태의 파수장 고른, 검은 추격자 샤크
+- C급: 망각의 서기관 카르덴, 피로의 방패 오르간, 균열의 교관 라반, 탐욕의 사냥개 그리드
+
+**현실 성취 네임드** (`sourceType: 'achievement_named'`):
+- 분석관 카심 — `main-kbi-cert`
+- 시장 감시자 라오 — `dungeon-dart-analysis`
+- 금융 패트론 차르카 — `main-club`
+- 검은 회계사 네블 — `dungeon-finance-terms`
+- 전략가 볼렌 — `dungeon-backtest`
+- 강철의 기사 베르크 — `main-bench-100`
+- 질주의 그림자 레이븐 — `main-run-5k`
+- 절제의 조리장 모로 — `dungeon-cooking-routine`
+- 수면의 파수꾼 노크 — `dungeon-sleep-rhythm`
+- 커팅의 감시자 바론 — `main-cut`
+- 기록관 이르넬 — `main-gpa`
+- 시한의 집행자 칼트 — `dungeon-assignment-early`
+- 절약가 세론 — `dungeon-expense-record`
+- 새벽의 척후 루멘 — `daily-sleep`
+
+### 추출 시스템
+
+게이트 victory 후 1회 추출 가능:
+- defeat/draw에서는 추출 불가
+- 자동/수동 전투 victory 모두 추출 가능
+
+성공률:
+- E급 base 45%
+- D급 base 35%
+- C급 base 25%
+- SEN bonus = Math.min(0.15, SEN * 0.0015)
+- 그림자 extraction_bonus 추가
+- 최종 10%~75% clamp
+
+품질 롤:
+- E: common 55%, uncommon 28%, rare 12%, epic 4%, legendary 1%
+- D: common 40%, uncommon 32%, rare 18%, epic 8%, legendary 2%
+- C: common 25%, uncommon 30%, rare 25%, epic 15%, legendary 5%
+- extraction_quality_bonus 가중치 보정 가능
+
+### 출전 슬롯 정책
+
+- 보유 수: 무제한
+- 출전 수: 제한
+- `getShadowSlotCount(hunter)`:
+  - 미각성: 0
+  - 1차 직업: 1
+  - 2차 직업: 2
+  - Lv30+: +1
+  - Lv45+: +1
+  - Lv60+: +1
+  - 최대 5
+- 슬롯 초과 장착은 막음
+- 기존 저장 데이터가 슬롯 초과 상태면 앞에서부터 slotCount개만 적용
+
+### 그림자 UI
+
+`src/components/ShadowPanel.tsx`:
+- 출전 슬롯 영역 (빈 슬롯 포함)
+- 현재 슬롯 수 / 출전 중 그림자 표시
+- 보유 목록 탭: 필터(전체/일반/게이트 네임드/성취 네임드/역할), 정렬(획득/희귀도/계급/이름)
+- 도감 탭: 미획득 게이트 네임드는 ??? 처리, 성취 네임드는 조건 표시
+- 장착/해제 버튼, 슬롯 초과 안내
+
+GatePanel에 그림자 추출 UI 추가:
+- victory 후 ShadowExtractionPanel 표시
+- 추출 가능 그림자 목록 (희귀도/이름/역할)
+- 성공률 표시
+- 추출 시도/완료 버튼
+- 추출 결과 메시지
+
+### 자동/수동 전투 연동
+
+`src/lib/game.ts`에 `resolveShadowSupportActions` 추가:
+- 그림자는 직접 조작하지 않음
+- 헌터 행동 후 자동 보조
+- 자동 전투와 수동 전투 모두 같은 helper 재사용
+- 로그에 `shadow-support-action` skillId로 그림자 행동 표시
+- 시스템/보조 로그는 maxTurns 계산에서 제외
+
+역할별 방향:
+- assault: 추가타, 높은 보조 피해 (발동률 +9%)
+- guard: 방어 턴 발동률 +10%, 반격
+- scout: 첫 턴/정찰 보조, 회피/명중 감소
+- analyst: 적 방어력 감소, 스킬 보조
+- support: 버프, wave 시작 보조
+- hunter: 드롭/추출 보조, 전투 기여는 낮음
+
+그림자 없는 상태에서도 전투 정상 작동.
+
+### 성취 네임드 지급
+
+`grantAchievementNamedShadows()`:
+- quest 완료 시 연결된 achievement_named 지급
+- `ACHIEVEMENT_SHADOWS_BY_QUEST_ID` 매핑
+- 이미 보유 중이면 중복 지급 금지
+- 완료 시 시스템 메시지 표시
+- App.tsx `useEffect`에서 초기화 시 한 번 실행 (retroactive 지급)
+- Main/Dungeon 완료 시 `completeQuest` / `progressDungeon` 후에도 실행
+
+### 기존 저장 데이터 호환성
+
+- migration에 `ownedShadows`, `equippedShadowIds`, `shadowExtractHistory` undefined fallback 추가
+- `partialize`는 `manualBattleSession`만 제외, 그림자 데이터는 모두 persist
+- `hardReset`에 그림자 필드 초기화 포함
+- persist version v14 유지
+
+### 밸런스 시뮬레이션 결과
+
+`scripts/sim-shadow-battle-balance.ts` 통과:
+- Build C (Lv20): C급 0% (그림자 유무 관계없이) — 초반 차단 유지
+- Build D (Lv30): C급 no_shadow 88~95%, common_shadow 92~96%
+- Build E/F: C급 안정권 또는 졸업
+- 그림자는 Build D C급 승률을 소폭 상승시키나, 기존 기준선 자체가 이미 90%대였으므로 근본적인 변화는 아님
+
+`scripts/sim-gate-current.ts` 통과:
+- 기존 E/D/C 밸런스 유지
+
+`scripts/sim-manual-battle-balance.ts` 통과:
+- 수동 전투 그림자 연동 확인
+
+### 검증
+- `npm run build` → ✅ 통과 (1951 modules, 511.21 kB JS / 36.65 kB CSS)
+- `npx tsx scripts/sim-shadow-battle-balance.ts` → ✅ 통과
+- `npx tsx scripts/sim-gate-current.ts` → ✅ 통과
+- `npx tsx scripts/sim-manual-battle-balance.ts` → ✅ 통과
+
+### 수정한 파일
+| 파일 | 변경 내용 |
+|---|---|
+| `src/lib/types.ts` | 그림자 시스템 타입 8개 추가 (ShadowRarity, ShadowRank, ShadowRole, ShadowDefinition, OwnedShadow, ShadowEffect, ShadowTrait, ShadowExtractResult) |
+| `src/lib/shadows.ts` | 신규 모듈. SHADOW_DEFINITIONS 44종, SHADOW_TRAITS 22종, 추출/품질/슬롯/효과 helper, 도감 preview |
+| `src/lib/game.ts` | `resolveShadowSupportActions`, `isShadowCombatLog`, `createShadowLog` 추가. 자동/수동 전투에 그림자 보조 행동 연동 |
+| `src/lib/store.ts` | 그림자 상태 필드 추가, `attemptShadowExtraction`, `equipShadow`, `unequipShadow`, `grantAchievementNamedShadows` 추가. XP/드롭 계산에 장착 그림자 보너스 연동. persist migration 추가 |
+| `src/components/ShadowPanel.tsx` | 신규. 출전 슬롯, 보유 목록/도감, 필터/정렬, 장착/해제 UI |
+| `src/components/GatePanel.tsx` | 그림자 추출 패널, 게이트별 추출 가능 목록 표시 추가 |
+| `src/App.tsx` | `shadows` 탭 추가, `ShadowPanel` 연결, 초기화 시 `grantAchievementNamedShadows` 호출 |
+| `src/components/SystemMessage.tsx` | `shadow` 메시지 kind 대응 |
+| `scripts/sim-shadow-battle-balance.ts` | 신규. 7가지 그림자 조합 × Build A~F × 9개 게이트 밸런스 시뮬레이션 |
+
+### persist version 변경 여부
+- **변경 없음** (v14 유지)
+- 그림자 필드는 migration에서 undefined fallback 처리
+
+### 남은 TODO
+- 그림자 레벨업/경험치
+- 그림자 진화 (계급 상승)
+- 그림자 중복 활용 (합성/강화)
+- 그림자 시너지 (조합 효과)
+- 장수/군주 계급 실제 도입
+- B/A/S급 게이트
+- 몬스터 패턴/텔레그래프
+- 회복형 전투 소모품

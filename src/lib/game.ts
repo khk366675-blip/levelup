@@ -10,6 +10,7 @@ import type {
   Item,
   JobId,
   MonsterDefinition,
+  OwnedShadow,
   PlayerCombatStats,
   Quest,
   Rank,
@@ -20,6 +21,7 @@ import type {
   TitleEffects,
 } from './types'
 import { CATEGORY_META, STAT_META, TITLE_DEFINITIONS } from './types'
+import { getShadowEffects } from './shadows'
 
 export const xpToNextLevel = (level: number): number => {
   // Adjusted growth curve: slower mid-late game, early discount for Lv 1-10
@@ -880,6 +882,141 @@ export const calculateDamage = ({
   return damage
 }
 
+const sumShadowEffects = (shadows: OwnedShadow[], type: string): number =>
+  shadows.reduce((sum, shadow) => sum + getShadowEffects(shadow)
+    .filter(effect => effect.type === type)
+    .reduce((inner, effect) => inner + effect.value, 0), 0)
+
+export const isShadowCombatLog = (log: BattleTurn): boolean => log.skillId === 'shadow-support-action'
+
+const createShadowLog = (params: {
+  shadow: OwnedShadow
+  monster: BattleActorState
+  damage: number
+  turnNumber: number
+  waveNumber?: number
+  waveLabel?: string
+  message: string
+}): BattleTurn => ({
+  turnNumber: params.turnNumber,
+  waveNumber: params.waveNumber,
+  waveLabel: params.waveLabel,
+  actorType: 'player',
+  actorId: `shadow:${params.shadow.instanceId}`,
+  actorName: params.shadow.name,
+  targetType: 'monster',
+  targetId: params.monster.id,
+  targetName: params.monster.name,
+  skillId: 'shadow-support-action',
+  skillName: 'Shadow Support',
+  outcome: 'hit',
+  damage: params.damage,
+  remainingHp: params.monster.hp,
+  message: params.message,
+})
+
+export const resolveShadowSupportActions = (params: {
+  shadows?: OwnedShadow[]
+  player: BattleActorState
+  monster: BattleActorState
+  activeEffects: ActiveCombatEffect[]
+  rng: RngFn
+  turnNumber: number
+  waveNumber?: number
+  waveLabel?: string
+  phase: 'player_after_action' | 'wave_start' | 'player_defend'
+  playerUsedSkill?: boolean
+}): { monster: BattleActorState; activeEffects: ActiveCombatEffect[]; logs: BattleTurn[] } => {
+  const shadows = params.shadows ?? []
+  if (shadows.length === 0 || params.monster.hp <= 0) {
+    return { monster: params.monster, activeEffects: params.activeEffects, logs: [] }
+  }
+
+  let monster = params.monster
+  let activeEffects = params.activeEffects
+  const logs: BattleTurn[] = []
+  const playerStats = getEffectiveBattleActorStats(params.player, activeEffects)
+  const monsterStats = getEffectiveBattleActorStats(monster, activeEffects)
+  const rosterDamageBonus = Math.min(0.12, sumShadowEffects(shadows, 'bonus_damage'))
+
+  for (const shadow of shadows) {
+    if (monster.hp <= 0) break
+    const effects = getShadowEffects(shadow)
+    const bonusDamage = Math.min(0.12, effects.filter(effect => effect.type === 'bonus_damage').reduce((sum, effect) => sum + effect.value, 0) + rosterDamageBonus * 0.35)
+    const executeDamage = monster.hp / monster.maxHp <= 0.3
+      ? Math.min(0.1, effects.filter(effect => effect.type === 'execute_damage').reduce((sum, effect) => sum + effect.value, 0))
+      : 0
+    const extraAttackChance = Math.min(0.16, effects.filter(effect => effect.type === 'extra_attack_chance').reduce((sum, effect) => sum + effect.value, 0))
+    const waveStartBonus = params.phase === 'wave_start'
+      ? Math.min(0.12, effects.filter(effect => effect.type === 'wave_start_bonus').reduce((sum, effect) => sum + effect.value, 0))
+      : 0
+    const skillDamageBonus = params.playerUsedSkill
+      ? Math.min(0.08, effects.filter(effect => effect.type === 'skill_damage_bonus').reduce((sum, effect) => sum + effect.value, 0))
+      : 0
+    const guardCounter = params.phase === 'player_defend'
+      ? Math.min(0.12, effects.filter(effect => effect.type === 'guard_counter').reduce((sum, effect) => sum + effect.value, 0))
+      : 0
+
+    let chance = 0.04
+    if (shadow.role === 'assault') chance += 0.09
+    if (shadow.role === 'scout') chance += 0.055
+    if (shadow.role === 'analyst') chance += 0.045
+    if (shadow.role === 'support') chance += 0.035
+    if (shadow.role === 'guard') chance += params.phase === 'player_defend' ? 0.1 : 0.025
+    if (shadow.role === 'hunter') chance += 0.02
+    chance += extraAttackChance + waveStartBonus + skillDamageBonus + guardCounter
+
+    if (params.rng() > Math.min(0.42, chance)) continue
+
+    const rolePower =
+      shadow.role === 'assault' ? 0.22 :
+      shadow.role === 'guard' ? 0.16 :
+      shadow.role === 'scout' ? 0.15 :
+      shadow.role === 'analyst' ? 0.14 :
+      shadow.role === 'support' ? 0.12 :
+      0.08
+    const rarityPower =
+      shadow.rarity === 'legendary' ? 1.45 :
+      shadow.rarity === 'epic' ? 1.25 :
+      shadow.rarity === 'rare' ? 1.1 :
+      shadow.rarity === 'uncommon' ? 1 :
+      0.9
+    const rankPower = shadow.rank === 'named' ? 1.25 : shadow.rank === 'knight' ? 1.12 : shadow.rank === 'elite' ? 1.05 : 1
+    const power = rolePower * rarityPower * rankPower * (1 + bonusDamage + executeDamage + waveStartBonus + skillDamageBonus + guardCounter)
+    const damage = calculateDamage({
+      attackerAtk: playerStats.atk,
+      defenderDef: Math.max(0, monsterStats.def * (1 - Math.min(0.08, sumShadowEffects([shadow], 'enemy_defense_down')))),
+      skillPower: power,
+      randomFactor: 0.9 + params.rng() * 0.2,
+      isCritical: false,
+    })
+    monster = { ...monster, hp: Math.max(0, monster.hp - damage) }
+    logs.push(createShadowLog({
+      shadow,
+      monster,
+      damage,
+      turnNumber: params.turnNumber,
+      waveNumber: params.waveNumber,
+      waveLabel: params.waveLabel,
+      message: `[${shadow.name}]이(가) 그림자 보조 행동을 수행했습니다. ${damage} 피해.`,
+    }))
+
+    const defenseDown = Math.min(0.04, effects.filter(effect => effect.type === 'enemy_defense_down').reduce((sum, effect) => sum + effect.value, 0))
+    if (defenseDown > 0 && params.rng() < 0.35) {
+      activeEffects = applyOrRefreshCombatEffect(activeEffects, {
+        sourceSkillId: `shadow-defense-down-${shadow.instanceId}`,
+        kind: 'stat',
+        stat: 'def',
+        value: -Math.max(1, Math.round(monster.def * defenseDown)),
+        remainingTurns: 2,
+        targetId: monster.id,
+      })
+    }
+  }
+
+  return { monster, activeEffects, logs }
+}
+
 export const didHit = (accuracy: number, roll: number): boolean => roll <= clamp01(accuracy)
 
 export const didEvade = (evasionRate: number, roll: number): boolean => roll <= clamp01(evasionRate)
@@ -1034,6 +1171,7 @@ export interface SimulateGateBattleParams {
   playerStats: PlayerCombatStats
   monster: MonsterDefinition
   skills: SkillDefinition[]
+  equippedShadows?: OwnedShadow[]
   initialActiveEffects?: ActiveCombatEffect[]
   maxTurns?: number
   seed?: number
@@ -1047,6 +1185,7 @@ export interface SimulateGateWaveBattleParams {
   playerStats: PlayerCombatStats
   monsters: MonsterDefinition[]
   skills: SkillDefinition[]
+  equippedShadows?: OwnedShadow[]
   initialActiveEffects?: ActiveCombatEffect[]
   maxTurns?: number
   seed?: number
@@ -1073,6 +1212,7 @@ export interface SummarizeGateBattleSimulationsParams {
   playerStats: PlayerCombatStats
   monster: MonsterDefinition
   skills: SkillDefinition[]
+  equippedShadows?: OwnedShadow[]
   initialActiveEffects?: ActiveCombatEffect[]
   gateInstanceId?: string
   seedBase?: number
@@ -1084,6 +1224,7 @@ export interface SummarizeGateWaveBattleSimulationsParams {
   playerStats: PlayerCombatStats
   monsters: MonsterDefinition[]
   skills: SkillDefinition[]
+  equippedShadows?: OwnedShadow[]
   initialActiveEffects?: ActiveCombatEffect[]
   gateInstanceId?: string
   seedBase?: number
@@ -1497,11 +1638,15 @@ export const tickRoundEffects = (effects: ActiveCombatEffect[]): ActiveCombatEff
     .filter(effect => effect.remainingTurns > 0)
 }
 
+export const getCombatActionCount = (turns: BattleTurn[]): number =>
+  turns.filter(turn => !isShadowCombatLog(turn)).length
+
 export const simulateGateBattle = ({
   playerName = '헌터',
   playerStats,
   monster,
   skills,
+  equippedShadows = [],
   initialActiveEffects = [],
   maxTurns = 30,
   seed,
@@ -1585,6 +1730,19 @@ export const simulateGateBattle = ({
         monsterActor = resolved.target
         activeEffects = resolved.activeEffects
         turns.push(resolved.log)
+        const shadowResolved = resolveShadowSupportActions({
+          shadows: equippedShadows,
+          player,
+          monster: monsterActor,
+          activeEffects,
+          rng,
+          turnNumber,
+          phase: skill.id === 'manual-defend' ? 'player_defend' : 'player_after_action',
+          playerUsedSkill: skill.id !== BASIC_ATTACK_SKILL.id,
+        })
+        monsterActor = shadowResolved.monster
+        activeEffects = shadowResolved.activeEffects
+        turns.push(...shadowResolved.logs)
       } else {
         monsterActor = decrementCooldowns(monsterActor)
         const context = buildBattleSkillContext(monsterActor, player, activeEffects, round)
@@ -1628,7 +1786,7 @@ export const simulateGateBattle = ({
     gateInstanceId,
     result,
     turns,
-    totalTurns: turns.length,
+    totalTurns: getCombatActionCount(turns),
     playerHpRemaining: Math.max(0, player.hp),
     rewards: [],
     penaltyApplied: undefined,
@@ -1640,6 +1798,7 @@ export const simulateGateWaveBattle = ({
   playerStats,
   monsters,
   skills,
+  equippedShadows = [],
   initialActiveEffects = [],
   maxTurns = 30,
   seed,
@@ -1678,7 +1837,7 @@ export const simulateGateWaveBattle = ({
     const waveNumber = waveIndex + 1
     const waveLabel = `Wave ${waveNumber}`
 
-    while (player.hp > 0 && monsterActor.hp > 0 && turns.length < maxTurns) {
+    while (player.hp > 0 && monsterActor.hp > 0 && getCombatActionCount(turns) < maxTurns) {
       const effectivePlayer = getEffectiveBattleActorStats(player, activeEffects)
       const effectiveMonster = getEffectiveBattleActorStats(monsterActor, activeEffects)
       const order: Array<'player' | 'monster'> = effectivePlayer.speed >= effectiveMonster.speed
@@ -1686,11 +1845,12 @@ export const simulateGateWaveBattle = ({
         : ['monster', 'player']
 
       for (const actorType of order) {
-        if (player.hp <= 0 || monsterActor.hp <= 0 || turns.length >= maxTurns) break
+        if (player.hp <= 0 || monsterActor.hp <= 0 || getCombatActionCount(turns) >= maxTurns) break
 
         if (actorType === 'player') {
           player = decrementCooldowns(player)
-          const context = buildBattleSkillContext(player, monsterActor, activeEffects, turns.length + 1)
+          const actionNumber = getCombatActionCount(turns) + 1
+          const context = buildBattleSkillContext(player, monsterActor, activeEffects, actionNumber)
           const skill = chooseSkill(player, allSkills, context)
           const resolved = resolveAction({
             actor: player,
@@ -1698,7 +1858,7 @@ export const simulateGateWaveBattle = ({
             skill,
             activeEffects,
             rng,
-            turnNumber: turns.length + 1,
+            turnNumber: actionNumber,
             waveNumber,
             waveLabel,
           })
@@ -1712,9 +1872,25 @@ export const simulateGateWaveBattle = ({
           monsterActor = resolved.target
           activeEffects = resolved.activeEffects
           turns.push(resolved.log)
+          const shadowResolved = resolveShadowSupportActions({
+            shadows: equippedShadows,
+            player,
+            monster: monsterActor,
+            activeEffects,
+            rng,
+            turnNumber: actionNumber,
+            waveNumber,
+            waveLabel,
+            phase: 'player_after_action',
+            playerUsedSkill: skill.id !== BASIC_ATTACK_SKILL.id,
+          })
+          monsterActor = shadowResolved.monster
+          activeEffects = shadowResolved.activeEffects
+          turns.push(...shadowResolved.logs)
         } else {
           monsterActor = decrementCooldowns(monsterActor)
-          const context = buildBattleSkillContext(monsterActor, player, activeEffects, turns.length + 1)
+          const actionNumber = getCombatActionCount(turns) + 1
+          const context = buildBattleSkillContext(monsterActor, player, activeEffects, actionNumber)
           const monsterSkills = allSkills.filter(skill => skill.ownerType === 'common' || skill.ownerType === 'monster')
           const skill = chooseSkill(monsterActor, monsterSkills, context)
           const resolved = resolveAction({
@@ -1723,7 +1899,7 @@ export const simulateGateWaveBattle = ({
             skill,
             activeEffects,
             rng,
-            turnNumber: turns.length + 1,
+            turnNumber: actionNumber,
             waveNumber,
             waveLabel,
           })
@@ -1740,7 +1916,7 @@ export const simulateGateWaveBattle = ({
         }
       }
 
-      if (player.hp <= 0 || monsterActor.hp <= 0 || turns.length >= maxTurns) break
+      if (player.hp <= 0 || monsterActor.hp <= 0 || getCombatActionCount(turns) >= maxTurns) break
       activeEffects = tickRoundEffects(activeEffects)
     }
 
@@ -1751,7 +1927,7 @@ export const simulateGateWaveBattle = ({
       result = 'defeat'
       break
     }
-    if (monsterActor.hp > 0 && turns.length >= maxTurns) {
+    if (monsterActor.hp > 0 && getCombatActionCount(turns) >= maxTurns) {
       result = 'draw'
       break
     }
@@ -1766,7 +1942,7 @@ export const simulateGateWaveBattle = ({
     gateInstanceId,
     result,
     turns,
-    totalTurns: turns.length,
+    totalTurns: getCombatActionCount(turns),
     playerHpRemaining: Math.max(0, player.hp),
     rewards: [],
     penaltyApplied: undefined,
@@ -1781,6 +1957,7 @@ export const summarizeGateBattleSimulations = ({
   playerStats,
   monster,
   skills,
+  equippedShadows,
   initialActiveEffects,
   gateInstanceId = 'simulated-gate',
   seedBase = 1,
@@ -1814,6 +1991,7 @@ export const summarizeGateBattleSimulations = ({
       playerStats,
       monster,
       skills,
+      equippedShadows,
       initialActiveEffects,
       gateInstanceId,
       seed,
@@ -1847,6 +2025,7 @@ export const summarizeGateWaveBattleSimulations = ({
   playerStats,
   monsters,
   skills,
+  equippedShadows,
   initialActiveEffects,
   gateInstanceId = 'simulated-wave-gate',
   seedBase = 1,
@@ -1880,6 +2059,7 @@ export const summarizeGateWaveBattleSimulations = ({
       playerStats,
       monsters,
       skills,
+      equippedShadows,
       initialActiveEffects,
       gateInstanceId,
       seed,

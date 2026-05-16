@@ -23,8 +23,15 @@ import {
   getPlayerCombatSkills,
   type GateRisk,
 } from '../lib/game'
-import type { ActiveConsumableEffect, CombatLog, Item, MonsterDefinition } from '../lib/types'
+import type { ActiveConsumableEffect, CombatLog, Item, MonsterDefinition, StatKey } from '../lib/types'
 import type { ManualBattleAction, ManualBattleSession, SkillDefinition } from '../lib/types'
+import {
+  SHADOW_RARITY_LABEL,
+  getEquippedShadows,
+  getEquippedShadowStatBonuses,
+  getGateShadowPreview,
+  getShadowExtractionChance,
+} from '../lib/shadows'
 
 const GATE_ENTRY_COST = 20
 
@@ -184,6 +191,81 @@ function PenaltySummary({ log }: { log: CombatLog }) {
   }
 
   return <div className="text-xs text-white/45">패널티 없음</div>
+}
+
+function ShadowExtractionPanel({
+  log,
+  gateId,
+}: {
+  log?: CombatLog
+  gateId?: string
+}) {
+  const hunter = useGame(s => s.hunter)
+  const ownedShadows = useGame(s => s.ownedShadows ?? [])
+  const equippedShadowIds = useGame(s => s.equippedShadowIds ?? [])
+  const extractHistory = useGame(s => s.shadowExtractHistory ?? [])
+  const lastResult = useGame(s => s.lastShadowExtractResult)
+  const attemptShadowExtraction = useGame(s => s.attemptShadowExtraction)
+  const gate = gateId ? GATE_DEFINITIONS.find(item => item.id === gateId) : undefined
+  if (!log || log.result !== 'victory' || !gate) return null
+
+  const equippedShadows = getEquippedShadows(ownedShadows, equippedShadowIds, hunter)
+  const chance = getShadowExtractionChance(hunter, gate, equippedShadows)
+  const attempted = extractHistory.some(result => result.gateInstanceId === log.gateInstanceId)
+  const preview = getGateShadowPreview(gate)
+  const ownedDefinitionIds = new Set(ownedShadows.map(shadow => shadow.definitionId))
+  const relatedResult = lastResult?.gateInstanceId === log.gateInstanceId ? lastResult : undefined
+
+  return (
+    <div className="panel corner-bracket p-4 border-purple-400/25 bg-purple-500/5">
+      <div className="br" />
+      <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-3">
+        <div>
+          <div className="system-text text-[11px] text-purple-300/80 mb-1">SHADOW EXTRACTION</div>
+          <h3 className="text-lg font-bold text-purple-100">그림자 추출</h3>
+          <p className="text-xs text-white/55 mt-1 leading-relaxed">
+            victory 후 1회 시도할 수 있습니다. 현재 성공률 {Math.round(chance * 100)}%.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => attemptShadowExtraction(log.gateInstanceId)}
+          disabled={attempted}
+          className="btn btn-primary text-xs min-h-10 disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          {attempted ? '추출 완료' : '그림자 추출 시도'}
+        </button>
+      </div>
+
+      <div className="mt-4 grid md:grid-cols-2 gap-3">
+        <div className="rounded-lg border border-white/10 bg-ink-900/35 p-3">
+          <div className="system-text text-[10px] text-cyan-300/70 mb-2">추출 가능 그림자</div>
+          <div className="space-y-1.5">
+            {preview.map(def => {
+              const obtained = ownedDefinitionIds.has(def.id)
+              const hidden = def.hiddenUntilObtained && !obtained
+              return (
+                <div key={def.id} className="text-xs text-white/65 flex justify-between gap-3">
+                  <span>[{SHADOW_RARITY_LABEL[def.rarity]}] {hidden ? '???' : def.name}</span>
+                  <span className="text-white/35">{def.role}</span>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+        <div className="rounded-lg border border-white/10 bg-ink-900/35 p-3">
+          <div className="system-text text-[10px] text-purple-300/70 mb-2">최근 결과</div>
+          {relatedResult ? (
+            <div className={relatedResult.success ? 'text-xs text-emerald-100/80' : 'text-xs text-amber-100/80'}>
+              {relatedResult.message}
+            </div>
+          ) : (
+            <div className="text-xs text-white/40">아직 추출하지 않았습니다.</div>
+          )}
+        </div>
+      </div>
+    </div>
+  )
 }
 
 function RecentBattleResult({
@@ -950,6 +1032,8 @@ export function GatePanel() {
   const equipment = useGame(s => s.equipment)
   const activeConsumableEffects = useGame(s => s.activeConsumableEffects)
   const activeGate = useGame(s => s.activeGate)
+  const ownedShadows = useGame(s => s.ownedShadows ?? [])
+  const equippedShadowIds = useGame(s => s.equippedShadowIds ?? [])
   const gateStatus = useGame(s => s.gateStatus)
   const combatLogs = useGame(s => s.combatLogs)
   const manualBattleSession = useGame(s => s.manualBattleSession)
@@ -959,6 +1043,12 @@ export function GatePanel() {
   const cancelManualGateBattle = useGame(s => s.cancelManualGateBattle)
 
   const equippedItems = getEquippedItems(items, equipment)
+  const equippedShadows = getEquippedShadows(ownedShadows, equippedShadowIds, hunter)
+  const shadowStatBonuses = getEquippedShadowStatBonuses(equippedShadows)
+  const combatStatsInput = { ...hunter.stats }
+  for (const [stat, value] of Object.entries(shadowStatBonuses)) {
+    combatStatsInput[stat as StatKey] = combatStatsInput[stat as StatKey] + (value ?? 0)
+  }
   const playerSkills = getPlayerCombatSkills({
     jobId: hunter.jobId,
     equippedItems,
@@ -966,7 +1056,7 @@ export function GatePanel() {
   })
   const combatStats = calculatePlayerCombatStats({
     level: hunter.level,
-    stats: hunter.stats,
+    stats: combatStatsInput,
     equippedItems,
     activeConsumableEffects,
     jobId: hunter.jobId,
@@ -996,6 +1086,7 @@ export function GatePanel() {
           shouldReveal={isBattleRevealing}
           onRevealStateChange={setIsBattleRevealing}
         />
+        <ShadowExtractionPanel log={combatLogs[0]} gateId={activeGate?.gateId} />
       </div>
     )
   }
@@ -1016,6 +1107,8 @@ export function GatePanel() {
   const monsters = gate.monsterIds
     .map(id => MONSTER_DEFINITIONS.find(monster => monster.id === id))
     .filter((monster): monster is MonsterDefinition => Boolean(monster))
+  const shadowPreview = getGateShadowPreview(gate)
+  const ownedShadowDefinitionIds = new Set(ownedShadows.map(shadow => shadow.definitionId))
   const rewardTable = GATE_REWARD_TABLES.find(reward => reward.id === gate.rewardTableId)
   const penalty = GATE_PENALTIES.find(item => item.id === gate.failPenaltyId)
   const risk = estimateGateRisk(playerPower, gate.recommendedPower)
@@ -1159,6 +1252,25 @@ export function GatePanel() {
 
           <div className="space-y-4">
             <div className="border border-purple-400/20 rounded-lg p-4 bg-purple-500/5">
+              <div className="system-text text-[11px] text-purple-300/80 mb-3">SHADOW POOL</div>
+              <div className="space-y-1.5">
+                {shadowPreview.map(def => {
+                  const obtained = ownedShadowDefinitionIds.has(def.id)
+                  const hidden = def.hiddenUntilObtained && !obtained
+                  return (
+                    <div key={def.id} className="flex justify-between gap-3 text-xs">
+                      <span className="text-white/60">[{SHADOW_RARITY_LABEL[def.rarity]}] {hidden ? '???' : def.name}</span>
+                      <span className="text-purple-200/70">{def.role}</span>
+                    </div>
+                  )
+                })}
+              </div>
+              <div className="text-[10px] text-white/35 leading-relaxed pt-2">
+                victory 후 이 게이트에서 1회 그림자 추출을 시도할 수 있습니다.
+              </div>
+            </div>
+
+            <div className="border border-purple-400/20 rounded-lg p-4 bg-purple-500/5">
               <div className="flex items-center gap-2 mb-3">
                 <Package className="w-4 h-4 text-purple-300" />
                 <div className="system-text text-[11px] text-purple-300/80">REWARD</div>
@@ -1272,6 +1384,7 @@ export function GatePanel() {
         shouldReveal={isBattleRevealing}
         onRevealStateChange={setIsBattleRevealing}
       />
+      <ShadowExtractionPanel log={combatLogs[0]} gateId={gate.id} />
     </div>
   )
 }
