@@ -5872,3 +5872,112 @@ GatePanel에 그림자 추출 UI 추가:
 - B/A/S급 게이트
 - 몬스터 패턴/텔레그래프
 - 회복형 전투 소모품
+
+## 12-12: C급 게이트 밸런스 재조정
+
+### 목표
+12-11 그림자 시스템 도입 후에도 Build D(Lv30)의 C급 자동 승률이 no_shadow 기준 88~95%로 너무 높았다. 문제는 그림자 때문이 아니라, 12-10D 시점부터 C급 기준선 자체가 이미 높아진 것이었다. B/A/S급 게이트 추가 전에 C급 난이도를 현재 성장 체계에 맞춰 재조정한다.
+
+### 변경 원칙
+- E급 게이트 변경 없음
+- D급 게이트 변경 없음
+- C급 게이트 중심 조정
+- XP 보상표 변경 금지
+- Main/Dungeon 목표 변경 금지
+- 그림자 시스템 구조/희귀도/추출 변경 금지
+- 수동 전투 구조 변경 금지
+- 장비 강화 공식 변경 금지
+- 칭호 효과 변경 금지
+- localStorage key 변경 금지
+- persist version 변경 금지
+- B/A/S급 게이트 추가 금지
+
+### 조정 전 문제
+- Build D / no_shadow / C급: 88~95% 승률
+- Build D / common_shadow / C급: 92~96% 승률
+- Build D가 C급을 "안정권"이 아닌 "졸업 구간"으로 인식하는 수준
+
+### 목표 승률
+- Build C / Lv20: C급 0~15%
+- Build D / Lv30: C급 55~75% (no_shadow), 60~80% (common_shadow)
+- Build E / Lv45: C급 85~100%
+- Build F / Lv60: C급 trivialize 허용
+
+### 조정한 C급 몬스터/게이트 값
+
+**망각의 서고** (균형형):
+- forgetting-warden: HP 1380→1520 (+10%), ATK 220→240 (+9%), DEF 80→82 (+3%)
+- recommendedPower: 1550→1620
+
+**피로의 회랑** (방어/attrition형):
+- fatigue-warden: HP 1445→1620 (+12%), ATK 176→190 (+8%), DEF 97→100 (+3%)
+- recommendedPower: 1600→1680
+
+**균열의 훈련장** (wave 누적 피해형):
+- memory-tracker: HP 950→1080 (+14%), ATK 185→205 (+11%), DEF 56→58 (+4%)
+- memory-scout: HP 790→900 (+14%), ATK 220→240 (+9%), DEF 49→52 (+6%)
+- recommendedPower: 1650→1720
+
+**탐욕의 금고** (공격형):
+- greed-warden: HP 1156→1300 (+12%), ATK 240→265 (+10%), DEF 61→64 (+5%)
+- recommendedPower: 1550→1620
+
+### 그림자 시스템 너프 여부
+- 그림자 효과, 추출 시스템, UI, 전투 연동 모두 변경 없음
+- 그림자를 넣은 직후에 너프하면 재미가 줄어든다는 원칙 유지
+
+### 조정 후 sim-shadow-battle-balance 결과
+
+Build D / C급 (no_shadow): 59~77% (목표 55~75% ✓)
+Build D / C급 (common_shadow): 63~76% (목표 60~80% ✓)
+Build D / C급 (rare_shadow): 59~73% ✓
+Build D / C급 (gate_named): 63~73% ✓
+Build D / C급 (achievement_named): 78~84% ✓
+Build D / C급 (mixed_2_slots): 64~78% ✓
+Build D / C급 (mixed_3_slots): 65~75% ✓
+
+Build C / C급 (no_shadow): 0% (목표 0~15% ✓)
+Build E / C급 (no_shadow): 96~100% (목표 85~100% ✓)
+Build F / C급 (no_shadow): 100% ✓
+
+### sim-gate-current 결과
+
+Build D / C급:
+- 망각의 서고: 57% victory
+- 피로의 회랑: 68% victory
+- 균열의 훈련장: 54% victory
+- 탐욕의 금고: 65% victory
+
+Build C / D급: 여전히 100% (D급 변경 없음 확인)
+Build E/F / C급: 96~100% (안정권 확인)
+
+### sim-manual-battle-balance 결과
+
+Build D / C급 / auto: 64~75% victory
+Build D / C급 / manual skill_first: 64~75% victory
+Build D / C급 / manual defensive_under_40%: 약간 낮음
+Build A/B / C급: 0% (초반 차단 유지)
+Build E/F / C급: 99~100%
+
+수동 전투가 C급을 100% 확정승으로 만들지 않음 확인.
+
+### 수정한 파일
+| 파일 | 변경 내용 |
+|---|---|
+| `src/lib/seed.ts` | C급 몬스터 5종 스탯 상향 (HP/ATK/DEF/SPD), C급 4개 게이트 recommendedPower 상향 |
+
+### persist version 변경 여부
+- **변경 없음** (v14 유지)
+- 이번 작업은 몬스터/게이트 정의 데이터만 수정
+
+### 검증
+- `npm run build` → ✅ 통과 (1951 modules, 511.22 kB JS / 36.65 kB CSS)
+- `npx tsx scripts/sim-shadow-battle-balance.ts` → ✅ 통과
+- `npx tsx scripts/sim-gate-current.ts` → ✅ 통과
+- `npx tsx scripts/sim-manual-battle-balance.ts` → ✅ 통과
+
+### 남은 TODO
+- 그림자 레벨업/진화/중복 활용/시너지
+- B/A/S급 게이트
+- 몬스터 패턴/텔레그래프
+- 회복형 전투 소모품

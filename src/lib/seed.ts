@@ -1742,11 +1742,11 @@ export const MONSTER_DEFINITIONS: MonsterDefinition[] = [
     name: '망각의 파수꾼',
     description: '기록과 집중을 흐리게 만드는 C급 파수꾼.',
     rank: 'C',
-    // 12-7: 12-3A/12-6 성장 재점검. Build C 0%, Build D 50~70%대 도전권 목표.
+    // 12-12: intermediate raise. Previous 1380/220/80/20 → 1680/265/88/22 was too hard. Now 1520/240/82/20.
     stats: {
-      maxHp: 1380,
-      atk: 220,
-      def: 80,
+      maxHp: 1520,
+      atk: 240,
+      def: 82,
       speed: 20,
       critRate: 0.08,
       accuracy: 0.92,
@@ -1760,11 +1760,11 @@ export const MONSTER_DEFINITIONS: MonsterDefinition[] = [
     name: '피로의 간수',
     description: '느리지만 끈질긴 방어형 C급 몬스터. 화력으론 좀처럼 뚫리지 않는다.',
     rank: 'C',
-    // 12-7: defensive C baseline reset. High HP/DEF, but attack raised enough to avoid excessive draw.
+    // 12-12: intermediate raise. Previous 1445/176/97/14 was too hard. Now 1620/190/100/14.
     stats: {
-      maxHp: 1445,
-      atk: 176,
-      def: 97,
+      maxHp: 1620,
+      atk: 190,
+      def: 100,
       speed: 14,
       critRate: 0.05,
       accuracy: 0.92,
@@ -1777,11 +1777,11 @@ export const MONSTER_DEFINITIONS: MonsterDefinition[] = [
     name: '기억 추적자',
     description: '망각의 서고 외곽을 떠도는 C급 정찰병. 단독으로는 약하지만 짝을 이뤄 다닌다.',
     rank: 'C',
-    // 12-7: C-wave front monster retuned for current stat/equipment growth.
+    // 12-12: intermediate raise. Previous 950/185/56/17 was too hard. Now 1080/205/58/17.
     stats: {
-      maxHp: 950,
-      atk: 185,
-      def: 56,
+      maxHp: 1080,
+      atk: 205,
+      def: 58,
       speed: 17,
       critRate: 0.06,
       accuracy: 0.9,
@@ -1794,11 +1794,11 @@ export const MONSTER_DEFINITIONS: MonsterDefinition[] = [
     name: '기억 정찰자',
     description: '추적자보다 빠르고 가볍지만, 한 번에 큰 피해를 노리는 후위 C급 몬스터.',
     rank: 'C',
-    // 12-7: C-wave back monster retuned for current stat/equipment growth.
+    // 12-12: intermediate raise. Previous 790/220/49/22 was too hard. Now 900/240/52/22.
     stats: {
-      maxHp: 790,
-      atk: 220,
-      def: 49,
+      maxHp: 900,
+      atk: 240,
+      def: 52,
       speed: 22,
       critRate: 0.08,
       accuracy: 0.91,
@@ -1811,11 +1811,11 @@ export const MONSTER_DEFINITIONS: MonsterDefinition[] = [
     name: '탐욕의 파수꾼',
     description: '한 번의 일격에 모든 것을 거는 공격형 C급 몬스터. HP는 낮지만 위협적이다.',
     rank: 'C',
-    // 12-7: aggressive C baseline reset. Still lower HP than defensive C, but one-hit threat restored.
+    // 12-12: intermediate raise. Previous 1156/240/61/22 was too hard. Now 1300/265/64/22.
     stats: {
-      maxHp: 1156,
-      atk: 240,
-      def: 61,
+      maxHp: 1300,
+      atk: 265,
+      def: 64,
       speed: 22,
       critRate: 0.10,
       accuracy: 0.92,
@@ -1892,8 +1892,8 @@ export const GATE_DEFINITIONS: GateDefinition[] = [
     description: '집중과 기록을 삼키는 C급 게이트.',
     rank: 'C',
     recommendedLevel: 15,
-    // 12-7: Build D power(~1450) should read as high risk, not low risk.
-    recommendedPower: 1550,
+    // 12-12: raised to match intermediate monster stats.
+    recommendedPower: 1620,
     monsterIds: ['forgetting-warden'],
     rewardTableId: 'reward-gate-c-basic',
     failPenaltyId: 'penalty-gate-basic',
@@ -1907,7 +1907,7 @@ export const GATE_DEFINITIONS: GateDefinition[] = [
     rank: 'C',
     recommendedLevel: 16,
     // 방어형 — 화력 부족하면 오래 끌리지만 DEF/HP가 높아 공격 못 뚫으면 결국 패배.
-    recommendedPower: 1600,
+    recommendedPower: 1680,
     monsterIds: ['fatigue-warden'],
     rewardTableId: 'reward-gate-c-basic',
     failPenaltyId: 'penalty-gate-basic',
@@ -1920,7 +1920,7 @@ export const GATE_DEFINITIONS: GateDefinition[] = [
     rank: 'C',
     recommendedLevel: 17,
     // wave형 — 단일 보스보다 약한 몹 둘이 누적 피해를 준다.
-    recommendedPower: 1650,
+    recommendedPower: 1720,
     monsterIds: ['memory-tracker', 'memory-scout'],
     rewardTableId: 'reward-gate-c-basic',
     failPenaltyId: 'penalty-gate-basic',
@@ -1933,7 +1933,7 @@ export const GATE_DEFINITIONS: GateDefinition[] = [
     rank: 'C',
     recommendedLevel: 17,
     // 공격형 — 화력은 높지만 HP가 낮음. 빠르게 끝나지만 한 방에 무너질 수 있음.
-    recommendedPower: 1550,
+    recommendedPower: 1620,
     monsterIds: ['greed-warden'],
     rewardTableId: 'reward-gate-c-basic',
     failPenaltyId: 'penalty-gate-basic',
