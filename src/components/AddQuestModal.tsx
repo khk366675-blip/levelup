@@ -13,6 +13,19 @@ import {
 } from '../lib/types'
 import { getBalancedQuestXp } from '../lib/game'
 
+// category → recommended 2 stats (균등 분배 기본값)
+const CATEGORY_STAT_SUGGESTIONS: Record<Category, [StatKey, StatKey]> = {
+  workout:   ['STR', 'VIT'],
+  health:    ['VIT', 'PER'],
+  study:     ['INT', 'PER'],
+  career:    ['INT', 'SEN'],
+  mind:      ['PER', 'SEN'],
+  finance:   ['INT', 'SEN'],
+  social:    ['AGI', 'SEN'],
+  challenge: ['PER', 'STR'],
+  habit:     ['PER', 'VIT'],
+}
+
 interface Props {
   open: boolean
   onClose: () => void
@@ -26,14 +39,33 @@ export function AddQuestModal({ open, onClose, type }: Props) {
   const [category, setCategory] = useState<Category>('workout')
   const [difficulty, setDifficulty] = useState<Difficulty>('normal')
   const [steps, setSteps] = useState(30)
-  const [selectedStats, setSelectedStats] = useState<StatKey[]>(['STR'])
+  const [selectedStats, setSelectedStats] = useState<StatKey[]>(CATEGORY_STAT_SUGGESTIONS['workout'])
 
   const reset = () => {
-    setTitle(''); setDesc(''); setCategory('workout'); setDifficulty('normal'); setSteps(30); setSelectedStats(['STR'])
+    setTitle('')
+    setDesc('')
+    setCategory('workout')
+    setDifficulty('normal')
+    setSteps(30)
+    setSelectedStats(CATEGORY_STAT_SUGGESTIONS['workout'])
+  }
+
+  const handleCategoryChange = (c: Category) => {
+    setCategory(c)
+    setSelectedStats(CATEGORY_STAT_SUGGESTIONS[c])
   }
 
   const toggleStat = (s: StatKey) => {
-    setSelectedStats(prev => prev.includes(s) ? prev.filter(x => x !== s) : [...prev, s])
+    setSelectedStats(prev => {
+      if (prev.includes(s)) {
+        // 최소 1개는 유지
+        if (prev.length <= 1) return prev
+        return prev.filter(x => x !== s)
+      }
+      // 최대 2개
+      if (prev.length >= 2) return prev
+      return [...prev, s]
+    })
   }
 
   const submit = () => {
@@ -42,12 +74,18 @@ export function AddQuestModal({ open, onClose, type }: Props) {
     const baseGain = difficulty === 'boss' ? 4 : difficulty === 'apex' ? 4 : difficulty === 'elite' ? 3 : difficulty === 'hard' ? 2 : 1
     selectedStats.forEach(s => { statRewards[s] = baseGain })
 
+    // 균등 분배 weights — 기존 퀘스트에 없으면 fallback으로 계속 동작
+    const rewardStatWeights: Quest['rewardStatWeights'] = {}
+    const w = 1 / selectedStats.length
+    selectedStats.forEach(s => { rewardStatWeights[s] = w })
+
     addQuest({
       title: title.trim(),
       description: desc.trim() || undefined,
       category,
       difficulty,
       statRewards,
+      rewardStatWeights,
       type,
       recurring: type === 'daily',
       totalSteps: type === 'dungeon' ? steps : undefined,
@@ -105,7 +143,7 @@ export function AddQuestModal({ open, onClose, type }: Props) {
                   {(Object.keys(CATEGORY_META) as Category[]).map(c => (
                     <button
                       key={c}
-                      onClick={() => setCategory(c)}
+                      onClick={() => handleCategoryChange(c)}
                       className={`px-2 py-2 rounded text-xs border transition ${
                         category === c
                           ? 'bg-cyan-400/20 border-cyan-400/60 text-white'
@@ -140,23 +178,41 @@ export function AddQuestModal({ open, onClose, type }: Props) {
               </div>
 
               <div>
-                <label className="block text-xs text-cyan-300/70 system-text mb-1">성장 스탯 (1개 이상)</label>
-                <div className="grid grid-cols-3 gap-1.5">
-                  {(Object.keys(STAT_META) as StatKey[]).map(s => (
-                    <button
-                      key={s}
-                      onClick={() => toggleStat(s)}
-                      className={`px-2 py-1.5 rounded text-xs border transition flex items-center justify-center gap-1 ${
-                        selectedStats.includes(s)
-                          ? `bg-cyan-400/15 border-cyan-400/50 ${STAT_META[s].color}`
-                          : 'bg-ink-900/40 border-white/10 text-white/50 hover:border-white/30'
-                      }`}
-                    >
-                      <span>{STAT_META[s].icon}</span>
-                      <span>{s}</span>
-                    </button>
-                  ))}
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-xs text-cyan-300/70 system-text">성장 스탯</label>
+                  <span className="text-[10px] text-white/30">최대 2개 · 카테고리 변경 시 자동 추천</span>
                 </div>
+                <p className="text-[10px] text-white/40 mb-2">퀘스트 완료 시 성장할 스탯입니다.</p>
+                <div className="grid grid-cols-3 gap-1.5">
+                  {(Object.keys(STAT_META) as StatKey[]).map(s => {
+                    const isSelected = selectedStats.includes(s)
+                    const isDisabled = !isSelected && selectedStats.length >= 2
+                    return (
+                      <button
+                        key={s}
+                        onClick={() => toggleStat(s)}
+                        disabled={isDisabled}
+                        className={`px-2 py-1.5 rounded text-xs border transition flex items-center justify-center gap-1 ${
+                          isSelected
+                            ? `bg-cyan-400/15 border-cyan-400/50 ${STAT_META[s].color}`
+                            : isDisabled
+                            ? 'bg-ink-900/20 border-white/5 text-white/20 cursor-not-allowed'
+                            : 'bg-ink-900/40 border-white/10 text-white/50 hover:border-white/30'
+                        }`}
+                      >
+                        <span>{STAT_META[s].icon}</span>
+                        <span>{s}</span>
+                        <span className="text-[9px] opacity-60">{STAT_META[s].label}</span>
+                      </button>
+                    )
+                  })}
+                </div>
+                {selectedStats.length > 0 && (
+                  <p className="text-[10px] text-white/35 mt-1.5">
+                    선택: {selectedStats.map(s => `${STAT_META[s].icon} ${s}`).join(' · ')}
+                    {selectedStats.length === 2 ? ' (균등 분배)' : ''}
+                  </p>
+                )}
               </div>
 
               {type === 'dungeon' && (

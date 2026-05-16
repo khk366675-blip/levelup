@@ -1,6 +1,17 @@
 import { motion } from 'framer-motion'
 import { useGame } from '../lib/store'
-import { RANK_COLOR, RANK_LABEL, xpToNextLevel, getStatBonus, getEquippedItems, getEquipmentStatBonuses, formatStat, formatStatReward } from '../lib/game'
+import {
+  RANK_COLOR,
+  RANK_LABEL,
+  xpToNextLevel,
+  getStatBonus,
+  getEquippedItems,
+  getEquipmentStatBonuses,
+  formatStat,
+  formatStatReward,
+  formatTitleEffects,
+  getEquippedTitleDefinition,
+} from '../lib/game'
 import { STAT_META, type StatKey, JOB_DEFINITIONS, JOB_LINE_META } from '../lib/types'
 import { Flame, Plus } from 'lucide-react'
 import { useState } from 'react'
@@ -24,6 +35,7 @@ export function HunterStatus() {
   // Get current job definition
   const currentJob = JOB_DEFINITIONS.find(j => j.id === hunter.jobId)
   const jobLine = currentJob ? JOB_LINE_META[currentJob.line] : null
+  const equippedTitleDef = getEquippedTitleDefinition(hunter)
 
   // Get equipment stat bonuses
   const equippedItems = getEquippedItems(items, equipment)
@@ -121,6 +133,14 @@ export function HunterStatus() {
                 {currentJob?.id === 'unawakened' && (
                   <div className="text-[10px] text-cyan-300/40 system-text mt-0.5 italic">
                     각성 조건을 달성하면 직업이 개방됩니다.
+                  </div>
+                )}
+                {equippedTitleDef && (
+                  <div className="text-[10px] text-amber-200/60 system-text mt-0.5">
+                    칭호 — {equippedTitleDef.name}
+                    <span className="ml-2">
+                      · 효과: {formatTitleEffects(equippedTitleDef).join(', ')}
+                    </span>
                   </div>
                 )}
               </div>

@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import { motion } from 'framer-motion'
-import { Award, Lock } from 'lucide-react'
+import { Award, Lock, Sparkles } from 'lucide-react'
 import { useGame } from '../lib/store'
+import { formatTitleEffects } from '../lib/game'
 import { TITLE_DEFINITIONS, type TitleRarity } from '../lib/types'
 
 type TitleFilter = 'all' | 'owned' | 'locked'
@@ -71,8 +72,13 @@ export function TitleCollection() {
           <div>
             <div className="text-xs text-cyan-300/60 mb-1">현재 장착</div>
             {equippedDef ? (
-              <div className={`text-lg font-medium ${RARITY_STYLE[equippedDef.rarity].color}`}>
-                {equippedDef.name}
+              <div>
+                <div className={`text-lg font-medium ${RARITY_STYLE[equippedDef.rarity].color}`}>
+                  {equippedDef.name}
+                </div>
+                <div className="mt-1 text-[11px] text-amber-200/70 system-text">
+                  적용 중: {formatTitleEffects(equippedDef).join(' · ')}
+                </div>
               </div>
             ) : (
               <div className="text-lg text-white/40">없음</div>
@@ -120,6 +126,7 @@ export function TitleCollection() {
             : def.conditionText
             ? `조건: ${def.conditionText}`
             : ''
+          const effectLines = isHiddenLocked ? ['해금 후 공개'] : formatTitleEffects(def)
 
           return (
             <motion.div
@@ -158,6 +165,22 @@ export function TitleCollection() {
                   {displayCondition}
                 </div>
               )}
+
+              <div className={`mb-3 rounded-md border px-3 py-2 ${
+                isEquipped
+                  ? 'bg-amber-400/10 border-amber-400/30 text-amber-100/80'
+                  : isHiddenLocked
+                    ? 'bg-white/5 border-white/10 text-white/30'
+                    : 'bg-cyan-400/5 border-cyan-400/15 text-cyan-100/70'
+              }`}>
+                <div className="flex items-center gap-1.5 text-[10px] system-text mb-1">
+                  <Sparkles className="w-3 h-3" />
+                  <span>{isEquipped ? '효과 적용 중' : '효과'}</span>
+                </div>
+                <div className="text-[11px] leading-relaxed">
+                  {effectLines.join(' · ')}
+                </div>
+              </div>
 
               {/* Action */}
               {isOwned && (

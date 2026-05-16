@@ -2,7 +2,16 @@ import { motion } from 'framer-motion'
 import { useGame } from '../lib/store'
 import { RARITY_META, EQUIPMENT_SLOT_LABEL, CATEGORY_META, type Item, type EquipmentSlot, type ActiveConsumableEffect } from '../lib/types'
 import { SKILL_DEFINITIONS } from '../lib/seed'
-import { formatStatReward } from '../lib/game'
+import {
+  canEnhanceItem,
+  formatEnhancementLabel,
+  formatStatReward,
+  getEnhancedItemEffects,
+  getEnhanceMaterialCandidates,
+  getEnhancementLevel,
+  isEnhanceableEquipment,
+  MAX_ITEM_ENHANCEMENT_LEVEL,
+} from '../lib/game'
 import { Package, Sword, Shield, Gem, Scroll, X, Sparkles } from 'lucide-react'
 
 const SLOT_ICONS: Record<EquipmentSlot, typeof Sword> = {
@@ -13,9 +22,10 @@ const SLOT_ICONS: Record<EquipmentSlot, typeof Sword> = {
 }
 
 function formatItemEffects(item: Item): string[] {
-  if (!item.effects || item.effects.length === 0) return []
+  const effects = getEnhancedItemEffects(item)
+  if (effects.length === 0) return []
   
-  return item.effects.map(effect => {
+  return effects.map(effect => {
     switch (effect.type) {
       case 'xp_bonus':
         const categoryLabel = effect.category ? CATEGORY_META[effect.category]?.label || effect.category : '전체'
@@ -109,6 +119,7 @@ export function Inventory() {
   const activeConsumableEffects = useGame(s => s.activeConsumableEffects)
   const equipItem = useGame(s => s.equipItem)
   const unequipItem = useGame(s => s.unequipItem)
+  const enhanceItem = useGame(s => s.enhanceItem)
   const useConsumable = useGame(s => s.useConsumable)
 
   // Equipment slots section
@@ -118,6 +129,8 @@ export function Inventory() {
   const isEquipped = (itemId: string) => {
     return Object.values(equipment).includes(itemId)
   }
+
+  const equippedItemIds = new Set(Object.values(equipment).filter((id): id is string => Boolean(id)))
 
   // Get equipped item for a slot
   const getEquippedItem = (slot: EquipmentSlot) => {
@@ -208,6 +221,9 @@ export function Inventory() {
                     <div className="text-2xl text-center mb-1">{equippedItem.icon}</div>
                     <div className={`text-xs font-semibold text-center ${RARITY_META[equippedItem.rarity].color}`}>
                       {equippedItem.name}
+                      {formatEnhancementLabel(equippedItem) && (
+                        <span className="ml-1 text-amber-300">{formatEnhancementLabel(equippedItem)}</span>
+                      )}
                     </div>
                     {equippedItem.effects && equippedItem.effects.length > 0 && (
                       <div className="text-[9px] text-purple-300/60 system-text mt-1 text-center">
@@ -252,6 +268,22 @@ export function Inventory() {
             const effects = formatItemEffects(item)
             const consumableEffects = formatConsumableEffects(item)
             const combatSkillNames = formatCombatSkillNames(item)
+            const enhancementLevel = getEnhancementLevel(item)
+            const enhancementLabel = formatEnhancementLabel(item)
+            const enhanceable = isEnhanceableEquipment(item)
+            const enhanceMaterials = getEnhanceMaterialCandidates(item, items, equippedItemIds)
+            const canEnhance = canEnhanceItem(item, items, equippedItemIds)
+            const enhanceDisabledReason =
+              isConsumable ? '소모품은 강화 불가' :
+              !enhanceable ? '강화 불가' :
+              enhancementLevel >= MAX_ITEM_ENHANCEMENT_LEVEL ? '최대 강화' :
+              enhanceMaterials.length === 0 ? '중복 장비 필요' :
+              ''
+            const handleEnhance = () => {
+              if (!canEnhance) return
+              const ok = window.confirm('같은 장비 1개를 소모해 이 장비를 +1 강화합니다. 계속할까요?')
+              if (ok) enhanceItem(item.id)
+            }
             
             return (
               <motion.div
@@ -263,7 +295,10 @@ export function Inventory() {
                 className={`relative bg-ink-800/60 border ${equipped ? 'border-amber-400/60 ring-2 ring-amber-400/40' : 'border-white/10'} ring-1 ${meta.ring} rounded-lg p-4 backdrop-blur-sm`}
               >
                 <div className="text-4xl text-center mb-2">{item.icon}</div>
-                <div className={`text-center text-sm font-semibold ${meta.color}`}>{item.name}</div>
+                <div className={`text-center text-sm font-semibold ${meta.color}`}>
+                  {item.name}
+                  {enhancementLabel && <span className="ml-1 text-amber-300">{enhancementLabel}</span>}
+                </div>
                 <div className="text-center text-[10px] system-text mt-0.5 uppercase tracking-wider opacity-70">
                   <span className={meta.color}>[{meta.label}]</span>
                   {item.slot && (
@@ -297,6 +332,21 @@ export function Inventory() {
                 )}
                 
                 <div className="text-xs text-white/50 text-center mt-2 leading-snug">{item.description}</div>
+
+                <div className="mt-3 rounded-md border border-white/10 bg-white/5 p-2">
+                  <div className="flex items-center justify-between gap-2 text-[10px] system-text">
+                    <span className="text-amber-200/70">강화 {enhancementLevel}/{MAX_ITEM_ENHANCEMENT_LEVEL}</span>
+                    <span className="text-white/40">재료 {enhanceMaterials.length}</span>
+                  </div>
+                  <button
+                    onClick={handleEnhance}
+                    disabled={!canEnhance}
+                    className="w-full mt-1.5 text-[10px] py-1 rounded bg-amber-400/15 hover:bg-amber-400/25 text-amber-200 border border-amber-400/30 transition disabled:opacity-45 disabled:cursor-not-allowed disabled:hover:bg-amber-400/15"
+                    title={canEnhance ? '중복 장비 1개를 소모해 +1 강화' : enhanceDisabledReason}
+                  >
+                    {canEnhance ? '강화' : enhanceDisabledReason}
+                  </button>
+                </div>
                 
                 {/* Action Buttons */}
                 <div className="mt-3">

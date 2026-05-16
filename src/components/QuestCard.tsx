@@ -1,7 +1,7 @@
 import { motion } from 'framer-motion'
 import { Check, Clock, Trash2 } from 'lucide-react'
 import { useGame } from '../lib/store'
-import { CATEGORY_META, DIFFICULTY_META, type Quest } from '../lib/types'
+import { CATEGORY_META, DIFFICULTY_META, type Quest, type StatKey } from '../lib/types'
 import {
   formatStatReward,
   getBalancedDungeonClearXp,
@@ -36,6 +36,9 @@ export function QuestCard({ quest, onRemove, removable }: Props) {
   const dungeonStepXp = isDungeon ? getBalancedDungeonStepXp(quest.difficulty, quest.totalSteps ?? 1) : 0
   const nonDungeonXp = !isDungeon ? getBalancedQuestXp(quest.type, quest.difficulty) : 0
   const clearStatRewards = getBalancedQuestStatRewards(quest)
+  const growthStatSummary = (Object.keys(clearStatRewards) as StatKey[])
+    .filter(stat => (clearStatRewards[stat] ?? 0) > 0)
+    .join('/')
 
   const handleAction = () => {
     if (done) return
@@ -103,6 +106,9 @@ export function QuestCard({ quest, onRemove, removable }: Props) {
                 {!dungeonDone && (
                   <span className="text-white/40">· 단계 +{dungeonStepXp} XP</span>
                 )}
+                {growthStatSummary && (
+                  <span className="text-white/40">· 성장 {growthStatSummary}</span>
+                )}
                 {Object.entries(clearStatRewards).map(([k, v]) => (
                   <span key={k} className="text-white/50">· {k} {formatStatReward(v ?? 0)}</span>
                 ))}
@@ -110,6 +116,9 @@ export function QuestCard({ quest, onRemove, removable }: Props) {
             ) : (
               <>
                 <span className="text-cyan-300 font-bold">+{nonDungeonXp} XP</span>
+                {growthStatSummary && (
+                  <span className="text-white/40">· 성장 {growthStatSummary}</span>
+                )}
                 {Object.entries(clearStatRewards).map(([k, v]) => (
                   <span key={k} className="text-white/50">· {k} {formatStatReward(v ?? 0)}</span>
                 ))}

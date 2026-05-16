@@ -1,7 +1,9 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import {
   Activity,
   AlertTriangle,
+  FastForward,
+  List,
   Package,
   Shield,
   Skull,
@@ -178,52 +180,124 @@ function PenaltySummary({ log }: { log: CombatLog }) {
   return <div className="text-xs text-white/45">패널티 없음</div>
 }
 
-function RecentBattleResult({ log }: { log?: CombatLog }) {
+function RecentBattleResult({
+  log,
+  shouldReveal = false,
+  onRevealStateChange,
+}: {
+  log?: CombatLog
+  shouldReveal?: boolean
+  onRevealStateChange?: (isRevealing: boolean) => void
+}) {
   const [showFullLog, setShowFullLog] = useState(false)
+  const [revealedLogCount, setRevealedLogCount] = useState(0)
+  const intervalRef = useRef<number | undefined>(undefined)
+
+  const clearRevealTimer = () => {
+    if (intervalRef.current !== undefined) {
+      window.clearInterval(intervalRef.current)
+      intervalRef.current = undefined
+    }
+  }
+
+  useEffect(() => {
+    clearRevealTimer()
+    setShowFullLog(false)
+
+    if (!log) {
+      setRevealedLogCount(0)
+      onRevealStateChange?.(false)
+      return
+    }
+
+    if (!shouldReveal || log.turns.length === 0) {
+      setRevealedLogCount(log.turns.length)
+      onRevealStateChange?.(false)
+      return
+    }
+
+    let nextCount = 0
+    setRevealedLogCount(0)
+    onRevealStateChange?.(true)
+
+    intervalRef.current = window.setInterval(() => {
+      nextCount += 1
+      setRevealedLogCount(Math.min(nextCount, log.turns.length))
+
+      if (nextCount >= log.turns.length) {
+        clearRevealTimer()
+        onRevealStateChange?.(false)
+      }
+    }, 500)
+
+    return () => {
+      clearRevealTimer()
+      onRevealStateChange?.(false)
+    }
+  }, [log?.battleId, log?.turns.length, onRevealStateChange, shouldReveal])
+
   if (!log) return null
 
   const meta = resultMeta[log.result]
-  const visibleTurns = showFullLog ? log.turns : log.turns.slice(-5)
+  const revealComplete = revealedLogCount >= log.turns.length
+  const revealedTurns = log.turns.slice(0, revealedLogCount)
+  const visibleTurns = revealComplete
+    ? (showFullLog ? log.turns : log.turns.slice(-5))
+    : revealedTurns
+  const panelClassName = revealComplete ? meta.className : 'border-cyan-400/40 bg-cyan-500/10'
+  const iconClassName = revealComplete ? meta.iconClassName : 'text-cyan-300'
+
+  const skipReveal = () => {
+    clearRevealTimer()
+    setRevealedLogCount(log.turns.length)
+    onRevealStateChange?.(false)
+  }
 
   return (
-    <div className={`panel corner-bracket p-4 border ${meta.className}`}>
+    <div className={`panel corner-bracket p-4 border ${panelClassName}`}>
       <div className="br" />
       <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-3 mb-4">
         <div className="flex items-start gap-3">
-          <Swords className={`w-5 h-5 mt-0.5 ${meta.iconClassName}`} />
+          <Swords className={`w-5 h-5 mt-0.5 ${iconClassName} ${revealComplete ? '' : 'animate-pulse'}`} />
           <div>
             <div className="system-text text-[11px] text-cyan-300/70 mb-1">RECENT BATTLE</div>
-            <h3 className="text-lg font-bold text-white/90">{meta.title}</h3>
-            <p className="text-xs text-white/55 leading-relaxed mt-1">{meta.description}</p>
+            <h3 className="text-lg font-bold text-white/90">
+              {revealComplete ? meta.title : '게이트 전투 진행 중'}
+            </h3>
+            <p className="text-xs text-white/55 leading-relaxed mt-1">
+              {revealComplete ? meta.description : '전투 로그가 순차적으로 전송되고 있습니다.'}
+            </p>
           </div>
         </div>
-        <div className={`text-xs system-text px-2.5 py-1 rounded border ${meta.className} ${meta.iconClassName}`}>
-          {meta.label}
+        <div className={`text-xs system-text px-2.5 py-1 rounded border ${panelClassName} ${iconClassName}`}>
+          {revealComplete ? meta.label : `${revealedLogCount}/${log.turns.length}`}
         </div>
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
-        <StatPill label="총 턴" value={log.totalTurns} />
-        <StatPill label="남은 HP" value={Math.round(log.playerHpRemaining)} />
-        <StatPill label="보상" value={log.rewards.length > 0 ? `${log.rewards.length}개` : '없음'} />
+        <StatPill label="공개 로그" value={`${revealedLogCount} / ${log.turns.length}`} />
+        <StatPill label="총 턴" value={revealComplete ? log.totalTurns : '-'} />
+        <StatPill label="남은 HP" value={revealComplete ? Math.round(log.playerHpRemaining) : '-'} />
         <StatPill
           label="웨이브"
-          value={log.totalWaves ? `${log.clearedWaves ?? 0} / ${log.totalWaves}` : '-'}
+          value={revealComplete && log.totalWaves ? `${log.clearedWaves ?? 0} / ${log.totalWaves}` : '-'}
         />
       </div>
 
-      <div className="grid md:grid-cols-2 gap-3 mb-4">
-        <div className="border border-white/10 rounded-lg p-3 bg-ink-900/35">
-          <div className="system-text text-[10px] text-purple-300/70 mb-2">REWARD</div>
-          <RewardSummary log={log} />
+      {revealComplete && (
+        <div className="grid md:grid-cols-2 gap-3 mb-4">
+          <div className="border border-white/10 rounded-lg p-3 bg-ink-900/35">
+            <div className="system-text text-[10px] text-purple-300/70 mb-2">REWARD</div>
+            <RewardSummary log={log} />
+          </div>
+          <div className="border border-white/10 rounded-lg p-3 bg-ink-900/35">
+            <div className="system-text text-[10px] text-rose-300/70 mb-2">PENALTY</div>
+            <PenaltySummary log={log} />
+          </div>
         </div>
-        <div className="border border-white/10 rounded-lg p-3 bg-ink-900/35">
-          <div className="system-text text-[10px] text-rose-300/70 mb-2">PENALTY</div>
-          <PenaltySummary log={log} />
-        </div>
-      </div>
+      )}
 
-      {log.result === 'draw' && (
+      {revealComplete && log.result === 'draw' && (
         <div className="mb-4 border border-amber-400/25 bg-amber-400/10 rounded-lg p-3 text-xs text-amber-100/80 leading-relaxed">
           보상과 패널티는 없습니다. 게이트는 유지되며, 장비/직업/소모품 세팅을 바꾼 뒤 다시 도전할 수 있습니다.
         </div>
@@ -231,20 +305,36 @@ function RecentBattleResult({ log }: { log?: CombatLog }) {
 
       <div className="flex items-center justify-between gap-3 mb-3">
         <div className="system-text text-[11px] text-cyan-300/70">
-          BATTLE LOG {showFullLog ? `(${log.turns.length})` : '(최근 5줄)'}
+          BATTLE LOG {revealComplete ? (showFullLog ? `(${log.turns.length})` : '(최근 5줄)') : '(전송 중)'}
         </div>
-        {log.turns.length > 5 && (
+        {!revealComplete && (
+          <button
+            type="button"
+            onClick={skipReveal}
+            className="inline-flex items-center gap-1.5 text-[10px] system-text text-amber-200 border border-amber-400/25 bg-amber-400/10 rounded px-2 py-1 hover:bg-amber-400/15 transition"
+          >
+            <FastForward className="w-3 h-3" />
+            전투 스킵
+          </button>
+        )}
+        {revealComplete && log.turns.length > 5 && (
           <button
             type="button"
             onClick={() => setShowFullLog(prev => !prev)}
-            className="text-[10px] system-text text-cyan-200 border border-cyan-400/25 bg-cyan-400/10 rounded px-2 py-1 hover:bg-cyan-400/15 transition"
+            className="inline-flex items-center gap-1.5 text-[10px] system-text text-cyan-200 border border-cyan-400/25 bg-cyan-400/10 rounded px-2 py-1 hover:bg-cyan-400/15 transition"
           >
+            <List className="w-3 h-3" />
             {showFullLog ? '로그 접기' : '전체 로그 보기'}
           </button>
         )}
       </div>
 
       <div className="space-y-2">
+        {visibleTurns.length === 0 && (
+          <div className="rounded-lg border border-cyan-400/20 bg-cyan-400/5 px-3 py-3 text-xs text-cyan-100/60 system-text">
+            전투 개시 대기 중...
+          </div>
+        )}
         {visibleTurns.map((turn, index) => {
           const outcome = outcomeMeta[turn.outcome]
           const isCounterLog =
@@ -338,10 +428,10 @@ function EmptyGateState() {
       </p>
 
       <div className="grid md:grid-cols-4 gap-3 mt-6 text-left">
-        <StatPill label="하루 첫 접속" value="5%" />
-        <StatPill label="던전 클리어" value="15%" />
-        <StatPill label="고난도 던전" value="25%" />
-        <StatPill label="활성 제한" value="1개" />
+        <StatPill label="하루 첫 접속" value="7%" />
+        <StatPill label="daily 완료" value="3%" />
+        <StatPill label="던전 클리어" value="25~30%" />
+        <StatPill label="main 완료" value="50%" />
       </div>
 
       <div className="text-[11px] system-text text-cyan-300/45 mt-5">
@@ -385,6 +475,7 @@ function MonsterCard({ monster, waveNumber }: { monster: MonsterDefinition; wave
 }
 
 export function GatePanel() {
+  const [isBattleRevealing, setIsBattleRevealing] = useState(false)
   const hunter = useGame(s => s.hunter)
   const items = useGame(s => s.items)
   const equipment = useGame(s => s.equipment)
@@ -427,7 +518,11 @@ export function GatePanel() {
       <div className="space-y-4">
         <GateStatusPanel />
         <EmptyGateState />
-        <RecentBattleResult log={combatLogs[0]} />
+        <RecentBattleResult
+          log={combatLogs[0]}
+          shouldReveal={isBattleRevealing}
+          onRevealStateChange={setIsBattleRevealing}
+        />
       </div>
     )
   }
@@ -454,7 +549,7 @@ export function GatePanel() {
   const riskInfo = riskMeta[risk]
   const isInjured = Boolean(gateStatus.injuredUntil)
   const hasStamina = gateStatus.stamina >= GATE_ENTRY_COST
-  const canStart = hasStamina && !isInjured
+  const canStart = hasStamina && !isInjured && !isBattleRevealing
   const latestCombatLog = combatLogs[0]
   const canRetry =
     latestCombatLog?.gateInstanceId === activeGate.instanceId &&
@@ -463,9 +558,17 @@ export function GatePanel() {
     ? '스태미나 부족'
     : isInjured
       ? '부상 회복 필요'
-      : canRetry
+      : isBattleRevealing
+        ? '전투 진행 중'
+        : canRetry
         ? '게이트 재도전'
         : '게이트 도전'
+
+  const handleStartGateBattle = () => {
+    if (!canStart) return
+    setIsBattleRevealing(true)
+    startGateBattle()
+  }
 
   return (
     <div className="space-y-4">
@@ -637,7 +740,7 @@ export function GatePanel() {
 
             <button
               type="button"
-              onClick={startGateBattle}
+              onClick={handleStartGateBattle}
               disabled={!canStart}
               className="w-full btn btn-primary text-sm disabled:opacity-60 disabled:cursor-not-allowed"
             >
@@ -649,7 +752,11 @@ export function GatePanel() {
           </div>
         </div>
       </div>
-      <RecentBattleResult log={combatLogs[0]} />
+      <RecentBattleResult
+        log={combatLogs[0]}
+        shouldReveal={isBattleRevealing}
+        onRevealStateChange={setIsBattleRevealing}
+      />
     </div>
   )
 }

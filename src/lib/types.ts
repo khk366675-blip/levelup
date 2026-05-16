@@ -265,6 +265,8 @@ export interface Quest {
   category: Category
   difficulty: Difficulty
   statRewards: Partial<Record<StatKey, number>>
+  /** Optional stat distribution weights. If present, total stat reward is split by these weights. */
+  rewardStatWeights?: Partial<Record<StatKey, number>>
   type: 'daily' | 'main' | 'dungeon'
   /** for daily: ISO date when last completed; reset at midnight */
   lastCompletedAt?: string
@@ -545,6 +547,8 @@ export interface Item {
   equippable?: boolean
   slot?: EquipmentSlot
   effects?: ItemEffect[]
+  /** 강화 레벨. 없으면 +0으로 취급한다. 보유한 개별 item instance에만 적용된다. */
+  enhancementLevel?: number
   /** 장착 중일 때 플레이어가 사용할 수 있는 전투 스킬 ID 목록. 주로 epic/legendary 장비에 부여한다. */
   combatSkillIds?: string[]
   
@@ -565,6 +569,16 @@ export type TitleRarity =
   | 'epic'
   | 'legendary'
 
+export interface TitleEffects {
+  xpBonusByCategory?: Partial<Record<Category, number>>
+  globalXpBonus?: number
+  gateDropBonus?: number
+  rarityBonus?: number
+  statBonus?: Partial<Record<StatKey, number>>
+  gatePenaltyReduction?: number
+  injuryRecoveryBonus?: number
+}
+
 export interface TitleDefinition {
   id: string
   name: string
@@ -573,6 +587,7 @@ export interface TitleDefinition {
   rarity: TitleRarity
   hidden: boolean
   conditionText?: string
+  effects?: TitleEffects
 }
 
 export const TITLE_DEFINITIONS: TitleDefinition[] = [
@@ -584,6 +599,7 @@ export const TITLE_DEFINITIONS: TitleDefinition[] = [
     rarity: 'normal',
     hidden: false,
     conditionText: '레벨 5 도달',
+    effects: { globalXpBonus: 0.01 },
   },
   {
     id: 'hunter',
@@ -593,6 +609,7 @@ export const TITLE_DEFINITIONS: TitleDefinition[] = [
     rarity: 'rare',
     hidden: false,
     conditionText: '레벨 25 도달',
+    effects: { globalXpBonus: 0.02 },
   },
   {
     id: 'veteran-hunter',
@@ -602,6 +619,7 @@ export const TITLE_DEFINITIONS: TitleDefinition[] = [
     rarity: 'epic',
     hidden: false,
     conditionText: '레벨 50 도달',
+    effects: { globalXpBonus: 0.03 },
   },
   {
     id: 'shadow-hunter',
@@ -611,6 +629,7 @@ export const TITLE_DEFINITIONS: TitleDefinition[] = [
     rarity: 'rare',
     hidden: false,
     conditionText: '첫 dungeon 클리어',
+    effects: { gateDropBonus: 0.03 },
   },
   {
     id: 'trained-one',
@@ -620,6 +639,7 @@ export const TITLE_DEFINITIONS: TitleDefinition[] = [
     rarity: 'normal',
     hidden: false,
     conditionText: 'STR 30',
+    effects: { xpBonusByCategory: { workout: 0.01 } },
   },
   {
     id: 'iron-hunter',
@@ -629,6 +649,7 @@ export const TITLE_DEFINITIONS: TitleDefinition[] = [
     rarity: 'rare',
     hidden: false,
     conditionText: 'STR 50',
+    effects: { xpBonusByCategory: { workout: 0.02, challenge: 0.01 } },
   },
   {
     id: 'steel-hunter',
@@ -638,6 +659,7 @@ export const TITLE_DEFINITIONS: TitleDefinition[] = [
     rarity: 'epic',
     hidden: false,
     conditionText: 'STR 80',
+    effects: { xpBonusByCategory: { workout: 0.03, health: 0.02 } },
   },
   {
     id: 'sage-apprentice',
@@ -647,6 +669,7 @@ export const TITLE_DEFINITIONS: TitleDefinition[] = [
     rarity: 'normal',
     hidden: false,
     conditionText: 'INT 30',
+    effects: { xpBonusByCategory: { study: 0.01 } },
   },
   {
     id: 'market-eye',
@@ -656,6 +679,7 @@ export const TITLE_DEFINITIONS: TitleDefinition[] = [
     rarity: 'rare',
     hidden: false,
     conditionText: 'INT 50',
+    effects: { xpBonusByCategory: { finance: 0.02, career: 0.01 } },
   },
   {
     id: 'analyst',
@@ -665,6 +689,7 @@ export const TITLE_DEFINITIONS: TitleDefinition[] = [
     rarity: 'epic',
     hidden: false,
     conditionText: 'INT 80',
+    effects: { xpBonusByCategory: { study: 0.03, career: 0.02 } },
   },
   {
     id: 'unyielding-will',
@@ -674,6 +699,7 @@ export const TITLE_DEFINITIONS: TitleDefinition[] = [
     rarity: 'rare',
     hidden: false,
     conditionText: 'PER 50',
+    effects: { xpBonusByCategory: { habit: 0.02, challenge: 0.01 } },
   },
   {
     id: 'steel-mental',
@@ -683,6 +709,7 @@ export const TITLE_DEFINITIONS: TitleDefinition[] = [
     rarity: 'epic',
     hidden: false,
     conditionText: 'PER 80',
+    effects: { xpBonusByCategory: { habit: 0.03, mind: 0.02 } },
   },
   {
     id: 'awakened-one',
@@ -692,6 +719,7 @@ export const TITLE_DEFINITIONS: TitleDefinition[] = [
     rarity: 'rare',
     hidden: false,
     conditionText: 'SEN 50',
+    effects: { rarityBonus: 0.01 },
   },
   {
     id: 'ruler-of-instinct',
@@ -701,6 +729,7 @@ export const TITLE_DEFINITIONS: TitleDefinition[] = [
     rarity: 'epic',
     hidden: false,
     conditionText: 'SEN 80',
+    effects: { rarityBonus: 0.03 },
   },
   {
     id: 'first-treasure',
@@ -710,6 +739,7 @@ export const TITLE_DEFINITIONS: TitleDefinition[] = [
     rarity: 'rare',
     hidden: false,
     conditionText: '첫 epic 이상 아이템 획득',
+    effects: { rarityBonus: 0.01 },
   },
   {
     id: 'collector',
@@ -719,6 +749,7 @@ export const TITLE_DEFINITIONS: TitleDefinition[] = [
     rarity: 'rare',
     hidden: false,
     conditionText: '인벤토리 50개 누적',
+    effects: { gateDropBonus: 0.02 },
   },
   {
     id: 'legend-in-hand',
@@ -728,6 +759,7 @@ export const TITLE_DEFINITIONS: TitleDefinition[] = [
     rarity: 'legendary',
     hidden: false,
     conditionText: 'legendary 아이템 첫 획득',
+    effects: { rarityBonus: 0.03 },
   },
   // ── Hidden Titles ──────────────────────────────────────────────────
   {
@@ -738,6 +770,7 @@ export const TITLE_DEFINITIONS: TitleDefinition[] = [
     rarity: 'rare',
     hidden: true,
     conditionText: '7시 전 기상 daily 30일 연속',
+    effects: { xpBonusByCategory: { health: 0.02, habit: 0.02 } },
   },
   {
     id: 'ruler-of-dawn',
@@ -747,6 +780,7 @@ export const TITLE_DEFINITIONS: TitleDefinition[] = [
     rarity: 'epic',
     hidden: true,
     conditionText: '7시 전 기상 daily 100회 누적',
+    effects: { xpBonusByCategory: { health: 0.03, habit: 0.03 } },
   },
   {
     id: 'incarnation-of-restraint',
@@ -756,6 +790,7 @@ export const TITLE_DEFINITIONS: TitleDefinition[] = [
     rarity: 'rare',
     hidden: true,
     conditionText: '숏폼 30분 이내 daily 30일 연속',
+    effects: { xpBonusByCategory: { habit: 0.02, mind: 0.01 } },
   },
   {
     id: 'dopamine-hunter',
@@ -765,6 +800,7 @@ export const TITLE_DEFINITIONS: TitleDefinition[] = [
     rarity: 'epic',
     hidden: true,
     conditionText: '숏폼 30분 이내 daily 90회 누적',
+    effects: { xpBonusByCategory: { habit: 0.03, mind: 0.02 } },
   },
   {
     id: 'quiet-mind',
@@ -774,6 +810,7 @@ export const TITLE_DEFINITIONS: TitleDefinition[] = [
     rarity: 'rare',
     hidden: true,
     conditionText: '명상 daily 30일 연속',
+    effects: { xpBonusByCategory: { mind: 0.02, habit: 0.02 } },
   },
   {
     id: 'market-observer',
@@ -783,6 +820,7 @@ export const TITLE_DEFINITIONS: TitleDefinition[] = [
     rarity: 'rare',
     hidden: true,
     conditionText: '시장 마감 점검 daily 60회 누적',
+    effects: { xpBonusByCategory: { finance: 0.03, career: 0.03 } },
   },
   {
     id: 'enemy-of-body-fat',
@@ -792,6 +830,7 @@ export const TITLE_DEFINITIONS: TitleDefinition[] = [
     rarity: 'rare',
     hidden: true,
     conditionText: '체중 기록 daily 60회 누적',
+    effects: { xpBonusByCategory: { health: 0.03 } },
   },
   {
     id: 'near-burnout',
@@ -801,6 +840,7 @@ export const TITLE_DEFINITIONS: TitleDefinition[] = [
     rarity: 'rare',
     hidden: true,
     conditionText: '하루에 daily 15개 이상 클리어',
+    effects: { globalXpBonus: 0.02 },
   },
   {
     id: 'all-nighter',
@@ -810,6 +850,7 @@ export const TITLE_DEFINITIONS: TitleDefinition[] = [
     rarity: 'rare',
     hidden: true,
     conditionText: '자정~2시 사이 daily 완료 5회',
+    effects: { xpBonusByCategory: { challenge: 0.02, habit: 0.01 } },
   },
   {
     id: 'hundred-days-record',
@@ -819,6 +860,7 @@ export const TITLE_DEFINITIONS: TitleDefinition[] = [
     rarity: 'epic',
     hidden: true,
     conditionText: '앱 사용 100일',
+    effects: { globalXpBonus: 0.03 },
   },
   {
     id: 'national-level-hunter',
@@ -828,6 +870,7 @@ export const TITLE_DEFINITIONS: TitleDefinition[] = [
     rarity: 'legendary',
     hidden: true,
     conditionText: 'National 랭크 도달',
+    effects: { globalXpBonus: 0.05, gateDropBonus: 0.05 },
   },
   {
     id: 'systems-favor',
@@ -837,6 +880,7 @@ export const TITLE_DEFINITIONS: TitleDefinition[] = [
     rarity: 'legendary',
     hidden: true,
     conditionText: 'legendary 아이템 5개 보유',
+    effects: { rarityBonus: 0.05, gateDropBonus: 0.03 },
   },
   {
     id: 'sleepless-hunter',
@@ -846,6 +890,7 @@ export const TITLE_DEFINITIONS: TitleDefinition[] = [
     rarity: 'legendary',
     hidden: true,
     conditionText: 'daily streak 100일',
+    effects: { globalXpBonus: 0.05 },
   },
   // ── Meta Hidden Titles ──────────────────────────────────────────────
   {
@@ -856,6 +901,7 @@ export const TITLE_DEFINITIONS: TitleDefinition[] = [
     rarity: 'normal',
     hidden: true,
     conditionText: '첫 로그인',
+    effects: { globalXpBonus: 0.01 },
   },
   {
     id: 'title-collector',
@@ -865,6 +911,7 @@ export const TITLE_DEFINITIONS: TitleDefinition[] = [
     rarity: 'rare',
     hidden: true,
     conditionText: '칭호 10개 보유',
+    effects: { globalXpBonus: 0.02 },
   },
   {
     id: 'hall-of-hunters',
@@ -874,6 +921,7 @@ export const TITLE_DEFINITIONS: TitleDefinition[] = [
     rarity: 'epic',
     hidden: true,
     conditionText: '칭호 25개 보유',
+    effects: { globalXpBonus: 0.03, rarityBonus: 0.01 },
   },
   // ── Additional Hidden Titles (5-5) ─────────────────────────────────
   {
@@ -884,6 +932,7 @@ export const TITLE_DEFINITIONS: TitleDefinition[] = [
     rarity: 'rare',
     hidden: true,
     conditionText: 'CMA 운용 일지 6회 작성',
+    effects: { xpBonusByCategory: { finance: 0.03, career: 0.01 } },
   },
   {
     id: 'self-reliant-hunter',
@@ -893,6 +942,7 @@ export const TITLE_DEFINITIONS: TitleDefinition[] = [
     rarity: 'rare',
     hidden: true,
     conditionText: '빨래 + 청소 + 분리수거 daily 각 10회 누적',
+    effects: { xpBonusByCategory: { habit: 0.02, health: 0.01 } },
   },
   {
     id: 'guardian-of-hygiene',
@@ -902,6 +952,7 @@ export const TITLE_DEFINITIONS: TitleDefinition[] = [
     rarity: 'epic',
     hidden: true,
     conditionText: '자취 daily 카테고리 합산 100회',
+    effects: { xpBonusByCategory: { habit: 0.03, health: 0.02 } },
   },
   {
     id: 'perfectionist',
@@ -911,6 +962,7 @@ export const TITLE_DEFINITIONS: TitleDefinition[] = [
     rarity: 'legendary',
     hidden: true,
     conditionText: '일주일 동안 모든 daily 100% 완료',
+    effects: { globalXpBonus: 0.05, rarityBonus: 0.02 },
   },
 ]
 

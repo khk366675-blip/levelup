@@ -16,8 +16,10 @@ import type {
   SkillEffect,
   SkillDefinition,
   StatKey,
+  TitleDefinition,
+  TitleEffects,
 } from './types'
-import { CATEGORY_META } from './types'
+import { CATEGORY_META, STAT_META, TITLE_DEFINITIONS } from './types'
 
 export const xpToNextLevel = (level: number): number => {
   // Adjusted growth curve: slower mid-late game, early discount for Lv 1-10
@@ -121,88 +123,84 @@ export const formatStatReward = (value: number): string => {
 
 type QuestRewardType = Quest['type']
 
-// 12-1C: daily stays low; main XP bumped further; dungeon clear XP standardized by rank (월 단위 대형 목표).
-const BALANCED_XP_BY_TYPE: Record<QuestRewardType, Record<Difficulty, number>> = {
+// 12-3: keep the reward hierarchy daily < dungeon < main, but raise the whole reward feel.
+export const BALANCED_XP_BY_TYPE: Record<QuestRewardType, Record<Difficulty, number>> = {
   daily: {
-    easy: 7,
-    normal: 10,
-    hard: 16,
-    elite: 35,
-    apex: 45,
-    boss: 60,
+    easy: 32,
+    normal: 48,
+    hard: 80,
+    elite: 160,
+    apex: 225,
+    boss: 320,
   },
   main: {
-    easy: 150,
-    normal: 280,
-    hard: 500,
-    elite: 800,
-    apex: 1300,
-    boss: 2000,
+    easy: 1800,
+    normal: 3400,
+    hard: 6800,
+    elite: 11800,
+    apex: 20500,
+    boss: 35000,
   },
-  // 12-1D: dungeon clear XP lowered to ~1/3 of same-rank main. Hierarchy: main > dungeon > daily.
-  //        Drop chance stays high — dungeon's edge is loot, not XP/stat.
   dungeon: {
-    easy: 50,
-    normal: 90,
-    hard: 170,
-    elite: 270,
-    apex: 430,
-    boss: 670,
+    easy: 650,
+    normal: 1100,
+    hard: 2000,
+    elite: 3200,
+    apex: 5100,
+    boss: 8000,
   },
 }
 
-// 12-1C: main stat multiplier raised — 자격증/대형 프로젝트는 +10~20 stat을 줄 수 있도록.
-// 12-1D: dungeon stat multiplier lowered to ~1/3 of main — main > dungeon > daily.
-//        daily kept identical to 12-1.
-const STAT_REWARD_MULTIPLIER_BY_TYPE: Record<QuestRewardType, Record<Difficulty, number>> = {
+// 12-3: stats rise with the same hierarchy. Gate remains item-first, so gate stat rewards stay absent.
+export const STAT_REWARD_MULTIPLIER_BY_TYPE: Record<QuestRewardType, Record<Difficulty, number>> = {
   daily: {
-    easy: 0.06,
-    normal: 0.1,
-    hard: 0.08,
-    elite: 0.08,
-    apex: 0.08,
-    boss: 0.08,
+    easy: 0.14,
+    normal: 0.22,
+    hard: 0.20,
+    elite: 0.20,
+    apex: 0.20,
+    boss: 0.20,
   },
   main: {
-    easy: 0.6,
-    normal: 0.8,
-    hard: 1.0,
-    elite: 1.2,
-    apex: 1.6,
-    boss: 2.0,
+    easy: 3.2,
+    normal: 4.5,
+    hard: 6.0,
+    elite: 8.0,
+    apex: 11.0,
+    boss: 15.0,
   },
   dungeon: {
-    easy: 0.20,
-    normal: 0.27,
-    hard: 0.35,
-    elite: 0.40,
-    apex: 0.55,
-    boss: 0.70,
+    easy: 0.95,
+    normal: 1.25,
+    hard: 1.6,
+    elite: 2.0,
+    apex: 2.8,
+    boss: 3.6,
   },
 }
 
-// 12-1B: daily drops stay rare; main/dungeon drops raised since completion itself is rare.
-const DROP_CHANCE_BY_TYPE: Record<QuestRewardType, Record<Difficulty, number>> = {
+// 12-3: a small drop bump across quest tiers. Daily stays modest; dungeon/main remain the loot-heavy milestones.
+export const DROP_CHANCE_BY_TYPE: Record<QuestRewardType, Record<Difficulty, number>> = {
   daily: {
-    easy: 0.015,
-    normal: 0.03,
-    hard: 0.05,
-    elite: 0.08,
-    apex: 0.1,
-    boss: 0.12,
+    easy: 0.02,
+    normal: 0.04,
+    hard: 0.07,
+    elite: 0.1,
+    apex: 0.12,
+    boss: 0.15,
   },
   main: {
-    easy: 0.25,
-    normal: 0.4,
-    hard: 0.55,
-    elite: 0.7,
-    apex: 0.85,
+    easy: 0.3,
+    normal: 0.48,
+    hard: 0.65,
+    elite: 0.8,
+    apex: 0.9,
     boss: 1.0,
   },
   dungeon: {
-    easy: 0.5,
-    normal: 0.7,
-    hard: 0.9,
+    easy: 0.6,
+    normal: 0.8,
+    hard: 0.95,
     elite: 0.95,
     apex: 1.0,
     boss: 1.0,
@@ -218,36 +216,56 @@ export const getBalancedDungeonClearXp = (difficulty: Difficulty): number => {
   return getBalancedQuestXp('dungeon', difficulty)
 }
 
-/** Per-step partial XP. Total partial budget = clear × 0.25, divided by totalSteps.
+export const DUNGEON_PARTIAL_XP_BUDGET_RATIO = 0.4
+
+/** Per-step partial XP. Total partial budget = clear × DUNGEON_PARTIAL_XP_BUDGET_RATIO, divided by totalSteps.
  *  Final clear award is granted separately as `getBalancedDungeonClearXp`. */
 export const getBalancedDungeonStepXp = (difficulty: Difficulty, totalSteps = 1): number => {
   const safeTotal = Math.max(1, totalSteps)
-  return Math.max(5, Math.round(getBalancedDungeonClearXp(difficulty) * 0.25 / safeTotal))
+  return Math.max(5, Math.round(getBalancedDungeonClearXp(difficulty) * DUNGEON_PARTIAL_XP_BUDGET_RATIO / safeTotal))
 }
 
 export const getBalancedQuestDropChance = (type: QuestRewardType, difficulty: Difficulty): number => {
   return DROP_CHANCE_BY_TYPE[type][difficulty]
 }
 
-export const getBalancedQuestStatRewards = (q: Pick<Quest, 'type' | 'difficulty' | 'statRewards'>): Partial<Record<StatKey, number>> => {
+export const getBalancedQuestStatRewards = (q: Pick<Quest, 'type' | 'difficulty' | 'category' | 'statRewards' | 'rewardStatWeights'>): Partial<Record<StatKey, number>> => {
   const multiplier = STAT_REWARD_MULTIPLIER_BY_TYPE[q.type][q.difficulty]
   const rewards: Partial<Record<StatKey, number>> = {}
+  const weights = Object.entries(q.rewardStatWeights ?? {}) as Array<[StatKey, number]>
+  const validWeights = weights
+    .map(([key, value]) => [key, Math.max(0, value ?? 0)] as [StatKey, number])
+    .filter(([, value]) => value > 0)
+  const totalWeight = validWeights.reduce((sum, [, value]) => sum + value, 0)
+
+  if (totalWeight > 0) {
+    const baseTotal = Object.values(q.statRewards).reduce((sum, value) => sum + Math.max(0, value ?? 0), 0)
+    const totalGain = roundStatValue(baseTotal * multiplier)
+    for (const [key, weight] of validWeights) {
+      rewards[key] = roundStatValue(totalGain * (weight / totalWeight))
+    }
+    return rewards
+  }
 
   for (const [key, value] of Object.entries(q.statRewards) as Array<[StatKey, number]>) {
     rewards[key] = roundStatValue((value ?? 0) * multiplier)
+  }
+
+  if (Object.keys(rewards).length === 0) {
+    rewards[CATEGORY_TO_STAT[q.category]] = roundStatValue(multiplier)
   }
 
   return rewards
 }
 
 export const getBalancedRandomQuestXp = (baseXp: number): number => {
-  return Math.max(5, Math.round(baseXp * 0.7))
+  return Math.max(5, Math.round(baseXp * 0.8))
 }
 
 export const getBalancedRandomQuestDropChance = (difficulty: Difficulty): number => {
-  if (difficulty === 'hard') return 0.1
-  if (difficulty === 'normal') return 0.06
-  return 0.035
+  if (difficulty === 'hard') return 0.12
+  if (difficulty === 'normal') return 0.07
+  return 0.04
 }
 
 export const monthStart = (now: Date = new Date()): Date => {
@@ -339,6 +357,77 @@ export const shouldProtectStreak = (hunter: HunterState, lastUsedAt: string | un
 
 // ── Equipment Effect Helpers ───────────────────────────────────────────
 
+export const MAX_ITEM_ENHANCEMENT_LEVEL = 5
+export const ITEM_ENHANCEMENT_EFFECT_STEP = 0.08
+
+export const getEnhancementLevel = (item: Pick<Item, 'enhancementLevel'>): number => {
+  const raw = Math.floor(item.enhancementLevel ?? 0)
+  if (!Number.isFinite(raw)) return 0
+  return Math.max(0, Math.min(MAX_ITEM_ENHANCEMENT_LEVEL, raw))
+}
+
+export const getEnhancementMultiplier = (item: Pick<Item, 'enhancementLevel'>): number => {
+  return 1 + getEnhancementLevel(item) * ITEM_ENHANCEMENT_EFFECT_STEP
+}
+
+export const formatEnhancementLabel = (item: Pick<Item, 'enhancementLevel'>): string => {
+  const level = getEnhancementLevel(item)
+  return level > 0 ? `+${level}` : ''
+}
+
+export const isEnhanceableEquipment = (item: Pick<Item, 'equippable' | 'slot' | 'consumable'>): boolean => {
+  return item.equippable === true && Boolean(item.slot) && item.consumable !== true
+}
+
+export const getItemEnhancementKey = (item: Pick<Item, 'name' | 'rarity' | 'slot' | 'equippable' | 'consumable'>): string => {
+  if (!isEnhanceableEquipment(item)) return ''
+  return `${item.name}::${item.rarity}::${item.slot}`
+}
+
+export const isSameEnhancementFamily = (
+  target: Pick<Item, 'name' | 'rarity' | 'slot' | 'equippable' | 'consumable'>,
+  candidate: Pick<Item, 'name' | 'rarity' | 'slot' | 'equippable' | 'consumable'>
+): boolean => {
+  const targetKey = getItemEnhancementKey(target)
+  return targetKey.length > 0 && targetKey === getItemEnhancementKey(candidate)
+}
+
+export const getEnhancedItemEffects = (item: Item): NonNullable<Item['effects']> => {
+  const multiplier = getEnhancementMultiplier(item)
+  return item.effects?.map(effect => ({
+    ...effect,
+    value: effect.type === 'stat_bonus'
+      ? roundStatValue(effect.value * multiplier)
+      : effect.value * multiplier,
+  })) ?? []
+}
+
+export const getEnhanceMaterialCandidates = (
+  target: Item,
+  inventory: Item[],
+  equippedItemIds: string[] | Set<string> = []
+): Item[] => {
+  if (!isEnhanceableEquipment(target)) return []
+  if (getEnhancementLevel(target) >= MAX_ITEM_ENHANCEMENT_LEVEL) return []
+
+  const equippedIds = equippedItemIds instanceof Set ? equippedItemIds : new Set(equippedItemIds)
+  return inventory
+    .filter(item =>
+      item.id !== target.id &&
+      !equippedIds.has(item.id) &&
+      isSameEnhancementFamily(target, item)
+    )
+    .sort((a, b) => getEnhancementLevel(a) - getEnhancementLevel(b))
+}
+
+export const canEnhanceItem = (
+  target: Item,
+  inventory: Item[],
+  equippedItemIds: string[] | Set<string> = []
+): boolean => {
+  return getEnhanceMaterialCandidates(target, inventory, equippedItemIds).length > 0
+}
+
 /** Get all equipped items from equipment state. */
 export const getEquippedItems = (items: Item[], equipment: EquipmentState): Item[] => {
   return Object.values(equipment)
@@ -350,8 +439,7 @@ export const getEquippedItems = (items: Item[], equipment: EquipmentState): Item
 export const getEquipmentXpBonus = (equippedItems: Item[], category: Category): number => {
   let total = 0
   for (const item of equippedItems) {
-    if (!item.effects) continue
-    for (const effect of item.effects) {
+    for (const effect of getEnhancedItemEffects(item)) {
       if (effect.type === 'xp_bonus' && effect.category === category) {
         total += effect.value
       }
@@ -364,8 +452,7 @@ export const getEquipmentXpBonus = (equippedItems: Item[], category: Category): 
 export const getEquipmentDropBonus = (equippedItems: Item[]): number => {
   let total = 0
   for (const item of equippedItems) {
-    if (!item.effects) continue
-    for (const effect of item.effects) {
+    for (const effect of getEnhancedItemEffects(item)) {
       if (effect.type === 'drop_bonus') {
         total += effect.value
       }
@@ -378,8 +465,7 @@ export const getEquipmentDropBonus = (equippedItems: Item[]): number => {
 export const getEquipmentRarityBonus = (equippedItems: Item[]): number => {
   let total = 0
   for (const item of equippedItems) {
-    if (!item.effects) continue
-    for (const effect of item.effects) {
+    for (const effect of getEnhancedItemEffects(item)) {
       if (effect.type === 'rarity_bonus') {
         total += effect.value
       }
@@ -392,8 +478,7 @@ export const getEquipmentRarityBonus = (equippedItems: Item[]): number => {
 export const getEquipmentStatBonuses = (equippedItems: Item[]): Partial<Record<StatKey, number>> => {
   const bonuses: Partial<Record<StatKey, number>> = {}
   for (const item of equippedItems) {
-    if (!item.effects) continue
-    for (const effect of item.effects) {
+    for (const effect of getEnhancedItemEffects(item)) {
       if (effect.type === 'stat_bonus' && effect.stat) {
         bonuses[effect.stat] = (bonuses[effect.stat] ?? 0) + effect.value
       }
@@ -467,6 +552,76 @@ export const getRarityWeightBonusWithEquipment = (
 ): number => {
   const effectiveStats = getEffectiveStats(hunter.stats, equippedItems, consumableStatBonuses)
   return getStatBonus(effectiveStats.SEN, 1) / 100
+}
+
+// ── Title Effect Helpers ───────────────────────────────────────────────
+
+const clampBonus = (value: number, min = 0, max = 1): number => {
+  if (!Number.isFinite(value)) return min
+  return Math.max(min, Math.min(max, value))
+}
+
+export const getEquippedTitleDefinition = (hunter: HunterState): TitleDefinition | undefined => {
+  if (!hunter.equippedTitleId || !hunter.ownedTitleIds.includes(hunter.equippedTitleId)) return undefined
+  return TITLE_DEFINITIONS.find(title => title.id === hunter.equippedTitleId)
+}
+
+export const getEquippedTitleEffects = (hunter: HunterState): TitleEffects => {
+  return getEquippedTitleDefinition(hunter)?.effects ?? {}
+}
+
+export const getTitleXpMultiplier = (hunter: HunterState, category: Category): number => {
+  const effects = getEquippedTitleEffects(hunter)
+  const globalBonus = clampBonus(effects.globalXpBonus ?? 0, 0, 0.07)
+  const categoryBonus = clampBonus(effects.xpBonusByCategory?.[category] ?? 0, 0, 0.07)
+  return 1 + Math.min(0.1, globalBonus + categoryBonus)
+}
+
+export const getTitleDropBonus = (hunter: HunterState): number => {
+  return clampBonus(getEquippedTitleEffects(hunter).gateDropBonus ?? 0, 0, 0.07)
+}
+
+export const getTitleRarityBonus = (hunter: HunterState): number => {
+  return clampBonus(getEquippedTitleEffects(hunter).rarityBonus ?? 0, 0, 0.05)
+}
+
+export const formatTitleEffects = (title: TitleDefinition): string[] => {
+  const effects = title.effects
+  if (!effects) return ['효과 없음']
+
+  const lines: string[] = []
+  const percent = (value: number) => `${Math.round(value * 100)}%`
+
+  if ((effects.globalXpBonus ?? 0) > 0) {
+    lines.push(`전체 XP +${percent(effects.globalXpBonus ?? 0)}`)
+  }
+
+  const categoryEntries = Object.entries(effects.xpBonusByCategory ?? {}) as Array<[Category, number]>
+  const categoryText = categoryEntries
+    .filter(([, value]) => value > 0)
+    .map(([category, value]) => `${CATEGORY_META[category].label} XP +${percent(value)}`)
+  lines.push(...categoryText)
+
+  if ((effects.gateDropBonus ?? 0) > 0) {
+    lines.push(`게이트 드롭률 +${percent(effects.gateDropBonus ?? 0)}`)
+  }
+  if ((effects.rarityBonus ?? 0) > 0) {
+    lines.push(`레어리티 +${percent(effects.rarityBonus ?? 0)}`)
+  }
+
+  const statEntries = Object.entries(effects.statBonus ?? {}) as Array<[StatKey, number]>
+  lines.push(...statEntries
+    .filter(([, value]) => value > 0)
+    .map(([stat, value]) => `${STAT_META[stat].label} ${formatStatReward(value)}`))
+
+  if ((effects.gatePenaltyReduction ?? 0) > 0) {
+    lines.push(`게이트 페널티 완화 +${percent(effects.gatePenaltyReduction ?? 0)}`)
+  }
+  if ((effects.injuryRecoveryBonus ?? 0) > 0) {
+    lines.push(`부상 회복 +${percent(effects.injuryRecoveryBonus ?? 0)}`)
+  }
+
+  return lines.length > 0 ? lines : ['효과 없음']
 }
 
 // ── Gate / Combat Calculation Helpers ──────────────────────────────

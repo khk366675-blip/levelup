@@ -4110,3 +4110,764 @@ E/D 게이트 회귀 영향 없음 (수치 그대로).
 5. 프로젝트 전체 완성 판단 후, 사용자가 요청할 때 GitHub -> Vercel 배포 진행
 
 배포는 사용자가 “프로젝트 완성, 배포하자”고 명시하기 전까지 진행하지 않는다.
+
+## 12차 작업 3단계 - 보상 체감 / 게이트 UX 개선
+
+### 작업 목표
+- 사용자가 실사용 중 느낀 “보상은 맞는데 체감이 약함”, “게이트가 전투처럼 느껴지지 않음”, “게이트가 너무 드묾”을 개선.
+- 전투 공식과 XP 곡선은 변경하지 않고, 보상 테이블/게이트 출현 정책/UI 공개 방식만 조정.
+- `daily < dungeon < main` 성장 위계 유지.
+- gate는 XP/stat 성장보다 장비/아이템/유물 중심 콘텐츠로 유지.
+
+### 보상 상향 후 테이블
+
+XP 기본값:
+
+| type | easy | normal | hard | elite | apex | boss |
+|---|---:|---:|---:|---:|---:|---:|
+| daily | 10 | 14 | 22 | 45 | 60 | 80 |
+| dungeon | 80 | 140 | 260 | 430 | 680 | 1050 |
+| main | 240 | 450 | 800 | 1300 | 2100 | 3200 |
+
+stat multiplier:
+
+| type | easy | normal | hard | elite | apex | boss |
+|---|---:|---:|---:|---:|---:|---:|
+| daily | 0.08 | 0.13 | 0.11 | 0.11 | 0.11 | 0.11 |
+| dungeon | 0.32 | 0.43 | 0.56 | 0.64 | 0.88 | 1.12 |
+| main | 0.90 | 1.20 | 1.50 | 1.80 | 2.40 | 3.00 |
+
+drop chance:
+
+| type | easy | normal | hard | elite | apex | boss |
+|---|---:|---:|---:|---:|---:|---:|
+| daily | 2% | 4% | 7% | 10% | 12% | 15% |
+| dungeon | 60% | 80% | 95% | 95% | 100% | 100% |
+| main | 30% | 48% | 65% | 80% | 90% | 100% |
+
+random quest:
+- XP: template XP × 0.8
+- drop: easy 4%, normal 7%, hard 12%
+- daily보다 약간 특별한 이벤트성 보상으로 유지.
+
+### 게이트 등장 확률 정책
+
+| trigger | chance | selection |
+|---|---:|---|
+| 하루 첫 접속 | 7% | E급 |
+| daily 완료 | 3% | E급 |
+| random 완료 | 5% | E급 중심, 일부 D급 |
+| 일반 dungeon 최종 클리어 | 25% | E/D급, D급 가중 |
+| 월간/고난도 dungeon 최종 클리어 | 30% | D급 중심, 일부 C급 |
+| main 완료 | 50% | D/C급, C급 가중 |
+
+- active gate는 동시에 1개만 유지.
+- active gate가 있으면 추가 출현 트리거는 조용히 무시하고 queue는 만들지 않음.
+- E급 게이트 recommendedLevel을 3/4/5로 낮춰 초반 등장 체감을 개선.
+
+### 전투 로그 순차 표시 UX
+
+- `startGateBattle`은 기존처럼 전투 로그를 한 번에 계산한다.
+- `GatePanel`의 `RecentBattleResult`가 이미 생성된 `combatLog.turns`를 0.5초 간격으로 하나씩 공개한다.
+- 전투 중에는 victory/defeat/draw, 보상, 패널티 요약을 숨긴다.
+- 마지막 로그가 공개된 뒤 결과/보상/패널티/전체 로그 버튼 표시.
+- 전투 중 `전투 스킵` 버튼 제공.
+- `useEffect` interval cleanup 적용. 새 battleId 또는 unmount 시 이전 interval 정리.
+- 전투 공개 중에는 게이트 도전 버튼이 `전투 진행 중`으로 비활성화되어 중복 클릭을 막는다.
+- 게이트 전투 결과 SystemMessage는 즉시 modal로 띄우지 않는다. 즉시 modal은 로그 연출을 스포일하기 때문이며, 결과는 GatePanel에서 확인한다.
+
+### 게이트 보상 방향
+
+- E/D/C gate reward XP는 소폭만 상향: 90 / 160 / 250.
+- itemDropChance를 크게 상향: E 55%, D 65%, C 75%.
+- C급 rare/epic/legendary 비중 상향: rare 48%, epic 28%, legendary 9%.
+- gate reward item은 artifact 슬롯 또는 combatSkillIds가 있는 전투 장비를 70% 확률로 우선 선택한다.
+- daily 일반 드롭은 artifact 슬롯을 제외한다.
+- random 일반 드롭은 75% 확률로 artifact 슬롯을 제외한다.
+- main/dungeon 일반 드롭은 기존 아이템 풀을 유지한다.
+- 장비 강화/중복 흡수 시스템은 이번 단계에서 구현하지 않음.
+
+### 검증
+- `npm run build` 통과.
+- 브라우저 수동 확인:
+  - 게이트 전투 시작 후 결과가 즉시 표시되지 않고 `게이트 전투 진행 중` + 공개 로그 카운트가 표시됨.
+  - 0.5초 간격으로 로그가 순차 표시됨.
+  - 마지막 로그 이후 결과/REWARD/PENALTY/전체 로그 버튼이 표시됨.
+  - 브라우저 콘솔 error 없음.
+
+### persist / 저장 데이터
+- persist version은 v14 유지.
+- localStorage key `levelup-save` 변경 없음.
+- 저장 스키마 변경 없음. 타입 union과 수치/로직 변경만 수행.
+- 기존 저장 데이터의 `activeGate`, `gateStatus`, `combatLogs` 구조와 호환.
+
+### 남은 TODO
+- 스탯 편중 완화
+- 칭호 효과 표시/적용
+- 왕의 검 아이콘 수정
+- 장비 중복 강화 시스템
+- B/A/S급 게이트 추가
+
+## 12차 작업 5단계 - 칭호 효과 표시/적용
+
+### 작업 목표
+- 칭호가 단순 수집/장착 요소로만 보이지 않도록, 칭호별 효과 구조를 도입하고 UI에 명확히 표시.
+- 장착 중인 칭호 1개만 실제 보상 계산에 반영.
+- 12-3A XP 보상표, XP 곡선, rank 기준, 전투 공식, 12-4 `rewardStatWeights` 구조는 변경하지 않음.
+- `왕의 검` 아이콘이 왕관처럼 보이는 문제를 수정.
+
+### 칭호 효과 구조
+
+`TitleDefinition`에 optional 효과 필드 추가:
+
+```ts
+effects?: {
+  xpBonusByCategory?: Partial<Record<Category, number>>
+  globalXpBonus?: number
+  gateDropBonus?: number
+  rarityBonus?: number
+  statBonus?: Partial<Record<StatKey, number>>
+  gatePenaltyReduction?: number
+  injuryRecoveryBonus?: number
+}
+```
+
+이번 단계에서 실제 계산에 연결한 효과:
+- `globalXpBonus`
+- `xpBonusByCategory`
+- `gateDropBonus`
+- `rarityBonus`
+
+아직 계산에 연결하지 않은 예약 효과:
+- `statBonus`
+- `gatePenaltyReduction`
+- `injuryRecoveryBonus`
+
+### 장착 칭호 1개 적용 정책
+- `hunter.equippedTitleId`가 있고, 해당 ID가 `ownedTitleIds`에 포함되어 있을 때만 효과 적용.
+- 장착 칭호가 없거나 기존 저장 데이터에 `equippedTitleId`가 없으면 효과 0.
+- 보유한 칭호 전체 컬렉션 보너스는 이번 단계에서 구현하지 않음.
+
+### helper
+
+`src/lib/game.ts`에 추가:
+- `getEquippedTitleDefinition(hunter)`
+- `getEquippedTitleEffects(hunter)`
+- `getTitleXpMultiplier(hunter, category)`
+- `getTitleDropBonus(hunter)`
+- `getTitleRarityBonus(hunter)`
+- `formatTitleEffects(title)`
+
+보너스 cap:
+- title XP bonus: global/category 합산 최대 10%
+- title gate drop bonus: 최대 7%
+- title rarity bonus: 최대 5%
+
+### 주요 칭호 효과 예시
+
+| 칭호 | 효과 |
+|---|---|
+| 첫 번째 각성 | 전체 XP +1% |
+| 하급 헌터 | 전체 XP +2% |
+| 숙련된 사냥꾼 | 전체 XP +3% |
+| 그림자 추적자 | 게이트 드롭률 +3% |
+| 첫 전리품의 주인 | 레어리티 +1% |
+| 전설을 쥔 자 | 레어리티 +3% |
+| 흐름을 읽는 눈 | 재정 XP +2%, 커리어 XP +1% |
+| 시장의 관찰자 | 재정 XP +3%, 커리어 XP +3% |
+| 새벽의 사냥꾼 | 건강 XP +2%, 습관 XP +2% |
+| 고요한 마음 | 정신 XP +2%, 습관 XP +2% |
+| 꺾이지 않는 의지 | 습관 XP +2%, 도전 XP +1% |
+| 국가급 사냥꾼 | 전체 XP +5%, 게이트 드롭률 +5% |
+
+### 계산 연결
+- `completeQuest`: daily/main XP에 장착 칭호 XP 보너스 합산, 일반 아이템 레어리티 롤에 `rarityBonus` 반영.
+- `completeRandomQuest`: random XP와 아이템 레어리티 롤에 장착 칭호 효과 반영.
+- `progressDungeon`: dungeon partial XP와 clear XP에 장착 칭호 XP 보너스 반영.
+- dungeon clear 보상 아이템 레어리티 롤에 `rarityBonus` 반영.
+- gate victory reward: gate XP에 `challenge` 기준 칭호 XP 보너스 반영, gate item drop chance에 `gateDropBonus` 반영, gate rarity table에 `rarityBonus`를 epic/legendary 쪽으로 소폭 가산.
+
+### UI
+- `TitleCollection` 카드에 효과 영역 추가.
+- 보유/미보유 일반 칭호는 효과를 보여 목표감을 강화.
+- 미보유 hidden 칭호는 이름/조건처럼 효과도 `해금 후 공개`로 숨김.
+- 장착 중인 칭호는 `효과 적용 중`으로 표시.
+- 상태창(`HunterStatus`)에서 현재 장착 칭호와 적용 효과를 간단히 표시.
+
+### 왕의 검 아이콘
+- `src/lib/seed.ts`의 `왕의 검` 아이콘을 `👑`에서 `⚔️`로 변경.
+- 왕관 이미지는 칭호/왕의 명령 계열에 남기고, 무기는 검 계열로 보이게 정리.
+
+### persist / 저장 데이터
+- persist version 변경 없음: v14 유지.
+- `levelup-save` key 변경 없음.
+- 저장 스키마 변경 없음. `TitleDefinition.effects`는 정적 정의의 optional 필드라 기존 저장 데이터에 영향 없음.
+- 기존 저장 데이터에 `equippedTitleId`가 없어도 앱은 보너스 0으로 정상 동작.
+
+### 검증
+- `npm run build` 통과.
+- `npx tsx scripts/sim-growth-1year.ts` 기준 기본 성장 시뮬레이션 결과 변경 없음.
+- helper 확인:
+  - 장착 칭호 없음: finance multiplier 1
+  - `market-observer` 장착: finance multiplier 1.03, study multiplier 1
+  - `national-level-hunter` 장착: challenge multiplier 1.05, gate drop bonus 0.05
+
+### TODO
+- 장비 중복 강화 시스템
+- 커스텀 퀘스트 성장 스탯 선택 기능
+- B/A/S급 게이트 추가
+- 칭호 컬렉션 전체 보너스는 보류
+- `statBonus`, `gatePenaltyReduction`, `injuryRecoveryBonus` 실제 계산 연결 여부는 별도 검토
+
+## 12차 작업 6단계 - 장비 중복 강화 시스템
+
+### 작업 목표
+- 12-3 이후 게이트/장비 드롭 빈도가 올라간 상황에서, 같은 장비 중복 획득분을 장기 성장 재료로 사용할 수 있게 함.
+- 기존 장비 보유 방식은 유지하고, 중복 장비를 자동 합치지 않음.
+- 사용자가 Inventory에서 직접 `강화` 버튼을 눌러야만 강화가 진행된다.
+- XP 보상표, rank 기준, gate 전투 공식, 12-4 `rewardStatWeights`, 12-5 칭호 효과 구조는 변경하지 않음.
+
+### 선택한 데이터 구조
+
+`Item` 보유 인스턴스에 optional 필드 추가:
+
+```ts
+enhancementLevel?: number
+```
+
+정책:
+- 필드가 없으면 +0으로 취급.
+- 최대 강화는 +5.
+- 강화 레벨은 보유한 개별 item instance에 저장한다.
+- `ITEM_POOL` 정적 정의는 강화하지 않는다.
+
+결정 이유:
+- 현재 보유 아이템의 `id`는 획득 시 `uid()`로 생성되는 개별 인스턴스 ID다.
+- 장착 상태도 이 개별 인스턴스 ID를 저장한다.
+- 따라서 "같은 item.id" 기준으로 중복을 찾으면 같은 종류의 중복 장비를 찾을 수 없다.
+- 대신 같은 `name + rarity + slot`을 같은 장비 계열로 보고, 대상 인스턴스의 `enhancementLevel`만 올리는 방식으로 구현했다.
+- 이 방식은 장착 중인 인스턴스와 재료 인스턴스를 안전하게 구분하면서 기존 저장 데이터와 호환된다.
+
+### 강화 규칙
+- 강화 대상: `equippable === true`이고 `slot`이 있는 장비.
+  - weapon
+  - armor
+  - accessory
+  - artifact
+- 소모품은 강화 불가.
+- 같은 장비 계열의 미장착 중복 장비 1개를 소모해 대상 장비 +1.
+- 대상 장비 자체는 소모하지 않음.
+- 실패 확률 없음.
+- 비용 없음.
+- 최대 +5 이상 강화 불가.
+- 재료 후보가 여러 개면 강화 레벨이 낮은 미장착 중복부터 소모.
+
+### 강화 효과
+
+강화 효과 상수:
+- +1당 장비 효과 +8%
+- +5 최대 장비 효과 +40%
+
+적용 대상:
+- `xp_bonus`
+- `drop_bonus`
+- `rarity_bonus`
+- `stat_bonus`
+
+예시:
+```ts
+career xp_bonus 0.05, +3 장비
+0.05 * (1 + 0.08 * 3) = 0.062
+```
+
+`stat_bonus`도 같은 배율을 적용하며 `roundStatValue`로 반올림한다.
+
+이번 단계에서 강화하지 않는 것:
+- `combatSkillIds`
+- 전투 스킬 power/cooldown/effect 수치
+
+### helper
+
+`src/lib/game.ts`에 추가:
+- `MAX_ITEM_ENHANCEMENT_LEVEL`
+- `ITEM_ENHANCEMENT_EFFECT_STEP`
+- `getEnhancementLevel(item)`
+- `getEnhancementMultiplier(item)`
+- `formatEnhancementLabel(item)`
+- `isEnhanceableEquipment(item)`
+- `getItemEnhancementKey(item)`
+- `isSameEnhancementFamily(target, candidate)`
+- `getEnhancedItemEffects(item)`
+- `getEnhanceMaterialCandidates(target, inventory, equippedItemIds)`
+- `canEnhanceItem(target, inventory, equippedItemIds)`
+
+기존 장비 효과 계산 helper 변경:
+- `getEquipmentXpBonus`
+- `getEquipmentDropBonus`
+- `getEquipmentRarityBonus`
+- `getEquipmentStatBonuses`
+
+위 함수들이 모두 `getEnhancedItemEffects`를 사용하므로, 장착 중 장비의 강화 효과가 XP/드롭/레어리티/스탯/전투 스탯 계산에 일관되게 반영된다.
+
+### Inventory UI
+- 장비 이름 옆에 `+1`~`+5` 강화 레벨 표시.
+- 장착 슬롯 카드에서도 강화 레벨 표시.
+- 각 아이템 카드에 강화 상태 영역 추가:
+  - `강화 0/5`
+  - `재료 N`
+  - `강화` 버튼 또는 비활성 사유
+- 비활성 사유:
+  - `중복 장비 필요`
+  - `최대 강화`
+  - `소모품은 강화 불가`
+  - `강화 불가`
+- 강화 클릭 시 confirm:
+  - "같은 장비 1개를 소모해 이 장비를 +1 강화합니다. 계속할까요?"
+- 성공 시 SystemMessage `장비 강화` 표시.
+
+### 장착/소모 안전장치
+- 장착 중인 아이템 ID는 재료 후보에서 제외.
+- target item ID도 재료 후보에서 제외.
+- 재료 후보는 같은 `name + rarity + slot` 장비만 허용.
+- 소모품은 재료/대상 모두 불가.
+- target이 장착 중이어도 강화 가능하지만, 재료는 반드시 미장착 중복이어야 한다.
+- 재료 소모 후 장착 상태는 기존 target/equipped item ID를 유지하므로 즉시 효과가 반영된다.
+
+### persist / 저장 데이터
+- persist version 변경 없음: v14 유지.
+- `levelup-save` key 변경 없음.
+- `enhancementLevel`은 optional 필드이며 기존 저장 데이터에 없으면 +0으로 처리한다.
+- 별도 migration 없이 기존 저장 데이터가 정상 동작한다.
+
+### 검증
+- `npm run build` 통과.
+- helper/action 점검:
+  - +3 장비 multiplier 1.24 확인.
+  - xp_bonus 0.08 → 0.0992, stat_bonus 2 → 2.48 확인.
+  - 장착 중인 중복 장비는 재료 후보에서 제외 확인.
+  - 강화 시 재료 1개 감소, target `enhancementLevel` +1 확인.
+  - +5 장비는 재료가 있어도 강화되지 않고 메시지도 생성되지 않음 확인.
+  - 소모품은 `canEnhanceItem === false` 확인.
+
+### TODO
+- 전투 스킬 강화 별도 설계.
+- 강화 재료 미리보기/재료 선택 UI.
+- 강화된 재료를 소모하려 할 때 추가 경고.
+- B/A/S급 게이트 추가.
+
+## 12차 작업 7단계 - 현재 성장 체계 기준 E/D/C 게이트 재점검
+
+### 작업 목표
+- 12-3A XP/stat 대폭 상향, 12-4 stat 분배 개선, 12-5 칭호 효과, 12-6 장비 강화 이후 기존 E/D/C 게이트 난이도가 적절한지 재측정.
+- B/A/S급 게이트 추가 전에 현재 E/D/C 기준점을 재설정.
+- XP 보상표, rank 기준, 전투 공식, 장비 강화 공식, 칭호 효과, persist version은 변경하지 않음.
+
+### 시뮬레이션 harness
+
+추가 스크립트:
+
+```bash
+npx tsx scripts/sim-gate-current.ts
+```
+
+특징:
+- 모든 기존 E/D/C 게이트를 Build A~F에 대해 200회 deterministic seed로 실행.
+- 출력 항목: playerPower, recommendedPower, ratio, risk, victory/defeat/draw, avgTurns, avgRemainingHp.
+- 장비 강화 효과는 `getEnhancedItemEffects` -> `getEquipmentStatBonuses` -> `calculatePlayerCombatStats` 경로로 전투력에 반영.
+- 칭호 효과는 현재 XP/drop/rarity 중심이라 전투 stat에는 직접 반영하지 않는다. 빌드 설명에는 포함하되 combat power에는 영향 없음.
+
+### Build A~F 정의
+
+| Build | Level | Job | Title | PlayerPower | Equipment | 목적 |
+|---|---:|---|---|---:|---|---|
+| A | 5 | unawakened | 없음 | 360 | 없음 | E급 입문 가능성 |
+| B | 10 | unawakened | 없음 | 540 | 의지의 룬 | E 안정, D 위험 |
+| C | 20 | grimoire-decoder | hunter | 783 | 강철 손목보호대 +1, 고요의 반지 | D 도전, C 위험 |
+| D | 30 | steelheart-fighter | veteran-hunter | 1449 | 그림자 단검 +1, 강철 손목보호대 +2, 금서의 책갈피 +1 | C 도전 |
+| E | 45 | fate-harmonizer | legend-in-hand | 2130 | 투사의 장갑 +3, 검은 정장 +2, 시간의 회중시계 +3, 시스템의 조각 +2 | C 안정, B급 기준 |
+| F | 60 | fate-harmonizer | national-level-hunter | 3030 | 왕의 검 +4, 그림자 왕관 +3, 시간의 회중시계 +4, 시스템의 조각 +4 | E/D/C 졸업 확인 |
+
+Build C는 12-4 stat distribution의 30일 총 stat gain 약 87을 참고해, 초기 stat + 레벨업 보정을 감안한 1개월 기준으로 재조정했다.
+
+### 조정 전 판단
+- E급: Build A도 100% 승리. 입문용으로 유지 가능.
+- D급: Build B가 57~70%, Build C가 100%라 초중반 도전 콘텐츠로는 쉬움.
+- C급: Build C가 18~26%로 일부 목표에 들어오지만, Build D/E가 100%라 현재 2~3개월 성장 이후에는 너무 쉬움.
+- recommendedPower도 Build D/E 기준 C급이 `low risk`로 표시되어 위험도 라벨과 실제 의도가 어긋남.
+
+### 조정한 값
+
+E급:
+- 변경 없음.
+
+D급 monster:
+- `lazy-goblin`: HP 350 -> 420, ATK 80 -> 96, DEF 31 -> 34
+- `sloth-brute`: HP 210 -> 252, ATK 42 -> 50, DEF 28 -> 31
+
+D급 recommendedPower:
+- `나태의 소굴`: 650 -> 800
+- `나태의 순찰로`: 780 -> 900
+
+C급 monster:
+- `forgetting-warden`: HP 780 -> 1380, ATK 105 -> 220, DEF 58 -> 80
+- `fatigue-warden`: HP 850 -> 1445, ATK 88 -> 176, DEF 72 -> 97
+- `memory-tracker`: HP 540 -> 950, ATK 88 -> 185, DEF 40 -> 56
+- `memory-scout`: HP 450 -> 790, ATK 105 -> 220, DEF 35 -> 49
+- `greed-warden`: HP 680 -> 1156, ATK 120 -> 240, DEF 45 -> 61
+
+C급 recommendedPower:
+- `망각의 서고`: 1000 -> 1550
+- `피로의 회랑`: 980 -> 1600
+- `균열의 훈련장`: 1050 -> 1650
+- `탐욕의 금고`: 1050 -> 1550
+
+조정 이유:
+- 전투 공식/보상/장비/칭호 효과를 바꾸지 않고, 현재 성장 체계에서 gate 자체의 기준점을 맞추기 위함.
+- C급은 기존 tuning 당시보다 플레이어 stat과 장비 강화가 훨씬 커졌기 때문에 단순 recommendedPower 조정만으로는 실제 승률을 맞출 수 없었다.
+- E급은 입문용 경험을 해치지 않기 위해 유지.
+
+### 최종 결과 요약
+
+E급:
+
+| Gate | Build A | Build B | 판단 |
+|---|---:|---:|---|
+| 균열의 골목 | 100% | 100% | 입문 가능, 이후 안정 |
+| 뒤틀린 뒷골목 | 100% | 100% | 입문 가능, 이후 안정 |
+| 균열의 둥지 | 100% | 100% | E-wave지만 입문 가능 |
+
+D급:
+
+| Gate | Build B | Build C | Build D | 판단 |
+|---|---:|---:|---:|---|
+| 나태의 소굴 | 17% | 100% | 100% | 2주 사용자는 위험, 1개월 이후 안정 |
+| 나태의 순찰로 | 11% | 99% | 100% | wave가 더 위험하지만 1개월 이후 안정 |
+
+비고:
+- Build B 목표인 10~50%는 달성.
+- Build C 목표 40~80%보다는 쉬움. 다만 C급이 Build C를 0%로 막도록 올라갔기 때문에, D급은 1개월 사용자의 안정 사다리로 남기는 판단을 선택했다.
+
+C급:
+
+| Gate | Build C | Build D | Build E | Draw max | 판단 |
+|---|---:|---:|---:|---:|---|
+| 망각의 서고 | 0% | 66% | 100% | 2% | C 기준 재설정 성공 |
+| 피로의 회랑 | 0% | 70% | 100% | 5% | 방어형 C, draw 허용 범위 |
+| 균열의 훈련장 | 0% | 63% | 100% | 7% | C-wave 기준 성공 |
+| 탐욕의 금고 | 0% | 74% | 100% | 0% | 공격형 C 기준 성공 |
+
+Build F:
+- 모든 E/D/C 게이트 100%.
+- S랭크 1년 사용자 기준으로 E/D/C trivialize는 의도된 결과.
+
+### 최종 판단
+- E급: 변경 없이 유지. 입문용 역할 정상.
+- D급: 초반 Build B에 위험한 선택지가 되었고, 1개월 이후에는 안정적으로 졸업하는 단계로 정리.
+- C급: Build C는 차단, Build D는 63~74% 도전권, Build E/F는 졸업 상태.
+- Build E에서 C급이 100%인 것은 6개월 사용자에게 C급이 더 이상 메인 전투 콘텐츠가 아니라는 신호다. 다음 단계는 B급 게이트 신설이 맞다.
+- B/A/S급 게이트 추가 전 기준점으로 이 결과를 사용한다.
+
+### persist / 저장 데이터
+- persist version 변경 없음: v14 유지.
+- `levelup-save` key 변경 없음.
+- 저장 스키마 변경 없음.
+
+### 검증
+- `npx tsx scripts/sim-gate-current.ts` 통과.
+- `npm run build` 통과.
+
+### TODO
+- B급 게이트 신설
+- 커스텀 퀘스트 성장 스탯 선택
+- 전투 스킬 강화
+- 강화 재료 선택 UI
+
+## 12차 작업 3A단계 - S랭크 1년 프로젝트화 검증
+
+### 작업 목표
+- S랭크를 Lv60 도달 기준으로 보고, 현실적 사용 시 330~390일 안에 도달하는 1년짜리 성장 프로젝트로 보상표를 재조정.
+- XP 곡선 `xpToNextLevel`, `rankFromLevel`, 전투 공식, 게이트 로그 UX, 저장 스키마는 변경하지 않음.
+- localStorage key `levelup-save`와 persist version v14 유지.
+
+### 12-3 수치 검증 결과
+
+시뮬레이션 스크립트:
+- `scripts/sim-growth-1year.ts`
+- 실행: `npx tsx scripts/sim-growth-1year.ts`
+
+가정:
+- daily 75% 달성
+- main 60일마다 1개 완료
+- dungeon 30일마다 1개 완료
+- daily는 현재 seed 20개와 `cooldownDays`를 반영
+- dungeon은 clear XP + partial XP 총량 반영
+- 현실적/적극적 시나리오는 gate/random/job/equipment 평균 XP를 일 단위 보너스로 반영
+
+12-3 baseline 결과:
+
+| scenario | 365d total XP | 365d level | 365d rank | Lv10 | Lv18/C | Lv30/B | Lv45/A | Lv60/S |
+|---|---:|---:|---|---:|---:|---:|---:|---:|
+| A. 보수적 | 74,128 | 28 | C | 36 | 124 | 420 | 1085 | - |
+| B. 현실적 | 128,878 | 35 | B | 20 | 73 | 240 | 629 | 1243 |
+| C. 적극적 | 183,628 | 41 | B | 14 | 55 | 173 | 441 | 872 |
+
+판정:
+- 현실적 Lv60 도달일 1243일 → 390일 초과, 500일 이상이므로 대폭 상향 필요.
+- 12-3은 “보상 체감 패치”로는 작동하지만 “S랭크 1년 프로젝트” 목표에는 크게 부족.
+
+### 최종 XP 보상표
+
+| type | easy | normal | hard | elite | apex | boss |
+|---|---:|---:|---:|---:|---:|---:|
+| daily | 32 | 48 | 80 | 160 | 225 | 320 |
+| dungeon clear | 650 | 1100 | 2000 | 3200 | 5100 | 8000 |
+| main | 1800 | 3400 | 6800 | 11800 | 20500 | 35000 |
+
+추가:
+- dungeon partial XP 총량: clear XP × 0.25 → clear XP × 0.4
+- gate XP: E/D/C = 180 / 400 / 900
+- random quest XP: template XP × 0.8 유지
+- drop chance는 12-3 값 유지
+
+의도:
+- daily는 매일 체감 가능한 수준으로 올리되, 성장의 핵심을 혼자 떠안지 않게 조정.
+- main은 2개월 단위 대형 목표라 가장 큰 성장 보상으로 설정.
+- dungeon은 월간 목표라 main보다 낮지만 월마다 확실히 체감되게 설정.
+- gate는 장비/유물 중심 정체성을 유지하면서 XP 보조 의미만 강화.
+
+### stat multiplier 변경표
+
+| type | easy | normal | hard | elite | apex | boss |
+|---|---:|---:|---:|---:|---:|---:|
+| daily | 0.14 | 0.22 | 0.20 | 0.20 | 0.20 | 0.20 |
+| dungeon | 0.95 | 1.25 | 1.60 | 2.00 | 2.80 | 3.60 |
+| main | 3.20 | 4.50 | 6.00 | 8.00 | 11.00 | 15.00 |
+
+의도:
+- daily stat은 기존 대비 약 1.5~2배로만 상향해 편중을 과도하게 키우지 않음.
+- dungeon stat은 약 3배권으로 상향.
+- main stat은 3~5배권으로 상향해 장기 목표 완료의 캐릭터 성장감을 크게 강화.
+- 스탯 편중 완화 자체는 별도 작업으로 남김.
+
+### 최종 1년 성장 시뮬레이션 결과
+
+최종 코드 결과:
+
+| scenario | 365d total XP | 365d level | 365d rank | Lv10 | Lv18/C | Lv30/B | Lv45/A | Lv60/S |
+|---|---:|---:|---|---:|---:|---:|---:|---:|
+| A. 보수적 | 366,388 | 55 | A | 12 | 40 | 97 | 240 | 447 |
+| B. 현실적 | 421,138 | 59 | A | 9 | 31 | 83 | 199 | 390 |
+| C. 적극적 | 475,888 | 62 | S | 8 | 30 | 68 | 180 | 349 |
+
+판정:
+- 현실적 시나리오 Lv60 도달일: 390일.
+- 목표 범위 330~390일의 상한에 정확히 들어오므로 통과.
+- 보수적 시나리오는 365일에 Lv55/A, Lv60은 447일로 “1년 내 Lv50~55 정도 허용” 조건과 부합.
+- 적극적 시나리오는 365일에 Lv62/S, Lv60은 349일로 “1년보다 약간 빠른 도달 허용” 조건과 부합.
+
+### persist / 저장 데이터
+- persist version 변경 없음: v14 유지.
+- `levelup-save` key 변경 없음.
+- 저장 스키마 변경 없음.
+- 변경 범위는 수치, helper export, 시뮬레이션 스크립트, 문서뿐.
+
+### 남은 작업
+- 스탯 편중 완화
+- 칭호 효과 표시/적용
+- 왕의 검 아이콘 수정
+- 장비 중복 강화 시스템
+- B/A/S급 게이트 추가
+
+## 12차 작업 4단계 - 스탯 편중 완화
+
+### 작업 목표
+- 12-3A에서 XP/stat 보상량이 커진 뒤 INT/PER만 과도하게 오르는 문제를 완화.
+- XP 보상표, S랭크 1년 성장 속도, 전투 공식, 게이트/장비/칭호 시스템은 변경하지 않음.
+- 퀘스트 성격에 맞게 STR/VIT/AGI/INT/PER/SEN이 자연스럽게 나뉘어 성장하도록 개선.
+
+### rewardStatWeights 구조
+
+`Quest`에 optional 필드 추가:
+
+```ts
+rewardStatWeights?: Partial<Record<StatKey, number>>
+```
+
+의미:
+- `statRewards`는 기존처럼 퀘스트의 총 stat reward 원천값을 담당.
+- `STAT_REWARD_MULTIPLIER_BY_TYPE[type][difficulty]`는 기존처럼 type/difficulty별 보상 강도를 담당.
+- `rewardStatWeights`는 최종 stat reward 총량을 어떤 스탯에 나눌지만 결정.
+
+예:
+
+```ts
+statRewards: { VIT: 2 },
+rewardStatWeights: { STR: 0.5, VIT: 0.5 }
+```
+
+daily normal multiplier 0.22 기준:
+- totalGain = 2 × 0.22 = 0.44
+- STR +0.22, VIT +0.22
+
+### fallback 정책
+- `rewardStatWeights`가 있고 양수 weight 합계가 0보다 크면 weight 정규화 후 분배.
+- 음수 weight는 0으로 처리.
+- weight 합계가 0이거나 `rewardStatWeights`가 없으면 기존 `statRewards` 개별 곱셈 방식으로 fallback.
+- `statRewards`까지 비어 있으면 마지막 안전 fallback으로 `CATEGORY_TO_STAT[category]`에 multiplier만 지급.
+- 따라서 기존 저장 데이터에 `rewardStatWeights`가 없어도 퀘스트 완료, dungeon clear, QuestCard 표시가 정상 동작한다.
+
+### 기본 퀘스트 배분 원칙
+- 운동/근력/헬스: STR + VIT, 일부 AGI
+- 유산소/스트레칭: VIT + AGI
+- 수면/컨디션: VIT + PER
+- 식단/체중/건강 기록: VIT + SEN
+- 공부/독서/자격증: INT + PER, 일부 SEN
+- 투자/시장 점검/CMA: INT + SEN, 일부 PER
+- 명상/마음관리: PER + SEN
+- 청소/정리/집안일: AGI + PER
+- 커리어/학회/리포트: INT 중심 + PER/SEN 보조
+- 습관 루틴: PER 중심이되 AGI/VIT/SEN을 일부 섞음
+
+주요 예시:
+- `daily-market-close`: INT 50% / SEN 50%
+- `daily-sleep`: VIT 60% / PER 40%
+- `daily-cleaning`: AGI 50% / PER 50%
+- `main-club`: INT 55% / PER 25% / SEN 20%
+- `main-cut`: STR 35% / VIT 45% / PER 20%
+- `dungeon-cma-journal`: INT 45% / SEN 45% / PER 10%
+- 월간 헬스 dungeon: STR/VIT 중심 + AGI 보조
+
+### UI
+- `QuestCard` 보상 줄에 `성장 STR/VIT`처럼 성장 대상 스탯 요약을 추가.
+- 실제 지급량은 기존처럼 `STR +0.22 · VIT +0.22` 형태로 표시.
+- dungeon clear 표시도 같은 helper를 사용하므로 weight 분배가 그대로 반영된다.
+
+### stat distribution 점검
+
+시뮬레이션 스크립트:
+- `scripts/sim-stat-distribution.ts`
+- 실행: `npx tsx scripts/sim-stat-distribution.ts`
+
+가정:
+- daily 75%
+- main 60일마다 1개
+- dungeon 30일마다 1개
+- 현재 seed 20 daily / 5 main / 8 dungeon 기준
+
+30일 결과:
+
+| mode | STR | VIT | AGI | INT | PER | SEN | total |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| legacy statRewards | 10.35 (12%) | 14.87 (17%) | 2.50 (3%) | 27.35 (31%) | 23.55 (27%) | 8.55 (10%) | 87.17 |
+| rewardStatWeights | 7.42 (9%) | 16.04 (18%) | 7.65 (9%) | 21.28 (25%) | 17.19 (20%) | 17.14 (20%) | 86.72 |
+
+90일 결과:
+
+| mode | STR | VIT | AGI | INT | PER | SEN | total |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| legacy statRewards | 30.90 (9%) | 50.90 (15%) | 7.50 (2%) | 117.72 (34%) | 108.56 (32%) | 28.81 (8%) | 344.39 |
+| rewardStatWeights | 26.74 (8%) | 53.94 (16%) | 23.00 (7%) | 102.09 (30%) | 74.54 (22%) | 62.79 (18%) | 343.10 |
+
+판정:
+- 90일 기준 INT+PER 비중 66% → 52%로 완화.
+- SEN 8% → 18%, AGI 2% → 7%로 보강.
+- 전체 stat 총량은 거의 유지되어 12-3A 성장 속도/보상 체감은 보존.
+
+### persist / 저장 데이터
+- persist version 변경 없음: v14 유지.
+- `levelup-save` key 변경 없음.
+- 저장 스키마 필수 필드 변경 없음. optional 필드 추가만 수행.
+- 기존 저장본의 quest에는 `rewardStatWeights`가 없을 수 있으며, 이 경우 legacy fallback으로 정상 동작.
+- seed 변경은 기존 저장본에 소급 적용되지 않는다. reset 또는 신규 저장 상태에서는 기본 퀘스트 weight가 적용된다.
+
+### TODO
+- 커스텀 퀘스트 생성 시 성장 스탯/weight 선택 기능
+- 기존 저장본의 기본 quest에 reset 없이 weight를 보강할지 검토
+- ~~칭호 효과 표시/적용~~ (12-5 완료)
+- ~~왕의 검 아이콘 수정~~ (12-5 완료)
+- ~~장비 중복 강화 시스템~~ (12-6 완료)
+- B/A/S급 게이트 추가 (보류 — 실사용 데이터 후 추가)
+
+## 12차 작업 8단계 완료 (2026-05-16) — 커스텀 퀘스트 성장 스탯 선택
+
+### 목표
+- B/A/S급 게이트 추가는 보류.
+- 커스텀 퀘스트 생성 시 성장 스탯을 직접 선택해 `rewardStatWeights`로 저장.
+- 기존 커스텀 퀘스트 (`rewardStatWeights` 없음)는 category fallback으로 계속 동작.
+
+### 변경 내용
+- `src/components/AddQuestModal.tsx`: `CATEGORY_STAT_SUGGESTIONS` 맵 추가 + UI 개선
+
+### CATEGORY_STAT_SUGGESTIONS — category별 기본 추천 스탯
+
+| Category | 추천 스탯 | 이유 |
+|---|---|---|
+| workout | STR / VIT | 근력 + 체력 |
+| health | VIT / PER | 컨디션 + 인내 |
+| study | INT / PER | 지식 + 인내 |
+| career | INT / SEN | 지식 + 감각 |
+| mind | PER / SEN | 인내 + 감각 |
+| finance | INT / SEN | 분석 + 감각 |
+| social | AGI / SEN | 민첩 + 감각 |
+| challenge | PER / STR | 인내 + 근력 |
+| habit | PER / VIT | 인내 + 체력 |
+
+### UI 변경
+- 카테고리 선택 시 `handleCategoryChange()` → 추천 스탯 자동 설정.
+- 성장 스탯 최대 2개 제한 (3번째 선택 시 무반응, disabled 스타일).
+- 최소 1개는 유지 (마지막 스탯 해제 불가).
+- 선택한 스탯을 하단에 요약 표시 ("선택: 💪 STR · 🛡️ VIT (균등 분배)").
+- 안내 문구: "퀘스트 완료 시 성장할 스탯입니다."
+- 라벨 우측에 "최대 2개 · 카테고리 변경 시 자동 추천" 힌트.
+
+### rewardStatWeights 저장 방식
+- 1개 선택 시 `{ STR: 1 }` (100%)
+- 2개 선택 시 `{ STR: 0.5, INT: 0.5 }` (균등 분배)
+- `statRewards`는 기존처럼 각 스탯에 `baseGain` 값 유지 (weight 분배 시 baseTotal이 동일하게 계산됨)
+
+### 기존 퀘스트 fallback 정책
+- `rewardStatWeights`가 없는 기존 커스텀 퀘스트는 `getBalancedQuestStatRewards()`의 legacy 경로로 계속 동작.
+- reset 없이 호환.
+
+### persist version
+- 변경 없음 (v14 유지). `rewardStatWeights`는 이미 Quest 타입에 optional 필드로 정의되어 있었음.
+
+### 테스트
+- `npm run build` 통과.
+
+### TODO
+- 세부 비율 조절 UI (현재는 균등 분배만)
+- 커스텀 퀘스트 수정 기능 추가 시 성장 스탯 수정 지원
+
+## 12차 작업 9단계 — 배포 전 최종 안정성 점검 (2026-05-16)
+
+### 점검 목표
+GitHub → Vercel 첫 배포 전 코드 안정성과 기존 데이터 호환성을 확인.
+
+### 점검 항목 및 결과
+
+| 항목 | 결과 | 비고 |
+|---|---|---|
+| 1. 빌드/포트/bat 파일 | ✅ | `start_levelup.bat` / `stop_levelup.bat` 존재 확인 |
+| 2. 저장/백업/복원 코드 | ✅ | `STORAGE_KEY = 'levelup-save'`, import 검증 로직 정상 |
+| 3. 퀘스트 흐름 | ✅ | `getBalancedQuestStatRewards` weight/fallback 경로 정상 |
+| 4. 게이트/전투 흐름 | ✅ | `sourceLabel` 타입과 `store.ts` source 변환 일치 확인 |
+| 5. 인벤토리/장비 강화 | ✅ | `getEnhancedItemEffects` 경로 및 enhancement cap 정상 |
+| 6. 칭호 효과 | ✅ | `getEquippedTitleEffects` additive bucket 반영 정상 |
+| 7. 모바일 UX / 헤더 버튼 | ✅ | viewport meta 확인, `overflow-x-auto` 탭 바, `flex-wrap` 헤더 버튼 |
+| 8. 버그/오타 | ✅ | 발견된 버그 없음 |
+
+### 확인한 불변 정책
+- localStorage key: `levelup-save` 변경 없음
+- persist version: v14 유지
+- XP 보상표 변경 없음
+- gate/monster 난이도 변경 없음
+- 전투 공식 변경 없음
+- 장비 강화 공식 변경 없음
+- 칭호 효과 변경 없음
+
+### 배포 준비 상태
+- `npm run build` 최종 확인: 통과
+- 기존 저장 데이터 호환성 문제 없음
+- GitHub → Vercel 배포 준비 완료
+- B/A/S급 게이트는 실사용 데이터 확인 후 추가

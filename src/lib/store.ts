@@ -73,6 +73,13 @@ import {
   getBalancedRandomQuestDropChance,
   getBalancedRandomQuestXp,
   getActiveGateSuccessBonus,
+  canEnhanceItem,
+  getEnhanceMaterialCandidates,
+  getEnhancementLevel,
+  getTitleDropBonus,
+  getTitleRarityBonus,
+  getTitleXpMultiplier,
+  MAX_ITEM_ENHANCEMENT_LEVEL,
   getPlayerCombatSkills,
   roundStatValue,
   simulateGateWaveBattle,
@@ -133,6 +140,7 @@ interface GameState {
   // equipment
   equipItem: (itemId: string) => void
   unequipItem: (slot: EquipmentSlot) => void
+  enhanceItem: (itemId: string) => void
 
   // consumables
   useConsumable: (itemId: string) => void
@@ -142,7 +150,7 @@ interface GameState {
   // gates
   setActiveGate: (gate: ActiveGate | undefined) => void
   clearExpiredGate: () => void
-  rollGateSpawn: (source: 'daily_open' | 'dungeon_clear' | 'hard_dungeon_clear') => void
+  rollGateSpawn: (source: 'daily_open' | 'daily_completion' | 'random_completion' | 'dungeon_clear' | 'hard_dungeon_clear' | 'main_completion') => void
   spawnGate: (gateId: string, source: 'random' | 'dungeon_clear' | 'event') => void
   recoverGateStamina: () => void
   recoverGateInjuryByQuest: () => void
@@ -315,9 +323,14 @@ const getActiveGatePenaltyReduction = (effects: ActiveConsumableEffect[]): numbe
   return Math.min(0.5, total)
 }
 
-const pickWeightedGateRarity = (rewardTable: GateRewardTable): Item['rarity'] | undefined => {
+const pickWeightedGateRarity = (rewardTable: GateRewardTable, titleRarityBonus = 0): Item['rarity'] | undefined => {
   const entries = Object.entries(rewardTable.rarityBias ?? {}) as Array<[Item['rarity'], number]>
-  const weighted = entries.filter(([, weight]) => weight > 0)
+  const boostedEntries = entries.map(([rarity, weight]) => {
+    if (rarity === 'legendary') return [rarity, weight + titleRarityBonus * 0.4] as [Item['rarity'], number]
+    if (rarity === 'epic') return [rarity, weight + titleRarityBonus * 0.6] as [Item['rarity'], number]
+    return [rarity, weight] as [Item['rarity'], number]
+  })
+  const weighted = boostedEntries.filter(([, weight]) => weight > 0)
   if (weighted.length === 0) return undefined
 
   const total = weighted.reduce((sum, [, weight]) => sum + weight, 0)
@@ -329,20 +342,29 @@ const pickWeightedGateRarity = (rewardTable: GateRewardTable): Item['rarity'] | 
   return weighted[0]?.[0]
 }
 
-const randomGateRewardItem = (rewardTable: GateRewardTable): Item | undefined => {
-  const rarity = pickWeightedGateRarity(rewardTable)
+const randomGateRewardItem = (rewardTable: GateRewardTable, titleRarityBonus = 0): Item | undefined => {
+  const rarity = pickWeightedGateRarity(rewardTable, titleRarityBonus)
   const rarityPool = rarity ? ITEM_POOL.filter(item => item.rarity === rarity) : []
   const pool = rarityPool.length > 0 ? rarityPool : ITEM_POOL
-  const pick = pool[Math.floor(Math.random() * pool.length)]
+  const gateFocusedPool = pool.filter(item => item.slot === 'artifact' || (item.combatSkillIds?.length ?? 0) > 0)
+  const shouldPreferGateLoot = gateFocusedPool.length > 0 && Math.random() < 0.7
+  const pickPool = shouldPreferGateLoot ? gateFocusedPool : pool
+  const pick = pickPool[Math.floor(Math.random() * pickPool.length)]
   if (!pick) return undefined
   return { ...pick, id: uid(), acquiredAt: todayISO() }
 }
 
 /** Rarity roll with SEN-driven epic/legendary boost + equipment rarity bonus + consumable rarity bonus. */
-const randomItem = (hunter: HunterState, equippedItems: Item[], consumableRarityBonus = 0): Item => {
+const randomItem = (
+  hunter: HunterState,
+  equippedItems: Item[],
+  consumableRarityBonus = 0,
+  titleRarityBonus = 0,
+  source: 'daily' | 'main' | 'dungeon' | 'random' = 'main'
+): Item => {
   const senBonus = getRarityWeightBonusWithEquipment(hunter, equippedItems) // SEN stat bonus
   const equipmentBonus = getEquipmentRarityBonus(equippedItems) // Equipment rarity bonus (capped at 0.05)
-  const totalBonus = senBonus + equipmentBonus + consumableRarityBonus
+  const totalBonus = senBonus + equipmentBonus + consumableRarityBonus + titleRarityBonus
   
   // Base mass: legendary 0.02, epic 0.08, rare 0.15, uncommon 0.25, common 0.50
   // Bonus splits: legendary gets 40%, epic gets 60%, pulled from common.
@@ -358,7 +380,14 @@ const randomItem = (hunter: HunterState, equippedItems: Item[], consumableRarity
   else if (r < legendaryProb + epicProb + rareProb) rarity = 'rare'
   else if (r < legendaryProb + epicProb + rareProb + uncommonProb) rarity = 'uncommon'
 
-  const pool = ITEM_POOL.filter(i => i.rarity === rarity)
+  const rarityPool = ITEM_POOL.filter(i => i.rarity === rarity)
+  const nonArtifactPool = rarityPool.filter(i => i.slot !== 'artifact')
+  const pool =
+    source === 'daily'
+      ? (nonArtifactPool.length > 0 ? nonArtifactPool : rarityPool)
+      : source === 'random' && Math.random() < 0.75
+        ? (nonArtifactPool.length > 0 ? nonArtifactPool : rarityPool)
+        : rarityPool
   const pick = pool[Math.floor(Math.random() * pool.length)] ?? ITEM_POOL[0]
   return { ...pick, id: uid(), acquiredAt: todayISO() }
 }
@@ -1138,8 +1167,9 @@ export const useGame = create<GameState>()(
         const jobCategoryBonus = currentJob?.effects.xpBonusByCategory?.[rq.category] ?? 0
         const equipmentXpBonus = getEquipmentXpBonus(equippedItems, rq.category)
         const consumableXpBonus = getActiveConsumableXpBonus(s.activeConsumableEffects, rq.category)
-        // Additive XP bonus: job + equipment + consumable
-        const additiveXpBonus = jobCategoryBonus + equipmentXpBonus + consumableXpBonus
+        const titleXpBonus = getTitleXpMultiplier(s.hunter, rq.category) - 1
+        // Additive XP bonus: job + equipment + consumable + equipped title
+        const additiveXpBonus = jobCategoryBonus + equipmentXpBonus + consumableXpBonus + titleXpBonus
         const xp = Math.round(baseXp * statMultiplier * (1 + additiveXpBonus))
         
         // Bump category progress
@@ -1159,7 +1189,8 @@ export const useGame = create<GameState>()(
         const consumableDropBonus = getActiveConsumableDropBonus(s.activeConsumableEffects)
         const finalDropChance = Math.min(0.95, baseDropChance + statDropBonus + equipmentDropBonus + consumableDropBonus)
         const consumableRarityBonus = getActiveConsumableRarityBonus(s.activeConsumableEffects)
-        if (Math.random() < finalDropChance) drops.push(randomItem(s.hunter, equippedItems, consumableRarityBonus))
+        const titleRarityBonus = getTitleRarityBonus(s.hunter)
+        if (Math.random() < finalDropChance) drops.push(randomItem(s.hunter, equippedItems, consumableRarityBonus, titleRarityBonus, 'random'))
         
         // Consume next_quest consumable effects
         const updatedConsumableEffects = consumeNextQuestEffects(s.activeConsumableEffects, rq.category)
@@ -1235,6 +1266,7 @@ export const useGame = create<GameState>()(
         setTimeout(() => {
           get().checkTitleUnlocks()
           get().checkJobAwakening()
+          get().rollGateSpawn('random_completion')
         }, 0)
       },
 
@@ -1315,6 +1347,38 @@ export const useGame = create<GameState>()(
             kind: 'info',
             title: '장비 해제',
             lines: [`[${item?.name || '알 수 없는 아이템'}]을(를) 해제했습니다.`],
+            createdAt: todayISO(),
+          }],
+        })
+      },
+
+      enhanceItem: (itemId) => {
+        const s = get()
+        const target = s.items.find(i => i.id === itemId)
+        if (!target) return
+
+        const equippedItemIds = new Set(Object.values(s.equipment).filter((id): id is string => Boolean(id)))
+        if (!canEnhanceItem(target, s.items, equippedItemIds)) return
+
+        const material = getEnhanceMaterialCandidates(target, s.items, equippedItemIds)[0]
+        if (!material) return
+
+        const nextLevel = Math.min(MAX_ITEM_ENHANCEMENT_LEVEL, getEnhancementLevel(target) + 1)
+        const nextItems = s.items
+          .filter(item => item.id !== material.id)
+          .map(item => item.id === target.id ? { ...item, enhancementLevel: nextLevel } : item)
+
+        set({
+          items: nextItems,
+          messages: [...s.messages, {
+            id: uid(),
+            kind: 'item',
+            title: '장비 강화',
+            lines: [
+              `[${target.name}] 강화 성공`,
+              `${target.name} +${nextLevel}`,
+              `재료로 [${material.name}] 1개를 소모했습니다.`,
+            ],
             createdAt: todayISO(),
           }],
         })
@@ -1477,23 +1541,38 @@ export const useGame = create<GameState>()(
         }
 
         const chance =
-          source === 'daily_open' ? 0.05 :
-          source === 'dungeon_clear' ? 0.15 :
-          0.25
+          source === 'daily_open' ? 0.07 :
+          source === 'daily_completion' ? 0.03 :
+          source === 'random_completion' ? 0.05 :
+          source === 'dungeon_clear' ? 0.25 :
+          source === 'hard_dungeon_clear' ? 0.3 :
+          0.5
         if (Math.random() >= chance) return
 
+        const eGates = GATE_DEFINITIONS.filter(g => g.rank === 'E')
+        const dGates = GATE_DEFINITIONS.filter(g => g.rank === 'D')
+        const cGates = GATE_DEFINITIONS.filter(g => g.rank === 'C')
         const candidates =
-          source === 'daily_open'
-            ? GATE_DEFINITIONS.filter(g => g.rank === 'E')
-            : source === 'dungeon_clear'
-              ? GATE_DEFINITIONS.filter(g => g.rank === 'E' || g.rank === 'D')
-              : GATE_DEFINITIONS.filter(g => g.rank === 'D' || g.rank === 'C')
+          source === 'daily_open' || source === 'daily_completion'
+            ? [...eGates, ...eGates, ...eGates]
+            : source === 'random_completion'
+              ? [...eGates, ...eGates, ...dGates]
+              : source === 'dungeon_clear'
+                ? [...eGates, ...dGates, ...dGates]
+                : source === 'hard_dungeon_clear'
+                  ? [...dGates, ...dGates, ...cGates]
+                  : [...dGates, ...cGates, ...cGates]
         const fallback = GATE_DEFINITIONS.filter(g => g.rank === 'E')
         const pool = candidates.length > 0 ? candidates : fallback.length > 0 ? fallback : GATE_DEFINITIONS
         const selected = pool[Math.floor(Math.random() * pool.length)]
         if (!selected) return
 
-        const activeSource = source === 'daily_open' ? 'random' : 'dungeon_clear'
+        const activeSource =
+          source === 'dungeon_clear' || source === 'hard_dungeon_clear'
+            ? 'dungeon_clear'
+            : source === 'main_completion'
+              ? 'event'
+              : 'random'
         get().spawnGate(selected.id, activeSource)
       },
 
@@ -1697,14 +1776,17 @@ export const useGame = create<GameState>()(
 
           let leveledUpOutcome: ReturnType<typeof applyXp>['outcome'] | undefined
           if (rewardTable) {
-            const xpReward = rewardTable.xp
+            const xpReward = Math.round(rewardTable.xp * getTitleXpMultiplier(s.hunter, 'challenge'))
             const xpResult = applyXp(s.hunter, xpReward, 'challenge')
             nextHunter = xpResult.hunter
             leveledUpOutcome = xpResult.outcome
             gateRewards.push({ type: 'xp', amount: xpReward })
 
-            if (Math.random() < rewardTable.itemDropChance) {
-              const item = randomGateRewardItem(rewardTable)
+            const titleDropBonus = getTitleDropBonus(s.hunter)
+            const titleRarityBonus = getTitleRarityBonus(s.hunter)
+            const finalDropChance = Math.min(0.95, rewardTable.itemDropChance + titleDropBonus)
+            if (Math.random() < finalDropChance) {
+              const item = randomGateRewardItem(rewardTable, titleRarityBonus)
               if (item) {
                 nextItems = [...nextItems, item]
                 gateRewards.push({
@@ -1823,7 +1905,9 @@ export const useGame = create<GameState>()(
           activeGate: nextActiveGate,
           activeConsumableEffects: nextConsumables,
           combatLogs: [finalLog, ...s.combatLogs].slice(0, 20),
-          messages: [...s.messages, ...newMessages],
+          // Gate battle outcome is revealed in GatePanel one log line at a time.
+          // Pushing result modals here would spoil the combat reveal immediately.
+          messages: s.messages,
         })
 
         if (combatLog.result === 'victory') {
@@ -1988,9 +2072,10 @@ export const useGame = create<GameState>()(
         
         // Consumable XP bonus
         const consumableXpBonus = getActiveConsumableXpBonus(s.activeConsumableEffects, q.category)
+        const titleXpBonus = getTitleXpMultiplier(s.hunter, q.category) - 1
         
-        // Additive XP bonus: job + equipment + consumable
-        const additiveXpBonus = jobCategoryBonus + equipmentXpBonus + consumableXpBonus
+        // Additive XP bonus: job + equipment + consumable + equipped title
+        const additiveXpBonus = jobCategoryBonus + equipmentXpBonus + consumableXpBonus + titleXpBonus
         const xp = Math.round(baseXp * statMultiplier * (1 + additiveXpBonus))
 
         // Bump category progress BEFORE applyXp so this completion counts for level-up.
@@ -2034,8 +2119,9 @@ export const useGame = create<GameState>()(
         
         // Get consumable rarity bonus for item generation
         const consumableRarityBonus = getActiveConsumableRarityBonus(s.activeConsumableEffects)
+        const titleRarityBonus = getTitleRarityBonus(s.hunter)
         
-        if (Math.random() < finalDropChance) drops.push(randomItem(s.hunter, equippedItems, consumableRarityBonus))
+        if (Math.random() < finalDropChance) drops.push(randomItem(s.hunter, equippedItems, consumableRarityBonus, titleRarityBonus, q.type))
 
         // messages
         const newMessages: SystemMessage[] = []
@@ -2107,6 +2193,8 @@ export const useGame = create<GameState>()(
         setTimeout(() => {
           get().checkTitleUnlocks()
           get().checkJobAwakening()
+          if (q.type === 'daily') get().rollGateSpawn('daily_completion')
+          if (q.type === 'main') get().rollGateSpawn('main_completion')
         }, 0)
       },
 
@@ -2140,7 +2228,7 @@ export const useGame = create<GameState>()(
           const equippedItems = getEquippedItems(s.items, s.equipment)
           const consumableStatBonuses = getActiveConsumableStatBonuses(s.activeConsumableEffects)
           const baseStepXp = getBalancedDungeonStepXp(q.difficulty, total)
-          const stepXp = Math.round(baseStepXp * getPartialRewardMultiplierWithEquipment(s.hunter, equippedItems, consumableStatBonuses))
+          const stepXp = Math.round(baseStepXp * getPartialRewardMultiplierWithEquipment(s.hunter, equippedItems, consumableStatBonuses) * getTitleXpMultiplier(s.hunter, q.category))
           const { hunter: newHunter, outcome } = applyXp(hunterIn, stepXp, q.category)
 
           const newMessages: SystemMessage[] = [{
@@ -2195,8 +2283,9 @@ export const useGame = create<GameState>()(
         const jobCategoryBonus = currentJob?.effects.xpBonusByCategory?.[q.category] ?? 0
         const equipmentXpBonus = getEquipmentXpBonus(equippedItems, q.category)
         const consumableXpBonus = getActiveConsumableXpBonus(s.activeConsumableEffects, q.category)
-        // Additive XP bonus: job + equipment + consumable
-        const additiveXpBonus = jobCategoryBonus + equipmentXpBonus + consumableXpBonus
+        const titleXpBonus = getTitleXpMultiplier(s.hunter, q.category) - 1
+        // Additive XP bonus: job + equipment + consumable + equipped title
+        const additiveXpBonus = jobCategoryBonus + equipmentXpBonus + consumableXpBonus + titleXpBonus
         const xp = Math.round(baseXp * statMultiplier * (1 + additiveXpBonus))
         const { hunter: newHunter, outcome } = applyXp(hunterIn, xp, q.category)
         const statRewards = getBalancedQuestStatRewards(q)
@@ -2204,7 +2293,8 @@ export const useGame = create<GameState>()(
         for (const [k, v] of Object.entries(statRewards)) {
           newStats[k as StatKey] = roundStatValue(newStats[k as StatKey] + (v ?? 0))
         }
-        const drop = randomItem(s.hunter, equippedItems)
+        const titleRarityBonus = getTitleRarityBonus(s.hunter)
+        const drop = randomItem(s.hunter, equippedItems, 0, titleRarityBonus, 'dungeon')
         
         // Consume next_quest consumable effects
         const updatedConsumableEffects = consumeNextQuestEffects(s.activeConsumableEffects, q.category)
