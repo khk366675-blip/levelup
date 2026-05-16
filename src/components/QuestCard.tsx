@@ -95,6 +95,33 @@ export function QuestCard({ quest, onRemove, removable }: Props) {
                 animate={{ width: `${Math.min(100, ((quest.currentSteps ?? 0) / (quest.totalSteps ?? 1)) * 100)}%` }}
               />
             </div>
+            {/* milestones: current / next goal */}
+            {quest.milestones && quest.milestones.length > 0 && (
+              <div className="mt-2 space-y-0.5">
+                {!dungeonDone ? (
+                  <>
+                    {quest.milestones[quest.currentSteps ?? 0] && (
+                      <p className="text-[11px] text-amber-300/90 leading-snug line-clamp-2">
+                        <span className="text-white/50">현재 목표:</span> {quest.milestones[quest.currentSteps ?? 0]}
+                      </p>
+                    )}
+                    {quest.milestones[(quest.currentSteps ?? 0) + 1] ? (
+                      <p className="text-[10px] text-white/40 leading-snug line-clamp-1">
+                        <span className="text-white/30">다음 목표:</span> {quest.milestones[(quest.currentSteps ?? 0) + 1]}
+                      </p>
+                    ) : (
+                      <p className="text-[10px] text-emerald-300/70 leading-snug">
+                        <span className="text-white/30">다음 목표:</span> 최종 단계
+                      </p>
+                    )}
+                  </>
+                ) : (
+                  <p className="text-[11px] text-emerald-300/80 leading-snug">
+                    모든 단계 완료
+                  </p>
+                )}
+              </div>
+            )}
           </div>
         )}
 

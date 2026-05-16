@@ -169,6 +169,9 @@ interface GameState {
 
   // dev
   hardReset: () => void
+
+  // metadata sync
+  syncDefaultQuestMetadata: () => void
 }
 
 const initialHunter: HunterState = {
@@ -2410,6 +2413,39 @@ export const useGame = create<GameState>()(
       dismissMessage: (id) => set((s) => ({ messages: s.messages.filter(x => x.id !== id) })),
       clearMessages: () => set({ messages: [] }),
 
+      syncDefaultQuestMetadata: () => set((s) => {
+        const defaultMap = new Map<string, Quest>(
+          initialQuests.map(q => [q.id, q])
+        )
+        const preserved = new Set<string>()
+        const mergedQuests: Quest[] = s.quests.map(saved => {
+          const def = defaultMap.get(saved.id)
+          if (!def) return saved // custom quest: leave untouched
+          preserved.add(saved.id)
+          // Merge: keep progress fields, update metadata from default seed
+          return {
+            ...def,
+            completed: saved.completed,
+            currentSteps: saved.currentSteps,
+            lastCompletedAt: saved.lastCompletedAt,
+            createdAt: saved.createdAt,
+            lastResetAt: saved.lastResetAt,
+          }
+        })
+        // Add new default quests that weren't in saved quests
+        const addedQuests: Quest[] = []
+        for (const def of initialQuests) {
+          if (!preserved.has(def.id)) {
+            addedQuests.push(def)
+          }
+        }
+        if (addedQuests.length === 0 && mergedQuests.length === s.quests.length) {
+          // Nothing changed
+          return {}
+        }
+        return { quests: [...mergedQuests, ...addedQuests] }
+      }),
+
       hardReset: () => set({
         hunter: initialHunter,
         quests: initialQuests,
@@ -2430,6 +2466,18 @@ export const useGame = create<GameState>()(
     {
       name: 'levelup-save',
       version: 14,
+      onRehydrateStorage: () => {
+        // Sync default quest metadata (title, description, milestones, weights) from latest seed
+        // while preserving user progress (currentSteps, completed, etc.).
+        // Custom quests are left untouched.
+        setTimeout(() => {
+          try {
+            useGame.getState().syncDefaultQuestMetadata()
+          } catch {
+            // ignore if store not ready
+          }
+        }, 0)
+      },
       migrate: (persistedState: any, version: number) => {
         // Ensure hunter has title fields
         if (persistedState?.hunter) {

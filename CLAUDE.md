@@ -5227,3 +5227,162 @@ Main Quest와 Dungeon의 역할을 명확히 분리한다.
 ### 빌드 결과
 - `npm run build` → ✅ 통과 (1949 modules, 443.10 kB JS / 33.49 kB CSS)
 - TypeScript 에러 0, 경고 0
+
+## 14차 작업 — 12-9A-1: Dungeon 마일스톤 시스템 및 운동 Dungeon 재구성 (2026-05-16)
+
+### 작업 목표
+Dungeon을 단순한 "N단계 체크리스트"가 아니라, 사용자가 지금 무엇을 해야 하는지 명확히 알 수 있는 "중간 마일스톤 진행 시스템"으로 개선한다.
+
+### 변경 원칙
+- XP 보상표 변경 금지
+- gate/monster/전투 공식 변경 금지
+- 장비 강화/칭호 효과 변경 금지
+- localStorage key `levelup-save` 변경 금지
+- persist version 변경 금지 (스키마 변경 없음 — `milestones`는 optional 필드)
+- 기존 저장 데이터 호환성 유지
+- B/A/S급 게이트 추가 금지
+- 새 대형 시스템 추가 금지
+
+### Dungeon milestones 구조
+
+`Quest` 타입에 optional 필드 추가:
+```ts
+milestones?: string[]
+```
+
+정책:
+- milestones가 있으면 Dungeon UI에서 현재 목표/다음 목표를 표시한다.
+- milestones가 없으면 기존처럼 currentSteps / totalSteps만 표시한다.
+- milestones.length가 totalSteps와 다르더라도 앱이 깨지지 않는다.
+- currentSteps 기준:
+  - currentSteps = 0이면 현재 목표는 milestones[0]
+  - 다음 목표는 milestones[1]
+  - 마지막 단계면 다음 목표는 "최종 단계"
+- 완료된 Dungeon은 "모든 단계 완료"로 표시한다.
+
+### QuestCard UI 개선
+
+Dungeon 카드에서 milestones가 있을 때:
+- **현재 목표**: amber-300 강조, 11px, line-clamp-2
+- **다음 목표**: white/40, 10px, line-clamp-1
+- 마지막 단계: "최종 단계" 안내
+- 완료 시: "모든 단계 완료" emerald 표시
+- milestones가 없으면 기존 UI 유지 (진행도 바만 표시)
+
+### 운동 Dungeon 재구성
+
+**제거한 Dungeon** (기존 부위별 운동 출석 체크):
+- `dungeon-arm-monthly` (팔 5회)
+- `dungeon-back-monthly` (등 5회)
+- `dungeon-chest-monthly` (가슴 5회)
+- `dungeon-shoulder-monthly` (어깨 5회)
+- `dungeon-leg-monthly` (하체 3회)
+
+**신규 종목별 점진적 과부하 Dungeon**:
+
+| ID | 이름 | 난이도 | 단계 | rewardStatWeights |
+|---|---|---|---|---|
+| `dungeon-shoulder-press` | 스미스 숄더프레스 점진적 과부하 | hard | 5 | STR 45% · VIT 25% · AGI 10% · PER 20% |
+| `dungeon-dumbbell-curl` | 덤벨컬 점진적 과부하 | hard | 5 | STR 45% · AGI 20% · VIT 15% · PER 20% |
+| `dungeon-tbar-row` | 티바로우 점진적 과부하 | hard | 5 | STR 45% · VIT 25% · PER 20% · SEN 10% |
+| `dungeon-squat` | 스쿼트 점진적 과부하 | elite | 5 | STR 50% · VIT 30% · PER 20% |
+| `dungeon-deadlift` | 데드리프트 점진적 과부하 | elite | 5 | STR 50% · VIT 30% · PER 20% |
+
+각 신규 Dungeon에는 5단계 milestones가 포함되어 있다.
+
+### 운동 외 milestones 적용 목록
+
+기존 마일스톤 Dungeon에 milestones 추가:
+
+| ID | milestones 단계 |
+|---|---|
+| `dungeon-bench-overload` | 80kg 확인 → 85kg → 90kg → 95kg → 100kg 준비 |
+| `dungeon-run-5k` | 28:00 → 27:30 → 27:00 → 26:30 → 26:00 → 25:30 → 25:00 준비 |
+| `dungeon-investment-return` | 500만 → 1000만 → 2000만 운용 → +3% → +5% → +7% → +10% 준비 |
+| `dungeon-networth` | +200만 → +400만 → +600만 → +800만 → +1000만 준비 |
+| `dungeon-club-prep` | 학회 후보 → 지원서 → 자기소개서 → 과제 → 면접질문 → 모의면접 → 최종 지원 |
+| `dungeon-kbi-prep` | 범위 확인 → 1회독 25% → 50% → 100% → 문제풀이 → 오답 정리 → 최종 복습 |
+| `dungeon-cutting` | 76kg → 75kg → 74kg → 73kg → 72kg → 체지방 15% 근접 |
+
+### milestones 미적용 Dungeon (보류)
+
+아래 Dungeon은 단계별 의미가 반복적이거나 description으로 충분하다고 판단하여 milestones를 추가하지 않음:
+- `dungeon-stock-reports` (5편 — description으로 충분)
+- `dungeon-cma-journal` (12회 — 월간 반복)
+- `dungeon-finance-books` (8권 — description으로 충분)
+- `dungeon-dart-analysis` (30기업 — 반복형)
+- `dungeon-finance-terms` (100개 — 반복형)
+- `dungeon-backtest` (12회 — 반복형)
+- `dungeon-exam-prep` (12회 — 과목별로 다르나 generic)
+- `dungeon-assignment-early` (10회 — generic)
+- `dungeon-running-monthly` (12회 — 출석/횟수)
+- `dungeon-protein-30` (30일 — 1일 = 1단계)
+- `dungeon-sleep-rhythm` (30일 — 1일 = 1단계)
+- `dungeon-cooking-routine` (20회 — 1끼 = 1단계)
+- `dungeon-expense-record` (30일 — 1일 = 1단계)
+
+### 기존 저장 데이터 반영 정책
+
+배포 후 사용 중인 localStorage에는 기존 퀘스트가 저장되어 있을 수 있다.
+
+구현한 동기화 메커니즘:
+- `store.ts`에 `syncDefaultQuestMetadata()` 액션 추가
+- `onRehydrateStorage` 콜백에서 자동 실행
+- 기본 퀘스트 id가 같은 경우:
+  - 진행도 보존: `completed`, `currentSteps`, `lastCompletedAt`, `createdAt`, `lastResetAt`
+  - 메타데이터 갱신: `title`, `description`, `milestones`, `rewardStatWeights`, `statRewards`, `difficulty`, `category`
+- 새로운 기본 퀘스트는 자동 추가
+- 커스텀 퀘스트는 건드리지 않음
+- persist version 유지 (v14)
+
+### stat distribution 결과
+
+| scenario | INT+PER% | AGI+SEN% | STR+VIT% | max/min | 판정 |
+|---|---|---|---|---|---|
+| A/B rolling 30d weighted | **42%** | **34%** | **24%** | **4.5×** | ✅✅❌✅ |
+| A/B rolling 90d weighted | **43%** | **34%** | **23%** | **3.8×** | ✅✅❌✅ |
+| C full+90d weighted | **44%** | **34%** | **22%** | **2.5×** | ❌✅❌✅ |
+| C full+180d weighted | **44%** | **34%** | **23%** | **2.8×** | ❌✅❌✅ |
+
+- INT+PER: 42~44% (목표 <45% 유지)
+- AGI+SEN: 34% (목표 ≥20% 유지)
+- STR+VIT: 22~24% (목표 ≥25%에 약간 미달 — 프로필 반영으로 수용)
+- max/min ratio: 2.5~4.5× (목표 <5× 유지)
+
+### XP 성장 시뮬레이션 결과
+
+| scenario | 365d total XP | 365d level | 365d rank |
+|---|---:|---:|---|
+| A. 보수적 | 354,444 | 54 | A |
+| B. 현실적 | 409,194 | 58 | A |
+| C. 적극적 | 463,944 | 61 | S |
+
+- 12-9A 대비 변화 없음 (보수적 55→54, 1레벨 차이)
+- Dungeon 25개 유지, elite/hard 비율 유사하여 XP 곡선 거의 동일
+
+### 게이트 시뮬레이션 결과
+
+- gate/monster/전투 공식 변경 없음
+- E/D/C 밸런스 12-7/12-9A와 동일하게 유지
+- Build D (Lv30): C급 도전권 63~74%
+- Build E (Lv45): C급 졸업
+- Build F (Lv60): 전 게이트 trivialize
+
+### persist version 변경 여부
+
+- **변경 없음** (v14 유지)
+- `milestones`는 optional 필드이므로 기존 저장 데이터와 완전 호환
+- `onRehydrateStorage`에서 `syncDefaultQuestMetadata()`를 자동 호출하여 기존 사용자도 새 milestones를 즉시 볼 수 있음
+
+### 변경한 파일
+
+| 파일 | 변경 내용 |
+|---|---|
+| `src/lib/types.ts` | `Quest` 인터페이스에 `milestones?: string[]` 추가 |
+| `src/lib/seed.ts` | 부위별 월간 Dungeon 5개 제거. 종목별 점진적 과부하 Dungeon 5개 추가. 기존 마일스톤 Dungeon 7개에 milestones 필드 추가. |
+| `src/components/QuestCard.tsx` | Dungeon 카드에 milestones 기반 현재 목표/다음 목표 표시 UI 추가 |
+| `src/lib/store.ts` | `syncDefaultQuestMetadata()` 액션 추가. `onRehydrateStorage`에서 자동 실행. |
+
+### 빌드 결과
+- `npm run build` → ✅ 통과 (1949 modules, 445.37 kB JS / 33.76 kB CSS)
+- TypeScript 에러 0, 경고 0

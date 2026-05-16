@@ -278,6 +278,8 @@ export interface Quest {
   /** dungeon: number of times you must complete to clear (e.g. 30-day) */
   totalSteps?: number
   currentSteps?: number
+  /** dungeon: step-by-step milestone descriptions. If present, UI shows current/next goal. */
+  milestones?: string[]
   /** daily only: days that must pass after completion before this can be done again.
    *  undefined or 0 = standard daily (midnight reset). 1 = every other day. 4 = every 5 days. */
   cooldownDays?: number
