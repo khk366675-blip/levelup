@@ -262,7 +262,9 @@ export function InfiniteTowerPanel() {
     resolveTowerBattle()
   }
 
-  const handleCloseResult = () => {
+  const handleCloseResult = (event?: { preventDefault?: () => void; stopPropagation?: () => void }) => {
+    event?.preventDefault?.()
+    event?.stopPropagation?.()
     cancelTowerBattle()
   }
 
@@ -787,6 +789,7 @@ export function InfiniteTowerPanel() {
               <button
                 type="button"
                 onClick={handleCloseResult}
+                onPointerUp={handleCloseResult}
                 className="text-[10px] system-text text-white/50 border border-white/10 rounded px-2 py-0.5 hover:bg-white/5 transition"
               >
                 닫기
@@ -798,6 +801,10 @@ export function InfiniteTowerPanel() {
                     handleCloseResult()
                     setSelectedFloor(activeBattle.floor + 1)
                   }}
+                  onPointerUp={(event) => {
+                    handleCloseResult(event)
+                    setSelectedFloor(activeBattle.floor + 1)
+                  }}
                   className="text-[10px] system-text text-emerald-200 border border-emerald-400/25 bg-emerald-400/10 rounded px-2 py-0.5 hover:bg-emerald-400/15 transition"
                 >
                   다음 층 도전
@@ -807,6 +814,7 @@ export function InfiniteTowerPanel() {
                 <button
                   type="button"
                   onClick={handleCloseResult}
+                  onPointerUp={handleCloseResult}
                   className="text-[10px] system-text text-amber-200 border border-amber-400/25 bg-amber-400/10 rounded px-2 py-0.5 hover:bg-amber-400/15 transition"
                 >
                   재도전

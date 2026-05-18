@@ -120,6 +120,7 @@ export function DramaticReveal({
   const completeRef = useRef(onComplete)
   const closeRef = useRef(onClose)
   const skipRef = useRef(onSkip)
+  const closedRef = useRef(false)
   const safeSteps = useMemo(() => steps.filter(step => step.text.trim().length > 0), [steps])
   const current = safeSteps[index]
   const currentTone = toneClass[current?.tone ?? tone]
@@ -137,6 +138,7 @@ export function DramaticReveal({
       return
     }
     generationRef.current += 1
+    closedRef.current = false
     setIndex(0)
     setDone(false)
   }, [isOpen, safeSteps.length])
@@ -158,15 +160,22 @@ export function DramaticReveal({
 
   if (!isOpen || !current) return null
 
-  const close = () => {
+  const close = (event?: { preventDefault?: () => void; stopPropagation?: () => void }) => {
+    event?.preventDefault?.()
+    event?.stopPropagation?.()
+    if (closedRef.current) return
+    closedRef.current = true
     generationRef.current += 1
     setDone(true)
     ;(closeRef.current ?? completeRef.current)?.()
   }
 
-  const skip = () => {
+  const skip = (event?: { preventDefault?: () => void; stopPropagation?: () => void }) => {
+    event?.preventDefault?.()
+    event?.stopPropagation?.()
+    if (closedRef.current) return
     skipRef.current?.()
-    close()
+    close(event)
   }
 
   const frame = (
@@ -191,6 +200,7 @@ export function DramaticReveal({
           <button
             type="button"
             onClick={skip}
+            onPointerUp={skip}
             className="inline-flex items-center gap-1 rounded border border-white/10 bg-white/5 px-2 py-1 text-[10px] system-text text-white/50 transition hover:bg-white/10 hover:text-white/75"
           >
             <FastForward className="h-3 w-3" />
@@ -234,6 +244,7 @@ export function DramaticReveal({
           <button
             type="button"
             onClick={close}
+            onPointerUp={close}
             className="relative z-20 mx-auto mt-4 flex min-h-9 items-center justify-center gap-2 rounded-md border border-white/15 bg-white/10 px-4 text-xs font-bold text-white transition hover:bg-white/15 pointer-events-auto"
           >
             <X className="h-3.5 w-3.5" />
@@ -253,8 +264,13 @@ export function DramaticReveal({
   }
 
   return (
-    <div className={clsx('fixed inset-0 z-[60] flex items-center justify-center bg-black/55 p-4 backdrop-blur-sm', className)}>
-      <div className="w-full max-w-lg">{frame}</div>
+    <div
+      className={clsx('fixed inset-0 z-[60] flex items-center justify-center bg-black/55 p-4 backdrop-blur-sm', className)}
+      onPointerUp={(event) => {
+        if (done && event.target === event.currentTarget) close(event)
+      }}
+    >
+      <div className="w-full max-w-lg" onPointerUp={event => event.stopPropagation()}>{frame}</div>
     </div>
   )
 }
