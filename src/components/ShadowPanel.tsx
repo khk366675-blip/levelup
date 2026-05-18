@@ -2,6 +2,10 @@ import { useMemo, useState } from 'react'
 import { motion } from 'framer-motion'
 import { Eclipse, Lock, Shield, Star, Swords, X } from 'lucide-react'
 import { useGame } from '../lib/store'
+import { ShadowCard as VisualShadowCard } from './shadows/ShadowCard'
+import { ShadowExpeditionPanel } from './shadows/ShadowExpeditionPanel'
+import { ShadowPortrait } from './shadows/ShadowPortrait'
+import { DramaticReveal, type RevealStep } from './DramaticReveal'
 import {
   SHADOW_DEFINITIONS,
   SHADOW_RANK_LABEL,
@@ -277,6 +281,7 @@ function CodexCard({ definition, owned, ownedCount, maxEnhancement, isEquipped }
   return (
     <div className={`panel corner-bracket p-4 ${rarityStyle[definition.rarity]} ${owned ? '' : 'opacity-60'}`}>
       <div className="br" />
+      <ShadowPortrait definition={definition} size="md" hidden={hidden} highlighted={definition.rank === 'named'} />
       <div className="flex items-start justify-between gap-3">
         <div>
           <div className="text-[10px] system-text opacity-70">[{SHADOW_RARITY_LABEL[definition.rarity]}]</div>
@@ -326,6 +331,11 @@ export function ShadowPanel() {
   const toggleShadowLock = useGame(s => s.toggleShadowLock)
   const toggleShadowFavorite = useGame(s => s.toggleShadowFavorite)
   const evolveShadow = useGame(s => s.evolveShadow)
+  const [pendingEvolution, setPendingEvolution] = useState<{
+    shadow: OwnedShadow
+    targetName: string
+    cost: number
+  } | undefined>()
 
   const filteredOwned = useMemo(() => {
     const list = ownedShadows.filter(shadow => {
@@ -345,10 +355,52 @@ export function ShadowPanel() {
     if (filter === 'achievement_named') return def.isAchievementNamed
     return def.role === filter
   })
+  const legionPower = equippedShadows.reduce((sum, shadow) => {
+    const def = getShadowDefinition(shadow.definitionId)
+    const levelBonus = 1 + ((shadow.level ?? 1) - 1) * 0.01
+    const enhanceBonus = 1 + (shadow.enhancementLevel ?? 0) * 0.06
+    return sum + Math.round((def?.basePower ?? 0) * levelBonus * enhanceBonus)
+  }, 0)
+  const evolutionSteps: RevealStep[] = pendingEvolution
+    ? [
+        {
+          title: 'SHADOW EVOLUTION',
+          text: `${pendingEvolution.shadow.name}의 형체가 흔들린다.`,
+          subtext: '강화는 유지되고 레벨은 1로 재정렬됩니다.',
+          durationMs: 900,
+          tone: 'shadow',
+        },
+        {
+          title: 'CONDENSE',
+          text: '더 깊은 어둠이 갑옷처럼 둘러진다.',
+          subtext: `그림자 정수 ${pendingEvolution.cost} 소모`,
+          durationMs: 900,
+          tone: 'shadow',
+        },
+        {
+          title: 'EVOLVED',
+          text: `${pendingEvolution.targetName}으로 진화했다.`,
+          subtext: '군단의 기척이 한 단계 더 무거워졌습니다.',
+          durationMs: 1200,
+          tone: 'rank',
+          emphasis: true,
+        },
+      ]
+    : []
 
   return (
     <div className="space-y-4">
-      <div className="panel corner-bracket p-5">
+      <DramaticReveal
+        isOpen={Boolean(pendingEvolution)}
+        steps={evolutionSteps}
+        tone="shadow"
+        position="modal"
+        onComplete={() => {
+          if (pendingEvolution) evolveShadow(pendingEvolution.shadow.instanceId)
+          setPendingEvolution(undefined)
+        }}
+      />
+      <div className="panel corner-bracket overflow-hidden p-5 border-purple-400/25 bg-[radial-gradient(circle_at_50%_0%,rgba(124,58,237,0.2),transparent_36%),linear-gradient(135deg,rgba(15,23,42,0.75),rgba(2,6,23,0.94))]">
         <div className="br" />
         <div className="flex items-center justify-between gap-3 mb-4">
           <div className="flex items-center gap-2">
@@ -358,6 +410,24 @@ export function ShadowPanel() {
               <div className="text-sm text-white/55">보유 {ownedShadows.length} · 출전 {equippedShadows.length} / {slotCount} · 정수 {shadowEssence}</div>
             </div>
           </div>
+          <div className="hidden lg:grid grid-cols-4 gap-2 min-w-[420px]">
+            <div className="rounded-md border border-cyan-400/20 bg-cyan-400/10 px-3 py-2">
+              <div className="system-text text-[9px] text-cyan-200/60">ESSENCE</div>
+              <div className="text-lg font-bold text-cyan-100">{shadowEssence}</div>
+            </div>
+            <div className="rounded-md border border-purple-400/20 bg-purple-400/10 px-3 py-2">
+              <div className="system-text text-[9px] text-purple-200/60">OWNED</div>
+              <div className="text-lg font-bold text-purple-100">{ownedShadows.length}</div>
+            </div>
+            <div className="rounded-md border border-amber-400/20 bg-amber-400/10 px-3 py-2">
+              <div className="system-text text-[9px] text-amber-200/60">DEPLOYED</div>
+              <div className="text-lg font-bold text-amber-100">{equippedShadows.length}/{slotCount}</div>
+            </div>
+            <div className="rounded-md border border-emerald-400/20 bg-emerald-400/10 px-3 py-2">
+              <div className="system-text text-[9px] text-emerald-200/60">POWER</div>
+              <div className="text-lg font-bold text-emerald-100">{legionPower}</div>
+            </div>
+          </div>
           {equippedShadowIds.length > slotCount && (
             <div className="text-[10px] text-amber-200 border border-amber-400/30 bg-amber-400/10 rounded px-2 py-1">
               슬롯 초과: 앞 {slotCount}명만 적용
@@ -365,17 +435,23 @@ export function ShadowPanel() {
           )}
         </div>
 
-        <div className="grid md:grid-cols-5 gap-3">
+        <div className="mb-3 flex items-center gap-3">
+          <div className="system-text text-[11px] text-purple-200/80">DEPLOYED LEGION</div>
+          <div className="h-px flex-1 bg-gradient-to-r from-purple-300/30 to-transparent" />
+        </div>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5">
           {Array.from({ length: Math.max(1, slotCount) }).map((_, index) => {
             const shadow = equippedShadows[index]
             return (
-              <div key={index} className="rounded-lg border border-white/10 bg-ink-900/45 p-3 min-h-24">
-                <div className="flex items-center gap-1.5 text-[10px] system-text text-cyan-300/60 mb-2">
+              <div key={index} className={`relative overflow-hidden rounded-lg border p-3 min-h-56 ${shadow ? 'border-cyan-400/25 bg-cyan-400/5 shadow-glow' : 'border-white/10 bg-ink-900/45'}`}>
+                <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_15%,rgba(34,211,238,0.12),transparent_42%),linear-gradient(180deg,rgba(168,85,247,0.06),transparent_60%)]" />
+                <div className="relative z-10 flex items-center gap-1.5 text-[10px] system-text text-cyan-300/60 mb-2">
                   {shadow?.role === 'guard' ? <Shield className="w-3 h-3" /> : <Swords className="w-3 h-3" />}
                   SLOT {index + 1}
                 </div>
                 {shadow ? (
-                  <div>
+                  <div className="relative z-10 space-y-2">
+                    <ShadowPortrait shadow={shadow} size="md" active highlighted={Boolean(shadow.isNamed)} />
                     <div className={`text-xs font-semibold ${rarityStyle[shadow.rarity].split(' ')[0]}`}>{shadow.name}</div>
                     <div className="text-[10px] text-white/45 mt-1">{SHADOW_ROLE_LABEL[shadow.role]} · {SHADOW_RANK_LABEL[shadow.rank]}</div>
                     <button type="button" onClick={() => unequipShadow(shadow.instanceId)} className="mt-2 text-[10px] text-rose-200 border border-rose-400/25 rounded px-2 py-1">
@@ -390,6 +466,8 @@ export function ShadowPanel() {
           })}
         </div>
       </div>
+
+      <ShadowExpeditionPanel />
 
       <div className="flex flex-wrap items-center gap-2">
         <button type="button" onClick={() => setView('owned')} className={`px-3 py-2 rounded-md text-xs border ${view === 'owned' ? 'border-cyan-400/50 bg-cyan-400/15 text-cyan-100' : 'border-white/10 bg-ink-900/45 text-white/50'}`}>보유</button>
@@ -413,7 +491,7 @@ export function ShadowPanel() {
           {filteredOwned.map(shadow => {
             const equipped = equippedShadowIds.includes(shadow.instanceId)
             return (
-              <ShadowCard
+              <VisualShadowCard
                 key={shadow.instanceId}
                 shadow={shadow}
                 equipped={equipped}
@@ -444,7 +522,11 @@ export function ShadowPanel() {
                   const check = canEvolveShadow(shadow, shadowEssence)
                   if (check.canEvolve && check.targetDefinition) {
                     if (window.confirm(`[${shadow.name}]을(를) [${check.targetDefinition.name}](으)로 진화합니다.\n그림자 정수 ${check.cost} 소모.\n레벨이 1로 초기화되고 강화는 유지됩니다. 계속할까요?`)) {
-                      evolveShadow(shadow.instanceId)
+                      setPendingEvolution({
+                        shadow,
+                        targetName: check.targetDefinition.name,
+                        cost: check.cost ?? 0,
+                      })
                     }
                   }
                 }}
@@ -481,4 +563,3 @@ export function ShadowPanel() {
     </div>
   )
 }
-

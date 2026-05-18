@@ -16,6 +16,7 @@ import { STAT_META, type StatKey, JOB_DEFINITIONS, JOB_LINE_META } from '../lib/
 import { Flame, Plus } from 'lucide-react'
 import { useState } from 'react'
 import { JobPanel } from './JobPanel'
+import { SkillPanel } from './SkillPanel'
 
 export function HunterStatus() {
   const hunter = useGame(s => s.hunter)
@@ -232,6 +233,8 @@ export function HunterStatus() {
           </div>
         </div>
       </div>
+
+      <SkillPanel />
 
       <JobPanel />
     </div>

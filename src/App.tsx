@@ -5,6 +5,7 @@ import {
   Calendar,
   Compass,
   Eclipse,
+  Gift,
   Package,
   Skull,
   Swords,
@@ -23,21 +24,26 @@ import { RandomQuestCard } from './components/RandomQuestCard'
 import { GatePanel } from './components/GatePanel'
 import { ShadowPanel } from './components/ShadowPanel'
 import { BackupControls } from './components/BackupControls'
+import { InfiniteTowerPanel } from './components/InfiniteTowerPanel'
+import { RewardBoxPanel } from './components/RewardBoxPanel'
+import { ChallengeCardsPanel } from './components/ChallengeCardsPanel'
 
-type Tab = 'daily' | 'main' | 'dungeon' | 'gate' | 'shadows' | 'inventory' | 'titles'
+type Tab = 'rewards' | 'daily' | 'main' | 'dungeon' | 'gate' | 'shadows' | 'inventory' | 'titles' | 'tower'
 
 const TABS: { key: Tab; label: string; icon: typeof Calendar }[] = [
+  { key: 'rewards',   label: '보상',           icon: Gift },
   { key: 'shadows',   label: '군단',         icon: Eclipse },
   { key: 'daily',     label: '일일 퀘스트', icon: Calendar },
   { key: 'main',      label: '메인 퀘스트', icon: Compass },
   { key: 'dungeon',   label: '던전',        icon: Skull },
   { key: 'gate',      label: '게이트',      icon: Swords },
+  { key: 'tower',     label: '무한의 탑',   icon: Swords },
   { key: 'inventory', label: '인벤토리',    icon: Package },
   { key: 'titles',    label: '칭호',        icon: Award },
 ]
 
 export default function App() {
-  const [tab, setTab] = useState<Tab>('daily')
+  const [tab, setTab] = useState<Tab>('rewards')
   const [addOpen, setAddOpen] = useState(false)
   const quests = useGame(s => s.quests)
   const hunter = useGame(s => s.hunter)
@@ -55,6 +61,8 @@ export default function App() {
   const rollGateSpawn = useGame(s => s.rollGateSpawn)
   const rollRandomQuest = useGame(s => s.rollRandomQuestForToday)
   const grantAchievementNamedShadows = useGame(s => s.grantAchievementNamedShadows)
+  const ensureTodayShadowExpedition = useGame(s => s.ensureTodayShadowExpedition)
+  const ensureDailyRewardSystems = useGame(s => s.ensureDailyRewardSystems)
   const initialized = useGame(s => s.initialized)
 
   useEffect(() => {
@@ -65,6 +73,8 @@ export default function App() {
     clearExpiredConsumableEffects()
     clearExpiredRandomQuest()
     clearExpiredGate()
+    ensureDailyRewardSystems()
+    ensureTodayShadowExpedition()
     rollGateSpawn('daily_open')
     rollRandomQuest()
     // Check title and job unlocks on app mount
@@ -73,7 +83,7 @@ export default function App() {
       checkJobs()
       grantAchievementNamedShadows()
     }, 100)
-  }, [init, checkTitles, checkJobs, grantAchievementNamedShadows, recordAppOpen, recoverGateStamina, clearGateInjuryIfExpired, clearExpiredConsumableEffects, clearExpiredRandomQuest, clearExpiredGate, rollGateSpawn, rollRandomQuest])
+  }, [init, checkTitles, checkJobs, grantAchievementNamedShadows, recordAppOpen, recoverGateStamina, clearGateInjuryIfExpired, clearExpiredConsumableEffects, clearExpiredRandomQuest, clearExpiredGate, ensureDailyRewardSystems, ensureTodayShadowExpedition, rollGateSpawn, rollRandomQuest])
 
   const dailies = quests.filter(q => q.type === 'daily')
   const mains = quests.filter(q => q.type === 'main')
@@ -161,6 +171,18 @@ export default function App() {
             transition={{ duration: 0.2 }}
             className="space-y-3"
           >
+            {tab === 'rewards' && (
+              <Section
+                title="보상"
+                subtitle="일일 박스와 오늘의 도전 카드"
+              >
+                <div className="space-y-4">
+                  <RewardBoxPanel />
+                  <ChallengeCardsPanel />
+                </div>
+              </Section>
+            )}
+
             {tab === 'daily' && (
               <Section
                 title="일일 퀘스트"
@@ -224,6 +246,12 @@ export default function App() {
             {tab === 'gate' && (
               <Section title="게이트" subtitle="출현한 균열과 전투 준비 상태">
                 <GatePanel />
+              </Section>
+            )}
+
+            {tab === 'tower' && (
+              <Section title="무한의 탑" subtitle="헌터와 군단의 성장을 측정하는 전투 콘텐츠">
+                <InfiniteTowerPanel />
               </Section>
             )}
 

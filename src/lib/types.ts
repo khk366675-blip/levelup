@@ -319,6 +319,17 @@ export type ShadowRole =
   | 'support'
   | 'hunter'
 
+export type ShadowVisualTheme =
+  | 'scout'
+  | 'soldier'
+  | 'guard'
+  | 'beast'
+  | 'analyst'
+  | 'support'
+  | 'hunter'
+  | 'named'
+  | 'evolved'
+
 export type ShadowSourceType =
   | 'gate_extract'
   | 'gate_named'
@@ -381,6 +392,21 @@ export interface ShadowDefinition {
   isGateNamed?: boolean
   isAchievementNamed?: boolean
   evolutionTargetDefinitionId?: string
+  visualKey?: string
+  portraitVariant?: string
+  visualTheme?: ShadowVisualTheme
+  silhouetteType?: string
+  accentColor?: string
+  weaponShape?: string
+  headShape?: string
+  shoulderShape?: string
+  auraType?: string
+  eyeStyle?: string
+  runeStyle?: string
+  accessory?: string
+  posture?: string
+  backgroundMotif?: string
+  visualIntensity?: number
 }
 
 export interface OwnedShadow {
@@ -418,6 +444,51 @@ export interface ShadowExtractResult {
   rolledRarity?: ShadowRarity
   shadow?: OwnedShadow
   message: string
+}
+
+export type ShadowExpeditionType = 'training' | 'essence' | 'hunt' | 'scout'
+export type ShadowExpeditionStatus = 'locked' | 'available' | 'in_progress' | 'completed' | 'expired'
+export type ShadowExpeditionCommand = 'attack' | 'defend' | 'scout' | 'analyze' | 'search'
+export type ShadowExpeditionOutcome = 'great_success' | 'success' | 'partial' | 'failure'
+
+export interface ShadowExpeditionLog {
+  id: string
+  turn: number
+  type: 'system' | 'command' | 'shadow' | 'risk' | 'reward'
+  message: string
+  actorShadowId?: string
+  command?: ShadowExpeditionCommand
+}
+
+export interface ShadowExpeditionResult {
+  outcome: ShadowExpeditionOutcome
+  progress: number
+  risk: number
+  shadowXpGained: number
+  essenceGained: number
+  bonusRewards?: string[]
+}
+
+export interface ShadowExpedition {
+  id: string
+  date: string
+  type: ShadowExpeditionType
+  title: string
+  description: string
+  requiredPower: number
+  recommendedRoles: ShadowRole[]
+  selectedShadowIds: string[]
+  status: ShadowExpeditionStatus
+  progress: number
+  risk: number
+  turn: number
+  maxTurns: number
+  expiresAt: string
+  logs: ShadowExpeditionLog[]
+  result?: ShadowExpeditionResult
+  searchStacks?: number
+  analyzeStacks?: number
+  scoutStacks?: number
 }
 
 // ── Equipment System ───────────────────────────────────────────────
@@ -524,8 +595,9 @@ export interface MonsterDefinition {
   skillIds: string[]
 }
 
-export type SkillOwnerType = 'job' | 'equipment' | 'monster' | 'common'
-export type SkillType = 'attack' | 'buff' | 'debuff' | 'heal'
+export type SkillOwnerType = 'job' | 'equipment' | 'monster' | 'common' | 'title' | 'special'
+export type SkillSource = 'basic' | 'job' | 'equipment' | 'title' | 'special' | 'monster'
+export type SkillType = 'attack' | 'damage' | 'defense' | 'buff' | 'debuff' | 'heal' | 'utility'
 export type CombatEffectKind = 'stat' | 'damage_reduction' | 'counter'
 
 export interface SkillEffect {
@@ -544,15 +616,32 @@ export interface SkillDefinition {
   description: string
 
   ownerType: SkillOwnerType
+  source?: SkillSource
   type: SkillType
 
   /** 스킬 cooldown은 턴 기반이다. */
+  cooldown?: number
   power?: number
   cooldownTurns?: number
+  staminaCost?: number
+  requiredJobId?: string
+  requiredLevel?: number
+  providedByItemId?: string
+  providedByTitleId?: string
+  tags?: string[]
+  effectSummary?: string
+  recommendedUse?: string
 
   /** 초기 전투는 player vs monster 중심. 다수 몬스터/광역 스킬이 필요하면 target을 확장한다. */
   effect?: SkillEffect
   effects?: SkillEffect[]
+}
+
+export interface SkillRuntimeState {
+  skillId: string
+  masteryXp?: number
+  masteryLevel?: number
+  timesUsed?: number
 }
 
 export interface ActiveCombatEffect {
@@ -600,6 +689,8 @@ export interface ManualBattleSession {
   logs: CombatLog['turns']
   result?: ManualBattleResult
   startedAt: string
+  source?: 'gate' | 'tower'
+  towerFloor?: number
 }
 
 export type ManualBattleAction =
@@ -1148,6 +1239,83 @@ export interface SystemMessage {
   createdAt: string
 }
 
+export type BoxType = 'daily' | 'weekly' | 'boss'
+export type BoxTier = 'normal' | 'enhanced' | 'superior' | 'epic'
+export type BoxSource = 'daily_login' | 'weekly_activity' | 'tower_boss' | 'challenge_card'
+
+export interface BoxReward {
+  hunterXp?: number
+  statRewards?: Partial<Record<StatKey, number>>
+  shadowEssence?: number
+  items?: Item[]
+  consumables?: Item[]
+  message?: string
+}
+
+export interface RewardBox {
+  id: string
+  type: BoxType
+  tier: BoxTier
+  source: BoxSource
+  createdAt: string
+  openedAt?: string
+  status: 'available' | 'opened'
+  label: string
+  floor?: number
+  reward?: BoxReward
+}
+
+export type ChallengeCardDifficulty = 'easy' | 'normal' | 'hard'
+
+export type ChallengeCardCategory =
+  | 'workout'
+  | 'study'
+  | 'finance'
+  | 'life'
+  | 'sleep'
+  | 'gate'
+  | 'shadow'
+  | 'tower'
+  | 'habit'
+
+export type ChallengeCardConditionType =
+  | 'completeAnyDaily'
+  | 'completeDailyCount'
+  | 'completeQuestCategory'
+  | 'completeGateAttempt'
+  | 'completeGateVictory'
+  | 'completeShadowExpedition'
+  | 'completeTowerAttempt'
+  | 'completeTowerClear'
+  | 'openBox'
+  | 'completeWorkoutAndStudy'
+
+export interface ChallengeCardCondition {
+  type: ChallengeCardConditionType
+  target?: number
+  category?: Category
+}
+
+export interface ChallengeCardReward {
+  hunterXp: number
+  shadowEssence: number
+  boxUpgradePoints: number
+}
+
+export interface ChallengeCard {
+  id: string
+  date: string
+  title: string
+  description: string
+  difficulty: ChallengeCardDifficulty
+  category: ChallengeCardCategory
+  condition: ChallengeCardCondition
+  reward: ChallengeCardReward
+  status: 'candidate' | 'selected' | 'completed' | 'expired'
+  selectedAt?: string
+  completedAt?: string
+}
+
 export interface HunterState {
   name: string
   level: number
@@ -1281,4 +1449,48 @@ export interface AchievementStats {
       completedAllAvailableDailies: boolean
     }
   >
+}
+
+// ── Infinite Tower System (12-18) ────────────────────────────────────
+
+export type TowerFloorType = 'normal' | 'boss'
+
+export type TowerBattleStatus = 'idle' | 'in_progress' | 'revealing' | 'resolved'
+
+export interface TowerBattleResult {
+  outcome: 'victory' | 'defeat' | 'draw'
+  floor: number
+  firstClear: boolean
+  rewards: TowerReward
+}
+
+export interface TowerReward {
+  hunterXp?: number
+  shadowXp?: number
+  shadowEssence?: number
+  itemDropChance?: number
+  boxType?: 'boss'
+  titleId?: string
+}
+
+export interface TowerBattleSession {
+  id: string
+  floor: number
+  floorType: TowerFloorType
+  monsterIds: string[]
+  recommendedPower: number
+  status: TowerBattleStatus
+  logs: BattleTurn[]
+  result?: TowerBattleResult
+  showResult?: boolean
+}
+
+export interface InfiniteTowerState {
+  currentFloor: number
+  highestClearedFloor: number
+  lastAttemptedFloor?: number
+  clearedFloors: Record<number, boolean>
+  firstClearRewardsClaimed: Record<number, boolean>
+  bossRewardsClaimed: Record<number, boolean>
+  activeTowerBattle?: TowerBattleSession
 }

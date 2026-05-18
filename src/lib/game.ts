@@ -22,6 +22,13 @@ import type {
 } from './types'
 import { CATEGORY_META, STAT_META, TITLE_DEFINITIONS } from './types'
 import { getShadowEffects } from './shadows'
+import {
+  getAvailableCombatSkillsForLoadout,
+  getSkillCooldownTurns,
+  getSkillMasteryEffectBonus,
+  isDamageSkill,
+  isHunterCombatSkill,
+} from './skills'
 
 export const xpToNextLevel = (level: number): number => {
   // Adjusted growth curve: slower mid-late game, early discount for Lv 1-10
@@ -670,10 +677,8 @@ const COMBAT_EFFECT_STAT_WEIGHTS: Record<CombatStatEffectKey, number> = {
   evasionRate: 100,
 }
 
-const getSkillCooldownFactor = (skill: SkillDefinition): number => {
-  const cooldown = Math.max(0, skill.cooldownTurns ?? 0)
-  return 1 / (1 + cooldown * 0.35)
-}
+const getSkillCooldownFactor = (skill: SkillDefinition): number =>
+  1 / (1 + getSkillCooldownTurns(skill) * 0.35)
 
 const getSkillEffects = (skill: SkillDefinition): SkillEffect[] => [
   ...(skill.effect ? [skill.effect] : []),
@@ -702,12 +707,12 @@ const calculateSkillEffectCombatValue = (effect: SkillEffect, cooldownFactor: nu
 export const calculateSkillCombatValue = (skill: SkillDefinition): number => {
   const cooldownFactor = getSkillCooldownFactor(skill)
 
-  if (skill.type === 'attack') {
+  if (isDamageSkill(skill)) {
     const power = skill.power ?? 1
     return Math.max(0, (power - 1) * 100 * cooldownFactor)
   }
 
-  if (skill.type === 'buff' || skill.type === 'debuff') {
+  if (skill.type === 'defense' || skill.type === 'buff' || skill.type === 'debuff' || skill.type === 'utility') {
     return getSkillEffects(skill).reduce(
       (sum, effect) => sum + calculateSkillEffectCombatValue(effect, cooldownFactor),
       0
@@ -770,23 +775,14 @@ export const getPlayerCombatSkills = ({
   jobId,
   equippedItems = [],
   allSkills,
+  includeBasicKit = false,
 }: {
   jobId?: JobId
   equippedItems?: Item[]
   allSkills: SkillDefinition[]
+  includeBasicKit?: boolean
 }): SkillDefinition[] => {
-  const skillIds = new Set<string>(['basic-attack'])
-  if (jobId) {
-    for (const id of JOB_COMBAT_SKILL_IDS[jobId] ?? []) skillIds.add(id)
-  }
-
-  for (const item of equippedItems) {
-    for (const skillId of item.combatSkillIds ?? []) {
-      skillIds.add(skillId)
-    }
-  }
-
-  return allSkills.filter(skill => skillIds.has(skill.id))
+  return getAvailableCombatSkillsForLoadout({ jobId, equippedItems, allSkills, includeBasicKit })
 }
 
 export interface CalculatePlayerCombatStatsParams {
@@ -1070,9 +1066,9 @@ export interface BattleSkillContext {
 }
 
 export const scoreSkill = (skill: SkillDefinition, context: BattleSkillContext): number => {
-  if (skill.type === 'attack') {
+  if (isDamageSkill(skill)) {
     const power = skill.power ?? 1
-    const cooldown = Math.max(0, skill.cooldownTurns ?? 0)
+    const cooldown = getSkillCooldownTurns(skill)
     return power * 100 - cooldown * 3
   }
 
@@ -1083,7 +1079,7 @@ export const scoreSkill = (skill: SkillDefinition, context: BattleSkillContext):
     return 0
   }
 
-  if (skill.type === 'buff') {
+  if (skill.type === 'defense' || skill.type === 'buff' || skill.type === 'utility') {
     const effects = getSkillEffects(skill)
     const hasDamageReduction = effects.some(effect => effect.kind === 'damage_reduction')
     const hasCounter = effects.some(effect => effect.kind === 'counter')
@@ -1268,9 +1264,12 @@ export const BASIC_ATTACK_SKILL: SkillDefinition = {
   name: '기본 공격',
   description: '가장 기본적인 공격.',
   ownerType: 'common',
+  source: 'basic',
   type: 'attack',
   power: 1,
+  cooldown: 0,
   cooldownTurns: 0,
+  effectSummary: '기본 단일 공격',
 }
 
 export const ensureBasicAttack = (skills: SkillDefinition[]): SkillDefinition[] => {
@@ -1296,7 +1295,7 @@ export const createPlayerBattleActor = (
   accuracy: playerStats.accuracy,
   evasionRate: playerStats.evasionRate,
   skillIds: allSkills
-    .filter(skill => skill.ownerType === 'common' || skill.ownerType === 'job' || skill.ownerType === 'equipment')
+    .filter(isHunterCombatSkill)
     .map(skill => skill.id),
   cooldowns: {},
 })
@@ -1485,6 +1484,30 @@ const buildEffectLogMessage = (
   return `[${actor.name}]가 [${skill.name}]을 퍼뜨렸다. [${targetName}]의 ${combatStatName(effect.stat)}이 무겁게 가라앉는다.`
 }
 
+const scaleSkillEffectForMastery = (effect: SkillEffect, masteryBonus: number): SkillEffect => {
+  if (masteryBonus <= 0) return effect
+
+  if (effect.kind === 'damage_reduction') {
+    return { ...effect, value: Math.min(0.5, effect.value * (1 + masteryBonus)) }
+  }
+
+  if (effect.kind === 'counter') {
+    return { ...effect, counterPower: (effect.counterPower ?? 0.5) * (1 + masteryBonus) }
+  }
+
+  if (effect.stat || effect.kind === 'stat') {
+    const scaledValue = effect.value * (1 + masteryBonus)
+    return {
+      ...effect,
+      value: Math.abs(scaledValue) < 1
+        ? Math.round(scaledValue * 1000) / 1000
+        : Math.round(scaledValue),
+    }
+  }
+
+  return effect
+}
+
 export const resolveAction = (params: {
   actor: BattleActorState
   target: BattleActorState
@@ -1494,6 +1517,7 @@ export const resolveAction = (params: {
   turnNumber: number
   waveNumber?: number
   waveLabel?: string
+  skillMasteryLevel?: number
 }): {
   actor: BattleActorState
   target: BattleActorState
@@ -1501,6 +1525,9 @@ export const resolveAction = (params: {
   log: BattleTurn
 } => {
   const { skill, rng, turnNumber, waveNumber, waveLabel } = params
+  const masteryLevel = Math.max(0, Math.min(3, params.skillMasteryLevel ?? 0))
+  const masteryBonus = getSkillMasteryEffectBonus(skill, masteryLevel)
+  const masteryMessage = masteryLevel > 0 ? ` 숙련 Lv.${masteryLevel}.` : ''
   const actorStats = getEffectiveBattleActorStats(params.actor, params.activeEffects)
   const targetStats = getEffectiveBattleActorStats(params.target, params.activeEffects)
   let actor = params.actor
@@ -1522,7 +1549,7 @@ export const resolveAction = (params: {
   } satisfies Omit<BattleTurn, 'outcome' | 'message'>
 
   if (skill.type === 'heal') {
-    const healAmount = Math.round(actor.maxHp * (skill.power ?? 0.2))
+    const healAmount = Math.round(actor.maxHp * (skill.power ?? 0.2) * (1 + masteryBonus))
     actor = { ...actor, hp: Math.min(actor.maxHp, actor.hp + healAmount) }
     return {
       actor,
@@ -1538,7 +1565,7 @@ export const resolveAction = (params: {
     }
   }
 
-  const needsHitCheck = skill.type === 'attack' || skill.type === 'debuff'
+  const needsHitCheck = isDamageSkill(skill) || skill.type === 'debuff'
   if (needsHitCheck && !didHit(actorStats.accuracy, rng())) {
     return {
       actor,
@@ -1567,7 +1594,7 @@ export const resolveAction = (params: {
     }
   }
 
-  if (skill.type === 'attack') {
+  if (isDamageSkill(skill)) {
     const isCritical = didCrit(actorStats.critRate, rng())
     let damage = calculateDamage({
       attackerAtk: actorStats.atk,
@@ -1576,6 +1603,9 @@ export const resolveAction = (params: {
       randomFactor: 0.9 + rng() * 0.2,
       isCritical,
     })
+    if (masteryBonus > 0) {
+      damage = Math.max(1, Math.round(damage * (1 + masteryBonus)))
+    }
     const damageReduction = getDamageReduction(target.id, activeEffects)
     if (damageReduction > 0) {
       damage = Math.max(1, Math.round(damage * (1 - damageReduction)))
@@ -1615,15 +1645,16 @@ export const resolveAction = (params: {
         remainingHp: target.hp,
         message: (isCritical
           ? `[${actor.name}]의 [${skill.name}]이 급소를 꿰뚫었다! 치명타 ${damage} 피해.`
-          : hitMessage) + reductionMessage + counterMessage,
+          : hitMessage) + reductionMessage + counterMessage + masteryMessage,
       },
     }
   }
 
   const skillEffects = getSkillEffects(skill)
-  if ((skill.type === 'buff' || skill.type === 'debuff') && skillEffects.length > 0) {
+  if ((skill.type === 'defense' || skill.type === 'buff' || skill.type === 'debuff' || skill.type === 'utility') && skillEffects.length > 0) {
     const appliedEffects: ActiveCombatEffect[] = []
-    for (const effect of skillEffects) {
+    for (const baseEffect of skillEffects) {
+      const effect = scaleSkillEffectForMastery(baseEffect, masteryBonus)
       const effectTarget = effect.target === 'self' ? actor : target
       const appliedEffect: ActiveCombatEffect = {
         sourceSkillId: skill.id,
@@ -1638,7 +1669,7 @@ export const resolveAction = (params: {
       activeEffects = applyOrRefreshCombatEffect(activeEffects, appliedEffect)
       appliedEffects.push(appliedEffect)
     }
-    const outcome: BattleTurn['outcome'] = skill.type === 'buff' ? 'buff' : 'debuff'
+    const outcome: BattleTurn['outcome'] = skill.type === 'debuff' ? 'debuff' : 'buff'
     return {
       actor,
       target,
@@ -1647,7 +1678,7 @@ export const resolveAction = (params: {
         ...baseLog,
         outcome,
         remainingHp: target.hp,
-        message: buildEffectLogMessage(actor, target, skill, outcome, appliedEffects[0]),
+        message: `${buildEffectLogMessage(actor, target, skill, outcome, appliedEffects[0])}${masteryMessage}`,
       },
     }
   }
@@ -1690,7 +1721,7 @@ export const simulateGateBattle = ({
   const rng = providedRng ?? (seed != null ? createSeededRng(seed) : Math.random)
   const allSkills = ensureBasicAttack(skills)
   const playerSkillIds = allSkills
-    .filter(skill => skill.ownerType === 'common' || skill.ownerType === 'job' || skill.ownerType === 'equipment')
+    .filter(isHunterCombatSkill)
     .map(skill => skill.id)
   const monsterSkillIds = Array.from(new Set([BASIC_ATTACK_SKILL.id, ...monster.skillIds]))
 
@@ -1757,7 +1788,7 @@ export const simulateGateBattle = ({
           ...resolved.actor,
           cooldowns: {
             ...resolved.actor.cooldowns,
-            [skill.id]: skill.cooldownTurns ?? 0,
+            [skill.id]: getSkillCooldownTurns(skill),
           },
         }
         monsterActor = resolved.target
@@ -1793,7 +1824,7 @@ export const simulateGateBattle = ({
           ...resolved.actor,
           cooldowns: {
             ...resolved.actor.cooldowns,
-            [skill.id]: skill.cooldownTurns ?? 0,
+            [skill.id]: getSkillCooldownTurns(skill),
           },
         }
         player = resolved.target
@@ -1899,7 +1930,7 @@ export const simulateGateWaveBattle = ({
             ...resolved.actor,
             cooldowns: {
               ...resolved.actor.cooldowns,
-              [skill.id]: skill.cooldownTurns ?? 0,
+              [skill.id]: getSkillCooldownTurns(skill),
             },
           }
           monsterActor = resolved.target
@@ -1940,7 +1971,7 @@ export const simulateGateWaveBattle = ({
             ...resolved.actor,
             cooldowns: {
               ...resolved.actor.cooldowns,
-              [skill.id]: skill.cooldownTurns ?? 0,
+              [skill.id]: getSkillCooldownTurns(skill),
             },
           }
           player = resolved.target

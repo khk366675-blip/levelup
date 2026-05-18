@@ -12,6 +12,10 @@ import {
   Zap,
 } from 'lucide-react'
 import { useGame } from '../lib/store'
+import { CinematicLogOverlay, type CinematicLogData, type CinematicLogTone } from './CinematicLogOverlay'
+import { CombatLogPanel, type CombatLogEntry, type CombatLogEntryTone } from './CombatLogPanel'
+import { DramaticReveal, type RevealStep } from './DramaticReveal'
+import { ShadowPortrait } from './shadows/ShadowPortrait'
 import { GATE_DEFINITIONS, GATE_PENALTIES, GATE_REWARD_TABLES, MONSTER_DEFINITIONS, SKILL_DEFINITIONS } from '../lib/seed'
 import {
   calculateCombatPower,
@@ -24,15 +28,24 @@ import {
   isShadowCombatLog,
   type GateRisk,
 } from '../lib/game'
-import type { ActiveConsumableEffect, CombatLog, Item, MonsterDefinition, StatKey } from '../lib/types'
+import type { ActiveConsumableEffect, CombatLog, Item, MonsterDefinition, ShadowExtractResult, StatKey } from '../lib/types'
 import type { ManualBattleAction, ManualBattleSession, SkillDefinition } from '../lib/types'
 import {
   SHADOW_RARITY_LABEL,
   getEquippedShadows,
   getEquippedShadowStatBonuses,
   getGateShadowPreview,
+  getShadowDefinition,
   getShadowExtractionChance,
 } from '../lib/shadows'
+import {
+  canUseSkill,
+  getSkillCooldownTurns,
+  getSkillEffectiveDescription,
+  getSkillMastery,
+  getSkillSourceLabel,
+  getSkillTypeLabel,
+} from '../lib/skills'
 
 const GATE_ENTRY_COST = 20
 
@@ -135,6 +148,119 @@ const outcomeMeta: Record<CombatLog['turns'][number]['outcome'], { label: string
   heal: { label: '회복', className: 'text-emerald-200 border-emerald-400/25 bg-emerald-400/10' },
 }
 
+function includesAny(message: string, keywords: string[]) {
+  return keywords.some(keyword => message.includes(keyword))
+}
+
+function classifyGateLogTurn(turn: CombatLog['turns'][number]): CombatLogEntryTone {
+  if (isShadowCombatLog(turn)) return 'shadow'
+  if (turn.skillId === 'system-manual-battle') {
+    if (includesAny(turn.message, ['보상', '획득', 'reward', 'Reward'])) return 'reward'
+    if (includesAny(turn.message, ['승리', '패배', '무승부', 'victory', 'defeat', 'draw'])) return 'result'
+    return 'system'
+  }
+  if (includesAny(turn.message, ['보상', '획득', '정수', 'XP'])) return 'reward'
+  if (
+    turn.outcome === 'miss' ||
+    turn.outcome === 'evade' ||
+    includesAny(turn.message, ['방어', '회피', '막았', '반격', '피해 감소'])
+  ) return 'defense'
+  if (turn.actorType === 'monster') return 'monster'
+  return 'player'
+}
+
+function getGateLogLabel(turn: CombatLog['turns'][number], tone: CombatLogEntryTone) {
+  if (tone === 'shadow') return '그림자'
+  if (tone === 'player') return '헌터'
+  if (tone === 'monster') return '몬스터'
+  if (tone === 'defense') return '방어'
+  if (tone === 'reward') return '보상'
+  if (tone === 'result') return '결과'
+  if (tone === 'system') return '시스템'
+  return outcomeMeta[turn.outcome]?.label ?? 'LOG'
+}
+
+export function gateTurnToLogEntry(turn: CombatLog['turns'][number], index: number): CombatLogEntry {
+  const tone = classifyGateLogTurn(turn)
+  const metaParts = [
+    turn.skillName,
+    turn.damage !== undefined ? `DMG ${Math.round(turn.damage)}` : undefined,
+  ].filter(Boolean)
+
+  return {
+    id: `${turn.turnNumber}-${turn.actorId}-${turn.skillId ?? 'basic'}-${index}`,
+    turn: turn.turnNumber,
+    wave: turn.waveNumber,
+    tone,
+    label: getGateLogLabel(turn, tone),
+    actorName: tone === 'system' || tone === 'result' || tone === 'reward' ? undefined : turn.actorName,
+    meta: metaParts.join(' / ') || undefined,
+    message: turn.message,
+  }
+}
+
+const cinematicGateBadge: Record<CinematicLogTone, string> = {
+  player: '헌터',
+  shadow: '그림자',
+  monster: '몬스터',
+  system: '시스템',
+  reward: '보상',
+  risk: '위험',
+  command: '명령',
+  result: '결과',
+  defense: '방어',
+}
+
+function shouldShowCinematicGateLog(turn?: CombatLog['turns'][number]) {
+  if (!turn) return false
+  return turn.message.trim().length > 0
+}
+
+function splitCinematicMessage(message: string) {
+  const normalized = message.replace(/\s+/g, ' ').trim()
+  const parts = normalized.split(/(?<=[.!?。])\s+|(?<=\.)\s+/).filter(Boolean)
+  return {
+    title: parts[0] ?? normalized,
+    body: parts.length > 1 ? parts.slice(1).join(' ') : undefined,
+  }
+}
+
+function gateTurnToCinematicLog(turn: CombatLog['turns'][number], index: number): CinematicLogData | undefined {
+  if (!shouldShowCinematicGateLog(turn)) return undefined
+  const isHunterSkill =
+    turn.actorType === 'player' &&
+    Boolean(turn.skillId) &&
+    turn.skillId !== 'basic-attack' &&
+    turn.skillId !== 'manual-defend' &&
+    turn.skillId !== 'system-manual-battle'
+  const tone = classifyGateLogTurn(turn) as CinematicLogTone
+  const message = splitCinematicMessage(turn.message)
+  const bodyParts = [
+    message.body,
+    turn.damage !== undefined ? `피해 ${Math.round(turn.damage)}` : undefined,
+    turn.skillName && turn.skillName !== turn.actorName ? turn.skillName : undefined,
+  ].filter(Boolean)
+
+  return {
+    id: `gate-cinematic-${turn.turnNumber}-${turn.actorId}-${turn.skillId ?? 'basic'}-${index}`,
+    tone: isHunterSkill ? 'player' : tone,
+    badge: isHunterSkill ? 'SKILL' : cinematicGateBadge[tone],
+    title: isHunterSkill && turn.skillName ? `${turn.skillName} 발동` : message.title,
+    body: isHunterSkill
+      ? [message.title, turn.damage !== undefined ? `${Math.round(turn.damage)} 피해` : undefined].filter(Boolean).join(' · ')
+      : bodyParts.join(' · ') || undefined,
+  }
+}
+
+function getGateRevealDelay(turn?: CombatLog['turns'][number]) {
+  if (!turn) return 850
+  const tone = classifyGateLogTurn(turn)
+  if (tone === 'reward' || tone === 'result') return 1300
+  if (tone === 'shadow' || turn.outcome === 'critical' || turn.outcome === 'evade') return 1100
+  if (tone === 'monster' || tone === 'defense') return 950
+  return 850
+}
+
 const rarityClassName = (rarity?: string): string => {
   switch (rarity) {
     case 'legendary':
@@ -194,6 +320,52 @@ function PenaltySummary({ log }: { log: CombatLog }) {
   return <div className="text-xs text-white/45">패널티 없음</div>
 }
 
+const getShadowActorInstanceId = (actorId?: string): string | undefined =>
+  actorId?.startsWith('shadow:') ? actorId.slice('shadow:'.length) : undefined
+
+function ShadowBattleRoster({
+  shadows,
+  activeShadowId,
+  compact = false,
+}: {
+  shadows: ReturnType<typeof getEquippedShadows>
+  activeShadowId?: string
+  compact?: boolean
+}) {
+  if (shadows.length === 0) return null
+
+  return (
+    <div className="rounded-lg border border-purple-400/20 bg-purple-500/5 p-3">
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <div className="system-text text-[10px] text-purple-200/75">SHADOW ROSTER</div>
+        <div className="text-[10px] text-white/35">{shadows.length} deployed</div>
+      </div>
+      <div className={compact ? 'flex gap-2 overflow-x-auto pb-1' : 'grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-5'}>
+        {shadows.map(shadow => {
+          const active = activeShadowId === shadow.instanceId
+          const def = getShadowDefinition(shadow.definitionId)
+          const flashClass =
+            active && shadow.role === 'guard' ? 'ring-emerald-300/60 border-emerald-300/45 bg-emerald-400/10' :
+            active && shadow.role === 'analyst' ? 'ring-cyan-300/60 border-cyan-300/45 bg-cyan-400/10' :
+            active && shadow.role === 'assault' ? 'ring-rose-300/60 border-rose-300/45 bg-rose-400/10' :
+            active ? 'ring-purple-300/60 border-purple-300/45 bg-purple-400/10' :
+            'border-white/10 bg-ink-900/35'
+          return (
+            <div
+              key={shadow.instanceId}
+              className={`min-w-[118px] rounded-md border p-2 transition ${flashClass} ${active ? 'ring-2 animate-pulse' : ''}`}
+            >
+              <ShadowPortrait shadow={shadow} definition={def} size="xs" active={active} highlighted={active || Boolean(shadow.isNamed)} />
+              <div className="mt-1 truncate text-[11px] font-semibold text-white/80">{shadow.name}</div>
+              <div className="text-[9px] system-text text-white/40">Lv {shadow.level ?? 1} / {shadow.role}</div>
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
 function ShadowExtractionPanel({
   log,
   gateId,
@@ -201,6 +373,7 @@ function ShadowExtractionPanel({
   log?: CombatLog
   gateId?: string
 }) {
+  const [revealingResult, setRevealingResult] = useState<ShadowExtractResult | undefined>()
   const hunter = useGame(s => s.hunter)
   const ownedShadows = useGame(s => s.ownedShadows ?? [])
   const equippedShadowIds = useGame(s => s.equippedShadowIds ?? [])
@@ -216,10 +389,88 @@ function ShadowExtractionPanel({
   const preview = getGateShadowPreview(gate)
   const ownedDefinitionIds = new Set(ownedShadows.map(shadow => shadow.definitionId))
   const relatedResult = lastResult?.gateInstanceId === log.gateInstanceId ? lastResult : undefined
+  const visibleResult = revealingResult?.gateInstanceId === log.gateInstanceId ? undefined : relatedResult
+  const revealTone = revealingResult?.success
+    ? revealingResult.shadow?.isGateNamed || revealingResult.shadow?.rarity === 'legendary'
+      ? 'rank'
+      : 'shadow'
+    : 'failure'
+  const revealSteps: RevealStep[] = revealingResult
+    ? [
+        {
+          title: 'SHADOW EXTRACTION',
+          text: '검은 기운이 잔해 위로 모여든다...',
+          subtext: `${gate.name}의 균열이 낮게 울립니다.`,
+          durationMs: 900,
+          tone: 'shadow',
+        },
+        {
+          title: 'RESONANCE',
+          text: revealingResult.success ? '당신의 감각이 그림자의 핵을 붙잡는다.' : '영혼이 거칠게 저항한다.',
+          subtext: `추출 성공률 ${Math.round(revealingResult.chance * 100)}%`,
+          durationMs: 950,
+          tone: 'shadow',
+        },
+        {
+          title: 'JUDGEMENT',
+          text: '그림자가 형체를 갖추기 시작한다...',
+          durationMs: 850,
+          tone: revealingResult.success ? 'shadow' : 'failure',
+          emphasis: true,
+        },
+        {
+          title: revealingResult.success ? 'ARISE' : 'FAILED',
+          text: revealingResult.success
+            ? (revealingResult.shadow?.isGateNamed ? '이름 있는 그림자가 굴복했다.' : '그림자가 무릎을 꿇었다.')
+            : '형체가 무너졌다.',
+          subtext: revealingResult.success
+            ? '새로운 병사가 군단에 합류했습니다.'
+            : '아직 당신의 힘이 닿지 않았습니다.',
+          durationMs: 1200,
+          tone: revealTone,
+          emphasis: true,
+        },
+      ]
+    : []
+
+  const handleExtraction = () => {
+    if (attempted) return
+    attemptShadowExtraction(log.gateInstanceId)
+    const result = useGame.getState().lastShadowExtractResult
+    if (result?.gateInstanceId === log.gateInstanceId) {
+      setRevealingResult(result)
+    }
+  }
 
   return (
     <div className="panel corner-bracket p-4 border-purple-400/25 bg-purple-500/5">
       <div className="br" />
+      <DramaticReveal
+        isOpen={Boolean(revealingResult)}
+        steps={revealSteps}
+        tone={revealTone}
+        position="modal"
+        result={revealingResult && (
+          <div className={revealingResult.success ? 'text-center text-emerald-100' : 'text-center text-amber-100'}>
+            {revealingResult.success && revealingResult.shadow ? (
+              <>
+                <div className="system-text text-[10px] text-white/45">EXTRACTED SHADOW</div>
+                <div className="mt-1 text-xl font-black">
+                  [{SHADOW_RARITY_LABEL[revealingResult.shadow.rarity]}] {revealingResult.shadow.name}
+                </div>
+                <div className="mt-1 text-xs text-white/55">{revealingResult.message}</div>
+              </>
+            ) : (
+              <>
+                <div className="system-text text-[10px] text-white/45">TRACE LOST</div>
+                <div className="mt-1 text-sm font-bold">{revealingResult.message}</div>
+              </>
+            )}
+          </div>
+        )}
+        onComplete={() => setRevealingResult(undefined)}
+        onSkip={() => setRevealingResult(undefined)}
+      />
       <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-3">
         <div>
           <div className="system-text text-[11px] text-purple-300/80 mb-1">SHADOW EXTRACTION</div>
@@ -230,7 +481,7 @@ function ShadowExtractionPanel({
         </div>
         <button
           type="button"
-          onClick={() => attemptShadowExtraction(log.gateInstanceId)}
+          onClick={handleExtraction}
           disabled={attempted}
           className="btn btn-primary text-xs min-h-10 disabled:opacity-50 disabled:cursor-not-allowed"
         >
@@ -256,9 +507,9 @@ function ShadowExtractionPanel({
         </div>
         <div className="rounded-lg border border-white/10 bg-ink-900/35 p-3">
           <div className="system-text text-[10px] text-purple-300/70 mb-2">최근 결과</div>
-          {relatedResult ? (
-            <div className={relatedResult.success ? 'text-xs text-emerald-100/80' : 'text-xs text-amber-100/80'}>
-              {relatedResult.message}
+          {visibleResult ? (
+            <div className={visibleResult.success ? 'text-xs text-emerald-100/80' : 'text-xs text-amber-100/80'}>
+              {visibleResult.message}
             </div>
           ) : (
             <div className="text-xs text-white/40">아직 추출하지 않았습니다.</div>
@@ -280,11 +531,12 @@ function RecentBattleResult({
 }) {
   const [showFullLog, setShowFullLog] = useState(false)
   const [revealedLogCount, setRevealedLogCount] = useState(0)
+  const [skipSignal, setSkipSignal] = useState(0)
   const intervalRef = useRef<number | undefined>(undefined)
 
   const clearRevealTimer = () => {
     if (intervalRef.current !== undefined) {
-      window.clearInterval(intervalRef.current)
+      window.clearTimeout(intervalRef.current)
       intervalRef.current = undefined
     }
   }
@@ -305,19 +557,8 @@ function RecentBattleResult({
       return
     }
 
-    let nextCount = 0
     setRevealedLogCount(0)
     onRevealStateChange?.(true)
-
-    intervalRef.current = window.setInterval(() => {
-      nextCount += 1
-      setRevealedLogCount(Math.min(nextCount, log.turns.length))
-
-      if (nextCount >= log.turns.length) {
-        clearRevealTimer()
-        onRevealStateChange?.(false)
-      }
-    }, 500)
 
     return () => {
       clearRevealTimer()
@@ -325,26 +566,46 @@ function RecentBattleResult({
     }
   }, [log?.battleId, log?.turns.length, onRevealStateChange, shouldReveal])
 
+  const hunter = useGame(s => s.hunter)
+  const ownedShadows = useGame(s => s.ownedShadows ?? [])
+  const equippedShadowIds = useGame(s => s.equippedShadowIds ?? [])
+
   if (!log) return null
 
   const meta = resultMeta[log.result]
   const revealComplete = revealedLogCount >= log.turns.length
   const revealedTurns = log.turns.slice(0, revealedLogCount)
-  const visibleTurns = revealComplete
-    ? (showFullLog ? log.turns : log.turns.slice(-5))
-    : revealedTurns
+  const visibleTurns = revealComplete ? log.turns : revealedTurns
+  const cinematicLogs = log.turns
+    .map((turn, index) => gateTurnToCinematicLog(turn, index))
+    .filter((item): item is CinematicLogData => Boolean(item))
+  const equippedShadows = getEquippedShadows(ownedShadows, equippedShadowIds, hunter)
+  const activeShadowId = [...visibleTurns].reverse().map(turn => getShadowActorInstanceId(turn.actorId)).find(Boolean)
   const panelClassName = revealComplete ? meta.className : 'border-cyan-400/40 bg-cyan-500/10'
   const iconClassName = revealComplete ? meta.iconClassName : 'text-cyan-300'
 
   const skipReveal = () => {
     clearRevealTimer()
+    setSkipSignal(signal => signal + 1)
     setRevealedLogCount(log.turns.length)
     onRevealStateChange?.(false)
   }
 
   return (
-    <div className={`panel corner-bracket p-4 border ${panelClassName}`}>
+    <div className={`panel corner-bracket relative overflow-hidden p-4 border ${panelClassName}`}>
       <div className="br" />
+      <CinematicLogOverlay
+        logs={cinematicLogs}
+        visible={shouldReveal && !revealComplete}
+        intervalMs={1250}
+        skipSignal={skipSignal}
+        onLogChange={(_, index) => setRevealedLogCount(Math.min(index + 1, log.turns.length))}
+        onComplete={() => {
+          setRevealedLogCount(log.turns.length)
+          onRevealStateChange?.(false)
+        }}
+        position="center"
+      />
       <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-3 mb-4">
         <div className="flex items-start gap-3">
           <Swords className={`w-5 h-5 mt-0.5 ${iconClassName} ${revealComplete ? '' : 'animate-pulse'}`} />
@@ -373,6 +634,10 @@ function RecentBattleResult({
         />
       </div>
 
+      <div className="mb-4">
+        <ShadowBattleRoster shadows={equippedShadows} activeShadowId={activeShadowId} />
+      </div>
+
       {revealComplete && (
         <div className="grid md:grid-cols-2 gap-3 mb-4">
           <div className="border border-white/10 rounded-lg p-3 bg-ink-900/35">
@@ -392,7 +657,33 @@ function RecentBattleResult({
         </div>
       )}
 
-      <div className="flex items-center justify-between gap-3 mb-3">
+      <div className="space-y-3">
+        {!revealComplete && (
+          <div className="flex justify-end">
+            <button
+              type="button"
+              onClick={skipReveal}
+              className="inline-flex items-center gap-1.5 text-[10px] system-text text-amber-200 border border-amber-400/25 bg-amber-400/10 rounded px-2 py-1 hover:bg-amber-400/15 transition"
+            >
+              <FastForward className="w-3 h-3" />
+              전투 스킵
+            </button>
+          </div>
+        )}
+        <CombatLogPanel
+          key={`${log.battleId}-${revealComplete ? 'complete' : 'revealing'}`}
+          title="BATTLE LOG"
+          subtitle={revealComplete ? '최근 행동 우선 / 전체 로그 펼치기 가능' : `${revealedLogCount} / ${log.turns.length} 전송 중`}
+          logs={visibleTurns.map(gateTurnToLogEntry)}
+          maxVisible={revealComplete ? 5 : 6}
+          latestFirst={revealComplete}
+          highlightLatest
+          defaultExpanded={!revealComplete}
+          emptyText="전투 개시 대기 중..."
+        />
+      </div>
+
+      <div className="hidden">
         <div className="system-text text-[11px] text-cyan-300/70">
           BATTLE LOG {revealComplete ? (showFullLog ? `(${log.turns.length})` : '(최근 5줄)') : '(전송 중)'}
         </div>
@@ -418,7 +709,7 @@ function RecentBattleResult({
         )}
       </div>
 
-      <div className="space-y-2">
+      <div className="hidden">
         {visibleTurns.length === 0 && (
           <div className="rounded-lg border border-cyan-400/20 bg-cyan-400/5 px-3 py-3 text-xs text-cyan-100/60 system-text">
             전투 개시 대기 중...
@@ -662,7 +953,19 @@ function ManualBattlePanel({
         </button>
       </div>
 
-      <div className="flex items-center justify-between gap-3 mb-3">
+      <CombatLogPanel
+        title="RECENT BATTLE LOG"
+        subtitle="버튼 입력 직후 최신 행동이 위에 고정됩니다."
+        logs={session.logs.map(gateTurnToLogEntry)}
+        maxVisible={6}
+        latestFirst
+        highlightLatest
+        compact
+        emptyText="행동을 선택하면 전투가 진행됩니다."
+        className="mb-4"
+      />
+
+      <div className="hidden">
         <div className="system-text text-[11px] text-cyan-300/70">
           BATTLE LOG {showFullLog ? `(${session.logs.length})` : '(최근 6줄)'}
         </div>
@@ -678,7 +981,7 @@ function ManualBattlePanel({
         )}
       </div>
 
-      <div className="space-y-2">
+      <div className="hidden">
         {visibleLogs.length === 0 && (
           <div className="rounded-lg border border-cyan-400/20 bg-cyan-400/5 px-3 py-3 text-xs text-cyan-100/60 system-text">
             행동을 선택하면 전투가 진행됩니다.
@@ -702,14 +1005,14 @@ function ManualBattlePanel({
   )
 }
 
-const manualSkillOwnerLabel: Record<SkillDefinition['ownerType'], string> = {
+const manualSkillOwnerLabel: Partial<Record<SkillDefinition['ownerType'], string>> = {
   common: '기본',
   job: '직업',
   equipment: '장비',
   monster: '몬스터',
 }
 
-const manualSkillTypeLabel: Record<SkillDefinition['type'], string> = {
+const manualSkillTypeLabel: Partial<Record<SkillDefinition['type'], string>> = {
   attack: '공격',
   buff: '강화',
   debuff: '약화',
@@ -757,10 +1060,32 @@ function ManualBattlePanelV2({
 }) {
   const [showFullLog, setShowFullLog] = useState(false)
   const [showConsumables, setShowConsumables] = useState(false)
+  const [manualCinematicLogs, setManualCinematicLogs] = useState<CinematicLogData[]>([])
+  const [manualSkipSignal, setManualSkipSignal] = useState(0)
+  const previousManualLogCountRef = useRef(session.logs.length)
   const actionCount = session.logs.filter(log => log.skillId !== 'system-manual-battle').length
   const totalWaves = session.waveIndex + 1 + session.remainingMonsterIds.length
   const result = session.result ? resultMeta[session.result] : undefined
   const visibleLogs = showFullLog ? session.logs : session.logs.slice(-6)
+  const hunter = useGame(s => s.hunter)
+  const ownedShadows = useGame(s => s.ownedShadows ?? [])
+  const equippedShadowIds = useGame(s => s.equippedShadowIds ?? [])
+  const skillStates = useGame(s => s.skillStates ?? {})
+  const equippedShadows = getEquippedShadows(ownedShadows, equippedShadowIds, hunter)
+  const activeShadowId = [...visibleLogs].reverse().map(turn => getShadowActorInstanceId(turn.actorId)).find(Boolean)
+  useEffect(() => {
+    const previousCount = previousManualLogCountRef.current
+    if (session.logs.length > previousCount) {
+      const nextLogs = session.logs
+        .slice(previousCount)
+        .map((turn, index) => gateTurnToCinematicLog(turn, previousCount + index))
+        .filter((item): item is CinematicLogData => Boolean(item))
+      setManualCinematicLogs(nextLogs)
+    } else if (session.logs.length < previousCount) {
+      setManualCinematicLogs([])
+    }
+    previousManualLogCountRef.current = session.logs.length
+  }, [session.logs])
   const combatConsumables = items.filter(item =>
     item.consumable &&
     item.consumableEffects?.some(effect =>
@@ -812,8 +1137,28 @@ function ManualBattlePanelV2({
   }
 
   return (
-    <div className={`panel corner-bracket p-4 sm:p-5 border ${result?.className ?? 'border-cyan-400/30 bg-cyan-500/5'}`}>
+    <div className={`panel corner-bracket relative overflow-hidden p-4 sm:p-5 border ${result?.className ?? 'border-cyan-400/30 bg-cyan-500/5'}`}>
       <div className="br" />
+      <CinematicLogOverlay
+        logs={manualCinematicLogs}
+        visible={manualCinematicLogs.length > 0}
+        intervalMs={2600}
+        skipSignal={manualSkipSignal}
+        onComplete={() => setManualCinematicLogs([])}
+        position="center"
+      />
+      {manualCinematicLogs.length > 0 && (
+        <div className="absolute right-3 top-3 z-40">
+          <button
+            type="button"
+            onClick={() => setManualSkipSignal(s => s + 1)}
+            className="inline-flex items-center gap-1 text-[10px] system-text text-amber-200 border border-amber-400/25 bg-amber-400/10 rounded px-2 py-1 hover:bg-amber-400/15 transition"
+          >
+            <FastForward className="w-3 h-3" />
+            스킵
+          </button>
+        </div>
+      )}
       <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-3 mb-5">
         <div>
           <div className="system-text text-[11px] text-cyan-300/80 mb-1">MANUAL TURN BATTLE</div>
@@ -872,6 +1217,10 @@ function ManualBattlePanelV2({
         </div>
       </div>
 
+      <div className="mb-5">
+        <ShadowBattleRoster shadows={equippedShadows} activeShadowId={activeShadowId} compact />
+      </div>
+
       <div className="space-y-3 mb-5">
         <div className="grid grid-cols-2 gap-2">
           <button type="button" onClick={() => onAction({ type: 'basic_attack' })} className="btn btn-primary text-sm min-h-14">
@@ -884,28 +1233,31 @@ function ManualBattlePanelV2({
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
           {skills.map(skill => {
+            const runtime = getSkillMastery(skillStates, skill.id)
             const cooldown = session.cooldowns[skill.id] ?? 0
-            const disabledReason = cooldown > 0 ? `재사용 대기 ${cooldown}턴` : '사용 가능'
+            const availability = canUseSkill(skill, session)
+            const description = getSkillEffectiveDescription(skill, runtime)
             return (
               <button
                 key={skill.id}
                 type="button"
                 onClick={() => onAction({ type: 'skill', skillId: skill.id })}
                 disabled={cooldown > 0}
-                title={skill.description}
+                title={description}
                 className="min-h-[72px] rounded-md border border-purple-400/25 bg-purple-400/10 px-3 py-2 text-left text-purple-50 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-purple-400/15 transition"
               >
                 <span className="flex items-center justify-between gap-2">
                   <span className="text-sm font-semibold truncate">{skill.name}</span>
                   <span className="shrink-0 text-[9px] system-text border border-purple-300/25 rounded px-1.5 py-0.5 text-purple-100/70">
-                    {manualSkillOwnerLabel[skill.ownerType]}
+                    {getSkillSourceLabel(skill) ?? manualSkillOwnerLabel[skill.ownerType]}
                   </span>
                 </span>
-                <span className="mt-1 block text-[11px] leading-snug text-white/55 line-clamp-2">{skill.description}</span>
+                <span className="mt-1 block text-[11px] leading-snug text-white/55 line-clamp-2">{description}</span>
                 <span className="mt-1 flex flex-wrap gap-1.5 text-[10px] system-text text-purple-100/70">
-                  <span>{manualSkillTypeLabel[skill.type]}</span>
-                  <span>CD {cooldown > 0 ? cooldown : (skill.cooldownTurns ?? 0)}</span>
-                  <span className={cooldown > 0 ? 'text-amber-200' : 'text-emerald-200'}>{disabledReason}</span>
+                  <span>{getSkillTypeLabel(skill) ?? manualSkillTypeLabel[skill.type]}</span>
+                  <span>CD {cooldown > 0 ? cooldown : getSkillCooldownTurns(skill)}</span>
+                  <span>숙련 Lv.{runtime.masteryLevel ?? 0}</span>
+                  <span className={cooldown > 0 ? 'text-amber-200' : 'text-emerald-200'}>{availability.reason}</span>
                 </span>
               </button>
             )
@@ -976,7 +1328,19 @@ function ManualBattlePanelV2({
         </div>
       </div>
 
-      <div className="flex items-center justify-between gap-3 mb-3">
+      <CombatLogPanel
+        title="RECENT BATTLE LOG"
+        subtitle="버튼 입력 직후 최신 행동이 위에 고정됩니다."
+        logs={session.logs.map(gateTurnToLogEntry)}
+        maxVisible={6}
+        latestFirst
+        highlightLatest
+        compact
+        emptyText="행동을 선택하면 전투가 진행됩니다."
+        className="mb-4"
+      />
+
+      <div className="hidden">
         <div className="system-text text-[11px] text-cyan-300/70">
           BATTLE LOG {showFullLog ? `(${session.logs.length})` : '(최근 6줄)'}
         </div>
@@ -992,7 +1356,7 @@ function ManualBattlePanelV2({
         )}
       </div>
 
-      <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+      <div className="hidden">
         {visibleLogs.length === 0 && (
           <div className="rounded-lg border border-cyan-400/20 bg-cyan-400/5 px-3 py-3 text-xs text-cyan-100/60 system-text">
             행동을 선택하면 전투가 진행됩니다.
@@ -1061,6 +1425,12 @@ export function GatePanel() {
     jobId: hunter.jobId,
     equippedItems,
     allSkills: SKILL_DEFINITIONS,
+  })
+  const manualPlayerSkills = getPlayerCombatSkills({
+    jobId: hunter.jobId,
+    equippedItems,
+    allSkills: SKILL_DEFINITIONS,
+    includeBasicKit: true,
   })
   const combatStats = calculatePlayerCombatStats({
     level: hunter.level,
@@ -1156,7 +1526,7 @@ export function GatePanel() {
         <GateStatusPanel />
         <ManualBattlePanelV2
           session={manualBattleSession}
-          skills={playerSkills}
+          skills={manualPlayerSkills.filter(skill => skill.id !== 'basic-attack')}
           items={items}
           monsterDefinition={MONSTER_DEFINITIONS.find(monster => monster.id === gate.monsterIds[manualBattleSession.waveIndex])}
           onAction={performManualBattleAction}
@@ -1259,6 +1629,8 @@ export function GatePanel() {
           </div>
 
           <div className="space-y-4">
+            <ShadowBattleRoster shadows={equippedShadows} compact />
+
             <div className="border border-purple-400/20 rounded-lg p-4 bg-purple-500/5">
               <div className="system-text text-[11px] text-purple-300/80 mb-3">SHADOW POOL</div>
               <div className="space-y-1.5">

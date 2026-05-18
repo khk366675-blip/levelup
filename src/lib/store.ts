@@ -7,7 +7,11 @@ import type {
   ActiveGate,
   ActiveRandomQuest,
   BattleTurn,
+  BoxReward,
+  BoxTier,
   Category,
+  ChallengeCard,
+  ChallengeCardCondition,
   CombatLog,
   ConsumableEffect,
   ConsumableEffectType,
@@ -26,10 +30,16 @@ import type {
   OwnedShadow,
   Quest,
   RandomQuestTemplate,
+  RewardBox,
   StatKey,
   SystemMessage,
   ShadowExtractResult,
+  ShadowExpedition,
+  ShadowExpeditionCommand,
+  SkillRuntimeState,
   Title,
+  InfiniteTowerState,
+  TowerBattleResult,
 } from './types'
 import { TITLE_DEFINITIONS, CATEGORY_META, JOB_DEFINITIONS, EQUIPMENT_SLOT_LABEL } from './types'
 import {
@@ -107,6 +117,12 @@ import {
   tickRoundEffects,
 } from './game'
 import {
+  getSkillCooldownTurns,
+  getSkillMastery,
+  isHunterCombatSkill,
+  recordSkillRuntimeUse,
+} from './skills'
+import {
   ACHIEVEMENT_SHADOWS_BY_QUEST_ID,
   addShadowXp,
   canAbsorbShadow,
@@ -126,6 +142,23 @@ import {
   SHADOW_DECOMPOSE_ESSENCE,
   SHADOW_RARITY_LABEL,
 } from './shadows'
+import {
+  createInitialTowerState,
+  getTowerFloorType,
+  getTowerMonstersForFloor,
+  getTowerRecommendedPower,
+  calculateTowerReward,
+} from './infiniteTower'
+import {
+  SHADOW_EXPEDITION_PARTY_MAX,
+  SHADOW_EXPEDITION_PARTY_MIN,
+  SHADOW_EXPEDITION_OUTCOME_LABEL,
+  SHADOW_EXPEDITION_UNLOCK_DAILY_COUNT,
+  createShadowExpeditionForDate,
+  getTodayDailyCompletedCount,
+  refreshShadowExpeditionLock,
+  resolveShadowExpeditionCommand,
+} from './shadowExpeditions'
 
 interface GameState {
   hunter: HunterState
@@ -152,6 +185,18 @@ interface GameState {
   shadowExtractHistory?: ShadowExtractResult[]
   lastShadowExtractResult?: ShadowExtractResult
   shadowEssence?: number
+  shadowExpeditions: ShadowExpedition[]
+  lastShadowExpeditionDate?: string
+  activeShadowExpeditionId?: string
+  infiniteTower?: InfiniteTowerState
+  rewardBoxes?: RewardBox[]
+  lastDailyBoxDate?: string
+  lastWeeklyBoxWeek?: string
+  todayChallengeCards?: ChallengeCard[]
+  selectedChallengeCardIds?: string[]
+  lastChallengeCardDate?: string
+  challengeCardHistory?: Record<string, { completedIds: string[]; completedCount: number }>
+  skillStates?: Record<string, SkillRuntimeState>
   initialized: boolean
 
   // hunter
@@ -219,6 +264,25 @@ interface GameState {
   toggleShadowLock: (shadowInstanceId: string) => void
   toggleShadowFavorite: (shadowInstanceId: string) => void
   evolveShadow: (shadowInstanceId: string) => void
+  ensureTodayShadowExpedition: () => void
+  selectShadowExpeditionParty: (expeditionId: string, shadowIds: string[]) => void
+  startShadowExpedition: (expeditionId: string) => void
+  issueShadowExpeditionCommand: (expeditionId: string, command: ShadowExpeditionCommand) => void
+  abandonShadowExpedition: (expeditionId: string) => void
+
+  // infinite tower
+  startTowerBattle: (floor: number) => void
+  resolveTowerBattle: () => void
+  cancelTowerBattle: () => void
+  startTowerManualBattle: (floor: number) => void
+  performTowerManualBattleAction: (action: ManualBattleAction) => void
+  cancelTowerManualBattle: () => void
+  switchTowerManualBattleToAuto: () => void
+
+  // rewards / challenge cards
+  ensureDailyRewardSystems: () => void
+  openRewardBox: (boxId: string) => void
+  selectChallengeCards: (cardIds: string[]) => void
 
   // achievements
   recordAppOpen: () => void
@@ -1176,6 +1240,372 @@ const createGateBattleOutcomeUpdate = (
   }
 }
 
+const syncTodayShadowExpeditionState = (s: GameState): Pick<GameState, 'shadowExpeditions' | 'lastShadowExpeditionDate' | 'activeShadowExpeditionId'> => {
+  const dateKey = todayKey()
+  const completedDailyCount = getTodayDailyCompletedCount(s.achievementStats, dateKey)
+  const now = new Date()
+  let hasToday = false
+  const shadowExpeditions = (s.shadowExpeditions ?? []).map(expedition => {
+    if (expedition.date === dateKey) {
+      hasToday = true
+      return refreshShadowExpeditionLock(expedition, completedDailyCount, now)
+    }
+    return refreshShadowExpeditionLock(expedition, SHADOW_EXPEDITION_UNLOCK_DAILY_COUNT, now)
+  })
+  if (!hasToday) {
+    shadowExpeditions.unshift(refreshShadowExpeditionLock(createShadowExpeditionForDate(dateKey), completedDailyCount, now))
+  }
+  const activeShadowExpeditionId = shadowExpeditions.some(
+    expedition => expedition.id === s.activeShadowExpeditionId && expedition.status === 'in_progress'
+  )
+    ? s.activeShadowExpeditionId
+    : undefined
+  return {
+    shadowExpeditions: shadowExpeditions.slice(0, 14),
+    lastShadowExpeditionDate: dateKey,
+    activeShadowExpeditionId,
+  }
+}
+
+type ChallengeProgressEvent = {
+  questCompleted?: Quest
+  gateAttempt?: boolean
+  gateVictory?: boolean
+  towerAttempt?: boolean
+  towerClear?: boolean
+  shadowExpeditionCompleted?: boolean
+  boxOpened?: boolean
+}
+
+const getWeekKey = (date = new Date()): string => {
+  const d = new Date(date)
+  const day = (d.getDay() + 6) % 7
+  d.setDate(d.getDate() - day + 3)
+  const firstThursday = new Date(d.getFullYear(), 0, 4)
+  const firstDay = (firstThursday.getDay() + 6) % 7
+  firstThursday.setDate(firstThursday.getDate() - firstDay + 3)
+  const week = 1 + Math.round((d.getTime() - firstThursday.getTime()) / 604_800_000)
+  return `${d.getFullYear()}-W${String(week).padStart(2, '0')}`
+}
+
+const countTodayDailyCompletions = (s: GameState): number =>
+  s.achievementStats.dailyHistory[todayKey()]?.completedDailyCount ?? 0
+
+const countTodayDailyCategoryCompletions = (s: GameState, categories: Category[]): number => {
+  const ids = s.achievementStats.dailyHistory[todayKey()]?.completedDailyQuestIds ?? []
+  return ids.filter(id => {
+    const quest = s.quests.find(q => q.id === id)
+    return quest ? categories.includes(quest.category) : false
+  }).length
+}
+
+const createChallengeCard = (
+  date: string,
+  slug: string,
+  difficulty: ChallengeCard['difficulty'],
+  category: ChallengeCard['category'],
+  title: string,
+  description: string,
+  condition: ChallengeCardCondition
+): ChallengeCard => {
+  const rewardByDifficulty: Record<ChallengeCard['difficulty'], ChallengeCard['reward']> = {
+    easy: { hunterXp: 15, shadowEssence: 1, boxUpgradePoints: 1 },
+    normal: { hunterXp: 35, shadowEssence: 2, boxUpgradePoints: 2 },
+    hard: { hunterXp: 80, shadowEssence: 5, boxUpgradePoints: 3 },
+  }
+  return {
+    id: `${date}-${slug}`,
+    date,
+    title,
+    description,
+    difficulty,
+    category,
+    condition,
+    reward: rewardByDifficulty[difficulty],
+    status: 'candidate',
+  }
+}
+
+const pickChallengeCards = <T,>(pool: T[], count: number): T[] => {
+  const copy = [...pool]
+  const picked: T[] = []
+  while (picked.length < count && copy.length > 0) {
+    picked.push(copy.splice(Math.floor(Math.random() * copy.length), 1)[0])
+  }
+  return picked
+}
+
+const generateChallengeCardsForToday = (quests: Quest[], date = todayKey()): ChallengeCard[] => {
+  const hasWorkout = quests.some(q => q.type === 'daily' && (q.category === 'workout' || q.category === 'health'))
+  const hasStudy = quests.some(q => q.type === 'daily' && (q.category === 'study' || q.category === 'career' || q.category === 'finance'))
+  const easyPool = [
+    createChallengeCard(date, 'daily-1', 'easy', 'habit', 'Daily 1개 완료', '오늘 가능한 Daily 퀘스트 1개를 완료합니다.', { type: 'completeAnyDaily', target: 1 }),
+    createChallengeCard(date, 'open-box', 'easy', 'life', '박스 1개 열기', '오늘 받은 박스나 보관 중인 박스를 직접 엽니다.', { type: 'openBox', target: 1 }),
+    createChallengeCard(date, 'shadow-start', 'easy', 'shadow', '그림자 원정 마무리', '그림자 원정을 1회 완료합니다.', { type: 'completeShadowExpedition', target: 1 }),
+    createChallengeCard(date, 'workout-1', 'easy', 'workout', '몸 깨우기', '운동 또는 건강 Daily 퀘스트 1개를 완료합니다.', { type: 'completeQuestCategory', category: hasWorkout ? 'workout' : 'health', target: 1 }),
+    createChallengeCard(date, 'study-1', 'easy', 'study', '지식 정리', '학습, 커리어, 금융 Daily 퀘스트 1개를 완료합니다.', { type: 'completeQuestCategory', category: hasStudy ? 'study' : 'finance', target: 1 }),
+  ]
+  const normalPool = [
+    createChallengeCard(date, 'daily-3', 'normal', 'habit', 'Daily 3개 완료', '오늘 가능한 Daily 퀘스트 3개를 완료합니다.', { type: 'completeDailyCount', target: 3 }),
+    createChallengeCard(date, 'gate-attempt', 'normal', 'gate', '게이트 진입', '게이트 전투에 1회 도전합니다.', { type: 'completeGateAttempt', target: 1 }),
+    createChallengeCard(date, 'tower-attempt', 'normal', 'tower', '탑 등반', '무한의 탑에 1회 도전합니다.', { type: 'completeTowerAttempt', target: 1 }),
+    createChallengeCard(date, 'study-2', 'normal', 'finance', '두뇌 예열', '학습, 커리어, 금융 Daily 퀘스트를 합산 2개 완료합니다.', { type: 'completeQuestCategory', category: 'study', target: 2 }),
+    createChallengeCard(date, 'workout-2', 'normal', 'workout', '훈련 루틴', '운동 또는 건강 Daily 퀘스트를 합산 2개 완료합니다.', { type: 'completeQuestCategory', category: 'workout', target: 2 }),
+  ]
+  const hardPool = [
+    createChallengeCard(date, 'daily-5', 'hard', 'habit', 'Daily 5개 완료', '오늘 가능한 Daily 퀘스트 5개를 완료합니다.', { type: 'completeDailyCount', target: 5 }),
+    createChallengeCard(date, 'gate-win', 'hard', 'gate', '게이트 승리', '게이트 전투에서 승리합니다.', { type: 'completeGateVictory', target: 1 }),
+    createChallengeCard(date, 'tower-clear', 'hard', 'tower', '한 층 돌파', '무한의 탑 전투에서 승리합니다.', { type: 'completeTowerClear', target: 1 }),
+    createChallengeCard(date, 'body-mind', 'hard', 'life', '몸과 머리 모두 사용', '운동/건강 1개와 학습/커리어/금융 1개를 각각 완료합니다.', { type: 'completeWorkoutAndStudy', target: 1 }),
+  ]
+
+  return [
+    ...pickChallengeCards(easyPool, 2),
+    ...pickChallengeCards(normalPool, 2),
+    ...pickChallengeCards(hardPool, 1),
+  ]
+}
+
+const getCompletedSelectedChallengeCards = (s: GameState): ChallengeCard[] => {
+  const selected = new Set(s.selectedChallengeCardIds ?? [])
+  return (s.todayChallengeCards ?? []).filter(card => selected.has(card.id) && card.status === 'completed')
+}
+
+const getDailyBoxTierForState = (s: GameState): BoxTier => {
+  const upgradePoints = getCompletedSelectedChallengeCards(s)
+    .reduce((sum, card) => sum + card.reward.boxUpgradePoints, 0)
+  if (upgradePoints >= 4) return 'superior'
+  if (upgradePoints >= 2) return 'enhanced'
+  return 'normal'
+}
+
+const createRewardBox = (
+  type: RewardBox['type'],
+  tier: BoxTier,
+  source: RewardBox['source'],
+  label: string,
+  floor?: number
+): RewardBox => ({
+  id: `${type}-box-${floor ?? todayKey()}-${Date.now()}-${Math.floor(Math.random() * 100_000)}`,
+  type,
+  tier,
+  source,
+  createdAt: todayISO(),
+  status: 'available',
+  label,
+  floor,
+})
+
+const getCurrentWeekChallengeCompletedCount = (history: GameState['challengeCardHistory'] = {}): number => {
+  const now = new Date()
+  let total = 0
+  for (let i = 0; i < 7; i++) {
+    const date = addDays(now, -i)
+    if (getWeekKey(date) === getWeekKey(now)) {
+      total += history[getDateKey(date)]?.completedCount ?? 0
+    }
+  }
+  return total
+}
+
+const addWeeklyBoxIfEligible = (
+  rewardBoxes: RewardBox[],
+  lastWeeklyBoxWeek: string | undefined,
+  history: GameState['challengeCardHistory'] = {}
+): Pick<GameState, 'rewardBoxes' | 'lastWeeklyBoxWeek'> => {
+  const weekKey = getWeekKey()
+  if (lastWeeklyBoxWeek === weekKey || getCurrentWeekChallengeCompletedCount(history) < 7) {
+    return { rewardBoxes, lastWeeklyBoxWeek }
+  }
+  return {
+    rewardBoxes: [
+      createRewardBox('weekly', 'superior', 'weekly_activity', `${weekKey} 주간 활동 박스`),
+      ...rewardBoxes,
+    ],
+    lastWeeklyBoxWeek: weekKey,
+  }
+}
+
+const getItemFromPool = (predicate: (item: Omit<Item, 'id' | 'acquiredAt'>) => boolean, maxRarity?: Item['rarity']): Item | undefined => {
+  const rarityOrder: Item['rarity'][] = ['common', 'uncommon', 'rare', 'epic', 'legendary']
+  const maxIndex = maxRarity ? rarityOrder.indexOf(maxRarity) : rarityOrder.length - 1
+  const pool = ITEM_POOL.filter(item => predicate(item) && rarityOrder.indexOf(item.rarity) <= maxIndex)
+  const pick = pool[Math.floor(Math.random() * pool.length)]
+  return pick ? { ...pick, id: uid(), acquiredAt: todayISO() } : undefined
+}
+
+const rollBoxReward = (s: GameState, box: RewardBox): BoxReward => {
+  const tierMultiplier: Record<BoxTier, number> = {
+    normal: 1,
+    enhanced: 1.25,
+    superior: 1.55,
+    epic: 1.9,
+  }
+  const mult = tierMultiplier[box.tier]
+  const statKeys: StatKey[] = ['STR', 'VIT', 'AGI', 'INT', 'PER', 'SEN']
+  const stat = statKeys[Math.floor(Math.random() * statKeys.length)]
+  const reward: BoxReward = {
+    statRewards: { [stat]: roundStatValue((box.type === 'daily' ? 0.05 : 0.12) * mult) },
+    items: [],
+    consumables: [],
+  }
+
+  if (box.type === 'daily') {
+    reward.hunterXp = Math.round(24 * mult)
+    reward.shadowEssence = Math.max(1, Math.round((1 + Math.floor(Math.random() * 3)) * mult))
+    if (Math.random() < 0.08 * mult) {
+      const consumable = getItemFromPool(item => item.consumable === true, 'rare')
+      if (consumable) reward.consumables?.push(consumable)
+    }
+    if (Math.random() < 0.055 * mult) {
+      const equipment = getItemFromPool(item => item.equippable === true && item.consumable !== true, box.tier === 'superior' ? 'rare' : 'uncommon')
+      if (equipment) reward.items?.push(equipment)
+    }
+    reward.message = '오늘의 루틴에 작은 추진력이 더해졌습니다.'
+  } else if (box.type === 'weekly') {
+    reward.hunterXp = Math.round(115 * mult)
+    reward.shadowEssence = 5 + Math.floor(Math.random() * 11)
+    if (Math.random() < 0.55) {
+      const consumable = getItemFromPool(item => item.consumable === true, 'epic')
+      if (consumable) reward.consumables?.push(consumable)
+    }
+    if (Math.random() < 0.42) {
+      const equipment = getItemFromPool(item => item.equippable === true && item.consumable !== true, 'rare')
+      if (equipment) reward.items?.push(equipment)
+    }
+    reward.message = '이번 주의 선택과 완료가 묶여 보상으로 돌아왔습니다.'
+  } else {
+    const floor = box.floor ?? 5
+    reward.hunterXp = Math.round((30 + floor * 3) * mult)
+    reward.shadowEssence = Math.round((5 + floor / 2) * mult)
+    reward.statRewards = { [stat]: roundStatValue((0.16 + floor * 0.003) * mult) }
+    if (Math.random() < 0.28) {
+      const consumable = getItemFromPool(item => item.consumable === true, 'epic')
+      if (consumable) reward.consumables?.push(consumable)
+    }
+    if (Math.random() < (box.tier === 'epic' ? 0.78 : 0.62)) {
+      const equipment = getItemFromPool(item => item.equippable === true && item.consumable !== true, box.tier === 'epic' ? 'epic' : 'rare')
+      if (equipment) reward.items?.push(equipment)
+    }
+    reward.message = `무한의 탑 ${floor}층 보스의 잔향이 담겨 있습니다.`
+  }
+
+  reward.items = reward.items?.filter(Boolean)
+  reward.consumables = reward.consumables?.filter(Boolean)
+  if (reward.items?.length === 0) delete reward.items
+  if (reward.consumables?.length === 0) delete reward.consumables
+  return reward
+}
+
+const isChallengeConditionMet = (s: GameState, card: ChallengeCard, event: ChallengeProgressEvent): boolean => {
+  const target = card.condition.target ?? 1
+  switch (card.condition.type) {
+    case 'completeAnyDaily':
+    case 'completeDailyCount':
+      return countTodayDailyCompletions(s) >= target
+    case 'completeQuestCategory': {
+      const category = card.condition.category
+      if (category === 'workout' || category === 'health') {
+        return countTodayDailyCategoryCompletions(s, ['workout', 'health']) >= target
+      }
+      if (category === 'study' || category === 'career' || category === 'finance') {
+        return countTodayDailyCategoryCompletions(s, ['study', 'career', 'finance']) >= target
+      }
+      return category ? countTodayDailyCategoryCompletions(s, [category]) >= target : false
+    }
+    case 'completeGateAttempt':
+      return Boolean(event.gateAttempt || event.gateVictory)
+    case 'completeGateVictory':
+      return Boolean(event.gateVictory)
+    case 'completeShadowExpedition':
+      return Boolean(event.shadowExpeditionCompleted)
+    case 'completeTowerAttempt':
+      return Boolean(event.towerAttempt || event.towerClear)
+    case 'completeTowerClear':
+      return Boolean(event.towerClear)
+    case 'openBox':
+      return Boolean(event.boxOpened)
+    case 'completeWorkoutAndStudy':
+      return countTodayDailyCategoryCompletions(s, ['workout', 'health']) >= 1 &&
+        countTodayDailyCategoryCompletions(s, ['study', 'career', 'finance']) >= 1
+    default:
+      return false
+  }
+}
+
+const applyChallengeProgress = (s: GameState, event: ChallengeProgressEvent): Partial<GameState> => {
+  const date = todayKey()
+  const selected = new Set(s.selectedChallengeCardIds ?? [])
+  const cards = s.todayChallengeCards ?? []
+  if (cards.length === 0 || selected.size === 0) return {}
+
+  const completedNow: ChallengeCard[] = []
+  const nextCards = cards.map(card => {
+    if (card.date !== date || card.status !== 'selected' || !selected.has(card.id)) return card
+    if (!isChallengeConditionMet(s, card, event)) return card
+    const completed = { ...card, status: 'completed' as const, completedAt: todayISO() }
+    completedNow.push(completed)
+    return completed
+  })
+  if (completedNow.length === 0) return {}
+
+  let nextHunter = s.hunter
+  let nextShadowEssence = s.shadowEssence ?? 0
+  const nextMessages: SystemMessage[] = []
+  for (const card of completedNow) {
+    const xpResult = applyXp(nextHunter, card.reward.hunterXp, 'challenge')
+    nextHunter = xpResult.hunter
+    nextShadowEssence += card.reward.shadowEssence
+    nextMessages.push({
+      id: uid(),
+      kind: 'quest',
+      title: '도전 카드 완료',
+      lines: [
+        `[${card.title}]`,
+        `XP +${card.reward.hunterXp}`,
+        `그림자 정수 +${card.reward.shadowEssence}`,
+        `박스 강화 +${card.reward.boxUpgradePoints}`,
+      ],
+      createdAt: todayISO(),
+    })
+    if (xpResult.outcome?.leveledUp) {
+      nextMessages.push({
+        id: uid(),
+        kind: 'levelup',
+        title: 'LEVEL UP',
+        lines: [
+          `Lv.${s.hunter.level} -> Lv.${xpResult.outcome.newLevel}`,
+          `자동 분배: ${formatStatGains(xpResult.outcome.autoStatGains)}`,
+          `자유 배분권 +${xpResult.outcome.freeStatPointsGained}`,
+        ],
+        createdAt: todayISO(),
+      })
+    }
+  }
+
+  const oldHistory = s.challengeCardHistory ?? {}
+  const oldDay = oldHistory[date] ?? { completedIds: [], completedCount: 0 }
+  const completedIds = Array.from(new Set([...oldDay.completedIds, ...completedNow.map(card => card.id)]))
+  const challengeCardHistory = {
+    ...oldHistory,
+    [date]: {
+      completedIds,
+      completedCount: completedIds.length,
+    },
+  }
+  const weekly = addWeeklyBoxIfEligible(s.rewardBoxes ?? [], s.lastWeeklyBoxWeek, challengeCardHistory)
+
+  return {
+    hunter: nextHunter,
+    shadowEssence: nextShadowEssence,
+    todayChallengeCards: nextCards,
+    challengeCardHistory,
+    rewardBoxes: weekly.rewardBoxes,
+    lastWeeklyBoxWeek: weekly.lastWeeklyBoxWeek,
+    messages: [...s.messages, ...nextMessages],
+  }
+}
+
 export const useGame = create<GameState>()(
   persist(
     (set, get) => ({
@@ -1198,10 +1628,119 @@ export const useGame = create<GameState>()(
       shadowExtractHistory: [],
       lastShadowExtractResult: undefined,
       shadowEssence: 0,
+      shadowExpeditions: [],
+      lastShadowExpeditionDate: undefined,
+      activeShadowExpeditionId: undefined,
+      rewardBoxes: [],
+      lastDailyBoxDate: undefined,
+      lastWeeklyBoxWeek: undefined,
+      todayChallengeCards: [],
+      selectedChallengeCardIds: [],
+      lastChallengeCardDate: undefined,
+      challengeCardHistory: {},
+      skillStates: {},
       initialized: false,
 
       setHunterName: (name) => set((s) => ({ hunter: { ...s.hunter, name } })),
       setHunterJob: (job) => set((s) => ({ hunter: { ...s.hunter, job } })),
+
+      ensureDailyRewardSystems: () => set((s) => {
+        const date = todayKey()
+        let rewardBoxes = s.rewardBoxes ?? []
+        let lastDailyBoxDate = s.lastDailyBoxDate
+        let todayChallengeCards = s.todayChallengeCards ?? []
+        let selectedChallengeCardIds = s.selectedChallengeCardIds ?? []
+        let lastChallengeCardDate = s.lastChallengeCardDate
+
+        if (lastChallengeCardDate !== date) {
+          todayChallengeCards = generateChallengeCardsForToday(s.quests, date)
+          selectedChallengeCardIds = []
+          lastChallengeCardDate = date
+        }
+
+        if (lastDailyBoxDate !== date) {
+          rewardBoxes = [
+            createRewardBox('daily', 'normal', 'daily_login', `${date} 일일 박스`),
+            ...rewardBoxes,
+          ].slice(0, 30)
+          lastDailyBoxDate = date
+        }
+
+        const weekly = addWeeklyBoxIfEligible(rewardBoxes, s.lastWeeklyBoxWeek, s.challengeCardHistory ?? {})
+
+        return {
+          rewardBoxes: weekly.rewardBoxes,
+          lastDailyBoxDate,
+          lastWeeklyBoxWeek: weekly.lastWeeklyBoxWeek,
+          todayChallengeCards,
+          selectedChallengeCardIds,
+          lastChallengeCardDate,
+        }
+      }),
+
+      selectChallengeCards: (cardIds) => set((s) => {
+        const date = todayKey()
+        const cards = s.todayChallengeCards ?? []
+        if (s.lastChallengeCardDate !== date || cards.length === 0) {
+          return {
+            todayChallengeCards: generateChallengeCardsForToday(s.quests, date),
+            selectedChallengeCardIds: [],
+            lastChallengeCardDate: date,
+          }
+        }
+        const alreadySelected = cards.some(card => card.status === 'selected' || card.status === 'completed')
+        if (alreadySelected) return {}
+        const validIds = Array.from(new Set(cardIds)).filter(id => cards.some(card => card.id === id)).slice(0, 3)
+        if (validIds.length !== 3) return {}
+        const now = todayISO()
+        return {
+          selectedChallengeCardIds: validIds,
+          todayChallengeCards: cards.map(card =>
+            validIds.includes(card.id) ? { ...card, status: 'selected' as const, selectedAt: now } : card
+          ),
+        }
+      }),
+
+      openRewardBox: (boxId) => {
+        const s = get()
+        const boxes = s.rewardBoxes ?? []
+        const box = boxes.find(item => item.id === boxId)
+        if (!box || box.status !== 'available') return
+
+        const effectiveTier = box.type === 'daily' && box.label.startsWith(todayKey())
+          ? getDailyBoxTierForState(s)
+          : box.tier
+        const effectiveBox = { ...box, tier: effectiveTier }
+        const reward = rollBoxReward(s, effectiveBox)
+
+        let nextHunter = s.hunter
+        if (reward.hunterXp && reward.hunterXp > 0) {
+          const xpResult = applyXp(nextHunter, reward.hunterXp, 'challenge')
+          nextHunter = xpResult.hunter
+        }
+        const nextStats = { ...nextHunter.stats }
+        for (const [stat, value] of Object.entries(reward.statRewards ?? {})) {
+          nextStats[stat as StatKey] = roundStatValue(nextStats[stat as StatKey] + (value ?? 0))
+        }
+        nextHunter = { ...nextHunter, stats: nextStats }
+
+        const rewardItems = [...(reward.items ?? []), ...(reward.consumables ?? [])]
+        set({
+          hunter: nextHunter,
+          shadowEssence: (s.shadowEssence ?? 0) + (reward.shadowEssence ?? 0),
+          items: [...s.items, ...rewardItems],
+          rewardBoxes: boxes.map(item => item.id === boxId
+            ? { ...effectiveBox, status: 'opened' as const, openedAt: todayISO(), reward }
+            : item
+          ),
+        })
+
+        setTimeout(() => {
+          set(current => applyChallengeProgress(current, { boxOpened: true }))
+          get().checkTitleUnlocks()
+          get().checkJobAwakening()
+        }, 0)
+      },
 
       recordAppOpen: () => set((s) => {
         const now = todayISO()
@@ -2481,8 +3020,13 @@ export const useGame = create<GameState>()(
 
         if (combatLog.result === 'victory') {
           setTimeout(() => {
+            set(current => applyChallengeProgress(current, { gateAttempt: true, gateVictory: true }))
             get().checkTitleUnlocks()
             get().checkJobAwakening()
+          }, 0)
+        } else {
+          setTimeout(() => {
+            set(current => applyChallengeProgress(current, { gateAttempt: true }))
           }, 0)
         }
       },
@@ -2541,6 +3085,7 @@ export const useGame = create<GameState>()(
           jobId: s.hunter.jobId,
           equippedItems,
           allSkills: SKILL_DEFINITIONS,
+          includeBasicKit: true,
         })
         const allPlayerSkills = ensureBasicAttack(playerSkills)
         const playerStats = calculatePlayerCombatStats({
@@ -2605,9 +3150,10 @@ export const useGame = create<GameState>()(
           jobId: s.hunter.jobId,
           equippedItems,
           allSkills: SKILL_DEFINITIONS,
+          includeBasicKit: true,
         })
         const playerSkillIds = ensureBasicAttack(playerSkills)
-          .filter(skill => skill.ownerType === 'common' || skill.ownerType === 'job' || skill.ownerType === 'equipment')
+          .filter(isHunterCombatSkill)
           .map(skill => skill.id)
         const monsterSkillIds = Array.from(new Set([BASIC_ATTACK_SKILL.id, ...currentMonsterDef.skillIds]))
         const monsterSkills = SKILL_DEFINITIONS.filter(skill => skill.ownerType === 'monster' && monsterSkillIds.includes(skill.id))
@@ -2620,6 +3166,7 @@ export const useGame = create<GameState>()(
         let waveIndex = session.waveIndex
         let remainingMonsterIds = [...session.remainingMonsterIds]
         let nextItems = s.items
+        let nextSkillStates = s.skillStates ?? {}
         let result: CombatLog['result'] | undefined
         let shadowPhase: 'player_after_action' | 'player_defend' = 'player_after_action'
         let playerUsedSkill = false
@@ -2693,6 +3240,7 @@ export const useGame = create<GameState>()(
             : allSkills.find(item => item.id === action.skillId)
           if (!skill || !player.skillIds.includes(skill.id) || (player.cooldowns[skill.id] ?? 0) > 0) return
           playerUsedSkill = skill.id !== BASIC_ATTACK_SKILL.id
+          const mastery = playerUsedSkill ? getSkillMastery(nextSkillStates, skill.id) : undefined
 
           const resolved = resolveAction({
             actor: player,
@@ -2703,12 +3251,16 @@ export const useGame = create<GameState>()(
             turnNumber: logs.length + 1,
             waveNumber: waveIndex + 1,
             waveLabel: `Wave ${waveIndex + 1}`,
+            skillMasteryLevel: mastery?.masteryLevel ?? 0,
           })
+          if (playerUsedSkill) {
+            nextSkillStates = recordSkillRuntimeUse(nextSkillStates, skill.id)
+          }
           player = {
             ...resolved.actor,
             cooldowns: {
               ...resolved.actor.cooldowns,
-              [skill.id]: skill.cooldownTurns ?? 0,
+              [skill.id]: getSkillCooldownTurns(skill),
             },
           }
           monster = resolved.target
@@ -2773,7 +3325,7 @@ export const useGame = create<GameState>()(
             ...resolved.actor,
             cooldowns: {
               ...resolved.actor.cooldowns,
-              [monsterSkill.id]: monsterSkill.cooldownTurns ?? 0,
+              [monsterSkill.id]: getSkillCooldownTurns(monsterSkill),
             },
           }
           player = resolved.target
@@ -2805,7 +3357,8 @@ export const useGame = create<GameState>()(
             nextGateStatus,
             combatLog
           )
-          set(outcome.state)
+          set({ ...outcome.state, skillStates: nextSkillStates })
+          set(current => applyChallengeProgress(current, { gateAttempt: true, gateVictory: result === 'victory' }))
           if (outcome.shouldCheckUnlocks) {
             setTimeout(() => {
               get().checkTitleUnlocks()
@@ -2833,6 +3386,7 @@ export const useGame = create<GameState>()(
             activeEffects: tickRoundEffects(activeEffects),
             logs,
           },
+          skillStates: nextSkillStates,
         })
       },
 
@@ -2858,7 +3412,7 @@ export const useGame = create<GameState>()(
           allSkills: SKILL_DEFINITIONS,
         })
         const playerSkillIds = ensureBasicAttack(playerSkills)
-          .filter(skill => skill.ownerType === 'common' || skill.ownerType === 'job' || skill.ownerType === 'equipment')
+          .filter(isHunterCombatSkill)
           .map(skill => skill.id)
         const remainingMonsterDefs = [currentMonsterDef, ...session.remainingMonsterIds
           .map(id => MONSTER_DEFINITIONS.find(monster => monster.id === id))
@@ -2929,7 +3483,7 @@ export const useGame = create<GameState>()(
                 ...resolved.actor,
                 cooldowns: {
                   ...resolved.actor.cooldowns,
-                  [skill.id]: skill.cooldownTurns ?? 0,
+                  [skill.id]: getSkillCooldownTurns(skill),
                 },
               }
               monster = resolved.target
@@ -2975,7 +3529,7 @@ export const useGame = create<GameState>()(
                 ...resolved.actor,
                 cooldowns: {
                   ...resolved.actor.cooldowns,
-                  [skill.id]: skill.cooldownTurns ?? 0,
+                  [skill.id]: getSkillCooldownTurns(skill),
                 },
               }
               player = resolved.target
@@ -3032,11 +3586,336 @@ export const useGame = create<GameState>()(
           combatLog
         )
         set(outcome.state)
+        set(current => applyChallengeProgress(current, { gateAttempt: true, gateVictory: result === 'victory' }))
         if (outcome.shouldCheckUnlocks) {
           setTimeout(() => {
             get().checkTitleUnlocks()
             get().checkJobAwakening()
           }, 0)
+        }
+      },
+
+      switchTowerManualBattleToAuto: () => {
+        const s = get()
+        const session = s.manualBattleSession
+        if (!session || session.source !== 'tower' || session.towerFloor == null) return
+        const floor = session.towerFloor
+
+        const monsterDef = getTowerMonstersForFloor(floor)[0]
+        if (!monsterDef) return
+
+        const equippedItems = getEquippedItems(s.items, s.equipment)
+        const equippedShadows = getEquippedShadows(s.ownedShadows, s.equippedShadowIds, s.hunter)
+        const playerSkills = getPlayerCombatSkills({
+          jobId: s.hunter.jobId,
+          equippedItems,
+          allSkills: SKILL_DEFINITIONS,
+        })
+        const playerSkillIds = ensureBasicAttack(playerSkills)
+          .filter(isHunterCombatSkill)
+          .map(skill => skill.id)
+        const monsterSkillIds = Array.from(new Set([BASIC_ATTACK_SKILL.id, ...monsterDef.skillIds]))
+        const monsterSkills = SKILL_DEFINITIONS.filter(skill => skill.ownerType === 'monster' && monsterSkillIds.includes(skill.id))
+        const allSkills = ensureBasicAttack([...playerSkills, ...monsterSkills])
+
+        let player = toBattleActor(session.player, 'player', 'player', playerSkillIds, session.cooldowns)
+        let monster = toBattleActor(session.monster, 'monster', monsterDef.id, monsterSkillIds, session.monsterCooldowns)
+        let activeEffects: ActiveCombatEffect[] = [...session.activeEffects]
+        let logs: BattleTurn[] = [
+          ...session.logs,
+          createManualSystemLog(
+            '자동 마무리를 시작합니다. 현재 HP, cooldown 상태를 이어받습니다.',
+            session.logs.length + 1,
+            1,
+            monster
+          ),
+        ]
+        let result: CombatLog['result'] | undefined
+
+        while (!result && player.hp > 0 && getManualActionCount(logs) < session.maxTurns) {
+          const effectivePlayer = getEffectiveBattleActorStats(player, activeEffects)
+          const effectiveMonster = getEffectiveBattleActorStats(monster, activeEffects)
+          const order: Array<'player' | 'monster'> = effectivePlayer.speed >= effectiveMonster.speed
+            ? ['player', 'monster']
+            : ['monster', 'player']
+
+          for (const actorType of order) {
+            if (player.hp <= 0 || monster.hp <= 0 || getManualActionCount(logs) >= session.maxTurns) break
+
+            if (actorType === 'player') {
+              player = decrementCooldowns(player)
+              const skill = chooseSkill(
+                player,
+                allSkills,
+                buildBattleSkillContext(player, monster, activeEffects, getManualActionCount(logs) + 1)
+              )
+              const resolved = resolveAction({
+                actor: player,
+                target: monster,
+                skill,
+                activeEffects,
+                rng: Math.random,
+                turnNumber: logs.length + 1,
+                waveNumber: 1,
+                waveLabel: 'Wave 1',
+              })
+              player = {
+                ...resolved.actor,
+                cooldowns: {
+                  ...resolved.actor.cooldowns,
+                  [skill.id]: getSkillCooldownTurns(skill),
+                },
+              }
+              monster = resolved.target
+              activeEffects = resolved.activeEffects
+              logs.push(resolved.log)
+              const shadowResolved = resolveShadowSupportActions({
+                shadows: equippedShadows,
+                player,
+                monster,
+                activeEffects,
+                rng: Math.random,
+                turnNumber: getManualActionCount(logs),
+                waveNumber: 1,
+                waveLabel: 'Wave 1',
+                phase: 'player_after_action',
+                playerUsedSkill: skill.id !== BASIC_ATTACK_SKILL.id,
+              })
+              monster = shadowResolved.monster
+              activeEffects = shadowResolved.activeEffects
+              logs.push(...shadowResolved.logs)
+            } else {
+              monster = decrementCooldowns(monster)
+              const skill = chooseSkill(
+                monster,
+                allSkills.filter(skill => skill.ownerType === 'common' || skill.ownerType === 'monster'),
+                buildBattleSkillContext(monster, player, activeEffects, getManualActionCount(logs) + 1)
+              )
+              const resolved = resolveAction({
+                actor: monster,
+                target: player,
+                skill,
+                activeEffects,
+                rng: Math.random,
+                turnNumber: logs.length + 1,
+                waveNumber: 1,
+                waveLabel: 'Wave 1',
+              })
+              monster = {
+                ...resolved.actor,
+                cooldowns: {
+                  ...resolved.actor.cooldowns,
+                  [skill.id]: getSkillCooldownTurns(skill),
+                },
+              }
+              player = resolved.target
+              activeEffects = resolved.activeEffects
+              logs.push(resolved.log)
+            }
+          }
+
+          if (player.hp <= 0) {
+            result = 'defeat'
+            break
+          }
+          if (monster.hp <= 0) {
+            logs.push(createManualSystemLog(
+              `[${monster.name}]을 쓰러뜨렸습니다. 전투 승리!`,
+              logs.length + 1,
+              1,
+              monster
+            ))
+            result = 'victory'
+            break
+          }
+          if (getManualActionCount(logs) >= session.maxTurns) {
+            result = 'draw'
+          }
+          if (!result) {
+            activeEffects = tickRoundEffects(activeEffects)
+          }
+        }
+
+        if (!result) {
+          result = player.hp <= 0 ? 'defeat' : 'draw'
+        }
+
+        const combatLog: CombatLog = {
+          battleId: `tower-manual-auto-${floor}-${Date.now()}`,
+          gateInstanceId: `tower-${floor}`,
+          result,
+          turns: logs,
+          totalTurns: getManualActionCount(logs),
+          playerHpRemaining: Math.max(0, player.hp),
+          rewards: [],
+          penaltyApplied: undefined,
+          totalWaves: 1,
+          clearedWaves: result === 'victory' ? 1 : 0,
+        }
+
+        const tower = s.infiniteTower ?? createInitialTowerState()
+        const isFirstClear = !tower.firstClearRewardsClaimed[floor]
+        const rewards = calculateTowerReward(floor, result, isFirstClear)
+        const towerResult: TowerBattleResult = {
+          outcome: result,
+          floor,
+          firstClear: isFirstClear,
+          rewards,
+        }
+
+        let nextHunter = s.hunter
+        let nextItems = s.items
+        let nextShadowEssence = s.shadowEssence ?? 0
+        let nextOwnedShadows = s.ownedShadows ?? []
+        const newMessages: SystemMessage[] = []
+
+        if (result === 'victory') {
+          if (rewards.hunterXp && rewards.hunterXp > 0) {
+            const xpResult = applyXp(s.hunter, rewards.hunterXp, 'challenge')
+            nextHunter = xpResult.hunter
+            if (xpResult.outcome?.leveledUp) {
+              newMessages.push({
+                id: uid(),
+                kind: 'levelup',
+                title: 'LEVEL UP',
+                lines: [
+                  `Lv.${s.hunter.level} → Lv.${xpResult.outcome.newLevel}`,
+                  `자동 분배 — ${formatStatGains(xpResult.outcome.autoStatGains)}`,
+                  `자유 배분권 +${xpResult.outcome.freeStatPointsGained}`,
+                ],
+                createdAt: todayISO(),
+              })
+            }
+          }
+          if (rewards.shadowEssence && rewards.shadowEssence > 0) {
+            nextShadowEssence += rewards.shadowEssence
+          }
+          if (rewards.itemDropChance && Math.random() < rewards.itemDropChance) {
+            const poolItem = ITEM_POOL[Math.floor(Math.random() * ITEM_POOL.length)]
+            if (poolItem) {
+              const item: Item = { ...poolItem, id: uid(), acquiredAt: todayISO() }
+              nextItems = [...nextItems, item]
+            }
+          }
+
+          const shadowXpAmount = rewards.shadowXp ?? Math.max(1, Math.floor(floor / 3))
+          if (shadowXpAmount > 0 && equippedShadows.length > 0) {
+            for (const es of equippedShadows) {
+              const idx = nextOwnedShadows.findIndex(sh => sh.instanceId === es.instanceId)
+              if (idx === -1) continue
+              const oldLevel = nextOwnedShadows[idx].level ?? 1
+              const res = addShadowXp(nextOwnedShadows[idx], shadowXpAmount)
+              if (res.leveledUp) {
+                newMessages.push({
+                  id: uid(),
+                  kind: 'shadow',
+                  title: '그림자 레벨 업',
+                  lines: [`[${nextOwnedShadows[idx].name}] Lv.${oldLevel} → Lv.${res.newLevel}`],
+                  createdAt: todayISO(),
+                })
+              }
+              nextOwnedShadows = nextOwnedShadows.map((sh, i) => i === idx ? res.shadow : sh)
+            }
+          }
+
+          const nextFirstClearRewardsClaimed = isFirstClear
+            ? { ...tower.firstClearRewardsClaimed, [floor]: true }
+            : tower.firstClearRewardsClaimed
+          const shouldGrantBossBox = rewards.boxType === 'boss' && !tower.bossRewardsClaimed[floor]
+          const nextBossRewardsClaimed = shouldGrantBossBox
+            ? { ...tower.bossRewardsClaimed, [floor]: true }
+            : tower.bossRewardsClaimed
+          const nextRewardBoxes = shouldGrantBossBox
+            ? [
+                createRewardBox(
+                  'boss',
+                  floor >= 20 ? 'epic' : 'superior',
+                  'tower_boss',
+                  `무한의 탑 ${floor}층 보스 박스`,
+                  floor
+                ),
+                ...(s.rewardBoxes ?? []),
+              ].slice(0, 30)
+            : s.rewardBoxes ?? []
+
+          newMessages.push({
+            id: uid(),
+            kind: 'quest',
+            title: `탑 ${floor}층 클리어`,
+            lines: [
+              `무한의 탑 ${floor}층을 클리어했습니다.`,
+              ...(rewards.hunterXp ? [`XP +${rewards.hunterXp}`] : []),
+              ...(rewards.shadowEssence ? [`정수 +${rewards.shadowEssence}`] : []),
+              ...(rewards.boxType ? ['보스 박스 획득'] : []),
+            ],
+            createdAt: todayISO(),
+          })
+
+          set({
+            hunter: nextHunter,
+            items: nextItems,
+            shadowEssence: nextShadowEssence,
+            ownedShadows: nextOwnedShadows,
+            rewardBoxes: nextRewardBoxes,
+            infiniteTower: {
+              ...tower,
+              currentFloor: floor + 1,
+              highestClearedFloor: Math.max(tower.highestClearedFloor, floor),
+              lastAttemptedFloor: floor,
+              firstClearRewardsClaimed: nextFirstClearRewardsClaimed,
+              bossRewardsClaimed: nextBossRewardsClaimed,
+              activeTowerBattle: {
+                id: `tower-manual-auto-${floor}-${Date.now()}`,
+                floor,
+                floorType: getTowerFloorType(floor),
+                monsterIds: [monsterDef.id],
+                recommendedPower: getTowerRecommendedPower(floor),
+                status: 'resolved',
+                logs: combatLog.turns,
+                result: towerResult,
+                showResult: true,
+              },
+            },
+            combatLogs: [combatLog, ...s.combatLogs].slice(0, 20),
+            messages: [...s.messages, ...newMessages],
+            manualBattleSession: undefined,
+          })
+        } else {
+          newMessages.push({
+            id: uid(),
+            kind: 'info',
+            title: `탑 ${floor}층 도전 실패`,
+            lines: [
+              result === 'defeat'
+                ? `무한의 탑 ${floor}층 도전에 실패했습니다.`
+                : `무한의 탑 ${floor}층 — 시간 초과.`,
+              '전투력을 키운 뒤 다시 도전할 수 있습니다.',
+            ],
+            createdAt: todayISO(),
+          })
+
+          set({
+            items: nextItems,
+            infiniteTower: {
+              ...tower,
+              currentFloor: 1,
+              lastAttemptedFloor: floor,
+              activeTowerBattle: {
+                id: `tower-manual-auto-${floor}-${Date.now()}`,
+                floor,
+                floorType: getTowerFloorType(floor),
+                monsterIds: [monsterDef.id],
+                recommendedPower: getTowerRecommendedPower(floor),
+                status: 'resolved',
+                logs: combatLog.turns,
+                result: towerResult,
+                showResult: true,
+              },
+            },
+            combatLogs: [combatLog, ...s.combatLogs].slice(0, 20),
+            messages: [...s.messages, ...newMessages],
+            manualBattleSession: undefined,
+          })
         }
       },
 
@@ -3063,13 +3942,6 @@ export const useGame = create<GameState>()(
           ownedShadows,
           lastShadowExtractResult: result,
           shadowExtractHistory: [result, ...(s.shadowExtractHistory ?? [])].slice(0, 50),
-          messages: [...s.messages, {
-            id: uid(),
-            kind: 'shadow',
-            title: result.success ? '그림자 추출 성공' : '그림자 추출 실패',
-            lines: [result.message],
-            createdAt: todayISO(),
-          }],
         })
       },
 
@@ -3209,6 +4081,853 @@ export const useGame = create<GameState>()(
             lines: [`[${shadow.name}]이(가) [${targetDef.name}](으)로 진화했습니다.`],
             createdAt: todayISO(),
           }],
+        }
+      }),
+
+      ensureTodayShadowExpedition: () => set((s) => syncTodayShadowExpeditionState(s)),
+
+      selectShadowExpeditionParty: (expeditionId, shadowIds) => set((s) => {
+        const expedition = (s.shadowExpeditions ?? []).find(item => item.id === expeditionId)
+        if (!expedition || expedition.status === 'completed' || expedition.status === 'expired' || expedition.status === 'in_progress') return {}
+        const ownedIds = new Set((s.ownedShadows ?? []).map(shadow => shadow.instanceId))
+        const uniqueIds = Array.from(new Set(shadowIds)).filter(id => ownedIds.has(id)).slice(0, SHADOW_EXPEDITION_PARTY_MAX)
+        return {
+          shadowExpeditions: (s.shadowExpeditions ?? []).map(item =>
+            item.id === expeditionId ? { ...item, selectedShadowIds: uniqueIds } : item
+          ),
+        }
+      }),
+
+      startShadowExpedition: (expeditionId) => set((s) => {
+        const synced = syncTodayShadowExpeditionState(s)
+        const expeditions = synced.shadowExpeditions
+        const expedition = expeditions.find(item => item.id === expeditionId)
+        if (!expedition || expedition.status !== 'available') return synced
+        const partySize = expedition.selectedShadowIds.filter(id => (s.ownedShadows ?? []).some(shadow => shadow.instanceId === id)).length
+        if (partySize < SHADOW_EXPEDITION_PARTY_MIN || partySize > SHADOW_EXPEDITION_PARTY_MAX) {
+          return {
+            ...synced,
+            messages: [...s.messages, {
+              id: uid(),
+              kind: 'shadow' as const,
+              title: '그림자 원정 편성 필요',
+              lines: [`원정 파티는 ${SHADOW_EXPEDITION_PARTY_MIN}~${SHADOW_EXPEDITION_PARTY_MAX}명으로 편성해야 합니다.`],
+              createdAt: todayISO(),
+            }],
+          }
+        }
+        return {
+          ...synced,
+          activeShadowExpeditionId: expeditionId,
+          shadowExpeditions: expeditions.map(item =>
+            item.id === expeditionId
+              ? {
+                  ...item,
+                  status: 'in_progress' as const,
+                  logs: [...item.logs, {
+                    id: uid(),
+                    turn: 0,
+                    type: 'system' as const,
+                    message: '그림자들이 균열 잔재로 진입했다. 헌터는 후방에서 명령을 내린다.',
+                  }],
+                }
+              : item
+          ),
+        }
+      }),
+
+      issueShadowExpeditionCommand: (expeditionId, command) => set((s) => {
+        const expedition = (s.shadowExpeditions ?? []).find(item => item.id === expeditionId)
+        if (!expedition || expedition.status !== 'in_progress') return {}
+        const party = expedition.selectedShadowIds
+          .map(id => (s.ownedShadows ?? []).find(shadow => shadow.instanceId === id))
+          .filter((shadow): shadow is OwnedShadow => Boolean(shadow))
+        if (party.length === 0) return {}
+
+        const resolved = resolveShadowExpeditionCommand(expedition, party, command, Math.random, uid)
+        let nextOwnedShadows = s.ownedShadows ?? []
+        let nextShadowEssence = s.shadowEssence ?? 0
+        const nextMessages = [...s.messages]
+
+        if (resolved.result && !expedition.result) {
+          const levelUps: string[] = []
+          for (const partyShadow of party) {
+            const idx = nextOwnedShadows.findIndex(shadow => shadow.instanceId === partyShadow.instanceId)
+            if (idx === -1) continue
+            const xpResult = addShadowXp(nextOwnedShadows[idx], resolved.result.shadowXpGained)
+            nextOwnedShadows = nextOwnedShadows.map((shadow, index) => index === idx ? xpResult.shadow : shadow)
+            if (xpResult.leveledUp) levelUps.push(`${partyShadow.name} Lv.${xpResult.newLevel}`)
+          }
+          nextShadowEssence += resolved.result.essenceGained
+          nextMessages.push({
+            id: uid(),
+            kind: 'shadow' as const,
+            title: '그림자 원정 완료',
+            lines: [
+              `${resolved.title} 결과: ${SHADOW_EXPEDITION_OUTCOME_LABEL[resolved.result.outcome]}`,
+              `파티 전원 그림자 XP +${resolved.result.shadowXpGained}`,
+              `그림자 정수 +${resolved.result.essenceGained}`,
+              ...levelUps.map(line => `레벨업: ${line}`),
+              ...(resolved.result.bonusRewards ?? []),
+            ],
+            createdAt: todayISO(),
+          })
+          setTimeout(() => {
+            set(current => applyChallengeProgress(current, { shadowExpeditionCompleted: true }))
+          }, 0)
+        }
+
+        return {
+          ownedShadows: nextOwnedShadows,
+          shadowEssence: nextShadowEssence,
+          activeShadowExpeditionId: resolved.status === 'completed' ? undefined : s.activeShadowExpeditionId,
+          shadowExpeditions: (s.shadowExpeditions ?? []).map(item => item.id === expeditionId ? resolved : item),
+          messages: nextMessages,
+        }
+      }),
+
+      abandonShadowExpedition: (expeditionId) => set((s) => {
+        const expedition = (s.shadowExpeditions ?? []).find(item => item.id === expeditionId)
+        if (!expedition || expedition.status !== 'in_progress') return {}
+        return {
+          activeShadowExpeditionId: undefined,
+          shadowExpeditions: (s.shadowExpeditions ?? []).map(item =>
+            item.id === expeditionId
+              ? {
+                  ...item,
+                  status: 'completed' as const,
+                  result: {
+                    outcome: 'failure' as const,
+                    progress: item.progress,
+                    risk: item.risk,
+                    shadowXpGained: 0,
+                    essenceGained: 0,
+                    bonusRewards: ['중도 포기: 보상 없음'],
+                  },
+                  logs: [...item.logs, {
+                    id: uid(),
+                    turn: item.turn,
+                    type: 'system' as const,
+                    message: '지휘가 중단되었다. 원정은 실패 처리되며 보상은 없다.',
+                  }],
+                }
+              : item
+          ),
+        }
+      }),
+
+      startTowerBattle: (floor) => {
+        const s = get()
+        const tower = s.infiniteTower ?? createInitialTowerState()
+        const floorType = getTowerFloorType(floor)
+        const monsters = getTowerMonstersForFloor(floor)
+        if (monsters.length === 0) return
+
+        const equippedItems = getEquippedItems(s.items, s.equipment)
+        const equippedShadows = getEquippedShadows(s.ownedShadows, s.equippedShadowIds, s.hunter)
+        const shadowStatBonuses = getEquippedShadowStatBonuses(equippedShadows)
+        const combatStatsWithShadows = { ...s.hunter.stats }
+        for (const [stat, value] of Object.entries(shadowStatBonuses)) {
+          combatStatsWithShadows[stat as StatKey] = roundStatValue(combatStatsWithShadows[stat as StatKey] + (value ?? 0))
+        }
+        const playerSkills = getPlayerCombatSkills({
+          jobId: s.hunter.jobId,
+          equippedItems,
+          allSkills: SKILL_DEFINITIONS,
+        })
+        const playerStats = calculatePlayerCombatStats({
+          level: s.hunter.level,
+          stats: combatStatsWithShadows,
+          equippedItems,
+          activeConsumableEffects: s.activeConsumableEffects,
+          jobId: s.hunter.jobId,
+          skills: playerSkills,
+        })
+
+        const monsterSkillIds = new Set(monsters.flatMap(m => m.skillIds))
+        const monsterSkills = SKILL_DEFINITIONS.filter(skill => skill.ownerType === 'monster' && monsterSkillIds.has(skill.id))
+        const skills = [...playerSkills, ...monsterSkills]
+
+        const combatLog = simulateGateWaveBattle({
+          playerName: s.hunter.name || '헌터',
+          playerStats,
+          monsters,
+          skills,
+          equippedShadows,
+          gateInstanceId: `tower-${floor}`,
+          battleId: `tower-battle-${floor}-${Date.now()}`,
+        })
+
+        const isFirstClear = !tower.firstClearRewardsClaimed[floor]
+        const rewards = calculateTowerReward(floor, combatLog.result as 'victory' | 'defeat' | 'draw', isFirstClear)
+
+        const towerResult: TowerBattleResult = {
+          outcome: combatLog.result as 'victory' | 'defeat' | 'draw',
+          floor,
+          firstClear: isFirstClear,
+          rewards,
+        }
+
+        const nextTower: InfiniteTowerState = {
+          ...tower,
+          lastAttemptedFloor: floor,
+          clearedFloors: {},
+          activeTowerBattle: {
+            id: `tower-${floor}-${Date.now()}`,
+            floor,
+            floorType,
+            monsterIds: monsters.map(m => m.id),
+            recommendedPower: getTowerRecommendedPower(floor),
+            status: 'revealing',
+            logs: combatLog.turns,
+            result: towerResult,
+            showResult: false,
+          },
+        }
+
+        set({
+          infiniteTower: nextTower,
+          combatLogs: [combatLog, ...s.combatLogs].slice(0, 20),
+          manualBattleSession: undefined,
+        })
+      },
+
+      resolveTowerBattle: () => {
+        const s = get()
+        const tower = s.infiniteTower
+        if (!tower?.activeTowerBattle) return
+        const activeBattle = tower.activeTowerBattle
+        if (activeBattle.status !== 'revealing') return
+
+        const result = activeBattle.result
+        if (!result) return
+        const floor = activeBattle.floor
+        const isFirstClear = result.firstClear
+        const rewards = result.rewards
+
+        let nextHunter = s.hunter
+        let nextItems = s.items
+        let nextShadowEssence = s.shadowEssence ?? 0
+        let nextOwnedShadows = s.ownedShadows ?? []
+        const newMessages: SystemMessage[] = []
+
+        if (result.outcome === 'victory') {
+          if (rewards.hunterXp && rewards.hunterXp > 0) {
+            const xpResult = applyXp(s.hunter, rewards.hunterXp, 'challenge')
+            nextHunter = xpResult.hunter
+            if (xpResult.outcome?.leveledUp) {
+              newMessages.push({
+                id: uid(),
+                kind: 'levelup',
+                title: 'LEVEL UP',
+                lines: [
+                  `Lv.${s.hunter.level} → Lv.${xpResult.outcome.newLevel}`,
+                  `자동 분배 — ${formatStatGains(xpResult.outcome.autoStatGains)}`,
+                  `자유 배분권 +${xpResult.outcome.freeStatPointsGained}`,
+                ],
+                createdAt: todayISO(),
+              })
+            }
+          }
+          if (rewards.shadowEssence && rewards.shadowEssence > 0) {
+            nextShadowEssence += rewards.shadowEssence
+          }
+          if (rewards.itemDropChance && Math.random() < rewards.itemDropChance) {
+            const poolItem = ITEM_POOL[Math.floor(Math.random() * ITEM_POOL.length)]
+            if (poolItem) {
+              const item: Item = { ...poolItem, id: uid(), acquiredAt: todayISO() }
+              nextItems = [...nextItems, item]
+            }
+          }
+
+          const shadowXpAmount = rewards.shadowXp ?? Math.max(1, Math.floor(floor / 3))
+          const equippedShadows = getEquippedShadows(s.ownedShadows, s.equippedShadowIds, s.hunter)
+          if (shadowXpAmount > 0 && equippedShadows.length > 0) {
+            for (const es of equippedShadows) {
+              const idx = nextOwnedShadows.findIndex(sh => sh.instanceId === es.instanceId)
+              if (idx === -1) continue
+              const oldLevel = nextOwnedShadows[idx].level ?? 1
+              const res = addShadowXp(nextOwnedShadows[idx], shadowXpAmount)
+              if (res.leveledUp) {
+                newMessages.push({
+                  id: uid(),
+                  kind: 'shadow',
+                  title: '그림자 레벨 업',
+                  lines: [`[${nextOwnedShadows[idx].name}] Lv.${oldLevel} → Lv.${res.newLevel}`],
+                  createdAt: todayISO(),
+                })
+              }
+              nextOwnedShadows = nextOwnedShadows.map((sh, i) => i === idx ? res.shadow : sh)
+            }
+          }
+
+          const nextFirstClearRewardsClaimed = isFirstClear
+            ? { ...tower.firstClearRewardsClaimed, [floor]: true }
+            : tower.firstClearRewardsClaimed
+          const shouldGrantBossBox = rewards.boxType === 'boss' && !tower.bossRewardsClaimed[floor]
+          const nextBossRewardsClaimed = shouldGrantBossBox
+            ? { ...tower.bossRewardsClaimed, [floor]: true }
+            : tower.bossRewardsClaimed
+          const nextRewardBoxes = shouldGrantBossBox
+            ? [
+                createRewardBox(
+                  'boss',
+                  floor >= 20 ? 'epic' : 'superior',
+                  'tower_boss',
+                  `무한의 탑 ${floor}층 보스 박스`,
+                  floor
+                ),
+                ...(s.rewardBoxes ?? []),
+              ].slice(0, 30)
+            : s.rewardBoxes ?? []
+
+          newMessages.push({
+            id: uid(),
+            kind: 'quest',
+            title: `탑 ${floor}층 클리어`,
+            lines: [
+              `무한의 탑 ${floor}층을 클리어했습니다.`,
+              ...(rewards.hunterXp ? [`XP +${rewards.hunterXp}`] : []),
+              ...(rewards.shadowEssence ? [`정수 +${rewards.shadowEssence}`] : []),
+              ...(rewards.boxType ? ['보스 박스 획득'] : []),
+            ],
+            createdAt: todayISO(),
+          })
+
+          set({
+            hunter: nextHunter,
+            items: nextItems,
+            shadowEssence: nextShadowEssence,
+            ownedShadows: nextOwnedShadows,
+            rewardBoxes: nextRewardBoxes,
+            infiniteTower: {
+              ...tower,
+              currentFloor: floor + 1,
+              highestClearedFloor: Math.max(tower.highestClearedFloor, floor),
+              firstClearRewardsClaimed: nextFirstClearRewardsClaimed,
+              bossRewardsClaimed: nextBossRewardsClaimed,
+              activeTowerBattle: {
+                ...activeBattle,
+                status: 'resolved',
+                showResult: true,
+              },
+            },
+            messages: [...s.messages, ...newMessages],
+          })
+          setTimeout(() => {
+            set(current => applyChallengeProgress(current, { towerAttempt: true, towerClear: true }))
+            get().checkTitleUnlocks()
+            get().checkJobAwakening()
+          }, 0)
+        } else {
+          newMessages.push({
+            id: uid(),
+            kind: 'info',
+            title: `탑 ${floor}층 도전 실패`,
+            lines: [
+              result.outcome === 'defeat'
+                ? `무한의 탑 ${floor}층 도전에 실패했습니다.`
+                : `무한의 탑 ${floor}층 — 시간 초과.`,
+              '전투력을 키운 뒤 다시 도전할 수 있습니다.',
+            ],
+            createdAt: todayISO(),
+          })
+
+          set({
+            infiniteTower: {
+              ...tower,
+              currentFloor: 1,
+              activeTowerBattle: {
+                ...activeBattle,
+                status: 'resolved',
+                showResult: true,
+              },
+            },
+            messages: [...s.messages, ...newMessages],
+          })
+          setTimeout(() => {
+            set(current => applyChallengeProgress(current, { towerAttempt: true }))
+          }, 0)
+        }
+      },
+
+      cancelTowerBattle: () => set((s) => {
+        const tower = s.infiniteTower
+        if (!tower || !tower.activeTowerBattle) return {}
+        return {
+          infiniteTower: {
+            ...tower,
+            activeTowerBattle: undefined,
+          },
+        }
+      }),
+
+      startTowerManualBattle: (floor) => {
+        const s = get()
+        const monsters = getTowerMonstersForFloor(floor)
+        if (monsters.length === 0) return
+        const monsterDef = monsters[0]
+        if (!monsterDef) return
+
+        const equippedItems = getEquippedItems(s.items, s.equipment)
+        const equippedShadows = getEquippedShadows(s.ownedShadows, s.equippedShadowIds, s.hunter)
+        const shadowStatBonuses = getEquippedShadowStatBonuses(equippedShadows)
+        const combatStatsWithShadows = { ...s.hunter.stats }
+        for (const [stat, value] of Object.entries(shadowStatBonuses)) {
+          combatStatsWithShadows[stat as StatKey] = roundStatValue(combatStatsWithShadows[stat as StatKey] + (value ?? 0))
+        }
+        const playerSkills = getPlayerCombatSkills({
+          jobId: s.hunter.jobId,
+          equippedItems,
+          allSkills: SKILL_DEFINITIONS,
+          includeBasicKit: true,
+        })
+        const playerStats = calculatePlayerCombatStats({
+          level: s.hunter.level,
+          stats: combatStatsWithShadows,
+          equippedItems,
+          activeConsumableEffects: s.activeConsumableEffects,
+          jobId: s.hunter.jobId,
+          skills: playerSkills,
+        })
+
+        const player = createPlayerBattleActor(s.hunter.name || '헌터', playerStats, playerSkills)
+        const monster = createMonsterBattleActor(monsterDef)
+
+        const tower = s.infiniteTower ?? createInitialTowerState()
+        set({
+          manualBattleSession: {
+            gateId: monsterDef.id,
+            gateName: `무한의 탑 ${floor}층`,
+            gateInstanceId: `tower-${floor}`,
+            waveIndex: 0,
+            turn: 1,
+            maxTurns: 30,
+            player: toManualCombatant(player),
+            monster: toManualCombatant(monster),
+            remainingMonsterIds: [],
+            cooldowns: {},
+            monsterCooldowns: {},
+            activeEffects: [],
+            consumableEffects: [],
+            usedConsumableItemIds: [],
+            usedConsumableEffectTypes: [],
+            consumableUseCount: 0,
+            logs: [],
+            startedAt: new Date().toISOString(),
+            source: 'tower',
+            towerFloor: floor,
+          },
+          infiniteTower: {
+            ...tower,
+            clearedFloors: {},
+            activeTowerBattle: undefined,
+          },
+        })
+      },
+
+      performTowerManualBattleAction: (action) => {
+        if (action.type === 'auto_finish') {
+          get().switchTowerManualBattleToAuto()
+          return
+        }
+
+        const s = get()
+        const session = s.manualBattleSession
+        if (!session || session.result || session.source !== 'tower' || session.towerFloor == null) return
+        const floor = session.towerFloor
+
+        const monsterDef = getTowerMonstersForFloor(floor)[0]
+        if (!monsterDef) return
+
+        const equippedItems = getEquippedItems(s.items, s.equipment)
+        const equippedShadows = getEquippedShadows(s.ownedShadows, s.equippedShadowIds, s.hunter)
+        const playerSkills = getPlayerCombatSkills({
+          jobId: s.hunter.jobId,
+          equippedItems,
+          allSkills: SKILL_DEFINITIONS,
+          includeBasicKit: true,
+        })
+        const playerSkillIds = ensureBasicAttack(playerSkills)
+          .filter(isHunterCombatSkill)
+          .map(skill => skill.id)
+        const monsterSkillIds = Array.from(new Set([BASIC_ATTACK_SKILL.id, ...monsterDef.skillIds]))
+        const monsterSkills = SKILL_DEFINITIONS.filter(skill => skill.ownerType === 'monster' && monsterSkillIds.includes(skill.id))
+        const allSkills = ensureBasicAttack([...playerSkills, ...monsterSkills])
+
+        let player = decrementCooldowns(toBattleActor(session.player, 'player', 'player', playerSkillIds, session.cooldowns))
+        let monster = decrementCooldowns(toBattleActor(session.monster, 'monster', monsterDef.id, monsterSkillIds, session.monsterCooldowns))
+        let activeEffects: ActiveCombatEffect[] = [...session.activeEffects]
+        let logs: BattleTurn[] = [...session.logs]
+        let nextItems = s.items
+        let nextSkillStates = s.skillStates ?? {}
+        let result: CombatLog['result'] | undefined
+        let shadowPhase: 'player_after_action' | 'player_defend' = 'player_after_action'
+        let playerUsedSkill = false
+
+        if (action.type === 'use_consumable') {
+          const item = s.items.find(candidate => candidate.id === action.itemId)
+          const failureReason = getManualConsumableFailureReason(session, item)
+          if (failureReason || !item) {
+            logs.push(createManualSystemLog(
+              `소모품을 사용할 수 없습니다: ${failureReason ?? '아이템을 찾을 수 없습니다.'}`,
+              logs.length + 1,
+              1,
+              monster
+            ))
+            set({
+              manualBattleSession: { ...session, logs },
+            })
+            return
+          }
+
+          const usableEffects = item.consumableEffects?.filter(isManualBattleConsumableEffect) ?? []
+          let nextActiveEffects = activeEffects
+          for (const effect of usableEffects) {
+            for (const combatEffect of createManualConsumableCombatEffects(effect, item)) {
+              nextActiveEffects = applyOrRefreshCombatEffect(nextActiveEffects, combatEffect)
+            }
+          }
+          activeEffects = nextActiveEffects
+          logs.push(createManualConsumableUseLog(
+            player,
+            monster,
+            formatManualConsumableUseMessage(item, usableEffects),
+            logs.length + 1,
+            1
+          ))
+
+          const usedConsumableEffectTypes = Array.from(new Set([
+            ...session.usedConsumableEffectTypes,
+            ...usableEffects.map(effect => effect.type),
+          ]))
+          nextItems = s.items.filter(candidate => candidate.id !== item.id)
+          session.usedConsumableItemIds = [...session.usedConsumableItemIds, item.id]
+          session.usedConsumableEffectTypes = usedConsumableEffectTypes
+          session.consumableUseCount += 1
+        } else if (action.type === 'defend') {
+          shadowPhase = 'player_defend'
+          activeEffects = applyOrRefreshCombatEffect(activeEffects, {
+            sourceSkillId: 'manual-defend',
+            kind: 'damage_reduction',
+            value: 0.4,
+            remainingTurns: 1,
+            targetId: 'player',
+          })
+          logs.push(createDefendLog(player, monster, logs.length + 1, 1))
+        } else {
+          const skill = action.type === 'basic_attack'
+            ? BASIC_ATTACK_SKILL
+            : allSkills.find(item => item.id === action.skillId)
+          if (!skill || !player.skillIds.includes(skill.id) || (player.cooldowns[skill.id] ?? 0) > 0) return
+          playerUsedSkill = skill.id !== BASIC_ATTACK_SKILL.id
+          const mastery = playerUsedSkill ? getSkillMastery(nextSkillStates, skill.id) : undefined
+
+          const resolved = resolveAction({
+            actor: player,
+            target: monster,
+            skill,
+            activeEffects,
+            rng: Math.random,
+            turnNumber: logs.length + 1,
+            waveNumber: 1,
+            waveLabel: 'Wave 1',
+            skillMasteryLevel: mastery?.masteryLevel ?? 0,
+          })
+          if (playerUsedSkill) {
+            nextSkillStates = recordSkillRuntimeUse(nextSkillStates, skill.id)
+          }
+          player = {
+            ...resolved.actor,
+            cooldowns: {
+              ...resolved.actor.cooldowns,
+              [skill.id]: getSkillCooldownTurns(skill),
+            },
+          }
+          monster = resolved.target
+          activeEffects = resolved.activeEffects
+          logs.push(resolved.log)
+        }
+
+        if (!result && monster.hp > 0) {
+          const shadowResolved = resolveShadowSupportActions({
+            shadows: equippedShadows,
+            player,
+            monster,
+            activeEffects,
+            rng: Math.random,
+            turnNumber: logs.length + 1,
+            waveNumber: 1,
+            waveLabel: 'Wave 1',
+            phase: shadowPhase,
+            playerUsedSkill,
+          })
+          monster = shadowResolved.monster
+          activeEffects = shadowResolved.activeEffects
+          logs.push(...shadowResolved.logs)
+        }
+
+        if (player.hp <= 0) result = 'defeat'
+
+        if (!result && monster.hp <= 0) {
+          logs.push(createManualSystemLog(
+            `[${monster.name}]을 쓰러뜨렸습니다. 전투 승리!`,
+            logs.length + 1,
+            1,
+            monster
+          ))
+          result = 'victory'
+        }
+
+        if (!result && getManualActionCount(logs) < session.maxTurns) {
+          monster = decrementCooldowns(monster)
+          const monsterContext = buildBattleSkillContext(monster, player, activeEffects, logs.length + 1)
+          const monsterSkill = chooseSkill(
+            monster,
+            allSkills.filter(skill => skill.ownerType === 'common' || skill.ownerType === 'monster'),
+            monsterContext
+          )
+          const resolved = resolveAction({
+            actor: monster,
+            target: player,
+            skill: monsterSkill,
+            activeEffects,
+            rng: Math.random,
+            turnNumber: logs.length + 1,
+            waveNumber: 1,
+            waveLabel: 'Wave 1',
+          })
+          monster = {
+            ...resolved.actor,
+            cooldowns: {
+              ...resolved.actor.cooldowns,
+              [monsterSkill.id]: getSkillCooldownTurns(monsterSkill),
+            },
+          }
+          player = resolved.target
+          activeEffects = resolved.activeEffects
+          logs.push(resolved.log)
+        }
+
+        if (!result && player.hp <= 0) result = 'defeat'
+        if (!result && getManualActionCount(logs) >= session.maxTurns) result = 'draw'
+
+        if (result) {
+          const combatLog: CombatLog = {
+            battleId: `tower-manual-${floor}-${Date.now()}`,
+            gateInstanceId: `tower-${floor}`,
+            result,
+            turns: logs,
+            totalTurns: getManualActionCount(logs),
+            playerHpRemaining: Math.max(0, player.hp),
+            rewards: [],
+            penaltyApplied: undefined,
+            totalWaves: 1,
+            clearedWaves: result === 'victory' ? 1 : 0,
+          }
+
+          const tower = s.infiniteTower ?? createInitialTowerState()
+          const isFirstClear = !tower.firstClearRewardsClaimed[floor]
+          const rewards = calculateTowerReward(floor, result, isFirstClear)
+          const towerResult: TowerBattleResult = {
+            outcome: result,
+            floor,
+            firstClear: isFirstClear,
+            rewards,
+          }
+
+          let nextHunter = s.hunter
+          let nextShadowEssence = s.shadowEssence ?? 0
+          let nextOwnedShadows = s.ownedShadows ?? []
+          const newMessages: SystemMessage[] = []
+
+          if (result === 'victory') {
+            if (rewards.hunterXp && rewards.hunterXp > 0) {
+              const xpResult = applyXp(s.hunter, rewards.hunterXp, 'challenge')
+              nextHunter = xpResult.hunter
+              if (xpResult.outcome?.leveledUp) {
+                newMessages.push({
+                  id: uid(),
+                  kind: 'levelup',
+                  title: 'LEVEL UP',
+                  lines: [
+                    `Lv.${s.hunter.level} → Lv.${xpResult.outcome.newLevel}`,
+                    `자동 분배 — ${formatStatGains(xpResult.outcome.autoStatGains)}`,
+                    `자유 배분권 +${xpResult.outcome.freeStatPointsGained}`,
+                  ],
+                  createdAt: todayISO(),
+                })
+              }
+            }
+            if (rewards.shadowEssence && rewards.shadowEssence > 0) {
+              nextShadowEssence += rewards.shadowEssence
+            }
+            if (rewards.itemDropChance && Math.random() < rewards.itemDropChance) {
+              const poolItem = ITEM_POOL[Math.floor(Math.random() * ITEM_POOL.length)]
+              if (poolItem) {
+                const item: Item = { ...poolItem, id: uid(), acquiredAt: todayISO() }
+                nextItems = [...nextItems, item]
+              }
+            }
+
+            const shadowXpAmount = rewards.shadowXp ?? Math.max(1, Math.floor(floor / 3))
+            if (shadowXpAmount > 0 && equippedShadows.length > 0) {
+              for (const es of equippedShadows) {
+                const idx = nextOwnedShadows.findIndex(sh => sh.instanceId === es.instanceId)
+                if (idx === -1) continue
+                const oldLevel = nextOwnedShadows[idx].level ?? 1
+                const res = addShadowXp(nextOwnedShadows[idx], shadowXpAmount)
+                if (res.leveledUp) {
+                  newMessages.push({
+                    id: uid(),
+                    kind: 'shadow',
+                    title: '그림자 레벨 업',
+                    lines: [`[${nextOwnedShadows[idx].name}] Lv.${oldLevel} → Lv.${res.newLevel}`],
+                    createdAt: todayISO(),
+                  })
+                }
+                nextOwnedShadows = nextOwnedShadows.map((sh, i) => i === idx ? res.shadow : sh)
+              }
+            }
+
+            const nextFirstClearRewardsClaimed = isFirstClear
+              ? { ...tower.firstClearRewardsClaimed, [floor]: true }
+              : tower.firstClearRewardsClaimed
+            const shouldGrantBossBox = rewards.boxType === 'boss' && !tower.bossRewardsClaimed[floor]
+            const nextBossRewardsClaimed = shouldGrantBossBox
+              ? { ...tower.bossRewardsClaimed, [floor]: true }
+              : tower.bossRewardsClaimed
+            const nextRewardBoxes = shouldGrantBossBox
+              ? [
+                  createRewardBox(
+                    'boss',
+                    floor >= 20 ? 'epic' : 'superior',
+                    'tower_boss',
+                    `무한의 탑 ${floor}층 보스 박스`,
+                    floor
+                  ),
+                  ...(s.rewardBoxes ?? []),
+                ].slice(0, 30)
+              : s.rewardBoxes ?? []
+
+            newMessages.push({
+              id: uid(),
+              kind: 'quest',
+              title: `탑 ${floor}층 클리어`,
+              lines: [
+                `무한의 탑 ${floor}층을 클리어했습니다.`,
+                ...(rewards.hunterXp ? [`XP +${rewards.hunterXp}`] : []),
+                ...(rewards.shadowEssence ? [`정수 +${rewards.shadowEssence}`] : []),
+                ...(rewards.boxType ? ['보스 박스 획득'] : []),
+              ],
+              createdAt: todayISO(),
+            })
+
+            set({
+              hunter: nextHunter,
+              items: nextItems,
+              shadowEssence: nextShadowEssence,
+              ownedShadows: nextOwnedShadows,
+              rewardBoxes: nextRewardBoxes,
+              infiniteTower: {
+                ...tower,
+                currentFloor: floor + 1,
+                highestClearedFloor: Math.max(tower.highestClearedFloor, floor),
+                lastAttemptedFloor: floor,
+                firstClearRewardsClaimed: nextFirstClearRewardsClaimed,
+                bossRewardsClaimed: nextBossRewardsClaimed,
+                activeTowerBattle: {
+                  id: `tower-manual-${floor}-${Date.now()}`,
+                  floor,
+                  floorType: getTowerFloorType(floor),
+                  monsterIds: [monsterDef.id],
+                  recommendedPower: getTowerRecommendedPower(floor),
+                  status: 'resolved',
+                  logs: combatLog.turns,
+                  result: towerResult,
+                  showResult: true,
+                },
+              },
+              combatLogs: [combatLog, ...s.combatLogs].slice(0, 20),
+              messages: [...s.messages, ...newMessages],
+              manualBattleSession: undefined,
+              skillStates: nextSkillStates,
+            })
+            setTimeout(() => {
+              set(current => applyChallengeProgress(current, { towerAttempt: true, towerClear: true }))
+              get().checkTitleUnlocks()
+              get().checkJobAwakening()
+            }, 0)
+          } else {
+            newMessages.push({
+              id: uid(),
+              kind: 'info',
+              title: `탑 ${floor}층 도전 실패`,
+              lines: [
+                result === 'defeat'
+                  ? `무한의 탑 ${floor}층 도전에 실패했습니다.`
+                  : `무한의 탑 ${floor}층 — 시간 초과.`,
+                '전투력을 키운 뒤 다시 도전할 수 있습니다.',
+              ],
+              createdAt: todayISO(),
+            })
+
+            set({
+              items: nextItems,
+              infiniteTower: {
+                ...tower,
+                currentFloor: 1,
+                lastAttemptedFloor: floor,
+                activeTowerBattle: {
+                  id: `tower-manual-${floor}-${Date.now()}`,
+                  floor,
+                  floorType: getTowerFloorType(floor),
+                  monsterIds: [monsterDef.id],
+                  recommendedPower: getTowerRecommendedPower(floor),
+                  status: 'resolved',
+                  logs: combatLog.turns,
+                  result: towerResult,
+                  showResult: true,
+                },
+              },
+              combatLogs: [combatLog, ...s.combatLogs].slice(0, 20),
+              messages: [...s.messages, ...newMessages],
+              manualBattleSession: undefined,
+              skillStates: nextSkillStates,
+            })
+            setTimeout(() => {
+              set(current => applyChallengeProgress(current, { towerAttempt: true }))
+            }, 0)
+          }
+          return
+        }
+
+        set({
+          items: nextItems,
+          manualBattleSession: {
+            ...session,
+            turn: getManualActionCount(logs) + 1,
+            player: toManualCombatant(player),
+            monster: toManualCombatant(monster),
+            cooldowns: player.cooldowns,
+            monsterCooldowns: monster.cooldowns,
+            activeEffects: tickRoundEffects(activeEffects),
+            logs,
+          },
+          skillStates: nextSkillStates,
+        })
+      },
+
+      cancelTowerManualBattle: () => set((s) => {
+        const session = s.manualBattleSession
+        if (!session || session.source !== 'tower') return {}
+        const tower = s.infiniteTower ?? createInitialTowerState()
+        return {
+          manualBattleSession: undefined,
+          infiniteTower: {
+            ...tower,
+            currentFloor: 1,
+          },
         }
       }),
 
@@ -3493,9 +5212,13 @@ export const useGame = create<GameState>()(
 
         // Check title unlocks after quest completion
         setTimeout(() => {
+          set(current => applyChallengeProgress(current, { questCompleted: q }))
           get().checkTitleUnlocks()
           get().checkJobAwakening()
-          if (q.type === 'daily') get().rollGateSpawn('daily_completion')
+          if (q.type === 'daily') {
+            get().ensureTodayShadowExpedition()
+            get().rollGateSpawn('daily_completion')
+          }
           if (q.type === 'main') get().rollGateSpawn('main_completion')
         }, 0)
       },
@@ -3779,6 +5502,19 @@ export const useGame = create<GameState>()(
         equippedShadowIds: [],
         shadowExtractHistory: [],
         lastShadowExtractResult: undefined,
+        shadowEssence: 0,
+        shadowExpeditions: [],
+        lastShadowExpeditionDate: undefined,
+        activeShadowExpeditionId: undefined,
+        infiniteTower: createInitialTowerState(),
+        rewardBoxes: [],
+        lastDailyBoxDate: undefined,
+        lastWeeklyBoxWeek: undefined,
+        todayChallengeCards: [],
+        selectedChallengeCardIds: [],
+        lastChallengeCardDate: undefined,
+        challengeCardHistory: {},
+        skillStates: {},
         initialized: true,
       }),
     }),
@@ -3872,6 +5608,39 @@ export const useGame = create<GameState>()(
         }
         if (!('shadowEssence' in persistedState)) {
           persistedState.shadowEssence = 0
+        }
+        if (!persistedState.shadowExpeditions) {
+          persistedState.shadowExpeditions = []
+        }
+        if (!('lastShadowExpeditionDate' in persistedState)) {
+          persistedState.lastShadowExpeditionDate = undefined
+        }
+        if (!('activeShadowExpeditionId' in persistedState)) {
+          persistedState.activeShadowExpeditionId = undefined
+        }
+        if (!persistedState.rewardBoxes) {
+          persistedState.rewardBoxes = []
+        }
+        if (!('lastDailyBoxDate' in persistedState)) {
+          persistedState.lastDailyBoxDate = undefined
+        }
+        if (!('lastWeeklyBoxWeek' in persistedState)) {
+          persistedState.lastWeeklyBoxWeek = undefined
+        }
+        if (!persistedState.todayChallengeCards) {
+          persistedState.todayChallengeCards = []
+        }
+        if (!persistedState.selectedChallengeCardIds) {
+          persistedState.selectedChallengeCardIds = []
+        }
+        if (!('lastChallengeCardDate' in persistedState)) {
+          persistedState.lastChallengeCardDate = undefined
+        }
+        if (!persistedState.challengeCardHistory) {
+          persistedState.challengeCardHistory = {}
+        }
+        if (!persistedState.skillStates) {
+          persistedState.skillStates = {}
         }
         persistedState.manualBattleSession = undefined
         return persistedState

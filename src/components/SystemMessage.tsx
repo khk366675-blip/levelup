@@ -17,6 +17,7 @@ export function SystemMessageQueue() {
 
   // show only the latest
   const current = messages[0]
+  const dramatic = current?.kind === 'levelup' || current?.kind === 'rank'
 
   return (
     <AnimatePresence>
@@ -35,7 +36,7 @@ export function SystemMessageQueue() {
             exit={{ scale: 0.9, opacity: 0 }}
             transition={{ type: 'spring', stiffness: 200, damping: 20 }}
             onClick={(e) => e.stopPropagation()}
-            className={`relative panel corner-bracket ${KIND_STYLE[current.kind].accent} ${KIND_STYLE[current.kind].glow}
+            className={`relative panel corner-bracket ${dramatic ? 'system-message-dramatic' : ''} ${KIND_STYLE[current.kind].accent} ${KIND_STYLE[current.kind].glow}
               p-8 min-w-[320px] max-w-md text-center`}
           >
             <div className="br" />

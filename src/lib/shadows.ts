@@ -9,6 +9,7 @@ import type {
   ShadowRank,
   ShadowRarity,
   ShadowRole,
+  ShadowVisualTheme,
   ShadowTrait,
   StatKey,
 } from './types'
@@ -69,7 +70,119 @@ export const SHADOW_TRAITS: ShadowTrait[] = [
 
 const e = (type: ShadowEffectType, value: number, extra: Partial<ShadowEffect> = {}): ShadowEffect => ({ type, value, ...extra })
 
-export const SHADOW_DEFINITIONS: ShadowDefinition[] = [
+type ShadowVisualPatch = Pick<
+  ShadowDefinition,
+  | 'visualKey'
+  | 'portraitVariant'
+  | 'visualTheme'
+  | 'silhouetteType'
+  | 'accentColor'
+  | 'weaponShape'
+  | 'headShape'
+  | 'shoulderShape'
+  | 'auraType'
+  | 'eyeStyle'
+  | 'runeStyle'
+  | 'accessory'
+  | 'posture'
+  | 'backgroundMotif'
+  | 'visualIntensity'
+>
+
+const SHADOW_ROLE_VISUAL_THEME: Record<ShadowRole, ShadowVisualTheme> = {
+  assault: 'soldier',
+  guard: 'guard',
+  scout: 'scout',
+  analyst: 'analyst',
+  support: 'support',
+  hunter: 'beast',
+}
+
+const SHADOW_VISUALS: Record<string, ShadowVisualPatch> = {
+  'shadow-rat': { visualKey: 'beast-rat-ember', portraitVariant: 'rat', visualTheme: 'beast', silhouetteType: 'rat', accentColor: '#f43f5e', headShape: 'snout', auraType: 'low-mist', eyeStyle: 'ember-points', accessory: 'tail-whip', posture: 'crouched', backgroundMotif: 'claw-marks', visualIntensity: 0.78 },
+  'shadow-scout': { visualKey: 'scout-knife-evolved', portraitVariant: 'runner', visualTheme: 'evolved', silhouetteType: 'scout-knife', accentColor: '#38bdf8', weaponShape: 'twin-daggers', headShape: 'hood', shoulderShape: 'light-mantle', auraType: 'speed-lines', eyeStyle: 'visor', accessory: 'scarf', posture: 'leaning', backgroundMotif: 'scan-lines', visualIntensity: 1.08 },
+  'shadow-infantry': { visualKey: 'soldier-blade-mantle', portraitVariant: 'infantry', visualTheme: 'soldier', silhouetteType: 'blade', accentColor: '#818cf8', weaponShape: 'longsword', headShape: 'helm', shoulderShape: 'pauldrons', auraType: 'battle-mist', eyeStyle: 'paired', accessory: 'short-cape', posture: 'braced', backgroundMotif: 'war-rune', visualIntensity: 0.92 },
+  'dark-executor': { visualKey: 'executor-greatsword-evolved', portraitVariant: 'executioner', visualTheme: 'evolved', silhouetteType: 'greatsword', accentColor: '#f43f5e', weaponShape: 'execution-blade', headShape: 'horned-helm', shoulderShape: 'heavy-pauldrons', auraType: 'blood-flare', eyeStyle: 'burning-slit', accessory: 'torn-cloak', posture: 'towering', backgroundMotif: 'execution-sigil', visualIntensity: 1.32 },
+  'forgetting-recorder': { visualKey: 'analyst-scroll-record', portraitVariant: 'recorder', visualTheme: 'analyst', silhouetteType: 'scroll', accentColor: '#22d3ee', weaponShape: 'stylus', headShape: 'thin-hood', shoulderShape: 'narrow', auraType: 'faint-runes', eyeStyle: 'small-glow', accessory: 'scrolls', posture: 'reading', backgroundMotif: 'paper-runes', visualIntensity: 0.92 },
+  'forgetting-scribe': { visualKey: 'analyst-book-evolved', portraitVariant: 'scribe', visualTheme: 'evolved', silhouetteType: 'book-runes', accentColor: '#67e8f9', weaponShape: 'rune-quill', headShape: 'scribe-cowl', shoulderShape: 'wide-robes', auraType: 'rune-orbit', eyeStyle: 'oracle', accessory: 'floating-pages', posture: 'casting', backgroundMotif: 'archive-circle', visualIntensity: 1.22 },
+  'fatigue-guardian': { visualKey: 'guard-tower-fatigue', portraitVariant: 'guardian', visualTheme: 'guard', silhouetteType: 'round-shield', accentColor: '#34d399', weaponShape: 'short-spear', headShape: 'low-helm', shoulderShape: 'stout', auraType: 'guard-haze', eyeStyle: 'dim', accessory: 'small-shield', posture: 'crouched-guard', backgroundMotif: 'shield-rune', visualIntensity: 0.9 },
+  'fatigue-shieldman': { visualKey: 'guard-wall-evolved', portraitVariant: 'shieldman', visualTheme: 'evolved', silhouetteType: 'tower-shield', accentColor: '#10b981', weaponShape: 'wall-shield', headShape: 'fortress-helm', shoulderShape: 'wall-plates', auraType: 'barrier', eyeStyle: 'steady', accessory: 'fortress-lines', posture: 'wall', backgroundMotif: 'bastion', visualIntensity: 1.26 },
+  'greed-hound': { visualKey: 'beast-hound-greed', portraitVariant: 'hound', visualTheme: 'beast', silhouetteType: 'hound', accentColor: '#fb7185', headShape: 'fangs', auraType: 'predator-haze', eyeStyle: 'ember-points', accessory: 'fangs', posture: 'pounce', backgroundMotif: 'claw-marks', visualIntensity: 0.98 },
+  'greed-collector': { visualKey: 'hunter-collector-evolved', portraitVariant: 'collector', visualTheme: 'evolved', silhouetteType: 'chained-beast', accentColor: '#f59e0b', headShape: 'fangs', auraType: 'essence-sparks', eyeStyle: 'gold-points', accessory: 'chains-trophy', posture: 'pounce', backgroundMotif: 'vault-sigil', visualIntensity: 1.24 },
+
+  'ner-first-rift': { visualKey: 'named-first-rift-scout', portraitVariant: 'named-scout', visualTheme: 'named', silhouetteType: 'scout-knife', accentColor: '#facc15', weaponShape: 'rift-dagger', headShape: 'hood', shoulderShape: 'light-mantle', auraType: 'named-corona', eyeStyle: 'star-slit', accessory: 'first-rift-mark', posture: 'leaning', backgroundMotif: 'rift-star', visualIntensity: 1.34 },
+  'rook-backstreet': { visualKey: 'named-rook-guard', portraitVariant: 'named-guard', visualTheme: 'named', silhouetteType: 'tower-shield', accentColor: '#facc15', weaponShape: 'tower-shield', headShape: 'fortress-helm', shoulderShape: 'wall-plates', auraType: 'named-corona', eyeStyle: 'steady', accessory: 'street-crest', posture: 'wall', backgroundMotif: 'bastion', visualIntensity: 1.34 },
+  'lark-nest-fang': { visualKey: 'named-lark-fang', portraitVariant: 'named-fang', visualTheme: 'named', silhouetteType: 'greatsword', accentColor: '#f97316', weaponShape: 'hooked-blade', headShape: 'horned-helm', shoulderShape: 'spiked-pauldrons', auraType: 'blood-flare', eyeStyle: 'burning-slit', accessory: 'fang-mantle', posture: 'towering', backgroundMotif: 'claw-marks', visualIntensity: 1.36 },
+  'gorn-sloth-captain': { visualKey: 'named-gorn-captain', portraitVariant: 'named-guard', visualTheme: 'named', silhouetteType: 'tower-shield', accentColor: '#facc15', weaponShape: 'captain-spear', headShape: 'fortress-helm', shoulderShape: 'heavy-pauldrons', auraType: 'named-corona', eyeStyle: 'steady', accessory: 'captain-plume', posture: 'wall', backgroundMotif: 'bastion', visualIntensity: 1.38 },
+  'shark-black-chaser': { visualKey: 'named-shark-chaser', portraitVariant: 'named-scout', visualTheme: 'named', silhouetteType: 'scout-knife', accentColor: '#60a5fa', weaponShape: 'twin-daggers', headShape: 'shark-hood', shoulderShape: 'light-mantle', auraType: 'speed-lines', eyeStyle: 'predator-slit', accessory: 'shadow-tailcoat', posture: 'leaning', backgroundMotif: 'scan-lines', visualIntensity: 1.34 },
+  'karden-forgetting-scribe': { visualKey: 'named-karden-archive', portraitVariant: 'named-analyst', visualTheme: 'named', silhouetteType: 'book-runes', accentColor: '#67e8f9', weaponShape: 'rune-quill', headShape: 'scribe-cowl', shoulderShape: 'wide-robes', auraType: 'rune-orbit', eyeStyle: 'oracle', accessory: 'grand-tome', posture: 'casting', backgroundMotif: 'archive-circle', visualIntensity: 1.42 },
+  'organ-fatigue-shield': { visualKey: 'named-organ-shield', portraitVariant: 'named-guard', visualTheme: 'named', silhouetteType: 'tower-shield', accentColor: '#34d399', weaponShape: 'wall-shield', headShape: 'fortress-helm', shoulderShape: 'wall-plates', auraType: 'barrier', eyeStyle: 'steady', accessory: 'fortress-lines', posture: 'wall', backgroundMotif: 'bastion', visualIntensity: 1.42 },
+  'raban-rift-instructor': { visualKey: 'named-raban-banner', portraitVariant: 'named-support', visualTheme: 'named', silhouetteType: 'banner', accentColor: '#a78bfa', weaponShape: 'command-staff', headShape: 'officer-helm', shoulderShape: 'command-mantle', auraType: 'command-halo', eyeStyle: 'paired', accessory: 'banner', posture: 'commanding', backgroundMotif: 'war-rune', visualIntensity: 1.32 },
+  'grid-greed-hound': { visualKey: 'named-grid-vault-hound', portraitVariant: 'named-hunter', visualTheme: 'named', silhouetteType: 'chained-beast', accentColor: '#f59e0b', headShape: 'fangs', auraType: 'essence-sparks', eyeStyle: 'gold-points', accessory: 'chains-trophy', posture: 'pounce', backgroundMotif: 'vault-sigil', visualIntensity: 1.42 },
+
+  'kasim-analyst': { visualKey: 'achievement-kasim-oracle', portraitVariant: 'achievement-analyst', visualTheme: 'named', silhouetteType: 'book-runes', accentColor: '#facc15', weaponShape: 'rune-quill', headShape: 'oracle-cowl', shoulderShape: 'wide-robes', auraType: 'achievement-halo', eyeStyle: 'oracle', accessory: 'chart-tome', posture: 'casting', backgroundMotif: 'archive-circle', visualIntensity: 1.42 },
+  'rao-market-watcher': { visualKey: 'achievement-rao-market', portraitVariant: 'achievement-analyst', visualTheme: 'named', silhouetteType: 'scroll', accentColor: '#38bdf8', weaponShape: 'stylus', headShape: 'thin-hood', shoulderShape: 'narrow', auraType: 'achievement-halo', eyeStyle: 'visor', accessory: 'chart-scroll', posture: 'reading', backgroundMotif: 'market-lines', visualIntensity: 1.24 },
+  'charka-finance-patron': { visualKey: 'achievement-charka-patron', portraitVariant: 'achievement-support', visualTheme: 'named', silhouetteType: 'banner', accentColor: '#f59e0b', weaponShape: 'patron-staff', headShape: 'officer-helm', shoulderShape: 'command-mantle', auraType: 'achievement-halo', eyeStyle: 'gold-points', accessory: 'coin-sigil', posture: 'commanding', backgroundMotif: 'vault-sigil', visualIntensity: 1.4 },
+  'nebl-black-accountant': { visualKey: 'achievement-nebl-ledger', portraitVariant: 'achievement-analyst', visualTheme: 'named', silhouetteType: 'book-runes', accentColor: '#94a3b8', weaponShape: 'ledger-quill', headShape: 'scribe-cowl', shoulderShape: 'wide-robes', auraType: 'paper-orbit', eyeStyle: 'small-glow', accessory: 'ledger', posture: 'reading', backgroundMotif: 'paper-runes', visualIntensity: 1.24 },
+  'volen-strategist': { visualKey: 'achievement-volen-strategy', portraitVariant: 'achievement-support', visualTheme: 'named', silhouetteType: 'banner', accentColor: '#a78bfa', weaponShape: 'command-staff', headShape: 'officer-helm', shoulderShape: 'command-mantle', auraType: 'command-halo', eyeStyle: 'visor', accessory: 'strategy-board', posture: 'commanding', backgroundMotif: 'war-rune', visualIntensity: 1.28 },
+  'verk-steel-knight': { visualKey: 'achievement-verk-steel', portraitVariant: 'achievement-assault', visualTheme: 'named', silhouetteType: 'greatsword', accentColor: '#f43f5e', weaponShape: 'steel-greatsword', headShape: 'horned-helm', shoulderShape: 'heavy-pauldrons', auraType: 'achievement-halo', eyeStyle: 'burning-slit', accessory: 'steel-plates', posture: 'towering', backgroundMotif: 'war-rune', visualIntensity: 1.44 },
+  'raven-running-shadow': { visualKey: 'achievement-raven-runner', portraitVariant: 'achievement-scout', visualTheme: 'named', silhouetteType: 'scout-knife', accentColor: '#38bdf8', weaponShape: 'twin-daggers', headShape: 'raven-hood', shoulderShape: 'light-mantle', auraType: 'speed-lines', eyeStyle: 'visor', accessory: 'wing-scarf', posture: 'leaning', backgroundMotif: 'scan-lines', visualIntensity: 1.26 },
+  'moro-restraint-chef': { visualKey: 'achievement-moro-hearth', portraitVariant: 'achievement-support', visualTheme: 'named', silhouetteType: 'banner', accentColor: '#34d399', weaponShape: 'hearth-ladle', headShape: 'keeper-hood', shoulderShape: 'command-mantle', auraType: 'soft-halo', eyeStyle: 'steady', accessory: 'hearth-mark', posture: 'commanding', backgroundMotif: 'shield-rune', visualIntensity: 1.18 },
+  'nok-sleep-keeper': { visualKey: 'achievement-nok-keeper', portraitVariant: 'achievement-guard', visualTheme: 'named', silhouetteType: 'round-shield', accentColor: '#60a5fa', weaponShape: 'moon-shield', headShape: 'low-helm', shoulderShape: 'stout', auraType: 'soft-halo', eyeStyle: 'dim', accessory: 'moon-mark', posture: 'crouched-guard', backgroundMotif: 'shield-rune', visualIntensity: 1.18 },
+  'baron-cutting-watcher': { visualKey: 'achievement-baron-watch', portraitVariant: 'achievement-guard', visualTheme: 'named', silhouetteType: 'tower-shield', accentColor: '#f43f5e', weaponShape: 'watcher-shield', headShape: 'fortress-helm', shoulderShape: 'wall-plates', auraType: 'achievement-halo', eyeStyle: 'predator-slit', accessory: 'watcher-chain', posture: 'wall', backgroundMotif: 'bastion', visualIntensity: 1.36 },
+  'irnel-registrar': { visualKey: 'achievement-irnel-registrar', portraitVariant: 'achievement-support', visualTheme: 'named', silhouetteType: 'scroll', accentColor: '#67e8f9', weaponShape: 'registrar-quill', headShape: 'scribe-cowl', shoulderShape: 'wide-robes', auraType: 'paper-orbit', eyeStyle: 'oracle', accessory: 'scrolls', posture: 'reading', backgroundMotif: 'archive-circle', visualIntensity: 1.32 },
+  'kalt-deadline-executor': { visualKey: 'achievement-kalt-deadline', portraitVariant: 'achievement-scout', visualTheme: 'named', silhouetteType: 'scout-knife', accentColor: '#f97316', weaponShape: 'clock-blade', headShape: 'hood', shoulderShape: 'light-mantle', auraType: 'speed-lines', eyeStyle: 'burning-slit', accessory: 'clock-sigil', posture: 'leaning', backgroundMotif: 'execution-sigil', visualIntensity: 1.28 },
+  'seron-saver': { visualKey: 'achievement-seron-saver', portraitVariant: 'achievement-hunter', visualTheme: 'named', silhouetteType: 'chained-beast', accentColor: '#f59e0b', headShape: 'fangs', auraType: 'essence-sparks', eyeStyle: 'gold-points', accessory: 'coin-chain', posture: 'pounce', backgroundMotif: 'vault-sigil', visualIntensity: 1.24 },
+  'lumen-dawn-vanguard': { visualKey: 'achievement-lumen-dawn', portraitVariant: 'achievement-scout', visualTheme: 'named', silhouetteType: 'scout-knife', accentColor: '#fde68a', weaponShape: 'dawn-dagger', headShape: 'raven-hood', shoulderShape: 'light-mantle', auraType: 'soft-halo', eyeStyle: 'star-slit', accessory: 'dawn-scarf', posture: 'leaning', backgroundMotif: 'rift-star', visualIntensity: 1.26 },
+}
+
+const inferShadowVisual = (definition: ShadowDefinition): ShadowVisualPatch => {
+  const named = definition.isGateNamed || definition.isAchievementNamed || definition.rank === 'named'
+  const visualTheme = named ? 'named' : SHADOW_ROLE_VISUAL_THEME[definition.role]
+  const silhouetteType =
+    definition.role === 'guard' ? 'round-shield' :
+    definition.role === 'scout' ? 'scout-knife' :
+    definition.role === 'analyst' ? 'scroll' :
+    definition.role === 'support' ? 'banner' :
+    definition.role === 'hunter' ? 'hound' :
+    'blade'
+  return {
+    visualKey: `${definition.role}-${definition.rank}-${definition.id}`,
+    portraitVariant: `${definition.role}-${definition.rarity}`,
+    visualTheme,
+    silhouetteType,
+    accentColor: named ? '#facc15' : undefined,
+    weaponShape:
+      definition.role === 'guard' ? 'short-spear' :
+      definition.role === 'scout' ? 'twin-daggers' :
+      definition.role === 'analyst' ? 'stylus' :
+      definition.role === 'support' ? 'command-staff' :
+      definition.role === 'hunter' ? 'fangs' :
+      'longsword',
+    headShape:
+      definition.role === 'guard' ? 'low-helm' :
+      definition.role === 'scout' ? 'hood' :
+      definition.role === 'analyst' ? 'thin-hood' :
+      definition.role === 'support' ? 'keeper-hood' :
+      definition.role === 'hunter' ? 'fangs' :
+      'helm',
+    shoulderShape:
+      definition.role === 'guard' ? 'stout' :
+      definition.role === 'analyst' ? 'narrow' :
+      definition.role === 'support' ? 'command-mantle' :
+      definition.role === 'hunter' ? 'low' :
+      'pauldrons',
+    auraType: named ? (definition.isAchievementNamed ? 'achievement-halo' : 'named-corona') : SHADOW_ROLE_VISUAL_THEME[definition.role],
+    eyeStyle: named ? 'star-slit' : undefined,
+    runeStyle: named ? 'ornate' : undefined,
+    accessory: definition.isAchievementNamed ? 'achievement-sigil' : definition.isGateNamed ? 'gate-sigil' : undefined,
+    posture: definition.role === 'guard' ? 'crouched-guard' : definition.role === 'hunter' ? 'pounce' : definition.role === 'scout' ? 'leaning' : undefined,
+    backgroundMotif: named ? (definition.isAchievementNamed ? 'rift-star' : 'war-rune') : undefined,
+    visualIntensity: named ? 1.22 : 1,
+  }
+}
+
+export const SHADOW_DEFINITIONS: ShadowDefinition[] = ([
   { id: 'shadow-rat', name: '그림자 쥐', description: '틈새를 파고드는 작은 하급 그림자.', rarity: 'common', rank: 'lesser', role: 'scout', sourceType: 'gate_extract', sourceGateRank: 'E', basePower: 18, effects: [e('extra_attack_chance', 0.03)], evolutionTargetDefinitionId: 'shadow-scout' },
   { id: 'rift-remnant', name: '균열의 잔영', description: '전투 시작을 아주 조금 안정시키는 잔류 마력.', rarity: 'common', rank: 'lesser', role: 'support', sourceType: 'gate_extract', sourceGateRank: 'E', basePower: 16, effects: [e('wave_start_bonus', 0.03)] },
   { id: 'shadow-sentry', name: '그림자 보초', description: '첫 피격을 받아내는 하급 수비 그림자.', rarity: 'common', rank: 'lesser', role: 'guard', sourceType: 'gate_extract', sourceGateRank: 'E', basePower: 17, effects: [e('damage_reduction', 0.015)] },
@@ -127,7 +240,11 @@ export const SHADOW_DEFINITIONS: ShadowDefinition[] = [
   { id: 'kalt-deadline-executor', name: '시한의 집행자 칼트', description: '마감 전에 끝내는 습관의 그림자.', rarity: 'epic', rank: 'named', role: 'scout', sourceType: 'achievement_named', sourceQuestId: 'dungeon-assignment-early', unlockConditionText: '과제 선제 처리 10회 완료', basePower: 94, effects: [e('stat_bonus', 2, { stat: 'AGI' }), e('wave_start_bonus', 0.04)], isAchievementNamed: true },
   { id: 'seron-saver', name: '절약가 세론', description: '소비 통제에서 생긴 사냥형 지원 그림자.', rarity: 'epic', rank: 'named', role: 'hunter', sourceType: 'achievement_named', sourceQuestId: 'dungeon-expense-record', unlockConditionText: '월 소비 70만원 이하 3개월 또는 생활비 기록 30일 완료', basePower: 86, effects: [e('category_xp_bonus', 0.03, { category: 'finance' }), e('category_xp_bonus', 0.03, { category: 'habit' }), e('drop_bonus', 0.02)], isAchievementNamed: true },
   { id: 'lumen-dawn-vanguard', name: '새벽의 척후 루멘', description: '이른 기상의 축적이 만든 정찰 그림자.', rarity: 'epic', rank: 'named', role: 'scout', sourceType: 'achievement_named', sourceQuestId: 'daily-sleep', unlockConditionText: '7시 전 기상 90일 또는 수면 리듬 던전 완료', basePower: 90, effects: [e('category_xp_bonus', 0.03, { category: 'habit' }), e('stat_bonus', 1, { stat: 'AGI' }), e('stat_bonus', 1, { stat: 'VIT' })], isAchievementNamed: true },
-]
+] as ShadowDefinition[]).map(definition => ({
+  ...definition,
+  ...inferShadowVisual(definition),
+  ...SHADOW_VISUALS[definition.id],
+}))
 
 export const getShadowDefinition = (definitionId: string): ShadowDefinition | undefined =>
   SHADOW_DEFINITIONS.find(def => def.id === definitionId)

@@ -1,0 +1,877 @@
+import clsx from 'clsx'
+import {
+  Activity,
+  ChevronDown,
+  ChevronUp,
+  Compass,
+  Crosshair,
+  Eye,
+  FastForward,
+  Search,
+  Shield,
+  Sparkles,
+  Swords,
+  Zap,
+} from 'lucide-react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { useGame } from '../../lib/store'
+import { todayKey } from '../../lib/game'
+import { type CinematicLogData, type CinematicLogTone } from '../CinematicLogOverlay'
+import { CombatLogPanel, type CombatLogEntry, type CombatLogEntryTone } from '../CombatLogPanel'
+import {
+  SHADOW_EXPEDITION_COMMAND_LABEL,
+  SHADOW_EXPEDITION_OUTCOME_LABEL,
+  SHADOW_EXPEDITION_PARTY_MAX,
+  SHADOW_EXPEDITION_UNLOCK_DAILY_COUNT,
+  estimateShadowExpeditionSuccess,
+  getShadowExpeditionPartyPower,
+  getShadowExpeditionRecommendedRoleMatches,
+  getTodayDailyCompletedCount,
+} from '../../lib/shadowExpeditions'
+import { SHADOW_ROLE_LABEL, getShadowDefinition } from '../../lib/shadows'
+import type { OwnedShadow, ShadowExpeditionCommand, ShadowExpeditionLog, ShadowExpeditionOutcome, ShadowExpeditionType, ShadowRole } from '../../lib/types'
+import { ShadowExpeditionBattlefield } from './ShadowExpeditionBattlefield'
+import { ShadowPortrait } from './ShadowPortrait'
+
+const commandIcons: Record<ShadowExpeditionCommand, typeof Swords> = {
+  attack: Swords,
+  defend: Shield,
+  scout: Compass,
+  analyze: Eye,
+  search: Search,
+}
+
+const commandRoles: Record<ShadowExpeditionCommand, ShadowRole[]> = {
+  attack: ['assault'],
+  defend: ['guard', 'support'],
+  scout: ['scout'],
+  analyze: ['analyst', 'support'],
+  search: ['hunter', 'scout'],
+}
+
+const commandTone: Record<ShadowExpeditionCommand, { border: string; bg: string; text: string; glow: string; effect: string; chip: string }> = {
+  attack: {
+    border: 'border-rose-400/35',
+    bg: 'bg-rose-400/10 hover:bg-rose-400/15',
+    text: 'text-rose-100',
+    glow: 'ring-rose-300/45 shadow-[0_0_22px_rgba(244,63,94,0.28)]',
+    effect: 'from-rose-400/30 via-orange-300/20 to-transparent',
+    chip: 'border-rose-300/30 bg-rose-400/10 text-rose-100',
+  },
+  defend: {
+    border: 'border-sky-300/35',
+    bg: 'bg-sky-400/10 hover:bg-sky-400/15',
+    text: 'text-sky-100',
+    glow: 'ring-sky-200/45 shadow-[0_0_22px_rgba(125,211,252,0.24)]',
+    effect: 'from-sky-300/28 via-slate-100/18 to-transparent',
+    chip: 'border-sky-200/30 bg-sky-400/10 text-sky-100',
+  },
+  scout: {
+    border: 'border-cyan-300/35',
+    bg: 'bg-cyan-400/10 hover:bg-cyan-400/15',
+    text: 'text-cyan-100',
+    glow: 'ring-cyan-300/45 shadow-[0_0_22px_rgba(34,211,238,0.24)]',
+    effect: 'from-cyan-300/28 via-teal-300/16 to-transparent',
+    chip: 'border-cyan-300/30 bg-cyan-400/10 text-cyan-100',
+  },
+  analyze: {
+    border: 'border-purple-300/35',
+    bg: 'bg-purple-400/10 hover:bg-purple-400/15',
+    text: 'text-purple-100',
+    glow: 'ring-purple-300/45 shadow-[0_0_22px_rgba(168,85,247,0.26)]',
+    effect: 'from-purple-300/28 via-fuchsia-300/16 to-transparent',
+    chip: 'border-purple-300/30 bg-purple-400/10 text-purple-100',
+  },
+  search: {
+    border: 'border-amber-300/35',
+    bg: 'bg-amber-400/10 hover:bg-amber-400/15',
+    text: 'text-amber-100',
+    glow: 'ring-amber-300/45 shadow-[0_0_22px_rgba(245,158,11,0.26)]',
+    effect: 'from-amber-300/28 via-violet-300/16 to-transparent',
+    chip: 'border-amber-300/30 bg-amber-400/10 text-amber-100',
+  },
+}
+
+const commandHint: Record<ShadowExpeditionCommand, { title: string; bias: string }> = {
+  attack: { title: '진행도를 크게 올리지만 위험도도 증가', bias: '진행도↑ / 위험↑' },
+  defend: { title: '위험도를 낮추고 원정대를 정비', bias: '위험↓ / 정비' },
+  scout: { title: '위험 경로를 찾아 다음 턴을 안정화', bias: '위험↓ / 안정' },
+  analyze: { title: '약점을 기록해 다음 공격/수색 보조', bias: '준비 / 진행도' },
+  search: { title: '정수 보너스를 노리지만 위험도가 오른다', bias: '보상↑ / 위험↑' },
+}
+
+const expeditionTheme: Record<ShadowExpeditionType, { icon: typeof Crosshair; panel: string; border: string; accent: string; wash: string; label: string }> = {
+  training: {
+    icon: Swords,
+    panel: 'bg-[radial-gradient(circle_at_18%_0%,rgba(59,130,246,0.18),transparent_32%),linear-gradient(135deg,rgba(15,23,42,0.82),rgba(2,6,23,0.96))]',
+    border: 'border-blue-300/25',
+    accent: 'text-blue-100',
+    wash: 'from-blue-400/18 to-slate-500/5',
+    label: 'TRAINING FIELD',
+  },
+  essence: {
+    icon: Sparkles,
+    panel: 'bg-[radial-gradient(circle_at_24%_0%,rgba(168,85,247,0.22),transparent_34%),linear-gradient(135deg,rgba(30,18,52,0.76),rgba(2,6,23,0.96))]',
+    border: 'border-purple-300/25',
+    accent: 'text-purple-100',
+    wash: 'from-purple-400/18 to-violet-500/5',
+    label: 'ESSENCE RIFT',
+  },
+  hunt: {
+    icon: Crosshair,
+    panel: 'bg-[radial-gradient(circle_at_18%_0%,rgba(244,63,94,0.2),transparent_33%),linear-gradient(135deg,rgba(40,13,21,0.76),rgba(2,6,23,0.96))]',
+    border: 'border-rose-300/25',
+    accent: 'text-rose-100',
+    wash: 'from-rose-400/18 to-orange-500/5',
+    label: 'REMNANT HUNT',
+  },
+  scout: {
+    icon: Compass,
+    panel: 'bg-[radial-gradient(circle_at_22%_0%,rgba(45,212,191,0.18),transparent_34%),linear-gradient(135deg,rgba(10,38,45,0.72),rgba(2,6,23,0.96))]',
+    border: 'border-teal-300/25',
+    accent: 'text-teal-100',
+    wash: 'from-teal-400/18 to-cyan-500/5',
+    label: 'RIFT SCOUTING',
+  },
+}
+
+const outcomeTone: Record<ShadowExpeditionOutcome, { border: string; bg: string; text: string; glow: string }> = {
+  great_success: {
+    border: 'border-amber-300/45',
+    bg: 'bg-amber-400/12',
+    text: 'text-amber-100',
+    glow: 'shadow-[0_0_34px_rgba(245,158,11,0.24)]',
+  },
+  success: {
+    border: 'border-emerald-300/35',
+    bg: 'bg-emerald-400/10',
+    text: 'text-emerald-100',
+    glow: 'shadow-[0_0_28px_rgba(52,211,153,0.18)]',
+  },
+  partial: {
+    border: 'border-cyan-300/30',
+    bg: 'bg-cyan-400/8',
+    text: 'text-cyan-100',
+    glow: 'shadow-[0_0_22px_rgba(34,211,238,0.14)]',
+  },
+  failure: {
+    border: 'border-rose-400/30',
+    bg: 'bg-rose-950/20',
+    text: 'text-rose-100',
+    glow: 'shadow-[0_0_22px_rgba(244,63,94,0.14)]',
+  },
+}
+
+const logTone: Record<string, string> = {
+  system: 'border-white/10 bg-white/5 text-white/65',
+  command: 'border-cyan-300/20 bg-cyan-400/8 text-cyan-100/80',
+  shadow: 'border-purple-300/20 bg-purple-400/8 text-purple-100/80',
+  risk: 'border-rose-300/20 bg-rose-400/8 text-rose-100/80',
+  reward: 'border-amber-300/20 bg-amber-400/8 text-amber-100/80',
+}
+
+const barWidth = (value: number): string => `${Math.max(0, Math.min(100, value))}%`
+
+const parseDeltas = (message?: string): { progress?: number; risk?: number } => {
+  if (!message) return {}
+  const progressMatch = message.match(/(?:진행도|吏꾪뻾??)\s*\+?(-?\d+)/)
+  const riskMatch = message.match(/(?:위험도|위험|꾪뿕??)\s*([+-]?\d+)/)
+  return {
+    progress: progressMatch ? Number(progressMatch[1]) : undefined,
+    risk: riskMatch ? Number(riskMatch[1]) : undefined,
+  }
+}
+
+const expeditionCinematicTone: Record<ShadowExpeditionLog['type'], CinematicLogTone> = {
+  system: 'system',
+  command: 'command',
+  shadow: 'shadow',
+  risk: 'risk',
+  reward: 'reward',
+}
+
+const expeditionCinematicBadge: Record<CinematicLogTone, string> = {
+  player: '헌터',
+  shadow: '그림자',
+  monster: '몬스터',
+  system: '시스템',
+  reward: '보상',
+  risk: '위험',
+  command: '명령',
+  result: '결과',
+  defense: '방어',
+}
+
+const shouldShowCinematicExpeditionLog = (log?: ShadowExpeditionLog): boolean => {
+  if (!log) return false
+  return log.message.trim().length > 0
+}
+
+const expeditionLogToCinematic = (log?: ShadowExpeditionLog): CinematicLogData | undefined => {
+  if (!log || !shouldShowCinematicExpeditionLog(log)) return undefined
+  const tone = expeditionCinematicTone[log.type] ?? 'system'
+  const deltas = parseDeltas(log.message)
+  const bodyParts = [
+    typeof deltas.progress === 'number' ? `진행도 +${deltas.progress}` : undefined,
+    typeof deltas.risk === 'number' ? `위험도 ${deltas.risk > 0 ? '+' : ''}${deltas.risk}` : undefined,
+    log.command ? SHADOW_EXPEDITION_COMMAND_LABEL[log.command] : undefined,
+  ].filter(Boolean)
+
+  return {
+    id: `expedition-cinematic-${log.id}`,
+    tone,
+    badge: log.command ? SHADOW_EXPEDITION_COMMAND_LABEL[log.command] : expeditionCinematicBadge[tone],
+    title: log.message,
+    body: bodyParts.join(' · ') || undefined,
+  }
+}
+
+const difficultyLabel = (partyPower: number, requiredPower: number): string => {
+  const ratio = partyPower / Math.max(1, requiredPower)
+  if (ratio >= 1.45) return '안정'
+  if (ratio >= 1.15) return '유리'
+  if (ratio >= 0.9) return '적정'
+  if (ratio >= 0.65) return '도전'
+  return '위험'
+}
+
+function CommandEffect({ command }: { command?: ShadowExpeditionCommand }) {
+  if (!command) return null
+  const tone = commandTone[command]
+  return (
+    <div className="pointer-events-none absolute inset-0 overflow-hidden rounded-lg" aria-hidden>
+      <div className={clsx('absolute inset-0 animate-pulse bg-gradient-to-br opacity-70', tone.effect)} />
+      {command === 'attack' && (
+        <>
+          <div className="absolute left-[12%] top-[22%] h-0.5 w-2/3 rotate-[-18deg] bg-gradient-to-r from-transparent via-rose-200/75 to-transparent" />
+          <div className="absolute left-[18%] top-[52%] h-0.5 w-1/2 rotate-[16deg] bg-gradient-to-r from-transparent via-orange-200/55 to-transparent" />
+        </>
+      )}
+      {command === 'defend' && (
+        <div className="absolute inset-x-[18%] top-[18%] h-[68%] rounded-full border border-sky-100/30 shadow-[inset_0_0_26px_rgba(125,211,252,0.22),0_0_22px_rgba(125,211,252,0.16)]" />
+      )}
+      {command === 'scout' && (
+        <>
+          <div className="absolute left-0 right-0 top-1/3 h-px bg-cyan-200/50" />
+          <div className="absolute left-0 right-0 top-2/3 h-px bg-teal-200/35" />
+        </>
+      )}
+      {command === 'analyze' && (
+        <div className="absolute left-1/2 top-1/2 h-24 w-24 -translate-x-1/2 -translate-y-1/2 rotate-45 rounded-md border border-purple-200/30 shadow-[0_0_28px_rgba(168,85,247,0.18)]" />
+      )}
+      {command === 'search' && (
+        <>
+          <div className="absolute left-[18%] top-[24%] h-1.5 w-1.5 rounded-full bg-amber-100/80 shadow-[0_0_14px_rgba(251,191,36,0.8)]" />
+          <div className="absolute right-[22%] top-[46%] h-1 w-1 rounded-full bg-violet-100/80 shadow-[0_0_14px_rgba(196,181,253,0.8)]" />
+          <div className="absolute left-[45%] bottom-[22%] h-1 w-1 rounded-full bg-amber-100/70 shadow-[0_0_12px_rgba(251,191,36,0.7)]" />
+        </>
+      )}
+    </div>
+  )
+}
+
+function StatBar({
+  label,
+  value,
+  kind,
+  delta,
+}: {
+  label: string
+  value: number
+  kind: 'progress' | 'risk'
+  delta?: number
+}) {
+  const highRisk = kind === 'risk' && value >= 70
+  const dangerRisk = kind === 'risk' && value >= 90
+  const reached = kind === 'progress' && value >= 100
+  return (
+    <div className="rounded-md border border-white/10 bg-ink-950/35 p-3">
+      <div className="mb-1.5 flex items-center justify-between gap-2 text-[11px]">
+        <div className="font-semibold text-white/75">
+          {label} <span className="system-text text-white/35">{value} / 100</span>
+        </div>
+        <div className="flex items-center gap-1.5">
+          {typeof delta === 'number' && (
+            <span className={clsx(
+              'rounded border px-1.5 py-0.5 text-[10px] system-text',
+              kind === 'progress'
+                ? 'border-emerald-300/25 bg-emerald-400/10 text-emerald-100'
+                : delta > 0
+                  ? 'border-rose-300/25 bg-rose-400/10 text-rose-100'
+                  : 'border-sky-300/25 bg-sky-400/10 text-sky-100',
+            )}>
+              {delta > 0 ? '+' : ''}{delta}
+            </span>
+          )}
+          {reached && <span className="rounded border border-emerald-300/25 bg-emerald-400/10 px-1.5 py-0.5 text-[10px] system-text text-emerald-100">SUCCESS LINE</span>}
+          {highRisk && <span className={clsx('rounded border px-1.5 py-0.5 text-[10px] system-text', dangerRisk ? 'border-rose-300/35 bg-rose-400/15 text-rose-100 animate-pulse' : 'border-amber-300/25 bg-amber-400/10 text-amber-100')}>위험</span>}
+        </div>
+      </div>
+      <div className="relative h-3 overflow-hidden rounded-full bg-white/10">
+        <div className="absolute left-0 top-0 h-full w-px bg-white/20" />
+        <div className="absolute left-[70%] top-0 h-full w-px bg-amber-200/25" />
+        <div className="absolute left-[90%] top-0 h-full w-px bg-rose-200/30" />
+        <div
+          className={clsx(
+            'h-full rounded-full transition-all duration-500',
+            kind === 'progress'
+              ? 'bg-gradient-to-r from-cyan-300 via-blue-300 to-emerald-300 shadow-[0_0_14px_rgba(45,212,191,0.24)]'
+              : value >= 90
+                ? 'bg-gradient-to-r from-amber-300 to-rose-500 shadow-[0_0_18px_rgba(244,63,94,0.28)]'
+                : value >= 70
+                  ? 'bg-gradient-to-r from-yellow-300 to-orange-400'
+                  : 'bg-gradient-to-r from-slate-300 to-amber-300',
+          )}
+          style={{ width: barWidth(value) }}
+        />
+        <div className="absolute left-[100%] top-0 h-full w-px -translate-x-px bg-white/45" />
+      </div>
+    </div>
+  )
+}
+
+function MiniShadow({
+  shadow,
+  selected,
+  active,
+  recommended,
+  commandMatch,
+  command,
+  onClick,
+}: {
+  shadow: OwnedShadow
+  selected?: boolean
+  active?: boolean
+  recommended?: boolean
+  commandMatch?: boolean
+  command?: ShadowExpeditionCommand
+  onClick?: () => void
+}) {
+  const tone = command ? commandTone[command] : undefined
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={clsx(
+        'relative min-w-[118px] overflow-hidden rounded-md border p-2 text-left transition',
+        selected ? 'border-cyan-300/45 bg-cyan-400/10 ring-1 ring-cyan-300/30' : 'border-white/10 bg-ink-900/45 hover:border-purple-300/35 hover:bg-purple-400/10',
+        recommended && !selected && 'border-emerald-300/25',
+        commandMatch && tone && `${tone.border} ${tone.bg}`,
+        active && tone ? `ring-2 ${tone.glow}` : active && 'animate-pulse border-amber-300/60 ring-2 ring-amber-300/35',
+      )}
+    >
+      {commandMatch && tone && <div className={clsx('absolute inset-x-0 top-0 h-0.5 bg-gradient-to-r', tone.effect)} />}
+      <ShadowPortrait
+        shadow={shadow}
+        size="xs"
+        active={active}
+        highlighted={selected || active || commandMatch || Boolean(shadow.isNamed)}
+      />
+      <div className="mt-1 truncate text-[11px] font-semibold text-white/85">{shadow.name}</div>
+      <div className="text-[9px] system-text text-white/45">
+        Lv {shadow.level ?? 1} / {SHADOW_ROLE_LABEL[shadow.role]}
+      </div>
+      <div className="mt-1 flex flex-wrap gap-1">
+        {recommended && (
+          <span className="rounded border border-emerald-300/25 bg-emerald-400/10 px-1 py-0.5 text-[8px] system-text text-emerald-100">
+            추천
+          </span>
+        )}
+        {commandMatch && (
+          <span className={clsx('rounded border px-1 py-0.5 text-[8px] system-text', tone?.chip)}>
+            반응
+          </span>
+        )}
+      </div>
+    </button>
+  )
+}
+
+export function ShadowExpeditionPanel() {
+  const ownedShadows = useGame(s => s.ownedShadows ?? [])
+  const shadowExpeditions = useGame(s => s.shadowExpeditions ?? [])
+  const achievementStats = useGame(s => s.achievementStats)
+  const selectParty = useGame(s => s.selectShadowExpeditionParty)
+  const startExpedition = useGame(s => s.startShadowExpedition)
+  const issueCommand = useGame(s => s.issueShadowExpeditionCommand)
+  const abandonExpedition = useGame(s => s.abandonShadowExpedition)
+  const [expanded, setExpanded] = useState(true)
+  const [expeditionCinematicLogs, setExpeditionCinematicLogs] = useState<CinematicLogData[]>([])
+  const [expeditionSkipSignal, setExpeditionSkipSignal] = useState(0)
+  const previousExpeditionLogRef = useRef<{ expeditionId?: string; count: number }>({ count: 0 })
+  const dateKey = todayKey()
+  const dailyCount = getTodayDailyCompletedCount(achievementStats, dateKey)
+  const expedition = shadowExpeditions.find(item => item.date === dateKey) ?? shadowExpeditions[0]
+
+  const selectedShadows = useMemo(() => {
+    if (!expedition) return []
+    return expedition.selectedShadowIds
+      .map(id => ownedShadows.find(shadow => shadow.instanceId === id))
+      .filter((shadow): shadow is OwnedShadow => Boolean(shadow))
+  }, [expedition, ownedShadows])
+
+  useEffect(() => {
+    if (!expedition) {
+      setExpeditionCinematicLogs([])
+      previousExpeditionLogRef.current = { count: 0 }
+      return
+    }
+
+    const previous = previousExpeditionLogRef.current
+    if (previous.expeditionId !== expedition.id) {
+      previousExpeditionLogRef.current = { expeditionId: expedition.id, count: expedition.logs.length }
+      setExpeditionCinematicLogs([])
+      return
+    }
+
+    if (expedition.logs.length > previous.count) {
+      const nextLogs = expedition.logs
+        .slice(previous.count)
+        .map(expeditionLogToCinematic)
+        .filter((item): item is CinematicLogData => Boolean(item))
+      setExpeditionCinematicLogs(nextLogs)
+    } else if (expedition.logs.length < previous.count) {
+      setExpeditionCinematicLogs([])
+    }
+
+    previousExpeditionLogRef.current = { expeditionId: expedition.id, count: expedition.logs.length }
+  }, [expedition])
+
+  if (!expedition) {
+    return (
+      <div className="panel corner-bracket p-5 border-purple-400/20 bg-purple-500/5">
+        <div className="br" />
+        <div className="text-sm text-white/55">오늘의 그림자 원정을 준비하는 중입니다.</div>
+      </div>
+    )
+  }
+
+  const theme = expeditionTheme[expedition.type]
+  const ThemeIcon = theme.icon
+  const latestCommandLog = [...expedition.logs].reverse().find(log => log.command)
+  const activeCommand = latestCommandLog?.command
+  const activeLog = [...expedition.logs].reverse().find(log => log.actorShadowId)
+  const activeShadowId = activeLog?.actorShadowId
+  const deltas = parseDeltas(latestCommandLog?.message)
+  const expeditionLogEntries: CombatLogEntry[] = expedition.logs.map(log => {
+    const actor = log.actorShadowId ? ownedShadows.find(shadow => shadow.instanceId === log.actorShadowId) : undefined
+    const definition = actor ? getShadowDefinition(actor.definitionId) : undefined
+    const Icon = log.command ? commandIcons[log.command] : Activity
+    const tone: CombatLogEntryTone = log.type === 'risk'
+      ? 'risk'
+      : log.type === 'reward'
+        ? 'reward'
+        : log.type === 'command'
+          ? 'command'
+          : log.type === 'shadow'
+            ? 'shadow'
+            : 'system'
+
+    return {
+      id: log.id,
+      turn: log.turn,
+      tone,
+      label: log.command ? SHADOW_EXPEDITION_COMMAND_LABEL[log.command] : log.type.toUpperCase(),
+      actorName: actor?.name,
+      actorNode: actor ? (
+        <div className="w-12">
+          <ShadowPortrait shadow={actor} definition={definition} size="xs" active={log.id === activeLog?.id} highlighted />
+        </div>
+      ) : undefined,
+      icon: <Icon className="h-3 w-3" />,
+      message: log.message,
+    }
+  })
+  const partyPower = getShadowExpeditionPartyPower(selectedShadows, expedition)
+  const difficulty = difficultyLabel(partyPower, expedition.requiredPower)
+  const rawDifficulty = estimateShadowExpeditionSuccess(partyPower, expedition.requiredPower)
+  const powerRatio = partyPower / Math.max(1, expedition.requiredPower)
+  const roleMatches = getShadowExpeditionRecommendedRoleMatches(selectedShadows, expedition)
+  const isLocked = expedition.status === 'locked' && dailyCount < SHADOW_EXPEDITION_UNLOCK_DAILY_COUNT
+  const canEditParty = expedition.status === 'locked' || expedition.status === 'available'
+  const canStart = expedition.status === 'available' && selectedShadows.length >= 1 && selectedShadows.length <= SHADOW_EXPEDITION_PARTY_MAX
+  const inProgress = expedition.status === 'in_progress'
+  const completed = expedition.status === 'completed'
+  const showFull = expanded || inProgress
+  const compactCompleted = completed && !expanded
+
+  const toggleShadow = (shadow: OwnedShadow) => {
+    if (!canEditParty) return
+    const selected = expedition.selectedShadowIds.includes(shadow.instanceId)
+    const nextIds = selected
+      ? expedition.selectedShadowIds.filter(id => id !== shadow.instanceId)
+      : [...expedition.selectedShadowIds, shadow.instanceId].slice(0, SHADOW_EXPEDITION_PARTY_MAX)
+    selectParty(expedition.id, nextIds)
+  }
+
+  const issueVisualCommand = (command: ShadowExpeditionCommand) => {
+    issueCommand(expedition.id, command)
+  }
+
+  return (
+    <div className={clsx('panel corner-bracket relative overflow-hidden p-4 sm:p-5', theme.border, theme.panel)}>
+      <div className="br" />
+      {expeditionCinematicLogs.length > 0 && (
+        <div className="absolute right-3 top-3 z-40">
+          <button
+            type="button"
+            onClick={() => setExpeditionSkipSignal(s => s + 1)}
+            className="inline-flex items-center gap-1 text-[10px] system-text text-amber-200 border border-amber-400/25 bg-amber-400/10 rounded px-2 py-1 hover:bg-amber-400/15 transition"
+          >
+            <FastForward className="w-3 h-3" />
+            스킵
+          </button>
+        </div>
+      )}
+      <div className={clsx('pointer-events-none absolute inset-0 bg-gradient-to-br opacity-70', theme.wash)} />
+      {inProgress && <CommandEffect command={activeCommand} />}
+
+      <div className="relative flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+        <div className="min-w-0">
+          <div className="mb-1 flex flex-wrap items-center gap-2">
+            <span className={clsx('inline-flex items-center gap-1.5 system-text text-[10px]', theme.accent)}>
+              <ThemeIcon className="h-3.5 w-3.5" />
+              {theme.label}
+            </span>
+            <span className="rounded border border-cyan-400/25 bg-cyan-400/10 px-2 py-0.5 text-[10px] system-text text-cyan-100">
+              오늘 Daily {dailyCount} / {SHADOW_EXPEDITION_UNLOCK_DAILY_COUNT}
+            </span>
+            <span className={clsx(
+              'rounded border px-2 py-0.5 text-[10px] system-text',
+              completed ? 'border-emerald-400/30 bg-emerald-400/10 text-emerald-100' :
+              inProgress ? 'border-amber-400/30 bg-amber-400/10 text-amber-100' :
+              isLocked ? 'border-white/10 bg-white/5 text-white/45' :
+              'border-purple-400/30 bg-purple-400/10 text-purple-100',
+            )}>
+              {expedition.status.toUpperCase()}
+            </span>
+            {inProgress && activeCommand && (
+              <span className={clsx('rounded border px-2 py-0.5 text-[10px] system-text', commandTone[activeCommand].chip)}>
+                최근 명령: {SHADOW_EXPEDITION_COMMAND_LABEL[activeCommand]}
+              </span>
+            )}
+          </div>
+          <h3 className="text-xl font-bold text-white/95">{expedition.title}</h3>
+          <p className="mt-1 max-w-3xl text-sm leading-relaxed text-white/55">{expedition.description}</p>
+        </div>
+
+        <div className="flex items-start gap-2">
+          <div className="grid grid-cols-3 gap-2 text-center sm:min-w-[300px]">
+            <div className="rounded-md border border-purple-400/20 bg-purple-400/10 px-3 py-2">
+              <div className="system-text text-[9px] text-purple-100/55">POWER</div>
+              <div className="font-bold text-purple-100">{partyPower}</div>
+            </div>
+            <div className="rounded-md border border-amber-400/20 bg-amber-400/10 px-3 py-2">
+              <div className="system-text text-[9px] text-amber-100/55">REQUIRED</div>
+              <div className="font-bold text-amber-100">{expedition.requiredPower}</div>
+            </div>
+            <div className="rounded-md border border-cyan-400/20 bg-cyan-400/10 px-3 py-2">
+              <div className="system-text text-[9px] text-cyan-100/55">ODDS</div>
+              <div className="font-bold text-cyan-100">{difficulty}</div>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => setExpanded(value => !value)}
+            className="rounded-md border border-white/10 bg-ink-900/45 p-2 text-white/55 transition hover:text-white/80"
+            title={expanded ? '접기' : '펼치기'}
+          >
+            {expanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+          </button>
+        </div>
+      </div>
+
+      {compactCompleted && expedition.result && (
+        <div className="relative mt-4">
+          <ResultPanel expeditionResult={expedition.result} activeShadowId={activeShadowId} selectedShadows={selectedShadows} compact />
+        </div>
+      )}
+
+      {showFull && (
+        <div className="relative mt-4 grid gap-4 xl:grid-cols-[minmax(0,1fr)_340px]">
+          <div className="space-y-3">
+            <div className="rounded-lg border border-white/10 bg-ink-900/35 p-3">
+              <div className="mb-2 flex items-center justify-between gap-2">
+                <div className="system-text text-[11px] text-cyan-200/75">EXPEDITION PARTY</div>
+                <div className="flex items-center gap-2 text-[10px] text-white/40">
+                  <span>{selectedShadows.length} / {SHADOW_EXPEDITION_PARTY_MAX}</span>
+                  <span>ratio {(powerRatio || 0).toFixed(2)}x</span>
+                </div>
+              </div>
+              <div className="flex gap-2 overflow-x-auto pb-1">
+                {selectedShadows.map(shadow => (
+                  <MiniShadow
+                    key={shadow.instanceId}
+                    shadow={shadow}
+                    selected
+                    recommended={expedition.recommendedRoles.includes(shadow.role)}
+                    commandMatch={activeCommand ? commandRoles[activeCommand].includes(shadow.role) : false}
+                    command={activeCommand}
+                    active={activeShadowId === shadow.instanceId}
+                    onClick={() => toggleShadow(shadow)}
+                  />
+                ))}
+                {selectedShadows.length === 0 && (
+                  <div className="rounded-md border border-dashed border-white/10 px-4 py-8 text-sm text-white/35">
+                    원정에 보낼 그림자를 선택하세요.
+                  </div>
+                )}
+              </div>
+              <div className="mt-3 flex flex-wrap items-center gap-1.5 text-[10px] system-text">
+                <span className="text-white/35">추천 역할</span>
+                {expedition.recommendedRoles.map(role => (
+                  <span
+                    key={role}
+                    className={clsx(
+                      'rounded border px-2 py-0.5',
+                      roleMatches.includes(role) ? 'border-emerald-400/30 bg-emerald-400/10 text-emerald-100' : 'border-white/10 bg-white/5 text-white/35',
+                    )}
+                  >
+                    {SHADOW_ROLE_LABEL[role]}
+                  </span>
+                ))}
+                <span className="rounded border border-cyan-300/20 bg-cyan-400/10 px-2 py-0.5 text-cyan-100">
+                  난이도 {difficulty} <span className="text-white/35">({rawDifficulty})</span>
+                </span>
+              </div>
+            </div>
+
+            {canEditParty && (
+              <div className="rounded-lg border border-white/10 bg-ink-900/25 p-3">
+                <div className="mb-2 flex items-center justify-between">
+                  <div className="system-text text-[11px] text-purple-200/75">OWNED SHADOWS</div>
+                  <div className="text-[10px] text-white/35">추천 역할 그림자는 초록 배지로 표시</div>
+                </div>
+                <div className="grid max-h-[360px] grid-cols-2 gap-2 overflow-y-auto pr-1 sm:grid-cols-3 lg:grid-cols-4">
+                  {ownedShadows.map(shadow => (
+                    <MiniShadow
+                      key={shadow.instanceId}
+                      shadow={shadow}
+                      selected={expedition.selectedShadowIds.includes(shadow.instanceId)}
+                      recommended={expedition.recommendedRoles.includes(shadow.role)}
+                      onClick={() => toggleShadow(shadow)}
+                    />
+                  ))}
+                  {ownedShadows.length === 0 && (
+                    <div className="col-span-full rounded-md border border-white/10 bg-white/5 p-4 text-sm text-white/40">
+                      보유 그림자가 없습니다. 게이트에서 그림자를 추출한 뒤 원정을 지휘할 수 있습니다.
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            <div className="rounded-lg border border-white/10 bg-ink-900/35 p-3">
+              <div className="mb-2 flex items-center justify-between gap-3 text-[10px] system-text text-white/45">
+                <span>TURN {expedition.turn} / {expedition.maxTurns}</span>
+                <span>수색 보너스 {expedition.searchStacks ?? 0} / 3</span>
+              </div>
+              <div className="mb-3">
+                <ShadowExpeditionBattlefield
+                  expedition={expedition}
+                  selectedShadows={selectedShadows}
+                  latestCommand={activeCommand}
+                  latestActorShadowId={activeShadowId}
+                  progressDelta={deltas.progress}
+                  riskDelta={deltas.risk}
+                  outcome={expedition.result?.outcome}
+                  cinematicLogs={expeditionCinematicLogs}
+                  skipSignal={expeditionSkipSignal}
+                  onCinematicComplete={() => setExpeditionCinematicLogs([])}
+                />
+              </div>
+              <div className="grid gap-2 md:grid-cols-2">
+                <StatBar label="원정 진행" value={expedition.progress} kind="progress" delta={deltas.progress} />
+                <StatBar label="위험도" value={expedition.risk} kind="risk" delta={deltas.risk} />
+              </div>
+            </div>
+
+            {inProgress && (
+              <div className="grid grid-cols-2 gap-2 lg:grid-cols-5">
+                {(Object.keys(SHADOW_EXPEDITION_COMMAND_LABEL) as ShadowExpeditionCommand[]).map(command => {
+                  const Icon = commandIcons[command]
+                  const tone = commandTone[command]
+                  const matchedCount = selectedShadows.filter(shadow => commandRoles[command].includes(shadow.role)).length
+                  return (
+                    <button
+                      key={command}
+                      type="button"
+                      onClick={() => issueVisualCommand(command)}
+                      className={clsx(
+                        'relative overflow-hidden rounded-md border px-2 py-3 text-left text-xs transition',
+                        tone.border,
+                        tone.bg,
+                        tone.text,
+                        activeCommand === command && `ring-1 ${tone.glow}`,
+                      )}
+                      title={commandHint[command].title}
+                    >
+                      <div className={clsx('absolute inset-x-0 top-0 h-0.5 bg-gradient-to-r', tone.effect)} />
+                      <div className="mb-1 flex items-center justify-between gap-2">
+                        <Icon className="h-4 w-4" />
+                        {matchedCount > 0 && (
+                          <span className="rounded border border-white/15 bg-white/10 px-1.5 py-0.5 text-[9px] system-text">
+                            추천 {matchedCount}
+                          </span>
+                        )}
+                      </div>
+                      <div className="font-semibold">{SHADOW_EXPEDITION_COMMAND_LABEL[command]}</div>
+                      <div className="mt-1 text-[10px] leading-tight opacity-75">{commandHint[command].title}</div>
+                      <div className="mt-2 system-text text-[9px] opacity-60">{commandHint[command].bias}</div>
+                    </button>
+                  )
+                })}
+              </div>
+            )}
+
+            <div className="flex flex-wrap gap-2">
+              {canStart && (
+                <button type="button" onClick={() => startExpedition(expedition.id)} className="btn btn-primary text-xs">
+                  <Zap className="h-3.5 w-3.5" />
+                  원정 시작
+                </button>
+              )}
+              {isLocked && (
+                <div className="rounded border border-white/10 bg-white/5 px-3 py-2 text-xs text-white/45">
+                  Daily 2개를 완료하면 그림자 원정을 지휘할 수 있습니다.
+                </div>
+              )}
+              {inProgress && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (window.confirm('원정을 중도 포기하면 보상이 없습니다. 계속할까요?')) abandonExpedition(expedition.id)
+                  }}
+                  className="btn border-rose-400/25 bg-rose-400/10 text-xs text-rose-100"
+                >
+                  중도 포기
+                </button>
+              )}
+            </div>
+          </div>
+
+          <aside className="space-y-3">
+            <CombatLogPanel
+              title="EXPEDITION LOG"
+              subtitle={activeCommand ? `${SHADOW_EXPEDITION_COMMAND_LABEL[activeCommand]} 명령 반응 추적` : '최근 명령과 그림자 행동을 우선 표시'}
+              logs={expeditionLogEntries}
+              maxVisible={5}
+              latestFirst
+              highlightLatest
+              compact
+              emptyText="원정 로그가 아직 없습니다."
+            />
+
+            <div className="hidden">
+              <div className="mb-2 flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2 system-text text-[11px] text-purple-200/75">
+                  <Activity className="h-3.5 w-3.5" />
+                  EXPEDITION LOG
+                </div>
+                {activeCommand && (
+                  <span className={clsx('rounded border px-2 py-0.5 text-[9px] system-text', commandTone[activeCommand].chip)}>
+                    {SHADOW_EXPEDITION_COMMAND_LABEL[activeCommand]}
+                  </span>
+                )}
+              </div>
+              <div className="max-h-[360px] space-y-2 overflow-y-auto pr-1">
+                {[...expedition.logs].slice(-6).reverse().map((log, index) => {
+                  const actor = log.actorShadowId ? ownedShadows.find(shadow => shadow.instanceId === log.actorShadowId) : undefined
+                  const definition = actor ? getShadowDefinition(actor.definitionId) : undefined
+                  const Icon = log.command ? commandIcons[log.command] : Activity
+                  const isLatest = index === 0
+                  return (
+                    <div
+                      key={log.id}
+                      className={clsx(
+                        'rounded-md border p-2 transition',
+                        logTone[log.type] ?? logTone.system,
+                        isLatest && 'ring-1 ring-white/15',
+                      )}
+                    >
+                      <div className="flex gap-2">
+                        {actor && (
+                          <div className="w-14 shrink-0">
+                            <ShadowPortrait shadow={actor} definition={definition} size="xs" active={log.id === activeLog?.id} highlighted />
+                          </div>
+                        )}
+                        <div className="min-w-0 flex-1">
+                          <div className="mb-1 flex items-center gap-1.5 system-text text-[9px] text-white/40">
+                            <Icon className="h-3 w-3" />
+                            <span>TURN {log.turn}</span>
+                            <span>/</span>
+                            <span>{log.type.toUpperCase()}</span>
+                          </div>
+                          <div className="text-[11px] leading-relaxed text-white/72">{log.message}</div>
+                        </div>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+
+            {completed && expedition.result && (
+              <ResultPanel expeditionResult={expedition.result} activeShadowId={activeShadowId} selectedShadows={selectedShadows} />
+            )}
+          </aside>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function ResultPanel({
+  expeditionResult,
+  selectedShadows,
+  activeShadowId,
+  compact = false,
+}: {
+  expeditionResult: NonNullable<ReturnType<typeof useGame.getState>['shadowExpeditions'][number]['result']>
+  selectedShadows: OwnedShadow[]
+  activeShadowId?: string
+  compact?: boolean
+}) {
+  const tone = outcomeTone[expeditionResult.outcome]
+  return (
+    <div className={clsx('rounded-lg border p-3', tone.border, tone.bg, tone.glow)}>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <div className="system-text text-[10px] text-white/45">EXPEDITION RESULT</div>
+          <div className={clsx('mt-1 text-2xl font-black', tone.text)}>
+            {SHADOW_EXPEDITION_OUTCOME_LABEL[expeditionResult.outcome]}
+          </div>
+        </div>
+        <div className="rounded-md border border-white/10 bg-ink-950/35 px-3 py-2 text-right">
+          <div className="system-text text-[9px] text-white/35">FINAL</div>
+          <div className="text-xs text-white/70">진행 {expeditionResult.progress} / 위험 {expeditionResult.risk}</div>
+        </div>
+      </div>
+      <div className="mt-3 grid grid-cols-2 gap-2">
+        <div className="rounded-md border border-cyan-300/20 bg-cyan-400/10 p-2">
+          <div className="system-text text-[9px] text-cyan-100/55">SHADOW XP</div>
+          <div className="text-lg font-bold text-cyan-100">+{expeditionResult.shadowXpGained}</div>
+        </div>
+        <div className="rounded-md border border-purple-300/20 bg-purple-400/10 p-2">
+          <div className="system-text text-[9px] text-purple-100/55">ESSENCE</div>
+          <div className="text-lg font-bold text-purple-100">+{expeditionResult.essenceGained}</div>
+        </div>
+      </div>
+      {expeditionResult.bonusRewards && expeditionResult.bonusRewards.length > 0 && (
+        <div className="mt-2 rounded-md border border-amber-300/20 bg-amber-400/10 p-2 text-xs text-amber-100/80">
+          {expeditionResult.bonusRewards.join(' / ')}
+        </div>
+      )}
+      {!compact && selectedShadows.length > 0 && (
+        <div className="mt-3 flex gap-2 overflow-x-auto pb-1">
+          {selectedShadows.map(shadow => (
+            <div key={shadow.instanceId} className="min-w-[82px]">
+              <ShadowPortrait shadow={shadow} size="xs" active={activeShadowId === shadow.instanceId} highlighted />
+              <div className="mt-1 truncate text-[10px] text-white/60">{shadow.name}</div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}

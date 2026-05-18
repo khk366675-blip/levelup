@@ -6574,3 +6574,1113 @@ Build C / C급: **0%** (변화 없음 ✓)
 - B/A/S급 게이트
 - 몬스터 패턴/텔레그래프
 - 회복형 전투 소모품
+## 12-15: 그림자 비주얼 시스템 1차
+
+### 목표
+B/A/S급 게이트 추가와 전투/성장 수치 변경은 보류하고, 이미 들어간 그림자 시스템을 더 게임답게 보이도록 시각 레이어를 강화했다. 그림자가 단순 텍스트 카드가 아니라 역할과 개성이 있는 군단 구성원처럼 보이게 하는 것이 목적이다.
+
+### 변경 원칙
+- XP 보상표, Main/Dungeon 목표, 게이트/몬스터 수치, 게이트 출현률 변경 없음
+- 그림자 추출률/희귀도 롤, 강화/레벨/진화 공식 변경 없음
+- 자동/수동 전투 구조 대규모 변경 없음
+- 장비 강화 공식, 칭호 효과 변경 없음
+- localStorage key `levelup-save` 변경 없음
+- persist version 변경 없음: v14 유지
+- B/A/S급 게이트 추가 없음
+
+### visualKey / 비주얼 구조
+- `ShadowDefinition`에 optional visual 필드 추가: `visualKey`, `portraitVariant`, `visualTheme`, `silhouetteType`, `accentColor`
+- 저장 데이터에는 넣지 않고 definition 메타데이터로만 사용한다.
+- `src/lib/shadows.ts`에서 `SHADOW_VISUALS` 전용 테이블과 role fallback을 통해 모든 그림자가 visual profile을 갖도록 했다.
+- 전용 visualKey가 없으면 role 기반 silhouette로 fallback한다.
+
+### 신규 컴포넌트
+| 파일 | 역할 |
+|---|---|
+| `src/components/shadows/ShadowPortrait.tsx` | inline SVG/CSS 기반 그림자 초상 렌더러. rarity frame, role silhouette, named glow, mist/rune/aura, idle float/pulse 포함 |
+| `src/components/shadows/ShadowCard.tsx` | 보유 그림자 카드. 초상, 등급/역할/네임드 배지, Lv/XP, 강화, 잠금/즐겨찾기, 진화 가능 상태, 관리 버튼 통합 |
+
+### ShadowPanel 개편
+- 상단 패널을 군단 전시실 느낌으로 강화했다.
+- 그림자 정수, 보유 수, 출전 수, 출전 군단 전력 표시를 추가했다.
+- 출전 중 군단 슬롯에 `ShadowPortrait`를 표시해 현재 출전 그림자가 크게 떠 있는 느낌을 준다.
+- 전체 보유 그리드는 새 `ShadowCard`를 사용해 초상 중심 카드로 변경했다.
+- 도감 카드에도 portrait를 표시하고, 미획득/숨김 상태는 silhouette을 흐리게 보여준다.
+
+### 진화 전/후 외형 차이
+- 진화체는 별도 `visualKey`, `visualTheme: 'evolved'`, 상위 silhouette을 가진다.
+- 그림자 쥐 -> 그림자 정찰병: 작은 짐승형 -> 날렵한 정찰병
+- 그림자 보병 -> 어둠의 처형병: 기본 병사 -> 대검 처형병
+- 망각의 기록병 -> 망각의 서기관: scroll/기록형 -> book/rune 마도형
+- 피로의 수호병 -> 피로의 방패병: 작은 방패 -> tower shield
+- 탐욕의 사냥개 -> 탐욕의 수집가: 사냥개 -> chained beast/전리품 분위기
+
+### GatePanel 전투 존재감
+- 전투 화면에 출전 그림자 roster strip을 추가했다.
+- 자동 전투 결과 공개 중에는 최근 shadow combat log의 `actorId`를 읽어 해당 portrait를 pulse/highlight한다.
+- 수동 전투 화면에도 동일한 roster strip을 추가했다.
+- guard/analyst/assault 등 role에 따라 하이라이트 색을 다르게 했다.
+- 전투 로직은 변경하지 않고 `actorId: shadow:<instanceId>` 로그만 읽는 표시 레이어로 구현했다.
+
+### fallback 전략
+1. definition별 `SHADOW_VISUALS` 전용 visualKey가 있으면 사용
+2. 없으면 role 기반 silhouette 사용
+3. role도 애매하면 rarity/default portrait 사용
+
+### 검증
+- `npm run build` 통과
+- `npx tsx scripts/sim-shadow-battle-balance.ts` 통과
+- `npx tsx scripts/sim-gate-current.ts` 통과
+- `npx tsx scripts/sim-manual-battle-balance.ts` 통과
+
+### persist version
+- 변경 없음. v14 유지.
+
+### 남은 TODO
+- 실제 개별 portrait PNG/WebP 자산 제작 및 교체
+- 그림자 행동 이펙트 강화
+- 전투 비주얼 보드
+- 그림자 시너지
+- 고급 진화/네임드 전용 진화
+- B/A/S급 게이트 (사용자 성장 후)
+
+## 12-16: 그림자 원정 시스템 1차
+
+### 목표와 방향
+- 기존에 논의된 "매일 던전"은 구현하지 않고, 그림자 육성 전용 콘텐츠인 "그림자 원정"으로 방향을 변경했다.
+- 헌터 전투는 헌터가 직접 싸우고 그림자가 보조하는 구조, 게이트는 사건형 전투와 그림자 추출 구조, 그림자 원정은 헌터가 직접 싸우지 않고 그림자 병사만 지휘하는 육성 구조로 역할을 분리했다.
+- 향후 무한의 탑은 헌터+그림자 군단의 장기 성장 측정 콘텐츠로 남겨둔다.
+
+### 핵심 원칙
+- 원정에서 헌터 XP는 지급하지 않는다.
+- 원정에서 그림자 추출은 발생하지 않는다.
+- 보상은 그림자 XP와 `shadowEssence` 중심이다.
+- XP 보상표, Main/Dungeon 목표, 게이트/몬스터 수치, 게이트 출현률, 그림자 추출률/희귀도 롤, 그림자 강화/레벨/진화 공식, 장비 강화 공식, 칭호 효과는 변경하지 않았다.
+- localStorage key `levelup-save` 유지.
+- persist version 변경 없음: v14 유지.
+- B/A/S급 게이트 추가 없음.
+
+### 타입과 저장 구조
+`src/lib/types.ts`에 원정 타입을 추가했다.
+- `ShadowExpeditionType`: `training | essence | hunt | scout`
+- `ShadowExpeditionStatus`: `locked | available | in_progress | completed | expired`
+- `ShadowExpeditionCommand`: `attack | defend | scout | analyze | search`
+- `ShadowExpeditionOutcome`: `great_success | success | partial | failure`
+- `ShadowExpedition`, `ShadowExpeditionLog`, `ShadowExpeditionResult`
+
+`src/lib/store.ts` state 추가:
+- `shadowExpeditions: ShadowExpedition[]`
+- `lastShadowExpeditionDate?: string`
+- `activeShadowExpeditionId?: string`
+
+기존 저장 데이터 fallback:
+- migrate에서 `shadowExpeditions ?? []`, `lastShadowExpeditionDate ?? undefined`, `activeShadowExpeditionId ?? undefined`
+- hardReset 초기화 포함
+
+### 생성/해금 정책
+- 앱 진입 시 `ensureTodayShadowExpedition()`로 오늘 날짜 기준 원정 1개를 생성한다.
+- 오늘 이미 생성된 원정이 있으면 중복 생성하지 않는다.
+- daily 완료 후에도 `ensureTodayShadowExpedition()`를 호출해 해금 상태를 갱신한다.
+- 오늘 daily 2개 완료 시 `available`, 2개 미만이면 `locked`.
+- 하루 1회 완료 구조. `completed`는 당일 재도전 불가.
+- 만료 시간이 지난 미완료 원정은 `expired` 처리.
+
+### 원정 타입 4종
+`src/lib/shadowExpeditions.ts`에 원정 템플릿을 추가했다.
+- `training`: 그림자 훈련장. 추천 역할 `assault / guard / support`. XP 높음, 정수 낮음.
+- `essence`: 흩어진 그림자 정수. 추천 역할 `hunter / scout / analyst`. 정수 높음, XP 보통.
+- `hunt`: 균열 잔재 소탕. 추천 역할 `assault / scout / hunter`. XP/정수 균형.
+- `scout`: 불안정한 균열 정찰. 추천 역할 `scout / analyst / support`. 안정형.
+
+### 파티 편성
+- 보유 그림자 중 1~5명 선택.
+- 장착 중, 잠금, 즐겨찾기, 성취 네임드 모두 원정 가능.
+- 1차는 즉시 수동 세션형 콘텐츠라 원정 중 사용 불가 상태는 만들지 않는다.
+- 선택 파티의 원정 전력, 요구 전력, 추천 역할 매칭, 예상 난이도를 UI에 표시한다.
+
+### 원정 전력 계산
+`src/lib/shadowExpeditions.ts` helper:
+- `getShadowExpeditionPower`
+- `getShadowExpeditionPartyPower`
+- `getShadowExpeditionRecommendedRoleMatches`
+- `estimateShadowExpeditionSuccess`
+
+공식:
+- `definition.basePower`
+- rarity multiplier: common 1.0, uncommon 1.1, rare 1.25, epic 1.45, legendary 1.75
+- enhancement: `1 + enhancementLevel * 0.08`
+- level: `1 + (level - 1) * 0.015`
+- recommended role match: +15%
+- named: +8%
+- 추천 역할 다양성 2종 +5%, 3종 +10%
+
+### 수동 지휘 턴제 구조
+- HP 전투가 아니라 `progress / risk` 기반 턴제.
+- progress 100 이상이면 성공권, risk 100 이상이면 실패.
+- maxTurns 종료 시 progress/risk로 결과 판정.
+
+결과 판정:
+- risk >= 100: failure
+- progress >= 120 and risk < 70: great_success
+- progress >= 100: success
+- progress >= 60: partial
+- 그 외 failure
+
+명령 5종:
+- `attack`: 진행도 크게 상승, 위험도 상승. assault 보너스.
+- `defend`: 위험도 감소, 진행도 소폭 상승. guard/support 보너스.
+- `scout`: 위험도 감소, 다음 턴 안정화. scout 보너스.
+- `analyze`: 진행도 상승, 다음 attack/search 강화. analyst/support 보너스.
+- `search`: 정수 보너스 stack, 위험도 상승. hunter/scout 보너스.
+
+### 보상 정책
+원정 보상은 파티 전원에게 지급된다.
+- training: 대성공 XP 55/정수 2, 성공 XP 40/정수 1, 부분 XP 18, 실패 XP 6
+- essence: 대성공 XP 28/정수 12, 성공 XP 20/정수 8, 부분 XP 10/정수 3, 실패 XP 5
+- hunt: 대성공 XP 42/정수 8, 성공 XP 30/정수 5, 부분 XP 14/정수 2, 실패 XP 5
+- scout: 대성공 XP 36/정수 6, 성공 XP 24/정수 4, 부분 XP 12/정수 1, 실패 XP 4
+- search stack은 실패가 아니면 정수 +0~3 보너스.
+
+그림자 XP 지급:
+- 기존 `addShadowXp` helper 재사용.
+- 파티 전원에게 동일 XP 지급.
+- maxLevel 정책 유지.
+- 레벨업 메시지를 시스템 메시지에 포함.
+
+### UI
+신규 컴포넌트:
+- `src/components/shadows/ShadowExpeditionPanel.tsx`
+
+ShadowPanel 통합:
+- 군단 전시실 아래에 오늘의 그림자 원정 섹션 추가.
+- 원정 카드: 제목, 상태, daily 완료 수, 요구 전력, 파티 전력, 예상 난이도.
+- 파티 편성: ShadowPortrait 기반 compact 카드로 선택.
+- 지휘 화면: progress/risk bar, turn/maxTurns, 명령 버튼 5종.
+- 로그: 최근 6줄, actorShadowId가 있는 로그는 해당 그림자 초상 highlight.
+- 완료 후 outcome, XP/정수, progress/risk 표시.
+
+### 시뮬레이션
+신규 스크립트:
+- `scripts/sim-shadow-expedition.ts`
+
+검증 범위:
+- low/basic/trained/named party
+- training/essence/hunt/scout
+- attack_only/balanced/safe/greedy_search/role_matched
+
+요약:
+- low party는 대부분 failure, 일부 안정형 원정에서 partial 가능.
+- basic party는 성공 가능하고, 역할/전략이 맞으면 대성공도 가능.
+- trained/named party는 안정적으로 성공한다.
+- greedy_search는 정수 기대치가 높지만 위험도도 상승한다.
+- safe 전략은 실패를 크게 줄이지만, 고전력 파티에서는 대성공도 잘 나온다. 향후 고급 원정에서는 safe 대성공률 제한 조정 가능.
+
+### 검증 결과
+- `npm run build` 통과. Vite chunk size warning만 존재.
+- `npx tsx scripts/sim-shadow-expedition.ts` 통과.
+- `npx tsx scripts/sim-shadow-battle-balance.ts` 통과.
+- `npx tsx scripts/sim-gate-current.ts` 통과.
+- `npx tsx scripts/sim-manual-battle-balance.ts` 통과.
+- 브라우저에서 `http://localhost:3002` 군단 탭 원정 패널 렌더링 확인.
+- 콘솔 error/warning 없음.
+
+### 기존 시스템 영향
+- 게이트 전투 로직 변경 없음.
+- 그림자 추출 없음/추출률 변경 없음.
+- 그림자 강화/진화 공식 변경 없음.
+- ShadowPortrait/ShadowCard 비주얼 시스템 유지 및 원정 UI에서 재사용.
+- persist version 변경 없음: v14.
+
+### 남은 TODO
+- 원정 1~3개로 확장
+- 장시간 원정/타이머 원정
+- 고급 원정
+- 무한의 탑
+- 보스 추적
+- 일일 박스/도전 카드
+
+## 12-17B 전투 로그 UX 개선
+
+목표: 게이트 자동 전투, 게이트 수동 전투, 그림자 원정에서 전투 로그가 전투 체감의 중심에 오도록 가독성, 배치, 최신 행동 강조, 모바일 사용성을 개선했다. 이번 작업은 로그 UI/렌더링 레이어만 다루며 전투 수치, 원정 수치, 보상, XP, 정수, 저장 구조는 변경하지 않았다.
+
+### 변경 범위
+- 전투/원정 수치와 공식 변경 없음.
+- 게이트/몬스터 수치 변경 없음.
+- 그림자 전투/강화/레벨/진화 공식 변경 없음.
+- 원정 `progress / risk` 계산 공식 변경 없음.
+- 보상/XP/정수 지급량 변경 없음.
+- localStorage key 변경 없음: `levelup-save`.
+- persist version 변경 없음: v14.
+
+### 공용 로그 컴포넌트
+신규 컴포넌트:
+- `src/components/CombatLogPanel.tsx`
+
+역할:
+- 최근 로그 5~6줄을 우선 표시한다.
+- 전체 로그 보기/접기를 공통 처리한다.
+- 최신 로그와 직전 로그를 시각적으로 구분한다.
+- 로그 타입별 배지와 색상을 통일한다.
+- 데미지, XP, 정수, 진행도, 위험도, 성공/실패, 방어/회피/치명타 같은 핵심 단어를 렌더링 단계에서 강조한다.
+- `prefers-reduced-motion: reduce`에서 최신 로그 flash animation을 끈다.
+
+### 게이트 로그 개선
+- `GatePanel`의 자동 전투 결과 로그와 수동 전투 로그를 `CombatLogPanel` 기반으로 표시한다.
+- `BattleTurn`을 렌더링 단계에서 `헌터 / 그림자 / 몬스터 / 방어 / 시스템 / 보상 / 결과` tone으로 분류한다.
+- 최신 행동이 버튼 입력 흐름 가까이에 보이도록 수동 전투 로그를 행동 영역 직후에 배치했다.
+- 그림자 actor 로그는 기존 `actorId = shadow:*` 구조를 활용해 출전 그림자 roster highlight와 연결한다.
+- 자동 전투 결과 공개 중에는 전송 중 로그를 순차 표시하고, 완료 후에는 최근 로그 우선 + 전체 로그 펼치기를 제공한다.
+
+### 그림자 원정 로그 개선
+- `ShadowExpeditionPanel`의 원정 로그를 `CombatLogPanel`로 교체했다.
+- 원정 로그 type을 `명령 / 그림자 / 위험 / 보상 / 시스템` tone으로 표시한다.
+- `actorShadowId`가 있는 로그는 작은 `ShadowPortrait`를 함께 보여 주며, 기존 battlefield highlight 흐름과 연결한다.
+- 원정 화면 흐름은 `battlefield -> progress/risk -> command buttons -> expedition log`가 이어지도록 유지했다.
+
+### 모바일 레이아웃
+- 로그 패널은 compact 모드에서 높이를 제한하고, 최근 로그가 먼저 보이게 했다.
+- 전체 로그는 접힌 상태가 기본이며, 필요할 때만 펼친다.
+- 버튼 입력 후 최신 로그가 바로 위쪽에 강조되어 작은 화면에서도 행동 결과를 놓치지 않도록 했다.
+
+### 검증 결과
+- `npm run build` 통과. 첫 시도는 샌드박스 상위 디렉터리 접근 제한으로 실패했으나, 승인된 환경에서 `tsc && vite build` 통과. Vite chunk size warning만 존재.
+- `npx tsx scripts/sim-shadow-expedition.ts` 통과.
+- `npx tsx scripts/sim-manual-battle-balance.ts` 통과.
+- `npx tsx scripts/sim-shadow-battle-balance.ts` 통과.
+- `npx tsx scripts/sim-gate-current.ts` 통과.
+- 브라우저에서 `http://localhost:3002` 렌더링 확인, 콘솔 error 없음.
+- 군단 탭 원정 패널에서 `EXPEDITION LOG`, battlefield, 모바일 폭 렌더링 확인.
+- 현재 로컬 저장 상태에는 활성 게이트가 없어 실제 게이트 전투 로그 화면은 발생 조건까지 확인하지 못했지만, 게이트 탭 렌더링과 콘솔 error 없음은 확인했다.
+
+### 남은 TODO
+- 실제 모바일 기기에서 전투 로그 사용감 피드백 수집.
+- 게이트 전투 보드/VFX 고도화.
+- 실제 그림자 portrait 자산 교체.
+- 원정 2~3개 확장.
+- 무한의 탑.
+- 보스 추적.
+- 일일 박스/도전 카드.
+
+## 12-16B 그림자 원정 연출 강화
+
+목표: 12-16에서 추가한 그림자 원정의 전투/성장/보상 수치는 유지하고, 수동 지휘형 턴제 화면의 명령 피드백과 시각적 몰입감을 강화했다. 사용자가 헌터로 직접 싸우는 것이 아니라 후방 지휘관처럼 명령하고, 그림자 병사들이 그 명령에 반응한다는 체감을 만드는 것이 핵심이다.
+
+### 변경 범위
+- 수치/공식/보상 변경 없음.
+- `progress / risk` 계산 공식 변경 없음.
+- 그림자 XP/정수 지급량 변경 없음.
+- 게이트/몬스터/추출/강화/레벨/진화 공식 변경 없음.
+- localStorage key 변경 없음.
+- persist version 변경 없음: v14.
+
+### 명령별 이펙트
+`src/components/shadows/ShadowExpeditionPanel.tsx`에 명령별 lightweight visual effect를 추가했다.
+- `attack`: 붉은/주황 slash line, 공격 flash.
+- `defend`: 푸른 shield glow, 방어막 ring.
+- `scout`: 청록 scan line, 탐색 pulse.
+- `analyze`: 보라 rune/glyph ring, 약점 분석 느낌.
+- `search`: 금색/보라 sparkle, 정수 파편 glow.
+
+외부 라이브러리, canvas, WebGL은 추가하지 않고 CSS class와 작은 div layer만 사용했다.
+
+### 그림자 portrait highlight
+- 최근 `actorShadowId` 로그에 해당하는 그림자는 강한 pulse ring으로 표시한다.
+- 현재 명령과 role이 맞는 그림자들은 subtle glow를 받는다.
+- 파티 row에서는 실제 활약 그림자와 명령 적합 그림자를 분리해 강조한다.
+- ShadowPortrait는 기존 12-15 비주얼 시스템을 그대로 재사용한다.
+
+### progress/risk UI
+- progress/risk bar를 별도 `StatBar`로 정리했다.
+- progress는 100 성공 임계점, 100 초과 상태, 변화량 배지를 더 명확히 표시한다.
+- risk는 70 이상 경고, 90 이상 danger pulse, 100 실패 임계점을 표시한다.
+- 최근 로그에서 `진행도 +N`, `위험도 +N/-N`을 읽어 짧은 변화량 배지를 보여준다.
+
+### 원정 타입별 테마
+원정 타입마다 배경/테두리/accent/icon을 다르게 했다.
+- `training`: 푸른 수련장/전투 훈련 톤.
+- `essence`: 보라 심연/정수 파편 톤.
+- `hunt`: 붉은 잔재 사냥 톤.
+- `scout`: 청록 안개/스캔 톤.
+
+### 로그와 결과 화면
+- 로그는 최근 6줄 중심으로 유지하고, type별 라벨/색/아이콘을 강화했다.
+- 최신 로그는 강조 배경을 준다.
+- 결과 화면은 outcome별 tone을 나누고, 대성공/성공/부분성공/실패 배지와 보상 카드를 강화했다.
+- search stack bonus와 레벨업 그림자 목록을 결과 카드 안에서 확인할 수 있다.
+
+### 명령 버튼/파티 선택 UX
+- 명령 버튼에 명령명, 짧은 설명, 성향, 추천 role, 파티 내 role match 수를 표시한다.
+- 추천 role과 맞는 그림자에는 `추천` badge를 표시한다.
+- 파티 선택 영역에 역할 coverage, 요구 전력 대비 ratio, 예상 난이도를 더 잘 보이게 정리했다.
+- ShadowExpeditionPanel은 접기/펼치기 가능하게 만들어 ShadowPanel의 기존 보유/도감/강화 UX를 밀어내지 않도록 했다.
+- 모바일에서는 명령 버튼을 2열 grid로 유지하고, 로그/파티 row는 compact하게 스크롤되도록 구성했다.
+
+### 검증 결과
+- `npm run build` 통과. Vite chunk size warning만 존재.
+- `npx tsx scripts/sim-shadow-expedition.ts` 통과.
+- `npx tsx scripts/sim-shadow-battle-balance.ts` 통과.
+- `npx tsx scripts/sim-gate-current.ts` 통과.
+- `npx tsx scripts/sim-manual-battle-balance.ts` 통과.
+- 브라우저에서 `http://localhost:3002` 앱 렌더링 확인.
+- 군단 탭에서 그림자 원정 패널 렌더링 확인.
+- 브라우저 콘솔 error 없음.
+
+### 남은 TODO
+- 원정 2~3개 확장
+- 장시간 원정/타이머 원정
+- 무한의 탑
+- 보스 추적
+- 일일 박스/도전 카드
+- 고급 전투 보드/VFX
+
+## 12-17 그림자 원정 전장 보드/VFX
+
+목표: 12-16/12-16B의 그림자 원정 시스템과 명령 피드백을 유지하면서, 원정 화면을 단순 패널 UI가 아니라 작은 전장처럼 보이게 만드는 전용 battlefield layer를 추가했다. 사용자가 명령을 누르면 그림자 병사들이 전장 위에서 반응하고, 진행도/위험도 변화가 배경과 VFX로 체감되도록 했다.
+
+### 변경 범위
+- 원정 `progress / risk` 계산 공식 변경 없음.
+- 원정 보상/XP/정수 수치 변경 없음.
+- 그림자 전투/강화/레벨/진화 공식 변경 없음.
+- 게이트/몬스터/추출/XP/장비/칭호 수치 변경 없음.
+- localStorage key 변경 없음.
+- persist version 변경 없음: v14.
+- 박스/카드/보스/무한의 탑/B/A/S급 게이트 추가 없음.
+
+### ShadowExpeditionBattlefield
+신규 컴포넌트:
+- `src/components/shadows/ShadowExpeditionBattlefield.tsx`
+
+역할:
+- 선택된 원정 파티 1~5명을 전장 위 반원형/전후열 배치로 표시한다.
+- 각 그림자는 `ShadowPortrait`를 재사용하고 이름, Lv, 강화, role을 compact label로 표시한다.
+- `latestCommand`, `latestActorShadowId`, `progress`, `risk`, `outcome`만 받아 시각 상태를 계산한다.
+- 원정 로직 helper나 보상 계산은 호출하지 않는다.
+
+### 원정 타입별 전장 배경
+- `training`: 푸른 수련장, 원형 rune floor, 안정적인 훈련장 톤.
+- `essence`: 보라 균열과 정수 particle, 심연/정수 회수 톤.
+- `hunt`: 붉은 잔재 전선, 위험 haze, 공격적인 사냥 톤.
+- `scout`: 청록 scan line과 안개, 미탐색 균열 정찰 톤.
+
+모두 CSS gradient/div 기반이며 외부 이미지, canvas, WebGL은 추가하지 않았다.
+
+### 명령별 전장 VFX
+- `attack`: diagonal slash 2종, assault/actor 돌진 모션, progress glow.
+- `defend`: blue barrier/shield ring, guard/support 방어 자세 강조.
+- `scout`: scan sweep, scout 탐색 흔적, 청록 파동.
+- `analyze`: 중앙 rune/glyph, analyst 약점 분석 표식.
+- `search`: essence sparkle, hunter/scout 정수 탐색 glow, search stack 표시.
+
+### role/actor highlight
+- 명령 role과 맞는 그림자는 role aura와 command motion을 받는다.
+- 실제 `actorShadowId` 그림자는 `ACTING` badge, scale-up, 강한 highlight를 받는다.
+- role match glow와 actor highlight를 분리해 “누가 잘 맞고, 누가 실제 행동했는지”가 구분된다.
+
+### progress/risk 전장 반응
+- progress 100 이상이면 battlefield victory glow가 켜진다.
+- risk 70 이상이면 warning haze, 90 이상이면 danger pulse가 적용된다.
+- 최근 명령 로그의 진행도/위험도 변화량은 battlefield 위 floating badge로 표시한다.
+- 결과 outcome에 따라 전장 전체 tone이 달라진다.
+
+### 결과 연출
+- `great_success`: 강한 amber victory glow.
+- `success`: emerald/cyan 안정화 glow.
+- `partial`: 채도와 밝기를 낮춰 일부 확보 느낌.
+- `failure`: 어두운 후퇴/붕괴 느낌.
+
+결과 보상 수치는 바꾸지 않고 전장 tone만 변경한다.
+
+### 모바일/성능
+- battlefield는 `h-52 ~ h-56` compact height로 유지해 명령 버튼과 로그를 밀어내지 않게 했다.
+- progress/risk bar는 battlefield 안 mini indicator와 기존 `StatBar`를 함께 사용한다.
+- particle은 6개 이하, VFX는 0.7~1.2초 내 짧은 CSS animation으로 제한했다.
+- `prefers-reduced-motion: reduce`에서 전장 VFX animation을 비활성화한다.
+
+### 검증 결과
+- `npm run build` 통과. Vite chunk size warning만 존재.
+- `npx tsx scripts/sim-shadow-expedition.ts` 통과.
+- `npx tsx scripts/sim-shadow-battle-balance.ts` 통과.
+- `npx tsx scripts/sim-gate-current.ts` 통과.
+- `npx tsx scripts/sim-manual-battle-balance.ts` 통과.
+- 브라우저에서 `http://localhost:3002` 앱 렌더링 확인.
+- 군단 탭에서 그림자 원정 battlefield 렌더링 확인.
+- 현재 브라우저 저장 상태는 `LOCKED` + 보유 그림자 0명이라 실제 파티 선택/명령 클릭은 같은 세션에서 진행 불가. empty battlefield, 원정 타입 배경, 명령 라벨, 콘솔 error 없음까지 확인.
+
+### 남은 TODO
+- 실제 그림자 portrait 자산 제작/교체
+- 원정 2~3개 확장
+- 무한의 탑
+- 보스 추적
+- 일일 박스/도전 카드
+
+## 12-17C 시네마틱 액션 자막
+
+목표: 12-17B에서 전투/원정 로그 가독성은 좋아졌지만, 아직 로그가 기록 패널처럼 느껴지는 문제가 있었다. 이번 작업에서는 기존 `CombatLogPanel`을 유지하면서, 중요한 최신 행동을 전투 카드나 원정 전장 중앙에 크게 띄우는 시네마틱 액션 자막 레이어를 추가했다.
+
+### 변경 범위
+- 전투 수치 변경 없음.
+- 게이트/몬스터 수치 변경 없음.
+- 그림자 전투/강화/레벨/진화 공식 변경 없음.
+- 원정 `progress / risk` 공식 변경 없음.
+- 보상/XP/정수 수치 변경 없음.
+- localStorage key 변경 없음.
+- persist version 변경 없음: v14.
+
+### CinematicLogOverlay
+신규 컴포넌트:
+- `src/components/CinematicLogOverlay.tsx`
+
+역할:
+- 최신 중요 로그 1개를 중앙 액션 자막으로 표시한다.
+- `player / shadow / monster / system / reward / risk / command / result / defense` tone에 따라 badge, border, glow 색을 다르게 적용한다.
+- 메인 문장과 보조 문장을 분리해 데미지, 진행도, 위험도, 보상 수치가 더 잘 보이게 했다.
+- `durationMs` 이후 자연스럽게 fade out되며, 새 log id가 들어오면 다시 표시된다.
+- `prefers-reduced-motion: reduce`에서는 animation을 끈다.
+
+### 자동 전투 로그 속도
+- 자동 전투 결과 공개는 기존 고정 짧은 interval 대신 로그 중요도별 `setTimeout` reveal 방식으로 바꿨다.
+- 일반 로그는 약 850ms, 몬스터/방어 로그는 약 950ms, 그림자/치명/회피 로그는 약 1100ms, 결과/보상 로그는 약 1300ms로 표시한다.
+- 전투 계산과 보상 지급 구조는 바꾸지 않고, 이미 계산된 로그를 보여주는 속도만 조정했다.
+- 스킵 시 overlay를 닫고 전체 로그를 바로 공개하는 기존 흐름을 유지한다.
+
+### 게이트 수동 전투 overlay
+- 수동 전투 패널에 최신 중요 행동을 `CinematicLogOverlay`로 표시한다.
+- 헌터 공격/스킬, 그림자 행동, 몬스터 공격, 방어/회피/치명타, 보상/결과 로그가 중앙 자막 후보가 된다.
+- 수동 전투는 조작감을 해치지 않도록 자동 전투보다 짧은 duration을 사용한다.
+
+### 그림자 원정 overlay
+- 원정 전장 보드 중앙에 `CinematicLogOverlay`를 연결했다.
+- 명령, 그림자 행동, 위험/보상/결과 로그를 선별해 battlefield 위에 띄운다.
+- 기존 actor highlight와 별개로, 전장 중앙에서 명령 결과가 한 문장으로 보이도록 했다.
+
+### 중요 로그 선별
+게이트:
+- 헌터 행동, 그림자 행동, 몬스터 행동, 치명타/회피/방어, wave/system, 결과/보상 로그를 우선 표시한다.
+
+원정:
+- 명령, 그림자 행동, 위험 변화, 보상, 결과 로그를 우선 표시한다.
+- 사소한 반복 시스템 로그는 중앙 자막에서 제외하고 `CombatLogPanel`에만 남긴다.
+
+### CombatLogPanel과의 관계
+- `CombatLogPanel`은 전체 기록과 최근 로그 확인용으로 유지한다.
+- `CinematicLogOverlay`는 기록 저장이 아니라 연출 레이어다.
+- overlay에 뜬 로그도 기존 로그 패널에는 그대로 남는다.
+
+### 검증 결과
+- `npm run build` 통과. Vite chunk size warning만 존재.
+- `npx tsx scripts/sim-manual-battle-balance.ts` 통과.
+- `npx tsx scripts/sim-shadow-expedition.ts` 통과.
+- `npx tsx scripts/sim-shadow-battle-balance.ts` 통과.
+- `npx tsx scripts/sim-gate-current.ts` 통과.
+- 브라우저에서 `http://localhost:3002` 앱 렌더링 확인.
+- 군단 탭에서 원정 battlefield, EXPEDITION LOG, 모바일 폭 가로 overflow 없음 확인.
+- 게이트 탭에서 열린 게이트 없음 상태 렌더링과 콘솔 error 없음 확인.
+- 현재 브라우저 저장 상태에는 활성 게이트와 보유 그림자가 없어 실제 자동/수동 게이트 전투 overlay와 원정 명령 overlay 발생까지는 같은 세션에서 확인하지 못했다.
+
+### 남은 TODO
+- 로그 속도 설정 또는 빠르게 보기 토글.
+- 실제 모바일 실사용 피드백 반영.
+- 그림자 개별 portrait/고급 실루엣 자산.
+- 무한의 탑.
+- 일일 박스/도전 카드.
+
+## 12-17D CinematicLogOverlay 전체 로그 queue 재생
+
+목표: 12-17C에서 중요한 로그만 중앙 액션 자막으로 보여주던 방식을 확장해, 전투와 원정의 모든 의미 있는 로그가 순서대로 중앙 자막처럼 재생되게 했다. `CombatLogPanel`은 전체 기록 패널로 유지하고, `CinematicLogOverlay`는 전투 흐름을 보여주는 재생 레이어 역할을 맡는다.
+
+### 변경 이유
+- 중요 로그만 중앙에 표시하면 큰 사건은 보이지만 전투의 전체 흐름이 끊겨 보였다.
+- 자동 전투는 계산 결과가 한 번에 나온 뒤 일부 로그만 강조되는 느낌이 강했다.
+- 수동 전투와 그림자 원정은 명령 한 번으로 여러 로그가 발생하므로, 그 묶음이 순서대로 보여야 명령 결과를 따라가기 쉽다.
+
+### CinematicLogOverlay queue 구조
+- `CinematicLogOverlay`가 단일 `log`뿐 아니라 `logs` 배열을 받을 수 있게 확장했다.
+- `logs`가 있으면 queue로 처리하고, 없으면 기존 단일 `log` 동작을 fallback으로 유지한다.
+- queue는 하나씩 표시하고 `intervalMs` 뒤 다음 로그로 넘어간다.
+- 마지막 로그까지 재생하면 `onComplete`를 호출한다.
+- 현재 재생 중인 로그는 `onLogChange`로 부모 컴포넌트에 알려줄 수 있게 했다.
+- `skipSignal`을 추가해 외부 스킵 버튼이 overlay queue를 즉시 종료할 수 있게 했다.
+
+### 자동 전투 적용
+- `GatePanel` 자동 전투 결과 공개에서 모든 non-empty combat log를 `CinematicLogOverlay` queue로 전달한다.
+- overlay의 `onLogChange`가 공개된 로그 수를 갱신하므로, 중앙 자막과 `CombatLogPanel`의 최근 로그 공개 흐름이 맞춰진다.
+- 스킵 시 queue를 종료하고 전체 로그를 즉시 공개한다.
+- 전투 계산, 보상 지급, 게이트 수치에는 영향이 없다.
+
+### 수동 전투 적용
+- 수동 전투 세션 로그 길이를 추적해, 사용자의 행동 이후 새로 추가된 로그 묶음만 queue로 만든다.
+- 새 행동이 들어오면 기존 queue 대신 새 queue를 재생해 답답한 누적 재생을 피했다.
+- 버튼/전투 조작 구조와 기존 중복 클릭 방지 정책은 유지했다.
+
+### 그림자 원정 적용
+- `ShadowExpeditionPanel`에서 원정 id와 로그 길이를 추적한다.
+- 원정 패널 최초 렌더링 시 기존 시스템 로그를 다시 재생하지 않고, 명령 이후 새로 추가된 로그 묶음만 battlefield overlay queue로 전달한다.
+- `ShadowExpeditionBattlefield`는 기존 단일 cinematic log prop과 새 queue prop을 모두 지원한다.
+- progress/risk 계산, 보상, shadow XP/essence 지급량은 변경하지 않았다.
+
+### 표시 정책
+- 기존 `shouldShowCinematicLog` 계열 helper의 기본 정책을 “중요 로그만”에서 “빈 메시지가 아닌 의미 있는 로그 전체”로 바꿨다.
+- overlay 문장은 최대 2줄 중심의 짧은 표시를 유지하고, 전체 원문 기록은 `CombatLogPanel`에 남긴다.
+- reduced motion 대응은 기존 `.cinematic-log-overlay` CSS 정책을 유지한다.
+
+### CombatLogPanel과의 관계
+- `CombatLogPanel`은 전체 기록/최근 로그/펼쳐보기 패널로 계속 유지한다.
+- `CinematicLogOverlay`는 기록 저장이 아니라 재생 연출 레이어다.
+- overlay에 표시된 로그도 `CombatLogPanel`에는 그대로 남는다.
+
+### 검증 결과
+- `npm run build` 통과. Vite chunk size warning만 존재.
+- `npx tsx scripts/sim-manual-battle-balance.ts` 통과.
+- `npx tsx scripts/sim-shadow-expedition.ts` 통과.
+- `npx tsx scripts/sim-shadow-battle-balance.ts` 통과.
+- `npx tsx scripts/sim-gate-current.ts` 통과.
+- 브라우저에서 `http://localhost:3002` 앱 렌더링 확인.
+- 브라우저 console error 없음.
+- 현재 저장 상태에는 활성 게이트/보유 그림자가 없어 실제 자동/수동 전투 및 원정 명령 overlay 발생까지는 같은 세션에서 직접 재현하지 못했다.
+
+### 변경하지 않은 것
+- 전투 수치 변경 없음.
+- 게이트/몬스터 수치 변경 없음.
+- 그림자 전투/강화/레벨/진화 공식 변경 없음.
+- 원정 progress/risk 공식 변경 없음.
+- 보상/XP/정수 수치 변경 없음.
+- localStorage key 변경 없음.
+- persist version 변경 없음: v14.
+
+### 남은 TODO
+- 로그 속도 사용자 설정.
+- 실제 모바일 실사용 피드백 반영.
+- QA fixture save 추가.
+- 그림자 개별 portrait/고급 실루엣 추가 고도화.
+
+## 12-18 그림자 portrait / 고급 실루엣 강화
+
+목표: 12-15에서 만든 코드 기반 그림자 비주얼 시스템을 더 고급화했다. 실제 PNG/WebP 자산을 대량 추가하지 않고, 현재 `ShadowPortrait`의 SVG/CSS 기반 구조를 확장해 군단 창, 그림자 원정 전장, 게이트 전투 roster에서 같은 visual identity가 유지되도록 했다.
+
+### 변경 범위
+- 전투 수치 변경 없음.
+- 원정 `progress / risk` 공식 변경 없음.
+- 게이트/몬스터 수치 변경 없음.
+- 그림자 효과/강화/레벨/진화 공식 변경 없음.
+- 그림자 추출률/희귀도 롤 변경 없음.
+- 보상/XP/정수 수치 변경 없음.
+- localStorage key 변경 없음.
+- persist version 변경 없음: v14.
+- B/A/S급 게이트, 박스, 카드, 보스, 무한의 탑 추가 없음.
+
+### visual profile 구조 고도화
+- `ShadowDefinition`에 optional visual fields를 확장했다.
+- 추가 필드: `weaponShape`, `headShape`, `shoulderShape`, `auraType`, `eyeStyle`, `runeStyle`, `accessory`, `posture`, `backgroundMotif`, `visualIntensity`.
+- 저장 데이터에는 들어가지 않는 definition-level 메타라 기존 세이브와 migration에 영향이 없다.
+- fallback은 기존처럼 `visualKey / silhouetteType / role / rarity` 순서로 유지하고, 새 필드가 없으면 role 기반 profile을 자동 구성한다.
+
+### 일반/진화 그림자 외형 강화
+최소 10개 핵심 계열에 전용 profile을 부여했다.
+- 그림자 쥐: 낮은 짐승형, 붉은 눈, 웅크린 자세, claw motif.
+- 그림자 정찰병: 후드, 쌍단검, speed line, leaning scout posture.
+- 그림자 보병: 투구, 검, 망토, 기본 soldier silhouette.
+- 어둠의 처형병: horned helm, 거대 처형검, 무거운 어깨, execution sigil.
+- 망각의 기록병: scroll/stylus, 얇은 기록자 silhouette.
+- 망각의 서기관: 떠다니는 책/페이지, rune orbit, archive circle.
+- 피로의 수호병: 작은 방패와 웅크린 guard posture.
+- 피로의 방패병: tower shield, fortress helm, barrier aura.
+- 탐욕의 사냥개: 낮은 사냥개형, 붉은 눈, predator haze.
+- 탐욕의 수집가: chain/trophy, vault sigil, essence sparks.
+
+진화체는 색만 바꾸지 않고 `weapon / head / shoulder / aura / motif / posture`가 달라지도록 했다.
+
+### 게이트 네임드 비주얼 강화
+- 네임드 전용 `named-corona`, 더 강한 aura, gate named badge/frame을 적용했다.
+- 네르, 루크, 라크, 고른, 샤크, 카르덴, 오르간, 라반, 그리드에 각자 다른 weapon/accessory/background motif를 부여했다.
+- 카르덴은 grand tome + archive circle, 오르간은 fortress barrier, 그리드는 chain/trophy + vault sigil 방향으로 강화했다.
+
+### 성취 네임드 비주얼 강화
+- 성취 네임드는 `achievement-halo`와 cyan/gold 계열 프레임으로 게이트 네임드와 구분했다.
+- 카심, 라오, 차르카, 네블, 볼렌, 베르크, 레이븐, 모로, 노크, 바론, 이르넬, 칼트, 세론, 루멘에 전용 visual profile을 부여했다.
+- 금융/학습 계열은 책/차트/룬/기록 장식, 운동 계열은 기사/질주/강철 motif, 생활/습관 계열은 수호자/새벽/시간/절제 motif를 사용한다.
+
+### ShadowPortrait 개선
+- profile resolver를 추가해 definition visual fields가 없을 때도 role 기반 고급 silhouette으로 fallback한다.
+- background motif layer, aura layer, advanced prop layer, eye overlay를 추가했다.
+- 작은 size에서는 눈/무기/방패/책 같은 핵심 shape가 남고, 큰 size에서는 aura와 accessory가 더 풍부하게 보이도록 했다.
+- named와 achievement named badge 표시를 분리했다.
+- 실제 이미지 asset 없이 inline SVG/CSS만 사용했다.
+
+### ShadowCard / ShadowPanel 개선
+- `ShadowCard` featured portrait를 더 크게 보이도록 조정했다.
+- 출전 군단 슬롯의 장착 portrait를 `sm`에서 `md`로 키우고, 슬롯 배경에 군단형 glow를 추가했다.
+- 기존 장착/해제/강화/분해/잠금/즐겨찾기/진화 기능은 유지했다.
+
+### 원정 전장 / 게이트 roster 적용
+- `ShadowPortrait`를 공통으로 쓰는 구조라 원정 battlefield, 원정 로그 actor portrait, 게이트 roster strip에 같은 visual identity가 적용된다.
+- 브라우저에서 군단 도감 portrait SVG 렌더링과 원정 전장 렌더링을 확인했다.
+- 현재 저장 상태에는 보유 그림자가 없어 실제 출전 roster와 원정 파티 portrait는 같은 세션에서 직접 발생시키지 못했다.
+
+### 검증 결과
+- `npm run build` 통과. Vite chunk size warning만 존재.
+- `npx tsx scripts/sim-shadow-expedition.ts` 통과.
+- `npx tsx scripts/sim-shadow-battle-balance.ts` 통과.
+- `npx tsx scripts/sim-gate-current.ts` 통과.
+- `npx tsx scripts/sim-manual-battle-balance.ts` 통과.
+- 브라우저에서 `http://localhost:3002` 렌더링 확인.
+- 군단 탭 / 도감 탭에서 portrait SVG 53개 렌더링 확인.
+- 콘솔 error 없음.
+- 모바일 폭에서 가로 overflow 없음 확인.
+
+### 남은 TODO
+- 실제 PNG/WebP portrait pipeline.
+- 네임드 전용 illustration asset.
+- 이미지 최적화/webp/lazy loading.
+- 전투 보드 고급 VFX 추가.
+- 무한의 탑.
+- 일일 박스/도전 카드.
+
+## 12-17D: 중앙 자막 queue 기반 전투 로그 재생
+
+### 목표
+CinematicLogOverlay를 "중요 로그만 표시"에서 "전투/원정의 모든 로그를 순서대로 중앙 자막처럼 재생"하는 방식으로 확장한다.
+
+### 변경 원칙
+- 전투 수치/공식 변경 금지
+- 게이트/몬스터 수치 변경 금지
+- 그림자 전투/강화/레벨/진화 공식 변경 금지
+- 원정 progress/risk 공식 변경 금지
+- 보상/XP/정수 수치 변경 금지
+- localStorage key 변경 금지
+- persist version 변경 금지
+
+### 작업 1. CinematicLogOverlay queue 구조 확인
+
+이미 12-17C에서 queue 기반 구조가 구현되어 있었다.
+- `logs?: CinematicLogData[]` prop으로 다수 로그 순차 재생 지원
+- `intervalMs`마다 다음 로그로 전환
+- `skipSignal`으로 즉시 종료
+- `onComplete`로 종료 콜백
+
+변경: `title`과 `body`에 `line-clamp-2` 추가하여 긴 로그가 화면을 벗어나지 않도록 처리.
+
+### 작업 2. 자동 전투 적용
+
+`RecentBattleResult` (`src/components/GatePanel.tsx`):
+- `gateTurnToCinematicLog`가 모든 턴(빈 메시지 제외)을 cinematic 형식으로 변환
+- `CinematicLogOverlay`에 `logs={cinematicLogs}`로 전체 로그 queue 전달
+- `intervalMs={1250}`
+- `skipSignal` + "전투 스킵" 버튼
+- `onLogChange`로 `revealedLogCount` 동기화 → CombatLogPanel 점진적 공개
+- 마지막 로그 후 `onComplete`로 결과/보상 표시
+
+### 작업 3. 수동 전투 적용
+
+`ManualBattlePanelV2` (`src/components/GatePanel.tsx`):
+- `useEffect`로 `session.logs` 변화 감지
+- 이전 로그 수(`previousManualLogCountRef`) 대비 새로 추가된 로그만 추출
+- 새 로그 묶음을 `manualCinematicLogs`에 설정
+- `CinematicLogOverlay`에 `logs={manualCinematicLogs}` 전달
+- `intervalMs={1050}`
+- 새 행동 발생 시 기존 queue를 새 queue로 교체 (답답함 방지)
+- 스킵 버튼 추가 (`manualSkipSignal`)
+- `onComplete`로 queue 정리
+
+### 작업 4. 그림자 원정 적용
+
+`ShadowExpeditionPanel` (`src/components/shadows/ShadowExpeditionPanel.tsx`):
+- `useEffect`로 `expedition.logs` 변화 감지
+- 새 로그 묶음을 `expeditionCinematicLogs`에 설정
+- `ShadowExpeditionBattlefield`에 `cinematicLogs`, `skipSignal`, `onCinematicComplete` 전달
+
+`ShadowExpeditionBattlefield` (`src/components/shadows/ShadowExpeditionBattlefield.tsx`):
+- `skipSignal`과 `onCinematicComplete` prop 추가
+- `CinematicLogOverlay`에 전달
+- `position="battlefield"` 유지
+
+`ShadowExpeditionPanel`에 스킵 버튼 추가 (`expeditionSkipSignal`).
+
+### 작업 5. reduced motion
+
+`index.css`에 이미 `prefers-reduced-motion: reduce` 처리되어 있음:
+- `.cinematic-log-overlay`의 enter/exit animation이 비활성화됨
+- 순차 표시 자체는 유지
+
+### 작업 6. 긴 로그 처리
+
+`CinematicLogOverlay`에 `line-clamp-2` 추가:
+- title 최대 2줄
+- body 최대 2줄
+- CombatLogPanel에는 전체 문장 그대로 유지
+
+### 작업 7. 기타 수정
+
+- `GatePanel.tsx` 내 깨진 한글 인코딩 수정
+  - `RecentBattleResult` skip 버튼 텍스트
+  - `CombatLogPanel` emptyText
+
+### 작업 8. 검증 결과
+
+- `npm run build` → ✅ 통과
+- `npx tsx scripts/sim-manual-battle-balance.ts` → ✅ 통과
+- `npx tsx scripts/sim-shadow-expedition.ts` → ✅ 통과
+- `npx tsx scripts/sim-shadow-battle-balance.ts` → ✅ 통과
+- `npx tsx scripts/sim-gate-current.ts` → ✅ 통과
+
+시뮬레이션 수치 변화 없음 (UI 변경만).
+
+### 수정한 파일
+| 파일 | 변경 내용 |
+|---|---|
+| `src/components/CinematicLogOverlay.tsx` | title/body에 `line-clamp-2` 추가 |
+| `src/components/GatePanel.tsx` | 수동 전투 스킵 버튼/신호 추가, 깨진 한글 복원 |
+| `src/components/shadows/ShadowExpeditionPanel.tsx` | 원정 스킵 버튼/신호 추가, `onCinematicComplete` 전달 |
+| `src/components/shadows/ShadowExpeditionBattlefield.tsx` | `skipSignal`/`onCinematicComplete` prop 추가 및 전달 |
+| `CLAUDE.md` | 12-17D 기록 추가 |
+
+### persist version 변경 여부
+- **변경 없음** (v14 유지)
+- 데이터 구조 변경 없음 (纯 UI)
+
+### 남은 TODO
+- 실제 PNG/WebP portrait pipeline.
+- 네임드 전용 illustration asset.
+- 이미지 최적화/webp/lazy loading.
+- 전투 보드 고급 VFX 추가.
+- 무한의 탑.
+- 일일 박스/도전 카드.
+- 로그 속도 사용자 설정.
+- 실제 모바일 실사용 피드백.
+
+## 12-17D-1: 중앙 자막 queue 재생 버그 수정
+
+### 문제
+수동 전투/원정에서 한 동작 후 여러 로그가 생성되지만, CinematicLogOverlay가 1개 로그만 표시하고 종료됨.
+
+### 원인
+`CinematicLogOverlay`의 queue 재생 로직은 `currentIndex`를 정상적으로 증가시켰으나, CSS `animation`이 DOM element mount 시 1회만 실행됨.
+
+- `currentIndex`가 바뀌어도 React가 같은 `<div>`를 재사용
+- 첫 로그의 exit animation 완료 후 `opacity: 0` 상태로 고정
+- 이후 로그는 렌더링되지만 보이지 않음
+
+### 수정
+
+**1. `key={currentLog.id}` 추가**
+- `CinematicLogOverlay` root `<div>`에 `key={currentLog.id}` 추가
+- queue 내 각 로그 전환 시 React가 element를 remount → CSS animation 재시작
+
+**2. `generationRef` 추가 (race condition 방지)**
+- queueKey 변경 또는 skip 시 `generationRef.current` 증가
+- timer callback 내에서 현재 generation과 비교
+- stale timer(이전 queue의 남은 타이머)가 새 queue를 덮어쓰지 않도록 방지
+
+### 수정한 파일
+| 파일 | 변경 내용 |
+|---|---|
+| `src/components/CinematicLogOverlay.tsx` | `key={currentLog.id}` 추가, `generationRef` 추가, timer/skip callback에 generation 체크 |
+
+### 검증 결과
+- `npm run build` → ✅ 통과
+- `npx tsx scripts/sim-manual-battle-balance.ts` → ✅ 통과
+- `npx tsx scripts/sim-shadow-expedition.ts` → ✅ 통과
+- `npx tsx scripts/sim-gate-current.ts` → ✅ 통과
+- `npx tsx scripts/sim-shadow-battle-balance.ts` → ✅ 통과
+
+### 기존 수치/공식 영향
+- **없음** (纯 UI/React 렌더링 수정)
+
+### persist version 변경 여부
+- **변경 없음** (v14 유지)
+
+## 12-18: 무한의 탑 (Infinite Tower)
+
+### 작업 목표
+새로운 전투 콘텐츠 "무한의 탑"을 추가. 게이트 전투 로직을 재사용하여 층별 자동 전투를 구현하고, 보스층(5층 단위)와 일반층을 구분하며, 층별 난이도/몬스터/보상 시스템을 설계.
+
+### 추가한 파일
+| 파일 | 설명 |
+|---|---|
+| `src/lib/infiniteTower.ts` | 탑 전용 helper: 층 타입, 추천 전투력, 몬스터 선택/스케일링, 보스 정의, 보상 계산 |
+| `src/components/InfiniteTowerPanel.tsx` | 탑 UI: 층 네비게이션, 도전 카드, 전투 결과, CombatLogPanel 연동, CinematicLogOverlay 연동 |
+| `scripts/sim-infinite-tower.ts` | 탑 밸런스 시뮬레이션: 6개 빌드 × 19개 층 승률 측정 |
+
+### 수정한 파일
+| 파일 | 변경 내용 |
+|---|---|
+| `src/lib/types.ts` | `TowerFloorType`, `TowerBattleStatus`, `TowerBattleResult`, `TowerReward`, `TowerBattleSession`, `InfiniteTowerState` 타입 추가 |
+| `src/lib/store.ts` | `infiniteTower` 상태 추가, `startTowerBattle`, `cancelTowerBattle` 액션 추가. 전투 시뮬레이션 → 보상(XP, 정수, 아이템, 그림자 XP) → 상태 업데이트 |
+| `src/App.tsx` | `'tower'` 탭 추가, `InfiniteTowerPanel` 임포트 및 렌더링 |
+| `src/components/GatePanel.tsx` | `gateTurnToLogEntry` export 추가 (InfiniteTowerPanel 재사용) |
+
+### 탑 구조
+- **층 타입**: 5층 단위 보스층(`boss`), 나머지 일반층(`normal`)
+- **몬스터 풀**: 1~5층 E급, 6~15층 D급, 16층+ C급 기반 몬스터 재사용
+- **보스 정의**: 6종 보스 (`tower-guardian-5` ~ `tower-abyss-30`) — 각 층에 맞는 고유 보스
+- **스케일링**: `multiplier = 1 + (floor - 1) * 0.028`, 보스 추가 `1.18x`
+- **추천 전투력**: `200 + floor * 80`, 보스 `1.35x`
+
+### 보상 구조
+- **일반 첫 클리어**: hunter XP = floor * 12, 정수 1~2, 아이템 확률 12%
+- **보스 첫 클리어**: hunter XP = floor * 28, 정수 5 + floor/5, 보스 박스, 아이템 확률 35%
+- **재클리어**: 1차 보상의 50% 수준
+
+### 시뮬레이션 결과 (밸런스)
+| 빌드 | 예상 안정 클리어 층 | 참고 |
+|---|---|---|
+| A (Lv5, 무그림자) | 4층 | 초반 성장 측정 |
+| B (Lv10, 일반 그림자) | 5~7층 | 5층 보스 95% |
+| C (Lv20, 훈련 그림자) | 10층 전후 | 10층 보스 5% |
+| D (Lv30, 혼합 훈련) | 14층 전후 | 15층 보스 2% |
+| E (Lv45, 에픽 장비) | 18층 전후 | 15층 보스 100%, 20층 0% |
+| F (Lv60, 풀 에픽) | 22층 전후 | 20층 보스 37% |
+
+### 검증 결과
+- `npm run build` → ✅ 통과
+- `npx tsx scripts/sim-infinite-tower.ts` → ✅ 통과
+- `npx tsx scripts/sim-manual-battle-balance.ts` → ✅ 통과
+- `npx tsx scripts/sim-shadow-expedition.ts` → ✅ 통과
+- `npx tsx scripts/sim-gate-current.ts` → ✅ 통과
+
+### persist version 변경 여부
+- **변경 없음** (v14 유지)
+- `infiniteTower`는 `partialize: (state) => ({ ...state })`에 의해 자동 저장됨
+
+## 12-18B: 무한의 탑 전투 UX 개선 (Delayed Result + Manual Combat)
+
+### 문제
+- 무한의 탑 도전 시 "1층 클리어!" 결과가 전투 로그보다 먼저 표시되어 긴장감이 부족
+- 자동 전투만 제공되어 사용자가 전략적으로 개입할 수 없음
+
+### 해결 방향
+1. **결과 지연 표시**: `startTowerBattle`이 전투를 시뮬레이션하되 보상/결과는 UI에 노출하지 않음
+2. **수동 전투 추가**: 게이트 수동 전투 구조를 재사용하여 턴제 전투 제공
+3. **자동 전투 UX 수정**: cinematic overlay → 결과 카드 순서로 표시
+
+### 추가한 타입 (`src/lib/types.ts`)
+- `TowerBattleStatus`: `'idle' | 'in_progress' | 'revealing' | 'resolved'` (기존 `'cleared'`/`'failed'` 제거)
+- `TowerBattleSession.showResult?: boolean`
+- `ManualBattleSession.source?: 'gate' | 'tower'`, `towerFloor?: number`
+
+### 수정한 파일
+| 파일 | 변경 내용 |
+|---|---|
+| `src/lib/store.ts` | `startTowerBattle` → `status: 'revealing'`, `showResult: false`, 보상 적용 제거. `resolveTowerBattle` 신규 추가 (보상/층 진행 적용). `startTowerManualBattle`, `performTowerManualBattleAction`, `cancelTowerManualBattle` 신규 추가 |
+| `src/components/InfiniteTowerPanel.tsx` | 자동/수동 버튼 분리. 자동: cinematic overlay → `resolveTowerBattle` → 결과 카드. 수동: HP바/스킬/소모품/전투로그 UI. 결과는 `showResult=true`일 때만 표시 |
+
+### 자동 전투 흐름
+1. 사용자 "자동 전투" 클릭
+2. `startTowerBattle(floor)` → 전투 시뮬레이션 + `activeTowerBattle` 생성 (`status: 'revealing'`, `showResult: false`)
+3. `CinematicLogOverlay`에 로그 순차 표시
+4. overlay 완료(또는 스킵) 시 `resolveTowerBattle()` 호출
+5. 보상 적용, `status: 'resolved'`, `showResult: true`
+6. 결과 카드 + 다음 층/재도전 버튼 표시
+
+### 수동 전투 흐름
+1. 사용자 "수동 전투" 클릭
+2. `startTowerManualBattle(floor)` → `manualBattleSession` 생성 (`source: 'tower'`)
+3. HP바, 스킬, 방어, 소모품 UI 표시
+4. 사용자 행동 → `performTowerManualBattleAction` → 턴 진행
+5. 승리/패배/무승부 시 `activeTowerBattle` 생성 (`status: 'resolved'`, `showResult: true`) 후 `manualBattleSession` 해제
+6. 결과 카드 + 다음 층/재도전 버튼 표시
+
+### 수동 전투 행동
+- 기본 공격 / 방어(피해 -40%) / 스킬(쿨다운 적용) / 소모품(2회 제한) / 자동 마무리 / 전투 포기
+- 보스층 안내 문구 추가: "보스층입니다. 수동 전투와 소모품 사용을 권장합니다."
+
+### 결과 정책
+- **승리**: 층 클리어, `highestClearedFloor` 갱신, 첫 클리어/재클리어 보상, 다음 층 해금
+- **패배/무승부**: 층 진행 없음, 보상 없음
+- **포기**: 보상 없음, `manualBattleSession`만 해제
+- **중복 보상 방지**: `firstClearRewardsClaimed` / `bossRewardsClaimed` 기존 로직 그대로 사용
+
+### 검증 결과
+- `npm run build` → ✅ 통과
+- `npx tsx scripts/sim-infinite-tower.ts` → ✅ 통과 (기존 밸런스 변화 없음 확인)
+- `npx tsx scripts/sim-manual-battle-balance.ts` → ✅ 통과
+- `npx tsx scripts/sim-gate-current.ts` → ✅ 통과
+
+### 기존 수치/공식 영향
+- **없음** (전투 시뮬레이션, 몬스터 스케일링, 보상 계산, 그림자 강화 공식 등 전부 유지)
+- `localStorage` key `levelup-save` 변경 없음
+
+### persist version 변경 여부
+- **변경 없음** (v14 유지)
+- `ManualBattleSession`에 추가된 `source`/`towerFloor`는 저장되지 않음 (런타임 전용)
+
+## 12-19: 박스 / 도전 카드 일일 루프
+
+### 목표
+매일 앱을 열었을 때 바로 할 행동을 고르게 만드는 보조 루프를 추가했다. 기존 전투, 게이트, 무한의 탑, 그림자, 장비 강화 수치는 변경하지 않고, 작은 동기부여 보상과 선택형 일일 미션만 얹었다.
+
+### 추가 구조
+- `RewardBox`: `daily`, `weekly`, `boss` 박스를 저장한다. 등급은 `normal`, `enhanced`, `superior`, `epic`.
+- `BoxReward`: hunter XP, stat, shadowEssence, 장비, 소모품, 메시지를 담는다.
+- `ChallengeCard`: `easy`, `normal`, `hard` 난이도와 `workout`, `study`, `finance`, `life`, `gate`, `shadow`, `tower`, `habit` 카테고리를 가진다.
+- 저장 필드: `rewardBoxes`, `lastDailyBoxDate`, `lastWeeklyBoxWeek`, `todayChallengeCards`, `selectedChallengeCardIds`, `lastChallengeCardDate`, `challengeCardHistory`.
+
+### 박스/카드 정책
+- 일일 박스는 앱 진입 날짜 체크 시 하루 1개 생성하고, 사용자가 직접 `열기`를 눌러 개봉한다.
+- 주간 박스는 이번 주 도전 카드 완료 누적 7장 이상이면 주 1회 `superior`로 생성한다.
+- 보스 박스는 무한의 탑 5층 단위 보스층 첫 클리어 시 생성하고, `bossRewardsClaimed[floor]`로 중복 지급을 막는다.
+- 오늘의 카드 후보는 매일 5장 생성한다: easy 2장, normal 2장, hard 1장.
+- 사용자는 후보 중 3장을 선택한다. 실패 패널티는 없다.
+- 카드 완료 보상은 소량 XP/그림자 정수와 `boxUpgradePoints`다.
+- 오늘 일일 박스는 개봉 전 완료한 카드의 `boxUpgradePoints` 합산으로 강화된다: 2점 이상 `enhanced`, 4점 이상 `superior`.
+
+### UI
+- `src/components/RewardBoxPanel.tsx`: 열 수 있는 박스, 등급/source/floor, 직접 개봉 버튼, 최근 개봉 보상 표시.
+- `src/components/ChallengeCardsPanel.tsx`: 후보 5장, 3장 선택 확정, 선택 후 진행/완료 상태와 보상 표시.
+- `src/App.tsx`: 새 `보상` 탭을 추가하고 첫 화면을 보상 탭으로 변경했다.
+
+### 이벤트 연결
+- Daily quest 완료: Daily 개수/카테고리 카드 판정.
+- 게이트 자동/수동 전투 종료: 도전/승리 카드 판정.
+- 그림자 원정 완료: 원정 카드 판정.
+- 무한의 탑 자동/수동 전투 종료: 도전/클리어 카드 판정.
+- 박스 개봉: 박스 열기 카드 판정.
+
+### 보상 밸런스 검토
+- `scripts/sim-box-card-rewards.ts` 추가.
+- perfect day 평균: XP 167, 정수 11.34, 장비 0.09개, 소모품 0.13개.
+- perfect week 평균: XP 1347, 정수 89.33, 장비 1.01개, 소모품 1.42개.
+- 15층 보스 박스 평균: XP 116, 정수 19, 장비 0.62개, 소모품 0.28개.
+- 기존 Main/Dungeon/탑/게이트 성장 보상보다 낮은 보조 동기부여 규모로 유지.
+
+### 호환성 및 영향
+- localStorage key `levelup-save` 변경 없음.
+- persist version 변경 없음: v14 유지.
+- 신규 저장 필드는 migration fallback으로 빈 배열/객체 또는 undefined 보정.
+- 전투 수치, 게이트/몬스터 수치, 무한의 탑 난이도 수치, 그림자 공식, 그림자 원정 progress/risk, 추출률/희귀도 롤, 기존 XP 보상표, Main/Dungeon 목표, 장비 강화 공식, 칭호 효과 변경 없음.
+
+### 검증
+- `npm run build` 통과. Vite chunk size warning만 유지.
+- `npx tsx scripts/sim-box-card-rewards.ts` 통과.
+- `npx tsx scripts/sim-infinite-tower.ts` 통과.
+- `npx tsx scripts/sim-shadow-expedition.ts` 통과.
+- `npx tsx scripts/sim-gate-current.ts` 통과.
+- `npx tsx scripts/sim-shadow-battle-balance.ts` 통과.
+- `npx tsx scripts/sim-manual-battle-balance.ts` 통과.
+- 브라우저 확인: 보상 탭 렌더링, 일일 박스 생성, 후보 카드 5장 생성, 3장 선택, 선택 후 3장 초과 방지, 직접 박스 개봉, 박스 열기 카드 완료, 보상 메시지, 모바일 가로 overflow 없음, 콘솔 error 없음.
+
+### 남은 TODO
+- 박스 개봉 긴장감 연출 고도화.
+- 카드 합성/컬렉션.
+- 주간 목표 조건 고도화.
+- 스킬 시스템 고도화.
+- 보상/전투 연출 강화.
+
+## 12-20: 스킬 시스템 고도화
+
+### 목표
+- 헌터 스킬을 게이트/무한의 탑 수동 전투용 전투 자산으로 정리했다.
+- 그림자 원정 명령(`attack/defend/scout/analyze/search`)과 헌터 스킬을 분리 유지했다.
+- 기존 몬스터/게이트/탑 난이도 수치, 그림자 공식, XP 보상표, 장비 강화 공식은 변경하지 않았다.
+
+### 타입/구조
+- `SkillSource`: `basic`, `job`, `equipment`, `title`, `special`, `monster`.
+- `SkillType`: 기존 `attack/buff/debuff/heal`에 `damage/defense/utility` 호환 타입을 추가.
+- `SkillDefinition`: `source`, `cooldown`, `staminaCost`, `requiredJobId`, `requiredLevel`, `providedByItemId`, `providedByTitleId`, `tags`, `effectSummary`, `recommendedUse`를 optional로 추가.
+- `SkillRuntimeState`: `skillId`, `masteryXp`, `masteryLevel`, `timesUsed`.
+- `GameState.skillStates?: Record<string, SkillRuntimeState>` 추가. persist version은 v14 유지, migration fallback은 `{}`.
+
+### helper
+- `src/lib/skills.ts` 추가.
+- 주요 helper: `getAvailableSkills`, `getAvailableCombatSkillsForLoadout`, `getSkillSourceLabel`, `getSkillTypeLabel`, `getSkillCooldownTurns`, `canUseSkill`, `getSkillMastery`, `recordSkillRuntimeUse`, `getSkillEffectiveDescription`.
+- 기본 수동 키트(`집중 베기`, `방어 태세`)는 스킬창/수동 전투에서만 포함한다. 자동 전투와 전투력 산정은 기존 스킬 풀을 유지한다.
+
+### 스킬 목록/출처
+- 기존 직업/장비 스킬 구조를 유지하고 definition 중심으로 해석한다.
+- 장비 스킬은 장착 장비의 `combatSkillIds`로 제공된다.
+- 칭호/특수 스킬은 타입과 UI 구조만 열어두고 실제 제공은 TODO로 남겼다.
+
+### UI
+- `src/components/SkillPanel.tsx` 추가.
+- 헌터 상태 화면에 보유 스킬 목록, 출처 badge, 타입 badge, 쿨타임, 효과 요약, 제공 장비, 숙련도/사용 횟수를 표시.
+- 게이트/무한의 탑 수동 전투 버튼에 출처, 타입, CD, 사용 가능/쿨타임 사유, 숙련도 레벨, 효과 설명을 표시.
+
+### 숙련도/강화 정책
+- 수동 전투에서 헌터가 스킬을 사용할 때만 `timesUsed +1`, `masteryXp +1`.
+- 숙련도 레벨: Lv0 기본, Lv1 5회, Lv2 15회, Lv3 35회.
+- 효과는 소폭: 피해/방어 Lv당 +2.5%, 강화/약화/회복 Lv당 +1.5%.
+- 쿨타임 감소는 적용하지 않았다.
+
+### 전투 적용
+- `resolveAction`은 optional `skillMasteryLevel`을 받아 피해/회복/효과량만 소폭 보정한다.
+- 자동 전투는 숙련도 획득/적용을 하지 않는다.
+- 게이트 수동 전투와 무한의 탑 수동 전투 모두 동일한 숙련도 기록/적용 경로를 사용한다.
+- 그림자 전투 보조와 그림자 원정 명령에는 연결하지 않았다.
+
+### 검증
+- `npm run build` 통과. Vite chunk size warning만 유지.
+- `npx tsx scripts/sim-skill-system.ts` 통과: Focus Slash Lv0 damage 43, Lv3 damage 46, Lv3 damage bonus +7.5%.
+- `npx tsx scripts/sim-gate-current.ts` 통과.
+- `npx tsx scripts/sim-manual-battle-balance.ts` 통과.
+- `npx tsx scripts/sim-infinite-tower.ts` 통과.
+- `npx tsx scripts/sim-shadow-battle-balance.ts` 통과.
+- `npx tsx scripts/sim-shadow-expedition.ts` 통과.
+- 브라우저 확인: 스킬 패널 렌더링, 보유 스킬/출처/쿨타임/효과/숙련도 표시, 무한의 탑 수동 전투 스킬 버튼 표시, 스킬 사용 후 쿨타임 disabled 정상, 모바일 390px 가로 overflow 없음.
+
+### persist
+- localStorage key `levelup-save` 변경 없음.
+- persist version 변경 없음: v14 유지.
+
+### 남은 TODO
+- 몬스터 패턴/텔레그래프와 방어/분석/차단 스킬 연결.
+- 스킬 강화 재료 및 스킬트리.
+- 장비 강화 레벨과 장비 제공 스킬의 연동.
+- 칭호/특수 스킬 실제 해금 경로.
+- 12-21 긴장감/연출 강화.
+
+## 12-21: 핵심 순간 긴장감/연출 강화 (2026-05-18)
+
+### 목표
+- 그림자 추출, 박스 개봉, 무한의 탑 보스층/클리어, 스킬 사용, 그림자 진화, 헌터 성장, 카드 선택/완료의 결과 공개 흐름을 강화.
+- 결과를 즉시 노출하기보다 짧은 단계 연출 -> 긴장감 -> 결과 공개 -> 보상/후속 메시지 순서로 보이도록 조정.
+- 전투 수치, 게이트/몬스터/탑 난이도, 그림자 추출/진화 공식, 박스/카드 보상, 스킬 효과, XP 보상표, 장비/칭호 효과는 변경하지 않음.
+
+### 공용 reveal 구조
+- `src/components/DramaticReveal.tsx` 추가.
+- `steps`, `tone`, `position`, `compact`, `result`, `onComplete`, `onSkip` 기반의 공용 결과 공개 컴포넌트.
+- `shadow/box/tower/skill/rank/success/failure` tone을 지원.
+- 스킵 버튼과 `prefers-reduced-motion` 대응 포함.
+- 역할 구분: `CinematicLogOverlay`는 전투 중 행동 자막, `DramaticReveal`은 결과 공개/특별 이벤트 연출.
+
+### 적용 범위
+- 그림자 추출: 버튼 클릭 후 추출 시작, 공명/저항, 판정 직전, 성공/실패, 등급/이름 공개 순서로 표시. Legendary/게이트 네임드는 더 강한 tone 사용.
+- 박스 개봉: 박스 선택 후 흔들림/빛/등급 암시 단계와 결과 공개. rare 이상 장비 드롭, boss box, 레벨/랭크 변화는 결과 카드에서 강조.
+- 무한의 탑: 보스층 경고 스타일, 전투 중 skill cinematic 강조, 클리어/패배 결과 reveal 추가. 첫 클리어/보스 박스/최고층 갱신 메시지와 기존 시스템 메시지는 reveal 이후 확인 가능하도록 계층 보정.
+- 스킬 사용: 게이트/무한의 탑 수동 전투에서 헌터 스킬 사용 시 중앙 자막을 `SKILL`, `{스킬명} 발동`, 피해량 중심으로 표시.
+- 그림자 진화: 즉시 결과 반영 대신 형태 흔들림 -> 어둠 응축 -> 새 형태 공개 reveal 후 기존 `evolveShadow` 로직 실행.
+- 헌터 레벨업/랭크업: 기존 `SystemMessage`에 dramatic flare 스타일 추가. 박스 보상에서 성장 변화가 발생하면 박스 reveal 결과에도 함께 표시.
+- 카드 선택/완료: 카드 선택 시 selected flip/glow, 완료 카드 badge/glow, 3장 확정/완료 compact reveal 추가.
+
+### 연출 과부하 방지
+- 그림자 추출, 박스 개봉, 탑 클리어/패배, 그림자 진화는 dramatic.
+- 카드 선택/완료는 compact.
+- 반복 레벨업은 기존 시스템 메시지 중심으로 유지하고, 랭크/중요 성장만 더 강하게 표시.
+- 모든 reveal은 스킵 가능.
+- 새 CSS 애니메이션은 `prefers-reduced-motion: reduce`에서 비활성화.
+
+### CSS/VFX
+- `index.css`에 reveal fade, pulse glow, rarity/result flash, challenge card flip/complete, boss warning, rank flare 추가.
+- 과도한 particle 없이 border/glow/text-shadow 중심으로 구현.
+- 기존 `CombatLogPanel`, `CinematicLogOverlay`, 전장 VFX 톤과 맞게 cyan/purple/amber 계열을 재사용.
+
+### persist / 저장 데이터
+- localStorage key `levelup-save` 변경 없음.
+- persist version 변경 없음: v14 유지.
+- 저장 스키마 변경 없음. 이번 단계는 UI state와 표시 순서 중심.
+
+### 검증
+- `npm run build` 통과. Vite chunk size warning만 유지.
+- `npx tsx scripts/sim-infinite-tower.ts` 통과.
+- `npx tsx scripts/sim-gate-current.ts` 통과.
+- `npx tsx scripts/sim-manual-battle-balance.ts` 통과.
+- `npx tsx scripts/sim-shadow-battle-balance.ts` 통과.
+- `npx tsx scripts/sim-shadow-expedition.ts` 통과.
+- `npx tsx scripts/sim-box-card-rewards.ts` 통과.
+- `npx tsx scripts/sim-skill-system.ts` 통과.
+- 브라우저 확인: 앱 로드, reveal CSS 로드, 무한의 탑 자동 전투 cinematic, 탑 클리어 `DramaticReveal`, 스킵/닫기 UI, reduced motion CSS rule, 콘솔 신규 error 0개 확인.
+
+### 남은 TODO
+- 12-22 비밀 확장.
+- 실제 실사용 피드백 기반 연출 속도 조정.
+- 로그 속도 설정.
+- 모바일 UI 미세 조정.
+- 보스 박스/게이트 네임드/legendary 추출의 실제 빈도 기반 연출 강도 조정.
