@@ -391,6 +391,9 @@ export function InfiniteTowerPanel() {
         )}
         onComplete={() => {
           if (activeBattle) setResultRevealSeenId(activeBattle.id)
+        }}
+        onClose={() => {
+          if (activeBattle) setResultRevealSeenId(activeBattle.id)
           cancelTowerBattle()
         }}
       />

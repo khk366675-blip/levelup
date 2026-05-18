@@ -26,6 +26,7 @@ interface DramaticRevealProps {
   tone?: DramaticRevealTone
   isOpen: boolean
   onComplete?: () => void
+  onClose?: () => void
   onSkip?: () => void
   compact?: boolean
   position?: 'modal' | 'inline' | 'overlay'
@@ -105,6 +106,7 @@ export function DramaticReveal({
   tone = 'success',
   isOpen,
   onComplete,
+  onClose,
   onSkip,
   compact = false,
   position = 'modal',
@@ -116,6 +118,7 @@ export function DramaticReveal({
   const [done, setDone] = useState(false)
   const generationRef = useRef(0)
   const completeRef = useRef(onComplete)
+  const closeRef = useRef(onClose)
   const skipRef = useRef(onSkip)
   const safeSteps = useMemo(() => steps.filter(step => step.text.trim().length > 0), [steps])
   const current = safeSteps[index]
@@ -123,8 +126,9 @@ export function DramaticReveal({
 
   useEffect(() => {
     completeRef.current = onComplete
+    closeRef.current = onClose
     skipRef.current = onSkip
-  }, [onComplete, onSkip])
+  }, [onComplete, onClose, onSkip])
 
   useEffect(() => {
     if (!isOpen) {
@@ -154,15 +158,15 @@ export function DramaticReveal({
 
   if (!isOpen || !current) return null
 
-  const finish = () => {
+  const close = () => {
     generationRef.current += 1
     setDone(true)
-    completeRef.current?.()
+    ;(closeRef.current ?? completeRef.current)?.()
   }
 
   const skip = () => {
     skipRef.current?.()
-    finish()
+    close()
   }
 
   const frame = (
@@ -229,8 +233,8 @@ export function DramaticReveal({
         {done && (
           <button
             type="button"
-            onClick={finish}
-            className="mx-auto mt-4 flex min-h-9 items-center justify-center gap-2 rounded-md border border-white/15 bg-white/10 px-4 text-xs font-bold text-white transition hover:bg-white/15"
+            onClick={close}
+            className="relative z-20 mx-auto mt-4 flex min-h-9 items-center justify-center gap-2 rounded-md border border-white/15 bg-white/10 px-4 text-xs font-bold text-white transition hover:bg-white/15 pointer-events-auto"
           >
             <X className="h-3.5 w-3.5" />
             Close
