@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   Activity,
   AlertTriangle,
@@ -241,6 +241,16 @@ function gateTurnToCinematicLog(turn: CombatLog['turns'][number], index: number)
     turn.skillName && turn.skillName !== turn.actorName ? turn.skillName : undefined,
   ].filter(Boolean)
 
+  let visualDelta: CinematicLogData['visualDelta']
+  if (turn.damage !== undefined && turn.damage !== 0) {
+    const isHeal = turn.outcome === 'heal'
+    visualDelta = {
+      target: turn.targetType,
+      hpChange: isHeal ? turn.damage : -turn.damage,
+      newHp: turn.remainingHp,
+    }
+  }
+
   return {
     id: `gate-cinematic-${turn.turnNumber}-${turn.actorId}-${turn.skillId ?? 'basic'}-${index}`,
     tone: isHunterSkill ? 'player' : tone,
@@ -249,6 +259,7 @@ function gateTurnToCinematicLog(turn: CombatLog['turns'][number], index: number)
     body: isHunterSkill
       ? [message.title, turn.damage !== undefined ? `${Math.round(turn.damage)} 피해` : undefined].filter(Boolean).join(' · ')
       : bodyParts.join(' · ') || undefined,
+    visualDelta,
   }
 }
 
@@ -1062,7 +1073,11 @@ function ManualBattlePanelV2({
   const [showConsumables, setShowConsumables] = useState(false)
   const [manualCinematicLogs, setManualCinematicLogs] = useState<CinematicLogData[]>([])
   const [manualSkipSignal, setManualSkipSignal] = useState(0)
+  const [isRevealing, setIsRevealing] = useState(false)
+  const [visualPlayer, setVisualPlayer] = useState(session.player)
+  const [visualMonster, setVisualMonster] = useState(session.monster)
   const previousManualLogCountRef = useRef(session.logs.length)
+  const sessionKeyRef = useRef(session.startedAt)
   const actionCount = session.logs.filter(log => log.skillId !== 'system-manual-battle').length
   const totalWaves = session.waveIndex + 1 + session.remainingMonsterIds.length
   const result = session.result ? resultMeta[session.result] : undefined
@@ -1073,6 +1088,27 @@ function ManualBattlePanelV2({
   const skillStates = useGame(s => s.skillStates ?? {})
   const equippedShadows = getEquippedShadows(ownedShadows, equippedShadowIds, hunter)
   const activeShadowId = [...visibleLogs].reverse().map(turn => getShadowActorInstanceId(turn.actorId)).find(Boolean)
+  const battleLocked = isRevealing || Boolean(session.result)
+
+  useEffect(() => {
+    if (sessionKeyRef.current !== session.startedAt) {
+      sessionKeyRef.current = session.startedAt
+      setVisualPlayer(session.player)
+      setVisualMonster(session.monster)
+      previousManualLogCountRef.current = session.logs.length
+      setManualCinematicLogs([])
+      setIsRevealing(false)
+    }
+  }, [session.startedAt, session.logs.length, session.monster, session.player])
+
+  useEffect(() => {
+    if (isRevealing) return
+    if (session.logs.length === previousManualLogCountRef.current) {
+      setVisualPlayer(session.player)
+      setVisualMonster(session.monster)
+    }
+  }, [session.logs.length, session.player, session.monster, isRevealing])
+
   useEffect(() => {
     const previousCount = previousManualLogCountRef.current
     if (session.logs.length > previousCount) {
@@ -1080,12 +1116,50 @@ function ManualBattlePanelV2({
         .slice(previousCount)
         .map((turn, index) => gateTurnToCinematicLog(turn, previousCount + index))
         .filter((item): item is CinematicLogData => Boolean(item))
-      setManualCinematicLogs(nextLogs)
+      if (nextLogs.length > 0) {
+        setManualCinematicLogs(nextLogs)
+        setIsRevealing(true)
+      }
     } else if (session.logs.length < previousCount) {
       setManualCinematicLogs([])
+      setIsRevealing(false)
+      setVisualPlayer(session.player)
+      setVisualMonster(session.monster)
     }
     previousManualLogCountRef.current = session.logs.length
   }, [session.logs])
+
+  const handleLogChange = useCallback((log: CinematicLogData, _index: number) => {
+    if (log.visualDelta) {
+      const { target, hpChange, newHp } = log.visualDelta
+      if (target === 'player') {
+        setVisualPlayer(prev => ({
+          ...prev,
+          hp: newHp !== undefined ? newHp : Math.max(0, prev.hp + hpChange),
+        }))
+      } else {
+        setVisualMonster(prev => ({
+          ...prev,
+          hp: newHp !== undefined ? newHp : Math.max(0, prev.hp + hpChange),
+        }))
+      }
+    }
+  }, [])
+
+  const handleQueueComplete = useCallback(() => {
+    setIsRevealing(false)
+    setManualCinematicLogs([])
+    setVisualPlayer(session.player)
+    setVisualMonster(session.monster)
+  }, [session.player, session.monster])
+
+  const handleSkip = useCallback(() => {
+    setManualSkipSignal(s => s + 1)
+    setIsRevealing(false)
+    setManualCinematicLogs([])
+    setVisualPlayer(session.player)
+    setVisualMonster(session.monster)
+  }, [session.player, session.monster])
   const combatConsumables = items.filter(item =>
     item.consumable &&
     item.consumableEffects?.some(effect =>
@@ -1144,14 +1218,15 @@ function ManualBattlePanelV2({
         visible={manualCinematicLogs.length > 0}
         intervalMs={2600}
         skipSignal={manualSkipSignal}
-        onComplete={() => setManualCinematicLogs([])}
+        onLogChange={handleLogChange}
+        onComplete={handleQueueComplete}
         position="center"
       />
-      {manualCinematicLogs.length > 0 && (
+      {isRevealing && (
         <div className="absolute right-3 top-3 z-40">
           <button
             type="button"
-            onClick={() => setManualSkipSignal(s => s + 1)}
+            onClick={handleSkip}
             className="inline-flex items-center gap-1 text-[10px] system-text text-amber-200 border border-amber-400/25 bg-amber-400/10 rounded px-2 py-1 hover:bg-amber-400/15 transition"
           >
             <FastForward className="w-3 h-3" />
@@ -1176,11 +1251,11 @@ function ManualBattlePanelV2({
           </div>
         </div>
         <div className="text-xs system-text border border-cyan-400/25 bg-cyan-400/10 text-cyan-200 rounded px-2.5 py-1">
-          {result?.label ?? '진행 중'}
+          {result && !isRevealing ? result.label : '진행 중'}
         </div>
       </div>
 
-      {result && (
+      {result && !isRevealing && (
         <div className="mb-5 border border-white/10 rounded-lg p-3 bg-ink-900/35">
           <div className="text-sm font-semibold text-white/85">{result.title}</div>
           <div className="text-xs text-white/55 leading-relaxed mt-1">{result.description}</div>
@@ -1189,7 +1264,7 @@ function ManualBattlePanelV2({
 
       <div className="grid lg:grid-cols-2 gap-3 mb-5">
         <div className="space-y-4 border border-white/10 rounded-lg p-4 bg-ink-900/35">
-          <ManualHpBar label={session.player.name} hp={session.player.hp} maxHp={session.player.maxHp} tone="cyan" />
+          <ManualHpBar label={visualPlayer.name} hp={visualPlayer.hp} maxHp={visualPlayer.maxHp} tone="cyan" />
           <div className="grid grid-cols-3 gap-2">
             <StatPill label="ATK" value={Math.round(session.player.atk)} />
             <StatPill label="DEF" value={Math.round(session.player.def)} />
@@ -1197,7 +1272,7 @@ function ManualBattlePanelV2({
           </div>
         </div>
         <div className="space-y-4 border border-rose-400/20 rounded-lg p-4 bg-rose-500/5">
-          <ManualHpBar label={session.monster.name} hp={session.monster.hp} maxHp={session.monster.maxHp} tone="rose" />
+          <ManualHpBar label={visualMonster.name} hp={visualMonster.hp} maxHp={visualMonster.maxHp} tone="rose" />
           <div className="grid grid-cols-3 gap-2">
             <StatPill label="ATK" value={Math.round(session.monster.atk)} />
             <StatPill label="DEF" value={Math.round(session.monster.def)} />
@@ -1223,10 +1298,10 @@ function ManualBattlePanelV2({
 
       <div className="space-y-3 mb-5">
         <div className="grid grid-cols-2 gap-2">
-          <button type="button" onClick={() => onAction({ type: 'basic_attack' })} className="btn btn-primary text-sm min-h-14">
+          <button type="button" disabled={battleLocked} onClick={() => onAction({ type: 'basic_attack' })} className="btn btn-primary text-sm min-h-14 disabled:opacity-50 disabled:cursor-not-allowed">
             기본 공격
           </button>
-          <button type="button" onClick={() => onAction({ type: 'defend' })} className="btn text-sm min-h-14 border-cyan-400/25 bg-cyan-400/10 text-cyan-100">
+          <button type="button" disabled={battleLocked} onClick={() => onAction({ type: 'defend' })} className="btn text-sm min-h-14 border-cyan-400/25 bg-cyan-400/10 text-cyan-100 disabled:opacity-50 disabled:cursor-not-allowed">
             <span>방어</span>
             <span className="ml-1 text-[10px] system-text text-cyan-100/60">피해 -40%</span>
           </button>
@@ -1242,7 +1317,7 @@ function ManualBattlePanelV2({
                 key={skill.id}
                 type="button"
                 onClick={() => onAction({ type: 'skill', skillId: skill.id })}
-                disabled={cooldown > 0}
+                disabled={battleLocked || cooldown > 0}
                 title={description}
                 className="min-h-[72px] rounded-md border border-purple-400/25 bg-purple-400/10 px-3 py-2 text-left text-purple-50 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-purple-400/15 transition"
               >
@@ -1306,7 +1381,7 @@ function ManualBattlePanelV2({
                       <button
                         type="button"
                         onClick={() => onAction({ type: 'use_consumable', itemId: item.id })}
-                        disabled={Boolean(disabledReason)}
+                        disabled={battleLocked || Boolean(disabledReason)}
                         className="shrink-0 min-h-10 px-3 rounded-md border border-emerald-400/25 bg-emerald-400/10 text-xs text-emerald-100 disabled:opacity-50 disabled:cursor-not-allowed"
                       >
                         사용
@@ -1319,7 +1394,7 @@ function ManualBattlePanelV2({
           )}
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-2 border-t border-white/10">
-          <button type="button" onClick={() => onAction({ type: 'auto_finish' })} className="btn text-sm min-h-12 border-amber-400/25 bg-amber-400/10 text-amber-100">
+          <button type="button" disabled={battleLocked} onClick={() => onAction({ type: 'auto_finish' })} className="btn text-sm min-h-12 border-amber-400/25 bg-amber-400/10 text-amber-100 disabled:opacity-50 disabled:cursor-not-allowed">
             자동 마무리
           </button>
           <button type="button" onClick={onCancel} className="btn text-sm min-h-12 border-rose-400/25 bg-rose-400/10 text-rose-100">
@@ -1445,6 +1520,31 @@ export function GatePanel() {
   const gate = activeGateOpen
     ? GATE_DEFINITIONS.find(g => g.id === activeGate.gateId)
     : undefined
+  const manualGateDefinition =
+    manualBattleSession && (!manualBattleSession.source || manualBattleSession.source === 'gate')
+      ? GATE_DEFINITIONS.find(g => g.id === manualBattleSession.gateId)
+      : undefined
+
+  if (
+    manualBattleSession &&
+    manualGateDefinition &&
+    (!manualBattleSession.source || manualBattleSession.source === 'gate') &&
+    activeGate?.instanceId === manualBattleSession.gateInstanceId
+  ) {
+    return (
+      <div className="space-y-4">
+        <GateStatusPanel />
+        <ManualBattlePanelV2
+          session={manualBattleSession}
+          skills={manualPlayerSkills.filter(skill => skill.id !== 'basic-attack')}
+          items={items}
+          monsterDefinition={MONSTER_DEFINITIONS.find(monster => monster.id === manualGateDefinition.monsterIds[manualBattleSession.waveIndex])}
+          onAction={performManualBattleAction}
+          onCancel={cancelManualGateBattle}
+        />
+      </div>
+    )
+  }
 
   const gateConsumables = activeConsumableEffects.filter(effect =>
     !effect.consumed && (effect.duration === 'today' || effect.duration === 'next_gate')

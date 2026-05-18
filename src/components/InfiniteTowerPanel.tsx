@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import clsx from 'clsx'
 import { Swords, Trophy, Zap, Shield, FastForward, Hand, X } from 'lucide-react'
 import { useGame } from '../lib/store'
@@ -15,6 +15,7 @@ import { gateTurnToLogEntry } from './GatePanel'
 import type { ManualBattleAction, ManualBattleSession } from '../lib/types'
 import { getEquippedShadows } from '../lib/shadows'
 import { getPlayerCombatSkills, BASIC_ATTACK_SKILL } from '../lib/game'
+import { getSecretVisibleFragments } from '../lib/secrets'
 import { SKILL_DEFINITIONS } from '../lib/seed'
 import {
   canUseSkill,
@@ -34,7 +35,7 @@ function classifyTowerLogTurn(turn: { actorId?: string; actorType?: string }): C
   return 'system'
 }
 
-function towerTurnToCinematicLog(turn: { turnNumber: number; actorId: string; actorType?: string; message: string; skillId?: string; skillName?: string; damage?: number }, index: number): CinematicLogData | undefined {
+function towerTurnToCinematicLog(turn: { turnNumber: number; actorId: string; actorType?: string; targetType?: 'player' | 'monster'; message: string; skillId?: string; skillName?: string; damage?: number; outcome?: string; remainingHp?: number }, index: number): CinematicLogData | undefined {
   if (!turn.message.trim()) return undefined
   const tone = classifyTowerLogTurn(turn)
   const isHunterSkill =
@@ -52,6 +53,16 @@ function towerTurnToCinematicLog(turn: { turnNumber: number; actorId: string; ac
     turn.damage !== undefined ? `피해 ${Math.round(turn.damage)}` : undefined,
   ].filter(Boolean)
 
+  let visualDelta: CinematicLogData['visualDelta']
+  if (turn.damage !== undefined && turn.damage !== 0 && turn.targetType) {
+    const isHeal = turn.outcome === 'heal'
+    visualDelta = {
+      target: turn.targetType,
+      hpChange: isHeal ? turn.damage : -turn.damage,
+      newHp: turn.remainingHp,
+    }
+  }
+
   return {
     id: `tower-cinematic-${turn.turnNumber}-${turn.actorId}-${index}`,
     tone: isHunterSkill ? 'player' : tone,
@@ -60,6 +71,7 @@ function towerTurnToCinematicLog(turn: { turnNumber: number; actorId: string; ac
     body: isHunterSkill
       ? [turn.message, turn.damage !== undefined ? `${Math.round(turn.damage)} 피해` : undefined].filter(Boolean).join(' · ')
       : bodyParts.join(' · ') || undefined,
+    visualDelta,
   }
 }
 
@@ -104,6 +116,7 @@ export function InfiniteTowerPanel() {
   const ownedShadows = useGame(s => s.ownedShadows ?? [])
   const equippedShadowIds = useGame(s => s.equippedShadowIds ?? [])
   const skillStates = useGame(s => s.skillStates ?? {})
+  const visibleTraces = useGame(s => getSecretVisibleFragments(s.secretProgress))
 
   const [selectedFloor, setSelectedFloor] = useState<number | null>(null)
   const [cinematicLogs, setCinematicLogs] = useState<CinematicLogData[]>([])
@@ -111,8 +124,12 @@ export function InfiniteTowerPanel() {
   const [showConsumables, setShowConsumables] = useState(false)
   const [manualCinematicLogs, setManualCinematicLogs] = useState<CinematicLogData[]>([])
   const [manualSkipSignal, setManualSkipSignal] = useState(0)
+  const [isRevealing, setIsRevealing] = useState(false)
+  const [visualPlayer, setVisualPlayer] = useState(manualSession?.player ?? { name: '', hp: 0, maxHp: 0, atk: 0, def: 0, spd: 0 })
+  const [visualMonster, setVisualMonster] = useState(manualSession?.monster ?? { name: '', hp: 0, maxHp: 0, atk: 0, def: 0, spd: 0 })
   const [resultRevealSeenId, setResultRevealSeenId] = useState<string | undefined>()
   const prevLogCountRef = useRef(0)
+  const manualSessionKeyRef = useRef<string | undefined>(manualSession?.startedAt)
 
   const towerState = tower ?? { currentFloor: 1, highestClearedFloor: 0, clearedFloors: {}, firstClearRewardsClaimed: {}, bossRewardsClaimed: {}, activeTowerBattle: undefined }
   const currentFloor = towerState.currentFloor
@@ -145,6 +162,27 @@ export function InfiniteTowerPanel() {
     }
   }, [isAutoRevealing, activeBattle?.id])
 
+  useEffect(() => {
+    if (manualSessionKeyRef.current !== manualSession?.startedAt) {
+      manualSessionKeyRef.current = manualSession?.startedAt
+      if (!manualSession) return
+      setVisualPlayer(manualSession.player)
+      setVisualMonster(manualSession.monster)
+      prevLogCountRef.current = manualSession.logs.length
+      setManualCinematicLogs([])
+      setIsRevealing(false)
+    }
+  }, [manualSession])
+
+  // Sync visual state with actual only when no new unrevealed logs are waiting.
+  useEffect(() => {
+    if (!manualSession || isRevealing) return
+    if (manualSession.logs.length === prevLogCountRef.current) {
+      setVisualPlayer(manualSession.player)
+      setVisualMonster(manualSession.monster)
+    }
+  }, [manualSession?.logs.length, manualSession?.player, manualSession?.monster, isRevealing])
+
   // Manual battle: build cinematic logs from new session logs
   useEffect(() => {
     if (!isTowerManual || !manualSession) return
@@ -154,12 +192,54 @@ export function InfiniteTowerPanel() {
         .slice(prev)
         .map((turn, idx) => towerTurnToCinematicLog(turn as any, prev + idx))
         .filter((l): l is CinematicLogData => Boolean(l))
-      setManualCinematicLogs(next)
+      if (next.length > 0) {
+        setManualCinematicLogs(next)
+        setIsRevealing(true)
+      }
     } else if (manualSession.logs.length < prev) {
       setManualCinematicLogs([])
+      setIsRevealing(false)
+      setVisualPlayer(manualSession.player)
+      setVisualMonster(manualSession.monster)
     }
     prevLogCountRef.current = manualSession.logs.length
   }, [isTowerManual, manualSession?.logs.length])
+
+  const handleLogChange = useCallback((log: CinematicLogData, _index: number) => {
+    if (log.visualDelta) {
+      const { target, hpChange, newHp } = log.visualDelta
+      if (target === 'player') {
+        setVisualPlayer(prev => ({
+          ...prev,
+          hp: newHp !== undefined ? newHp : Math.max(0, prev.hp + hpChange),
+        }))
+      } else {
+        setVisualMonster(prev => ({
+          ...prev,
+          hp: newHp !== undefined ? newHp : Math.max(0, prev.hp + hpChange),
+        }))
+      }
+    }
+  }, [])
+
+  const handleQueueComplete = useCallback(() => {
+    setIsRevealing(false)
+    setManualCinematicLogs([])
+    if (manualSession) {
+      setVisualPlayer(manualSession.player)
+      setVisualMonster(manualSession.monster)
+    }
+  }, [manualSession])
+
+  const handleManualSkip = useCallback(() => {
+    setManualSkipSignal(s => s + 1)
+    setIsRevealing(false)
+    setManualCinematicLogs([])
+    if (manualSession) {
+      setVisualPlayer(manualSession.player)
+      setVisualMonster(manualSession.monster)
+    }
+  }, [manualSession])
 
   const handleAutoBattle = () => {
     setCinematicLogs([])
@@ -168,6 +248,7 @@ export function InfiniteTowerPanel() {
 
   const handleManualBattle = () => {
     setManualCinematicLogs([])
+    setIsRevealing(false)
     prevLogCountRef.current = 0
     startTowerManualBattle(challengeFloor)
   }
@@ -198,7 +279,9 @@ export function InfiniteTowerPanel() {
   const currentCinematicLogs = isAutoRevealing
     ? cinematicLogs
     : []
+  const manualBattleLocked = isRevealing || Boolean(manualSession?.result)
   const shouldShowResultReveal = Boolean(
+    !isTowerManual &&
     isResolved &&
     showResult &&
     activeBattle?.result &&
@@ -322,6 +405,13 @@ export function InfiniteTowerPanel() {
           <div className="text-lg font-black text-violet-200">{highestCleared}층</div>
         </div>
       </div>
+
+      {visibleTraces.length > 0 && (
+        <div className="mb-4 rounded border border-violet-200/15 bg-black/15 px-3 py-2 text-[11px] text-violet-100/55">
+          <span className="system-text text-violet-200/60">ARCHIVE TRACE</span>
+          <span className="ml-2 text-white/45">x{visibleTraces.length}</span>
+        </div>
+      )}
 
       {/* Floor navigation */}
       <div className="mb-4 flex flex-wrap items-center gap-2">
@@ -448,14 +538,15 @@ export function InfiniteTowerPanel() {
               visible={manualCinematicLogs.length > 0}
               intervalMs={1800}
               skipSignal={manualSkipSignal}
-              onComplete={() => setManualCinematicLogs([])}
+              onLogChange={handleLogChange}
+              onComplete={handleQueueComplete}
               position="center"
             />
-            {manualCinematicLogs.length > 0 && (
+            {isRevealing && (
               <div className="absolute right-0 top-0 z-40">
                 <button
                   type="button"
-                  onClick={() => setManualSkipSignal(s => s + 1)}
+                  onClick={handleManualSkip}
                   className="inline-flex items-center gap-1 text-[10px] system-text text-amber-200 border border-amber-400/25 bg-amber-400/10 rounded px-2 py-1 hover:bg-amber-400/15 transition"
                 >
                   <FastForward className="w-3 h-3" />
@@ -479,7 +570,7 @@ export function InfiniteTowerPanel() {
           {/* HP bars */}
           <div className="grid md:grid-cols-2 gap-3 mb-4">
             <div className="space-y-3 border border-white/10 rounded-lg p-3 bg-ink-900/35">
-              <HpBar label={manualSession.player.name} hp={manualSession.player.hp} maxHp={manualSession.player.maxHp} color="cyan" />
+              <HpBar label={visualPlayer.name} hp={visualPlayer.hp} maxHp={visualPlayer.maxHp} color="cyan" />
               <div className="grid grid-cols-3 gap-2">
                 <StatPill label="ATK" value={Math.round(manualSession.player.atk)} />
                 <StatPill label="DEF" value={Math.round(manualSession.player.def)} />
@@ -487,7 +578,7 @@ export function InfiniteTowerPanel() {
               </div>
             </div>
             <div className="space-y-3 border border-rose-400/20 rounded-lg p-3 bg-rose-500/5">
-              <HpBar label={manualSession.monster.name} hp={manualSession.monster.hp} maxHp={manualSession.monster.maxHp} color="rose" />
+              <HpBar label={visualMonster.name} hp={visualMonster.hp} maxHp={visualMonster.maxHp} color="rose" />
               <div className="grid grid-cols-3 gap-2">
                 <StatPill label="ATK" value={Math.round(manualSession.monster.atk)} />
                 <StatPill label="DEF" value={Math.round(manualSession.monster.def)} />
@@ -502,6 +593,35 @@ export function InfiniteTowerPanel() {
               )}
             </div>
           </div>
+
+          {manualSession.result && !isRevealing && (
+            <div className={clsx(
+              'mb-4 rounded-lg border p-3',
+              manualSession.result === 'victory'
+                ? 'border-emerald-300/25 bg-emerald-400/8'
+                : manualSession.result === 'defeat'
+                  ? 'border-rose-300/25 bg-rose-400/8'
+                  : 'border-amber-300/25 bg-amber-400/8'
+            )}>
+              <div className={clsx(
+                'text-sm font-bold',
+                manualSession.result === 'victory'
+                  ? 'text-emerald-200'
+                  : manualSession.result === 'defeat'
+                    ? 'text-rose-200'
+                    : 'text-amber-200'
+              )}>
+                {manualSession.result === 'victory'
+                  ? '전투 승리'
+                  : manualSession.result === 'defeat'
+                    ? '전투 패배'
+                    : '무승부'}
+              </div>
+              <div className="mt-1 text-xs text-white/55">
+                모든 전투 로그 재생이 끝난 뒤 결과가 공개되었습니다.
+              </div>
+            </div>
+          )}
 
           {/* Shadow roster */}
           {equippedShadows.length > 0 && (
@@ -518,10 +638,10 @@ export function InfiniteTowerPanel() {
           {/* Action buttons */}
           <div className="space-y-2 mb-4">
             <div className="grid grid-cols-2 gap-2">
-              <button type="button" onClick={() => handleManualAction({ type: 'basic_attack' })} className="btn btn-primary text-sm min-h-12">
+              <button type="button" disabled={manualBattleLocked} onClick={() => handleManualAction({ type: 'basic_attack' })} className="btn btn-primary text-sm min-h-12 disabled:opacity-50 disabled:cursor-not-allowed">
                 <Swords className="w-4 h-4" /> 기본 공격
               </button>
-              <button type="button" onClick={() => handleManualAction({ type: 'defend' })} className="btn text-sm min-h-12 border-cyan-400/25 bg-cyan-400/10 text-cyan-100">
+              <button type="button" disabled={manualBattleLocked} onClick={() => handleManualAction({ type: 'defend' })} className="btn text-sm min-h-12 border-cyan-400/25 bg-cyan-400/10 text-cyan-100 disabled:opacity-50 disabled:cursor-not-allowed">
                 <Shield className="w-4 h-4" /> 방어 <span className="text-[10px] text-cyan-100/60 ml-1">피해 -40%</span>
               </button>
             </div>
@@ -530,7 +650,7 @@ export function InfiniteTowerPanel() {
                 const runtime = getSkillMastery(skillStates, skill.id)
                 const cooldown = manualSession.cooldowns[skill.id] ?? 0
                 const availability = canUseSkill(skill, manualSession)
-                const disabled = !availability.canUse
+                const disabled = !availability.canUse || manualBattleLocked
                 const description = getSkillEffectiveDescription(skill, runtime)
                 return (
                   <button
@@ -602,7 +722,7 @@ export function InfiniteTowerPanel() {
                           <button
                             type="button"
                             onClick={() => handleManualAction({ type: 'use_consumable', itemId: item.id })}
-                            disabled={Boolean(disabledReason)}
+                            disabled={manualBattleLocked || Boolean(disabledReason)}
                             className="shrink-0 min-h-10 px-3 rounded-md border border-emerald-400/25 bg-emerald-400/10 text-xs text-emerald-100 disabled:opacity-50 disabled:cursor-not-allowed"
                           >
                             사용
@@ -616,7 +736,7 @@ export function InfiniteTowerPanel() {
             </div>
 
             <div className="grid grid-cols-2 gap-2 pt-2 border-t border-white/10">
-              <button type="button" onClick={() => handleManualAction({ type: 'auto_finish' })} className="btn text-sm min-h-10 border-amber-400/25 bg-amber-400/10 text-amber-100">
+              <button type="button" disabled={manualBattleLocked} onClick={() => handleManualAction({ type: 'auto_finish' })} className="btn text-sm min-h-10 border-amber-400/25 bg-amber-400/10 text-amber-100 disabled:opacity-50 disabled:cursor-not-allowed">
                 <Zap className="w-3 h-3" /> 자동 마무리
               </button>
               <button type="button" onClick={handleManualCancel} className="btn text-sm min-h-10 border-rose-400/25 bg-rose-400/10 text-rose-100">
@@ -641,7 +761,7 @@ export function InfiniteTowerPanel() {
       )}
 
       {/* Result card (shown after resolving) */}
-      {isResolved && showResult && activeBattle?.result && (
+      {!isTowerManual && isResolved && showResult && activeBattle?.result && (
         <div className="mb-4">
           <div className={clsx('rounded-lg border p-4', activeBattle.result.outcome === 'victory' ? 'border-emerald-300/25 bg-emerald-400/8' : 'border-rose-300/25 bg-rose-400/8')}>
             <div className="text-sm font-bold mb-2">

@@ -7680,6 +7680,27 @@ CinematicLogOverlay를 "중요 로그만 표시"에서 "전투/원정의 모든 
 
 ### 남은 TODO
 - 12-22 비밀 확장.
+
+## 12-22 quiet connective layer
+
+- Added optional `secretProgress` meta state with fallback initialization from existing tower/gate/shadow/expedition/box/card/skill records.
+- Gate, Infinite Tower, Shadow Expedition, shadow extraction/evolution, reward boxes, challenge cards, and rank/level events feed a low-visibility connective layer.
+- Public UI exposure stays compact and indirect; no condition list or standalone hidden-system tab.
+- Existing progress, shadows, records, rewards, formulas, localStorage key, and persist version are preserved. Persist remains v14.
+- Added `scripts/sim-secret-expansion.ts` for duplicate/fallback/bounded-effect smoke checks.
+
+Verification:
+- `npm run build`: pass
+- `npx tsx scripts/sim-infinite-tower.ts`: pass
+- `npx tsx scripts/sim-gate-current.ts`: pass
+- `npx tsx scripts/sim-manual-battle-balance.ts`: pass
+- `npx tsx scripts/sim-shadow-battle-balance.ts`: pass
+- `npx tsx scripts/sim-shadow-expedition.ts`: pass
+- `npx tsx scripts/sim-box-card-rewards.ts`: pass
+- `npx tsx scripts/sim-skill-system.ts`: pass
+- `npx tsx scripts/sim-secret-expansion.ts`: pass
+- Browser smoke check on `http://127.0.0.1:5173/`: app loaded, Gate/Tower/Legion/Reward panels opened, console errors 0.
+- Spoiler reporting rule: do not disclose hidden trigger details, story text, reward identity/numbers, secret names, or hidden stat/effect details in user-facing completion reports.
 - 실제 실사용 피드백 기반 연출 속도 조정.
 - 로그 속도 설정.
 - 모바일 UI 미세 조정.

@@ -31,6 +31,7 @@ import type {
   Quest,
   RandomQuestTemplate,
   RewardBox,
+  SecretProgressState,
   StatKey,
   SystemMessage,
   ShadowExtractResult,
@@ -159,6 +160,11 @@ import {
   refreshShadowExpeditionLock,
   resolveShadowExpeditionCommand,
 } from './shadowExpeditions'
+import {
+  ensureSecretProgress,
+  recordSecretEvent,
+  type SecretEvent,
+} from './secrets'
 
 interface GameState {
   hunter: HunterState
@@ -197,6 +203,7 @@ interface GameState {
   lastChallengeCardDate?: string
   challengeCardHistory?: Record<string, { completedIds: string[]; completedCount: number }>
   skillStates?: Record<string, SkillRuntimeState>
+  secretProgress?: SecretProgressState
   initialized: boolean
 
   // hunter
@@ -388,6 +395,33 @@ const createInitialGateStatus = (): GateStatus => ({
 const initialQuests = [...DEFAULT_DAILIES, ...DEFAULT_MAIN_QUESTS, ...DEFAULT_DUNGEONS]
 
 const uid = () => Math.random().toString(36).slice(2, 10)
+
+const applySecretProgressEvent = (
+  s: GameState,
+  event: SecretEvent,
+  baseState: Partial<GameState> = {}
+): Partial<GameState> => {
+  const snapshot = { ...s, ...baseState }
+  const result = recordSecretEvent(s.secretProgress, event, snapshot)
+  const baseMessages = baseState.messages ?? s.messages
+  const secretMessages: SystemMessage[] = result.messages.map(message => ({
+    ...message,
+    id: uid(),
+    createdAt: todayISO(),
+  }))
+  const nextShadowEssence = ((baseState.shadowEssence ?? s.shadowEssence) ?? 0) + result.shadowEssenceBonus
+  const nextState: Partial<GameState> = {
+    ...baseState,
+    secretProgress: result.progress,
+    shadowEssence: nextShadowEssence,
+    messages: secretMessages.length > 0 ? [...baseMessages, ...secretMessages] : baseMessages,
+  }
+  if (result.ownedShadows ?? baseState.ownedShadows) {
+    nextState.ownedShadows = result.ownedShadows ?? baseState.ownedShadows
+  }
+
+  return nextState
+}
 
 const GATE_ENTRY_COST = 20
 
@@ -1223,10 +1257,7 @@ const createGateBattleOutcomeUpdate = (
       }]
     : s.messages
 
-  return {
-    finalLog,
-    shouldCheckUnlocks,
-    state: {
+  const baseState: Partial<GameState> = {
       hunter: nextHunter,
       items: nextItems,
       ownedShadows: nextOwnedShadows,
@@ -1236,7 +1267,12 @@ const createGateBattleOutcomeUpdate = (
       combatLogs: [finalLog, ...s.combatLogs].slice(0, 20),
       messages: finalMessages,
       manualBattleSession: undefined,
-    },
+    }
+
+  return {
+    finalLog,
+    shouldCheckUnlocks,
+    state: applySecretProgressEvent(s, { context: 'gate', outcome: combatLog.result }, baseState),
   }
 }
 
@@ -1595,7 +1631,7 @@ const applyChallengeProgress = (s: GameState, event: ChallengeProgressEvent): Pa
   }
   const weekly = addWeeklyBoxIfEligible(s.rewardBoxes ?? [], s.lastWeeklyBoxWeek, challengeCardHistory)
 
-  return {
+  return applySecretProgressEvent(s, { context: 'rank', challengeCardsCompleted: completedNow.length }, {
     hunter: nextHunter,
     shadowEssence: nextShadowEssence,
     todayChallengeCards: nextCards,
@@ -1603,7 +1639,7 @@ const applyChallengeProgress = (s: GameState, event: ChallengeProgressEvent): Pa
     rewardBoxes: weekly.rewardBoxes,
     lastWeeklyBoxWeek: weekly.lastWeeklyBoxWeek,
     messages: [...s.messages, ...nextMessages],
-  }
+  })
 }
 
 export const useGame = create<GameState>()(
@@ -1639,6 +1675,7 @@ export const useGame = create<GameState>()(
       lastChallengeCardDate: undefined,
       challengeCardHistory: {},
       skillStates: {},
+      secretProgress: undefined,
       initialized: false,
 
       setHunterName: (name) => set((s) => ({ hunter: { ...s.hunter, name } })),
@@ -1725,7 +1762,7 @@ export const useGame = create<GameState>()(
         nextHunter = { ...nextHunter, stats: nextStats }
 
         const rewardItems = [...(reward.items ?? []), ...(reward.consumables ?? [])]
-        set({
+        set(applySecretProgressEvent(s, { context: 'box', boxType: effectiveBox.type, source: effectiveBox.source }, {
           hunter: nextHunter,
           shadowEssence: (s.shadowEssence ?? 0) + (reward.shadowEssence ?? 0),
           items: [...s.items, ...rewardItems],
@@ -1733,7 +1770,7 @@ export const useGame = create<GameState>()(
             ? { ...effectiveBox, status: 'opened' as const, openedAt: todayISO(), reward }
             : item
           ),
-        })
+        }))
 
         setTimeout(() => {
           set(current => applyChallengeProgress(current, { boxOpened: true }))
@@ -3357,7 +3394,23 @@ export const useGame = create<GameState>()(
             nextGateStatus,
             combatLog
           )
-          set({ ...outcome.state, skillStates: nextSkillStates })
+          set({
+            ...outcome.state,
+            manualBattleSession: {
+              ...session,
+              waveIndex,
+              turn: getManualActionCount(logs) + 1,
+              player: toManualCombatant(player),
+              monster: toManualCombatant(monster),
+              remainingMonsterIds,
+              cooldowns: player.cooldowns,
+              monsterCooldowns: monster.cooldowns,
+              activeEffects: tickRoundEffects(activeEffects),
+              logs,
+              result,
+            },
+            skillStates: nextSkillStates,
+          })
           set(current => applyChallengeProgress(current, { gateAttempt: true, gateVictory: result === 'victory' }))
           if (outcome.shouldCheckUnlocks) {
             setTimeout(() => {
@@ -3585,7 +3638,22 @@ export const useGame = create<GameState>()(
           nextGateStatus,
           combatLog
         )
-        set(outcome.state)
+        set({
+          ...outcome.state,
+          manualBattleSession: {
+            ...session,
+            waveIndex,
+            turn: getManualActionCount(logs) + 1,
+            player: toManualCombatant(player),
+            monster: toManualCombatant(monster),
+            remainingMonsterIds,
+            cooldowns: player.cooldowns,
+            monsterCooldowns: monster.cooldowns,
+            activeEffects,
+            logs,
+            result,
+          },
+        })
         set(current => applyChallengeProgress(current, { gateAttempt: true, gateVictory: result === 'victory' }))
         if (outcome.shouldCheckUnlocks) {
           setTimeout(() => {
@@ -3851,7 +3919,13 @@ export const useGame = create<GameState>()(
             createdAt: todayISO(),
           })
 
-          set({
+          set(applySecretProgressEvent(s, {
+            context: 'tower',
+            outcome: result,
+            floor,
+            firstClear: isFirstClear,
+            boss: getTowerFloorType(floor) === 'boss',
+          }, {
             hunter: nextHunter,
             items: nextItems,
             shadowEssence: nextShadowEssence,
@@ -3878,8 +3952,18 @@ export const useGame = create<GameState>()(
             },
             combatLogs: [combatLog, ...s.combatLogs].slice(0, 20),
             messages: [...s.messages, ...newMessages],
-            manualBattleSession: undefined,
-          })
+            manualBattleSession: {
+              ...session,
+              turn: getManualActionCount(logs) + 1,
+              player: toManualCombatant(player),
+              monster: toManualCombatant(monster),
+              cooldowns: player.cooldowns,
+              monsterCooldowns: monster.cooldowns,
+              activeEffects,
+              logs,
+              result,
+            },
+          }))
         } else {
           newMessages.push({
             id: uid(),
@@ -3894,7 +3978,13 @@ export const useGame = create<GameState>()(
             createdAt: todayISO(),
           })
 
-          set({
+          set(applySecretProgressEvent(s, {
+            context: 'tower',
+            outcome: result,
+            floor,
+            firstClear: isFirstClear,
+            boss: getTowerFloorType(floor) === 'boss',
+          }, {
             items: nextItems,
             infiniteTower: {
               ...tower,
@@ -3914,8 +4004,18 @@ export const useGame = create<GameState>()(
             },
             combatLogs: [combatLog, ...s.combatLogs].slice(0, 20),
             messages: [...s.messages, ...newMessages],
-            manualBattleSession: undefined,
-          })
+            manualBattleSession: {
+              ...session,
+              turn: getManualActionCount(logs) + 1,
+              player: toManualCombatant(player),
+              monster: toManualCombatant(monster),
+              cooldowns: player.cooldowns,
+              monsterCooldowns: monster.cooldowns,
+              activeEffects,
+              logs,
+              result,
+            },
+          }))
         }
       },
 
@@ -3938,11 +4038,16 @@ export const useGame = create<GameState>()(
         const ownedShadows = result.success && result.shadow
           ? [...(s.ownedShadows ?? []), result.shadow]
           : (s.ownedShadows ?? [])
-        set({
+        set(applySecretProgressEvent(s, {
+          context: 'shadow',
+          action: 'extract',
+          success: result.success,
+          named: Boolean(result.shadow?.isGateNamed || result.shadow?.isAchievementNamed),
+        }, {
           ownedShadows,
           lastShadowExtractResult: result,
           shadowExtractHistory: [result, ...(s.shadowExtractHistory ?? [])].slice(0, 50),
-        })
+        }))
       },
 
       equipShadow: (shadowId) => set((s) => {
@@ -4071,7 +4176,7 @@ export const useGame = create<GameState>()(
               }
             : sh
         )
-        return {
+        return applySecretProgressEvent(s, { context: 'shadow', action: 'evolve', shadowInstanceId }, {
           ownedShadows: nextOwned,
           shadowEssence: (s.shadowEssence ?? 0) - cost,
           messages: [...s.messages, {
@@ -4081,7 +4186,7 @@ export const useGame = create<GameState>()(
             lines: [`[${shadow.name}]이(가) [${targetDef.name}](으)로 진화했습니다.`],
             createdAt: todayISO(),
           }],
-        }
+        })
       }),
 
       ensureTodayShadowExpedition: () => set((s) => syncTodayShadowExpeditionState(s)),
@@ -4177,19 +4282,33 @@ export const useGame = create<GameState>()(
           }, 0)
         }
 
-        return {
+        const baseState: Partial<GameState> = {
           ownedShadows: nextOwnedShadows,
           shadowEssence: nextShadowEssence,
           activeShadowExpeditionId: resolved.status === 'completed' ? undefined : s.activeShadowExpeditionId,
           shadowExpeditions: (s.shadowExpeditions ?? []).map(item => item.id === expeditionId ? resolved : item),
           messages: nextMessages,
         }
+        if (resolved.result && !expedition.result) {
+          return applySecretProgressEvent(s, {
+            context: 'expedition',
+            outcome: resolved.result.outcome,
+            expeditionType: resolved.type,
+            shadowIds: expedition.selectedShadowIds,
+          }, baseState)
+        }
+        return baseState
       }),
 
       abandonShadowExpedition: (expeditionId) => set((s) => {
         const expedition = (s.shadowExpeditions ?? []).find(item => item.id === expeditionId)
         if (!expedition || expedition.status !== 'in_progress') return {}
-        return {
+        return applySecretProgressEvent(s, {
+          context: 'expedition',
+          outcome: 'failure',
+          expeditionType: expedition.type,
+          shadowIds: expedition.selectedShadowIds,
+        }, {
           activeShadowExpeditionId: undefined,
           shadowExpeditions: (s.shadowExpeditions ?? []).map(item =>
             item.id === expeditionId
@@ -4213,7 +4332,7 @@ export const useGame = create<GameState>()(
                 }
               : item
           ),
-        }
+        })
       }),
 
       startTowerBattle: (floor) => {
@@ -4394,7 +4513,13 @@ export const useGame = create<GameState>()(
             createdAt: todayISO(),
           })
 
-          set({
+          set(applySecretProgressEvent(s, {
+            context: 'tower',
+            outcome: result.outcome,
+            floor,
+            firstClear: isFirstClear,
+            boss: getTowerFloorType(floor) === 'boss',
+          }, {
             hunter: nextHunter,
             items: nextItems,
             shadowEssence: nextShadowEssence,
@@ -4413,7 +4538,7 @@ export const useGame = create<GameState>()(
               },
             },
             messages: [...s.messages, ...newMessages],
-          })
+          }))
           setTimeout(() => {
             set(current => applyChallengeProgress(current, { towerAttempt: true, towerClear: true }))
             get().checkTitleUnlocks()
@@ -4433,7 +4558,13 @@ export const useGame = create<GameState>()(
             createdAt: todayISO(),
           })
 
-          set({
+          set(applySecretProgressEvent(s, {
+            context: 'tower',
+            outcome: result.outcome,
+            floor,
+            firstClear: isFirstClear,
+            boss: getTowerFloorType(floor) === 'boss',
+          }, {
             infiniteTower: {
               ...tower,
               currentFloor: 1,
@@ -4444,7 +4575,7 @@ export const useGame = create<GameState>()(
               },
             },
             messages: [...s.messages, ...newMessages],
-          })
+          }))
           setTimeout(() => {
             set(current => applyChallengeProgress(current, { towerAttempt: true }))
           }, 0)
@@ -4823,7 +4954,13 @@ export const useGame = create<GameState>()(
               createdAt: todayISO(),
             })
 
-            set({
+            set(applySecretProgressEvent(s, {
+              context: 'tower',
+              outcome: result,
+              floor,
+              firstClear: isFirstClear,
+              boss: getTowerFloorType(floor) === 'boss',
+            }, {
               hunter: nextHunter,
               items: nextItems,
               shadowEssence: nextShadowEssence,
@@ -4850,9 +4987,19 @@ export const useGame = create<GameState>()(
               },
               combatLogs: [combatLog, ...s.combatLogs].slice(0, 20),
               messages: [...s.messages, ...newMessages],
-              manualBattleSession: undefined,
+              manualBattleSession: {
+                ...session,
+                turn: getManualActionCount(logs) + 1,
+                player: toManualCombatant(player),
+                monster: toManualCombatant(monster),
+                cooldowns: player.cooldowns,
+                monsterCooldowns: monster.cooldowns,
+                activeEffects: tickRoundEffects(activeEffects),
+                logs,
+                result,
+              },
               skillStates: nextSkillStates,
-            })
+            }))
             setTimeout(() => {
               set(current => applyChallengeProgress(current, { towerAttempt: true, towerClear: true }))
               get().checkTitleUnlocks()
@@ -4872,7 +5019,13 @@ export const useGame = create<GameState>()(
               createdAt: todayISO(),
             })
 
-            set({
+            set(applySecretProgressEvent(s, {
+              context: 'tower',
+              outcome: result,
+              floor,
+              firstClear: isFirstClear,
+              boss: getTowerFloorType(floor) === 'boss',
+            }, {
               items: nextItems,
               infiniteTower: {
                 ...tower,
@@ -4892,9 +5045,19 @@ export const useGame = create<GameState>()(
               },
               combatLogs: [combatLog, ...s.combatLogs].slice(0, 20),
               messages: [...s.messages, ...newMessages],
-              manualBattleSession: undefined,
+              manualBattleSession: {
+                ...session,
+                turn: getManualActionCount(logs) + 1,
+                player: toManualCombatant(player),
+                monster: toManualCombatant(monster),
+                cooldowns: player.cooldowns,
+                monsterCooldowns: monster.cooldowns,
+                activeEffects: tickRoundEffects(activeEffects),
+                logs,
+                result,
+              },
               skillStates: nextSkillStates,
-            })
+            }))
             setTimeout(() => {
               set(current => applyChallengeProgress(current, { towerAttempt: true }))
             }, 0)
@@ -4921,6 +5084,7 @@ export const useGame = create<GameState>()(
       cancelTowerManualBattle: () => set((s) => {
         const session = s.manualBattleSession
         if (!session || session.source !== 'tower') return {}
+        if (session.result) return { manualBattleSession: undefined }
         const tower = s.infiniteTower ?? createInitialTowerState()
         return {
           manualBattleSession: undefined,
@@ -5198,7 +5362,7 @@ export const useGame = create<GameState>()(
         // Consume next_quest consumable effects
         const updatedConsumableEffects = consumeNextQuestEffects(s.activeConsumableEffects, q.category)
 
-        set({
+        const baseState: Partial<GameState> = {
           hunter: { ...newHunter, stats: newStats, streak, lastActiveDate: today },
           quests: updatedQuests,
           items: [...s.items, ...drops],
@@ -5208,7 +5372,11 @@ export const useGame = create<GameState>()(
           gateStatus: q.type === 'daily' || q.type === 'main'
             ? recoverGateAfterQuestCompletion(s.gateStatus)
             : s.gateStatus,
-        })
+        }
+        set(outcome.leveledUp || outcome.rankChanged
+          ? applySecretProgressEvent(s, { context: 'rank', leveledUp: outcome.leveledUp, rankChanged: outcome.rankChanged }, baseState)
+          : baseState
+        )
 
         // Check title unlocks after quest completion
         setTimeout(() => {
@@ -5282,12 +5450,16 @@ export const useGame = create<GameState>()(
             })
           }
 
-          set({
+          const baseState: Partial<GameState> = {
             hunter: newHunter,
             quests: s.quests.map(x => x.id === id ? { ...x, currentSteps: cur } : x),
             messages: [...s.messages, ...newMessages],
             achievementStats: stats,
-          })
+          }
+          set(outcome.leveledUp || outcome.rankChanged
+            ? applySecretProgressEvent(s, { context: 'rank', leveledUp: outcome.leveledUp, rankChanged: outcome.rankChanged }, baseState)
+            : baseState
+          )
 
           // Check title unlocks after dungeon progress
           setTimeout(() => {
@@ -5372,14 +5544,18 @@ export const useGame = create<GameState>()(
           })
         }
 
-        set({
+        const baseState: Partial<GameState> = {
           hunter: { ...newHunter, stats: newStats },
           quests: s.quests.map(x => x.id === id ? { ...x, currentSteps: total, completed: true } : x),
           items: [...s.items, drop],
           messages: [...s.messages, ...messages],
           achievementStats: stats,
           activeConsumableEffects: updatedConsumableEffects,
-        })
+        }
+        set(outcome.leveledUp || outcome.rankChanged
+          ? applySecretProgressEvent(s, { context: 'rank', leveledUp: outcome.leveledUp, rankChanged: outcome.rankChanged }, baseState)
+          : baseState
+        )
 
         // Unlock shadow-hunter on first dungeon clear
         setTimeout(() => {
@@ -5515,6 +5691,7 @@ export const useGame = create<GameState>()(
         lastChallengeCardDate: undefined,
         challengeCardHistory: {},
         skillStates: {},
+        secretProgress: undefined,
         initialized: true,
       }),
     }),
@@ -5642,6 +5819,7 @@ export const useGame = create<GameState>()(
         if (!persistedState.skillStates) {
           persistedState.skillStates = {}
         }
+        persistedState.secretProgress = ensureSecretProgress(persistedState.secretProgress, persistedState)
         persistedState.manualBattleSession = undefined
         return persistedState
       },

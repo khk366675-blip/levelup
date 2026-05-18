@@ -12,12 +12,20 @@ export type CinematicLogTone =
   | 'result'
   | 'defense'
 
+export interface VisualDelta {
+  target: 'player' | 'monster'
+  hpChange: number
+  newHp?: number
+  maxHp?: number
+}
+
 export interface CinematicLogData {
   id: string
   tone: CinematicLogTone
   badge: string
   title: string
   body?: string
+  visualDelta?: VisualDelta
 }
 
 interface CinematicLogOverlayProps {
@@ -126,6 +134,7 @@ export function CinematicLogOverlay({
   const onCompleteRef = useRef(onComplete)
   const onLogChangeRef = useRef(onLogChange)
   const generationRef = useRef(0)
+  const lastProcessedRef = useRef<{ generation: number; index: number } | null>(null)
   const currentLog = queue[currentIndex]
   const displayMs = intervalMs ?? durationMs
 
@@ -143,6 +152,7 @@ export function CinematicLogOverlay({
     }
 
     generationRef.current += 1
+    lastProcessedRef.current = null
     setActive(true)
     setCurrentIndex(0)
   }, [queueKey, queue.length, visible])
@@ -151,7 +161,13 @@ export function CinematicLogOverlay({
     if (!currentLog || !visible || !active) return
 
     const myGeneration = generationRef.current
-    onLogChangeRef.current?.(currentLog, currentIndex)
+
+    const alreadyProcessed = lastProcessedRef.current?.generation === myGeneration && lastProcessedRef.current?.index === currentIndex
+    if (!alreadyProcessed) {
+      lastProcessedRef.current = { generation: myGeneration, index: currentIndex }
+      onLogChangeRef.current?.(currentLog, currentIndex)
+    }
+
     const timer = window.setTimeout(() => {
       if (generationRef.current !== myGeneration) return
       const nextIndex = currentIndex + 1

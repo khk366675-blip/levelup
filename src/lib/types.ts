@@ -407,6 +407,8 @@ export interface ShadowDefinition {
   posture?: string
   backgroundMotif?: string
   visualIntensity?: number
+  secret?: boolean
+  variantKey?: string
 }
 
 export interface OwnedShadow {
@@ -432,6 +434,7 @@ export interface OwnedShadow {
   isFavorite?: boolean
   evolutionStage?: number
   evolvedFromDefinitionId?: string
+  secretTraits?: string[]
 }
 
 export interface ShadowExtractResult {
@@ -1237,6 +1240,17 @@ export interface SystemMessage {
   title: string
   lines: string[]
   createdAt: string
+}
+
+export interface SecretProgressState {
+  initializedAt?: string
+  flags?: Record<string, boolean>
+  counters?: Record<string, number>
+  lastSignals?: Record<string, string>
+  discoveredHints?: string[]
+  unlockedFragments?: string[]
+  hiddenAffinity?: Record<string, number>
+  sealedRewards?: Record<string, boolean>
 }
 
 export type BoxType = 'daily' | 'weekly' | 'boss'

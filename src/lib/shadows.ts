@@ -297,7 +297,16 @@ export const getShadowEffects = (shadow: OwnedShadow): ShadowEffect[] => {
   }))
   const baseEffects = applyMul(def?.effects ?? [])
   const traitEffects = applyMul(shadow.traits.map(trait => ({ type: trait.effectType, value: trait.value })))
-  return [...baseEffects, ...traitEffects]
+  const secretTraitEffects = (shadow.secretTraits ?? []).flatMap((trait): ShadowEffect[] => {
+    if (trait === 'silent-oath') {
+      return [
+        { type: 'category_xp_bonus', value: 0.01, category: 'challenge' },
+        { type: 'drop_bonus', value: 0.005 },
+      ]
+    }
+    return []
+  })
+  return [...baseEffects, ...traitEffects, ...secretTraitEffects]
 }
 
 export const getShadowEffectTotal = (
