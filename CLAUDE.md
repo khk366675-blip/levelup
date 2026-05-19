@@ -7701,6 +7701,28 @@ Verification:
 - `npx tsx scripts/sim-secret-expansion.ts`: pass
 - Browser smoke check on `http://127.0.0.1:5173/`: app loaded, Gate/Tower/Legion/Reward panels opened, console errors 0.
 - Spoiler reporting rule: do not disclose hidden trigger details, story text, reward identity/numbers, secret names, or hidden stat/effect details in user-facing completion reports.
+
+## 12-22B quiet layer hardening
+
+- Reviewed and tightened the low-visibility connective layer added in 12-22.
+- Existing save fallback now merges prior tower/gate/shadow/expedition/box/card/skill records into missing meta counters instead of only filling blank state.
+- Hint cadence, duplicate prevention, bounded reward claims, and cross-content progression checks were hardened without exposing a hidden-system UI.
+- Secret fragment/reward paths remain one-way additive and avoid deleting or invalidating existing player progress.
+- No large combat, growth, reward, extraction, expedition, box, card, or shadow formula changes. localStorage key remains `levelup-save`; persist remains v14.
+- `scripts/sim-secret-expansion.ts` now covers fallback merge, duplicate prevention, cadence throttling, and bounded bonus behavior.
+- User-facing reports for this work must stay spoiler-safe: do not disclose hidden conditions, story text, reward identity/numbers, secret names, fragment contents, or exact trigger combinations.
+
+Verification:
+- `npm run build`: pass (existing Vite chunk size warning only)
+- `npx tsx scripts/sim-infinite-tower.ts`: pass
+- `npx tsx scripts/sim-gate-current.ts`: pass
+- `npx tsx scripts/sim-manual-battle-balance.ts`: pass
+- `npx tsx scripts/sim-shadow-battle-balance.ts`: pass
+- `npx tsx scripts/sim-shadow-expedition.ts`: pass
+- `npx tsx scripts/sim-box-card-rewards.ts`: pass
+- `npx tsx scripts/sim-skill-system.ts`: pass
+- `npx tsx scripts/sim-secret-expansion.ts`: pass
+- Browser smoke check on `http://127.0.0.1:5173/`: app loaded, Gate/Tower/Legion/Reward panels opened, console errors 0.
 - 실제 실사용 피드백 기반 연출 속도 조정.
 - 로그 속도 설정.
 - 모바일 UI 미세 조정.

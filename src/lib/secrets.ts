@@ -50,10 +50,11 @@ const blankProgress = (): SecretProgressState => ({
 })
 
 const count = (progress: SecretProgressState, key: string): number => progress.counters?.[key] ?? 0
-const hasFlag = (progress: SecretProgressState, key: string): boolean => progress.flags?.[key] === true
 const hasHint = (progress: SecretProgressState, key: string): boolean => progress.discoveredHints?.includes(key) ?? false
 const hasFragment = (progress: SecretProgressState, key: string): boolean => progress.unlockedFragments?.includes(key) ?? false
 const hasReward = (progress: SecretProgressState, key: string): boolean => progress.sealedRewards?.[key] === true
+const rewardCount = (progress: SecretProgressState, prefix: string): number =>
+  Object.keys(progress.sealedRewards ?? {}).filter(key => key.startsWith(prefix)).length
 
 const bump = (target: Record<string, number>, key: string, amount = 1) => {
   target[key] = (target[key] ?? 0) + amount
@@ -66,9 +67,8 @@ const max = (target: Record<string, number>, key: string, value: number) => {
 const boolCount = (record: Record<number, boolean> | undefined): number =>
   Object.values(record ?? {}).filter(Boolean).length
 
-export const createInitialSecretProgress = (snapshot: SecretSnapshot = {}): SecretProgressState => {
-  const progress = blankProgress()
-  const counters = progress.counters as Record<string, number>
+const deriveSnapshotCounters = (snapshot: SecretSnapshot = {}): Record<string, number> => {
+  const counters: Record<string, number> = {}
   const shadows = snapshot.ownedShadows ?? []
 
   const highestFloor = snapshot.infiniteTower?.highestClearedFloor ?? 0
@@ -86,6 +86,12 @@ export const createInitialSecretProgress = (snapshot: SecretSnapshot = {}): Secr
   max(counters, 'challenge_cards_completed', Object.values(snapshot.challengeCardHistory ?? {}).reduce((sum, day) => sum + day.completedCount, 0))
   max(counters, 'skill_uses', Object.values(snapshot.skillStates ?? {}).reduce((sum, skill) => sum + (skill.timesUsed ?? 0), 0))
 
+  return counters
+}
+
+export const createInitialSecretProgress = (snapshot: SecretSnapshot = {}): SecretProgressState => {
+  const progress = blankProgress()
+  progress.counters = deriveSnapshotCounters(snapshot)
   return progress
 }
 
@@ -94,10 +100,15 @@ export const ensureSecretProgress = (
   snapshot: SecretSnapshot = {}
 ): SecretProgressState => {
   if (!progress) return createInitialSecretProgress(snapshot)
+  const snapshotCounters = deriveSnapshotCounters(snapshot)
+  const counters = { ...(progress.counters ?? {}) }
+  for (const [key, value] of Object.entries(snapshotCounters)) {
+    counters[key] = Math.max(counters[key] ?? 0, value)
+  }
   return {
     initializedAt: progress.initializedAt ?? new Date().toISOString(),
     flags: progress.flags ?? {},
-    counters: progress.counters ?? {},
+    counters,
     lastSignals: progress.lastSignals ?? {},
     discoveredHints: progress.discoveredHints ?? [],
     unlockedFragments: progress.unlockedFragments ?? [],
@@ -109,32 +120,34 @@ export const ensureSecretProgress = (
 const hintFor = (progress: SecretProgressState, context: SecretContext): string | undefined => {
   const options: Record<SecretContext, Array<{ id: string; min: number; text: string }>> = {
     tower: [
-      { id: 'tower-line-1', min: 1, text: '탑의 기록이 아주 짧게 진동했다.' },
-      { id: 'tower-line-2', min: 3, text: '발밑의 층계가 이전 전투의 흔적을 기억하는 듯하다.' },
+      { id: 'tower-line-1', min: 2, text: '탑의 기록이 아주 짧게 진동했다.' },
+      { id: 'tower-line-2', min: 6, text: '발밑의 층계가 이전 전투의 흔적을 기억하는 듯하다.' },
     ],
     gate: [
-      { id: 'gate-line-1', min: 2, text: '협회 단말에 출처를 알 수 없는 짧은 보고가 남았다.' },
-      { id: 'gate-line-2', min: 5, text: '균열 너머에서 탑과 닮은 압력이 스쳐 지나갔다.' },
+      { id: 'gate-line-1', min: 3, text: '협회 단말에 출처를 알 수 없는 짧은 보고가 남았다.' },
+      { id: 'gate-line-2', min: 7, text: '균열 너머에서 탑과 닮은 압력이 스쳐 지나갔다.' },
     ],
     expedition: [
-      { id: 'expedition-line-1', min: 1, text: '귀환 보고서 끝에 읽을 수 없는 검은 인장이 찍혔다.' },
-      { id: 'expedition-line-2', min: 4, text: '그림자들이 같은 방향으로 고개를 숙였다.' },
+      { id: 'expedition-line-1', min: 2, text: '귀환 보고서 끝에 읽을 수 없는 검은 인장이 찍혔다.' },
+      { id: 'expedition-line-2', min: 6, text: '그림자들이 같은 방향으로 고개를 숙였다.' },
     ],
     shadow: [
-      { id: 'shadow-line-1', min: 2, text: '추출의 잔향이 평소보다 오래 손끝에 남았다.' },
-      { id: 'shadow-line-2', min: 6, text: '몇몇 그림자가 이름 없는 명령을 기다리는 듯하다.' },
+      { id: 'shadow-line-1', min: 3, text: '추출의 잔향이 평소보다 오래 손끝에 남았다.' },
+      { id: 'shadow-line-2', min: 7, text: '몇몇 그림자가 이름 없는 명령을 기다리는 듯하다.' },
     ],
     box: [
-      { id: 'box-line-1', min: 1, text: '상자 안쪽에 사라지는 문양이 잠깐 떠올랐다.' },
-      { id: 'box-line-2', min: 3, text: '보상 기록 사이에 낯선 여백이 생겼다.' },
+      { id: 'box-line-1', min: 2, text: '상자 안쪽에 사라지는 문양이 잠깐 떠올랐다.' },
+      { id: 'box-line-2', min: 4, text: '보상 기록 사이에 낯선 여백이 생겼다.' },
     ],
     rank: [
-      { id: 'rank-line-1', min: 1, text: '시스템 평가 뒤편에서 다른 기준이 함께 움직였다.' },
-      { id: 'rank-line-2', min: 2, text: '성장의 기록이 세 방향으로 갈라졌다가 다시 합쳐졌다.' },
+      { id: 'rank-line-1', min: 2, text: '시스템 평가 뒤편에서 다른 기준이 함께 움직였다.' },
+      { id: 'rank-line-2', min: 4, text: '성장의 기록이 세 방향으로 갈라졌다가 다시 합쳐졌다.' },
     ],
   }
 
   const contextCount = count(progress, `${context}_signals`)
+  const lastHintAt = count(progress, `last_hint_signal_${context}`)
+  if (lastHintAt > 0 && contextCount - lastHintAt < 3) return undefined
   return options[context].find(item => contextCount >= item.min && !hasHint(progress, item.id))?.id
 }
 
@@ -158,30 +171,35 @@ const maybeUnlockFragments = (
   messages: Array<Omit<SystemMessage, 'id' | 'createdAt'>>
 ) => {
   const fragments = progress.unlockedFragments ?? []
+  let added = 0
   const add = (id: string) => {
     if (hasFragment(progress, id)) return
     fragments.push(id)
-    messages.push({
-      kind: 'info',
-      title: '기록의 여백',
-      lines: ['읽을 수 없는 기록 조각이 조용히 남았다.'],
-    })
+    added += 1
   }
 
   if (count(progress, 'tower_highest_milestone') >= 10) add('tower-trace-a')
-  if (count(progress, 'tower_boss_clears') >= 3) add('tower-trace-b')
-  if (count(progress, 'gate_clears') >= 4) add('gate-trace-a')
-  if (count(progress, 'gate_extractions_success') >= 3) add('gate-trace-b')
-  if (count(progress, 'expedition_success') >= 4) add('expedition-trace-a')
-  if (count(progress, 'expedition_great_success') >= 2) add('expedition-trace-b')
-  if (count(progress, 'shadows_evolved') >= 1) add('shadow-trace-a')
-  if (count(progress, 'shadows_reached_level_threshold') >= 2) add('shadow-trace-b')
+  if (count(progress, 'tower_boss_clears') >= 3 && count(progress, 'expedition_success') >= 1) add('tower-trace-b')
+  if (count(progress, 'gate_clears') >= 4 && count(progress, 'tower_highest_milestone') >= 5) add('gate-trace-a')
+  if (count(progress, 'gate_extractions_success') >= 3 && count(progress, 'shadows_evolved') >= 1) add('gate-trace-b')
+  if (count(progress, 'expedition_success') >= 4 && count(progress, 'gate_clears') >= 2) add('expedition-trace-a')
+  if (count(progress, 'expedition_great_success') >= 2 && count(progress, 'tower_boss_clears') >= 1) add('expedition-trace-b')
+  if (count(progress, 'shadows_evolved') >= 1 && count(progress, 'gate_extractions_attempted') >= 2) add('shadow-trace-a')
+  if (count(progress, 'shadows_reached_level_threshold') >= 2 && count(progress, 'expedition_success') >= 2) add('shadow-trace-b')
   if (
     count(progress, 'tower_boss_clears') >= 2 &&
     count(progress, 'gate_extractions_success') >= 2 &&
     count(progress, 'expedition_success') >= 3
   ) {
     add('cross-trace-a')
+  }
+
+  if (added > 0) {
+    messages.push({
+      kind: 'info',
+      title: '기록의 여백',
+      lines: ['읽을 수 없는 기록 조각이 조용히 남았다.'],
+    })
   }
 
   progress.unlockedFragments = fragments
@@ -200,7 +218,12 @@ const maybeApplySmallReward = (
     }
   }
 
-  if (event.context === 'expedition' && event.outcome === 'great_success' && !hasReward(progress, `expedition-${count(progress, 'expedition_great_success')}`)) {
+  if (
+    event.context === 'expedition' &&
+    event.outcome === 'great_success' &&
+    rewardCount(progress, 'expedition-') < 3 &&
+    !hasReward(progress, `expedition-${count(progress, 'expedition_great_success')}`)
+  ) {
     if (count(progress, 'gate_clears') >= 3) {
       progress.sealedRewards = { ...(progress.sealedRewards ?? {}), [`expedition-${count(progress, 'expedition_great_success')}`]: true }
       messages.push({ kind: 'shadow', title: '조용한 회수', lines: ['귀환한 그림자가 작은 잔재를 바쳤다.'] })
@@ -208,7 +231,12 @@ const maybeApplySmallReward = (
     }
   }
 
-  if (event.context === 'box' && event.boxType === 'boss' && !hasReward(progress, `box-${count(progress, 'boss_boxes_opened')}`)) {
+  if (
+    event.context === 'box' &&
+    event.boxType === 'boss' &&
+    rewardCount(progress, 'box-') < 3 &&
+    !hasReward(progress, `box-${count(progress, 'boss_boxes_opened')}`)
+  ) {
     if (count(progress, 'tower_highest_milestone') >= 10 && count(progress, 'gate_extractions_attempted') >= 2) {
       progress.sealedRewards = { ...(progress.sealedRewards ?? {}), [`box-${count(progress, 'boss_boxes_opened')}`]: true }
       messages.push({ kind: 'info', title: '상자의 잔향', lines: ['상자 바닥에 남은 빛이 정수로 가라앉았다.'] })
@@ -304,6 +332,7 @@ export const recordSecretEvent = (
 
   const hintId = hintFor(progress, event.context)
   if (hintId) {
+    counters[`last_hint_signal_${event.context}`] = count(progress, `${event.context}_signals`)
     progress.discoveredHints = [...(progress.discoveredHints ?? []), hintId]
     messages.push({ kind: 'info', title: '이상한 신호', lines: [hintText[hintId]] })
   }

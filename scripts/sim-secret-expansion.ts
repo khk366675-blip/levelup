@@ -4,6 +4,7 @@
  */
 import {
   createInitialSecretProgress,
+  ensureSecretProgress,
   getSecretVisibleFragments,
   recordSecretEvent,
 } from '../src/lib/secrets'
@@ -57,6 +58,12 @@ let progress = createInitialSecretProgress(snapshot)
 assert((progress.counters?.tower_highest_milestone ?? 0) >= 10, 'existing tower record was not reflected')
 assert((progress.counters?.gate_extractions_attempted ?? 0) === 2, 'existing extraction record was not reflected')
 
+const mergedProgress = ensureSecretProgress({
+  counters: { gate_clears: 1 },
+}, snapshot)
+assert((mergedProgress.counters?.tower_highest_milestone ?? 0) >= 10, 'fallback merge missed existing tower record')
+assert((mergedProgress.counters?.gate_clears ?? 0) >= 2, 'fallback merge regressed existing gate record')
+
 const first = recordSecretEvent(progress, { context: 'tower', outcome: 'victory', floor: 15, boss: true, firstClear: true }, snapshot)
 progress = first.progress
 const fragmentsAfterFirst = progress.unlockedFragments?.length ?? 0
@@ -68,6 +75,35 @@ assert((progress.unlockedFragments?.length ?? 0) >= fragmentsAfterFirst, 'fragme
 
 const boxResult = recordSecretEvent(progress, { context: 'box', boxType: 'boss', source: 'tower_boss' }, snapshot)
 assert(boxResult.shadowEssenceBonus <= 1, 'secret bonus exceeded bounded smoke limit')
+
+let cappedProgress = {
+  ...progress,
+  counters: {
+    ...(progress.counters ?? {}),
+    boss_boxes_opened: 0,
+    gate_extractions_attempted: 2,
+    tower_highest_milestone: 10,
+  },
+  sealedRewards: {},
+}
+let cappedBonus = 0
+for (let index = 0; index < 8; index += 1) {
+  const result = recordSecretEvent(cappedProgress, { context: 'box', boxType: 'boss', source: 'tower_boss' }, snapshot)
+  cappedProgress = result.progress
+  cappedBonus += result.shadowEssenceBonus
+}
+assert(cappedBonus <= 3, 'secret bonus cap was exceeded')
+
+let hintProgress = createInitialSecretProgress()
+let hintMessages = 0
+for (let index = 0; index < 3; index += 1) {
+  const result = recordSecretEvent(hintProgress, { context: 'gate', outcome: 'victory' }, {})
+  hintProgress = result.progress
+  hintMessages += result.messages.length
+}
+const cooldownProbe = recordSecretEvent(hintProgress, { context: 'gate', outcome: 'victory' }, {})
+assert(hintMessages === 1, 'hint did not trigger once at the expected smoke threshold')
+assert(cooldownProbe.messages.length === 0, 'hint cooldown did not prevent immediate repetition')
 
 const shadowResult = recordSecretEvent(boxResult.progress, { context: 'shadow', action: 'evolve', shadowInstanceId: evolvedShadow.instanceId }, snapshot)
 const markedOnce = shadowResult.ownedShadows?.find(shadow => shadow.instanceId === evolvedShadow.instanceId)?.secretTraits?.length ?? 0
