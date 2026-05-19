@@ -7723,7 +7723,144 @@ Verification:
 - `npx tsx scripts/sim-skill-system.ts`: pass
 - `npx tsx scripts/sim-secret-expansion.ts`: pass
 - Browser smoke check on `http://127.0.0.1:5173/`: app loaded, Gate/Tower/Legion/Reward panels opened, console errors 0.
+
+## 12-22C quiet layer finish pass
+
+- Added compatibility fields for the compact secret progress shape while preserving legacy fields and v14 persist compatibility.
+- Secret signals, one-time seen markers, unlocked traces, sealed rewards, and fragment ink are normalized through helper functions.
+- Discovery pacing was adjusted so the first meaningful trace can appear in normal play without exposing a public hidden-system checklist.
+- Added a one-time retrospective signal for existing records, staged hint strength, and a small three-content connection signal.
+- Secret message tone now has internal story/secret channels with subtle SystemMessage styling and fallback behavior.
+- Secret lore text is isolated in `src/lib/secretLore.ts`; user-facing reports must not quote hidden text, conditions, rewards, names, or trigger combinations.
+- Reward/variant paths are idempotent and bounded; existing shadows are favored for quiet changes instead of broad new secret-shadow drops.
+- Dev-only secret state helper is gated to development and is absent from production build output.
+
+Verification:
+- `npm run build`: pass (existing Vite chunk size warning only)
+- `npx tsx scripts/sim-infinite-tower.ts`: pass
+- `npx tsx scripts/sim-gate-current.ts`: pass
+- `npx tsx scripts/sim-manual-battle-balance.ts`: pass
+- `npx tsx scripts/sim-shadow-battle-balance.ts`: pass
+- `npx tsx scripts/sim-shadow-expedition.ts`: pass
+- `npx tsx scripts/sim-box-card-rewards.ts`: pass
+- `npx tsx scripts/sim-skill-system.ts`: pass
+- `npx tsx scripts/sim-secret-expansion.ts`: pass
+- Browser smoke check on `http://127.0.0.1:5173/`: app loaded, Gate/Tower/Legion/Reward panels opened, console errors 0, no debug UI visible.
+
+## 12-23A hunter combat power display
+
+- Added `src/lib/combatPower.ts` as a display/helper layer around the existing combat stat and combat power calculators.
+- Hunter status now shows current combat power with a compact mobile-safe summary.
+- The display breakdown accounts for base stats, equipment stat effects, equipped title stat effects, equipped shadows, combat skills, and active combat consumable effects.
+- Gate and Infinite Tower panels now show current combat power against recommended power with a non-blocking comparison label.
+- Shadow Expedition wording remains separate: hunter combat power is for Gate/Tower decisions, expedition power stays party-based in the expedition panel.
+- No combat, gate, tower, monster, shadow, equipment, skill, reward, localStorage key, or persist version changes. Persist remains v14.
+
+Verification:
+- `npm run build`: pass (existing Vite chunk size warning only)
+- `npx tsx scripts/sim-gate-current.ts`: pass
+- `npx tsx scripts/sim-infinite-tower.ts`: pass
+- `npx tsx scripts/sim-manual-battle-balance.ts`: pass
+- `npx tsx scripts/sim-shadow-battle-balance.ts`: pass
+- Browser smoke check on `http://127.0.0.1:5173/`: app loaded, Hunter/Gate/Tower panels checked, mobile viewport checked, console errors 0.
+
+TODO:
+- 12-23B equipment/shadow variety + shadow summon ticket system.
+- 12-23C shadow expedition narrative/event depth pass.
 - 실제 실사용 피드백 기반 연출 속도 조정.
 - 로그 속도 설정.
 - 모바일 UI 미세 조정.
 - 보스 박스/게이트 네임드/legendary 추출의 실제 빈도 기반 연출 강도 조정.
+
+## 12-23B equipment/shadow diversity and summon tickets
+
+- Expanded the equipment and shadow reward pools from the 12-23B-0 audit, prioritizing common/uncommon/rare variety while still adding controlled epic, legendary, gate named, and achievement named options.
+- Added 34 equipment templates: common 7, uncommon 9, rare 9, epic 6, legendary 3. Current pool: 72 equipment and 15 consumables.
+- Added 51 shadow definitions: 34 broader gate-extract/general candidates, 7 gate named candidates, and 10 achievement named candidates. Current pool: 104 shadows, including 64 gate extract, 16 gate named, and 24 achievement named.
+- Equipment instances support `equipmentStars` 1-5 with multipliers 0.85/1.00/1.18/1.38/1.65. Existing equipment falls back to 2-star.
+- Owned shadows support `innateGrade` C/B/A/S with multipliers 0.90/1.00/1.22/1.50. Existing owned shadows fall back to B.
+- Expanded evolution routes from 5 to 21, including support, analyst, hunter, scout, guard, and assault paths that reuse the existing level, enhancement, and essence policy.
+- Added shadow summon tickets and shards: normal, rare, role, gate named, achievement named, category achievement named, and normal/rare/named/achievement_named shards.
+- Main Quest achievement named rewards now grant category/grade-based achievement named summon tickets instead of fixed direct named shadows. Existing owned achievement named shadows are preserved, and sealed claim tracking prevents reload duplication.
+- Box/card/gate/tower rewards can grant summon shards or tickets. Boss and high-floor boss rewards use boosted rates with caps on achievement named tickets; Main Quest keeps guaranteed achievement ticket value.
+- UI updates: inventory shows equipment stars separately from enhancement, shadow cards/panels show innate grade, expedition selection shows innate grade, reward boxes list summon tickets/shards, and ShadowPanel includes a summon/shard exchange section.
+- Save compatibility: `localStorage` key remains `levelup-save`; persist remains v14. Migration fills missing equipment stars, shadow innate grades, summon ticket arrays, shard records, and sealed achievement ticket claims.
+
+Verification:
+- `npm run build`: pass, with the existing Vite chunk-size warning only.
+- `npx tsx scripts/sim-shadow-battle-balance.ts`: pass.
+- `npx tsx scripts/sim-gate-current.ts`: pass. Early E/D/C gate pacing remains in the expected ranges.
+- `npx tsx scripts/sim-infinite-tower.ts`: pass. Stable clear bands remain roughly A 7F, B 12F, C/D 14F, E 22F, F 28F.
+- `npx tsx scripts/sim-box-card-rewards.ts`: pass. Current item pool reports equipment 72, consumables 15.
+- `npx tsx scripts/sim-shadow-expedition.ts`: pass.
+- `npx tsx scripts/sim-equipment-shadow-diversity.ts`: pass. Gate-extract roles are assault 10, guard 11, scout 8, analyst 12, hunter 10, support 13; evolution routes 21.
+- `npx tsx scripts/sim-shadow-summon-ticket.ts`: pass. Ticket innate-grade rolls match target rates; high boss achievement ticket rate remains below cap.
+- Browser smoke check on `http://127.0.0.1:3002/`: desktop app loaded, inventory and legion/summon areas checked, mobile viewport 390x844 checked, console errors 0.
+
+TODO:
+- Tune summon ticket probabilities with real play data.
+- Keep expanding named and achievement named candidate pools by category.
+- Fine-tune equipment star and shadow innate-grade caps if long-term data shows runaway stacked quality.
+
+## 12-23C shadow expedition narrative depth pass
+
+- Added `src/lib/expeditionLore.ts` as a pure text/narrative data layer (no imports from store or components). Contains phase names, phase enter logs, phase-aware command logs, mid-event definitions, role lines, and report templates.
+- Added new type definitions in `src/lib/types.ts`: `ExpeditionPhase`, `ExpeditionPhaseEntry`, `ExpeditionMidEventChoice`, `ExpeditionMidEvent`, `ExpeditionReport`. Extended `ShadowExpeditionLog`, `ShadowExpeditionResult`, and `ShadowExpedition` with phase/event/report fields.
+- `ShadowExpedition` now tracks `currentPhase`, `phaseHistory`, `midEvent`, `eventTriggered`, `eventResolved`. All new fields are optional and backwards-compatible; existing saves load without migration needed.
+- `resolveShadowExpeditionCommand` now:
+  - Detects phase transitions (muster → deploy → contact → threshold → resolution → return) and emits a `phase` log on transition.
+  - Generates phase-contextual and role-contextual command log text via `getCommandLog` / `getRoleLine`.
+  - Triggers a mid-event in the `threshold` phase at ~42% chance per command, max once per expedition. Event is stored in `midEvent`; commands are blocked until resolved.
+  - Generates a 5-block `ExpeditionReport` (title, overview, highlight, harvest, closing) on completion via `buildExpeditionReport`.
+  - Emits a featured shadow role line at expedition end.
+- Added `resolveExpeditionMidEventChoice` in `shadowExpeditions.ts`: applies chosen delta (progress/risk/searchStacks), adds event log, sets `eventResolved`.
+- Added `resolveShadowExpeditionMidEvent(expeditionId, choiceId)` action in `store.ts`.
+- `ShadowExpeditionPanel.tsx` UI changes:
+  - Phase badge in header: shows type-specific phase name when `in_progress`.
+  - `MidEventCard` component: appears when event is triggered and unresolved. Shows event title, description, and 2-3 choice buttons with delta badges. Highlights role-matching choices.
+  - Commands are blocked while `eventTriggered && !eventResolved` (handled in `resolveShadowExpeditionCommand`).
+  - `ReportPanel` replaces `ResultPanel`: shows existing reward blocks plus a 4-block narrative report (overview, highlight, harvest, closing) with subdued per-outcome color scheme.
+  - Featured shadow in portraits is highlighted if `featuredShadowIds` is set.
+- `sim-shadow-expedition.ts` updated: auto-resolves mid-events with first choice to avoid infinite loop.
+- No changes to progress/risk/reward formulas, persistence key, or persist version. All existing simulation outcomes remain within expected bands.
+
+Verification:
+- `npm run build`: pass (existing Vite chunk size warning only).
+- `npx tsx scripts/sim-shadow-expedition.ts`: pass. Outcome distribution unchanged from 12-23B baseline.
+- Browser smoke check: phase badge, MidEventCard, and ReportPanel render correctly in shadow expedition flow.
+
+## combat log source separation bug fix
+
+**Problem:** After an Infinite Tower battle, the Gate panel displayed Tower battle logs. `combatLogs` is a shared global array containing both gate and tower `CombatLog` entries. `GatePanel` used `combatLogs[0]` (most recent, no source filter), so if a tower battle ran after the last gate battle, the tower log appeared in the gate panel.
+
+**Root cause:** `CombatLog` had no `source` field. Tower battles push to the same `combatLogs` array using `gateInstanceId: 'tower-${floor}'`. Gate panel read index `[0]` without discrimination.
+
+**Fix — `src/lib/types.ts`:** Added `source?: 'gate' | 'tower'` optional field to `CombatLog`. Optional for backwards compatibility with existing saves.
+
+**Fix — `src/lib/store.ts` (5 sites):**
+- Gate auto-battle (`createGateBattleOutcomeUpdate`): `finalLog.source = 'gate'`
+- Gate auto-battle (`startGateBattle`): `finalLog.source = 'gate'`
+- Tower manual-auto conversion combatLog literal: `source: 'tower'`
+- Tower auto-battle (`startTowerBattle`) push site: `{ ...combatLog, source: 'tower' }`
+- Tower pure manual battle (`performTowerManualBattleAction`) combatLog literal: `source: 'tower'`
+
+**Fix — `src/components/GatePanel.tsx`:** Replaced all `combatLogs[0]` with `latestGateCombatLog`:
+```js
+const latestGateCombatLog = combatLogs.find(
+  log => log.source === 'gate' || (!log.source && !log.gateInstanceId?.startsWith('tower-'))
+)
+```
+Fallback for old saves (no `source` field): treats logs with `gateInstanceId` not starting with `'tower-'` as gate logs. Tower logs always use `gateInstanceId: 'tower-${floor}'`.
+
+**`InfiniteTowerPanel.tsx`:** Already correct — uses `combatLogs.find(log => log.battleId === activeBattle.id)` to get the specific tower battle log. No change needed.
+
+**CinematicLogOverlay queue:** Each panel manages its own `cinematicLogs` local state. No shared queue — no change needed.
+
+**No changes to:** combat formulas, gate/tower/expedition reward values, XP, shadow stats, equipment, persist version, localStorage key.
+
+Verification:
+- `npm run build`: pass (existing Vite chunk size warning only).
+- `npx tsx scripts/sim-gate-current.ts`: pass. Gate outcome distribution unchanged.
+- `npx tsx scripts/sim-infinite-tower.ts`: pass. Tower clear bands unchanged.
+- `npx tsx scripts/sim-shadow-expedition.ts`: pass. Expedition outcomes unchanged.
+- Browser test scenario: Tower battle → Gate panel shows no tower logs; Gate battle → Gate panel shows gate log only.

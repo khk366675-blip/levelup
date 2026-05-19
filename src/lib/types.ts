@@ -290,6 +290,7 @@ export interface Quest {
 }
 
 export type ItemRarity = 'common' | 'uncommon' | 'rare' | 'epic' | 'legendary'
+export type EquipmentStars = 1 | 2 | 3 | 4 | 5
 
 export const RARITY_META: Record<ItemRarity, { label: string; color: string; ring: string }> = {
   common:    { label: '일반',    color: 'text-zinc-200',   ring: 'ring-zinc-500/40' },
@@ -301,6 +302,35 @@ export const RARITY_META: Record<ItemRarity, { label: string; color: string; rin
 
 // Shadow Soldier System (12-11)
 export type ShadowRarity = 'common' | 'uncommon' | 'rare' | 'epic' | 'legendary'
+export type ShadowInnateGrade = 'C' | 'B' | 'A' | 'S'
+
+export type ShadowSummonTicketType =
+  | 'normal_shadow'
+  | 'rare_shadow'
+  | 'role_shadow'
+  | 'gate_named_shadow'
+  | 'achievement_named_shadow'
+  | 'category_achievement_named'
+
+export type ShadowSummonTicketSource =
+  | 'achievement'
+  | 'reward_box'
+  | 'challenge_card'
+  | 'tower'
+  | 'gate'
+  | 'system'
+
+export type ShadowSummonShardType =
+  | 'normal'
+  | 'rare'
+  | 'named'
+  | 'achievement_named'
+
+export type AchievementTicketGrade =
+  | 'standard'
+  | 'rare'
+  | 'elite'
+  | 's_rank'
 
 export type ShadowRank =
   | 'lesser'
@@ -377,6 +407,8 @@ export interface ShadowDefinition {
   name: string
   description: string
   rarity: ShadowRarity
+  birthRarity?: ShadowRarity
+  sourceCategory?: Category
   rank: ShadowRank
   role: ShadowRole
   sourceType: ShadowSourceType
@@ -420,6 +452,8 @@ export interface OwnedShadow {
   sourceGateId?: string
   sourceQuestId?: string
   rarity: ShadowRarity
+  birthRarity?: ShadowRarity
+  innateGrade?: ShadowInnateGrade
   rank: ShadowRank
   role: ShadowRole
   traits: ShadowTrait[]
@@ -435,6 +469,29 @@ export interface OwnedShadow {
   evolutionStage?: number
   evolvedFromDefinitionId?: string
   secretTraits?: string[]
+  variantKey?: string
+  awakenedAt?: string
+}
+
+export interface ShadowSummonTicket {
+  id: string
+  ticketType: ShadowSummonTicketType
+  /** Legacy alias from the first 12-23B draft. Kept optional for old runtime saves. */
+  kind?: 'standard' | 'achievement_named'
+  label: string
+  createdAt: string
+  source: ShadowSummonTicketSource
+  role?: ShadowRole
+  category?: Category
+  grade?: AchievementTicketGrade
+  definitionId?: string
+  rarityFloor?: ShadowRarity
+  usedAt?: string
+}
+
+export interface ShadowFragmentReward {
+  definitionId: string
+  amount: number
 }
 
 export interface ShadowExtractResult {
@@ -454,13 +511,51 @@ export type ShadowExpeditionStatus = 'locked' | 'available' | 'in_progress' | 'c
 export type ShadowExpeditionCommand = 'attack' | 'defend' | 'scout' | 'analyze' | 'search'
 export type ShadowExpeditionOutcome = 'great_success' | 'success' | 'partial' | 'failure'
 
+export type ExpeditionPhase = 'muster' | 'deploy' | 'contact' | 'threshold' | 'resolution' | 'return'
+
+export interface ExpeditionPhaseEntry {
+  phase: ExpeditionPhase
+  enteredAt: number
+  message?: string
+}
+
+export interface ExpeditionMidEventChoice {
+  id: string
+  label: string
+  description: string
+  progressDelta?: number
+  riskDelta?: number
+  searchStackDelta?: number
+  log: string
+  preferredRoles?: ShadowRole[]
+}
+
+export interface ExpeditionMidEvent {
+  id: string
+  type: ShadowExpeditionType | 'any'
+  phase: 'threshold'
+  title: string
+  description: string
+  choices: ExpeditionMidEventChoice[]
+  recentCooldown?: number
+}
+
+export interface ExpeditionReport {
+  title: string
+  overview: string
+  highlight: string
+  harvest: string
+  closing: string
+}
+
 export interface ShadowExpeditionLog {
   id: string
   turn: number
-  type: 'system' | 'command' | 'shadow' | 'risk' | 'reward'
+  type: 'system' | 'command' | 'shadow' | 'risk' | 'reward' | 'phase' | 'event'
   message: string
   actorShadowId?: string
   command?: ShadowExpeditionCommand
+  phase?: ExpeditionPhase
 }
 
 export interface ShadowExpeditionResult {
@@ -470,6 +565,8 @@ export interface ShadowExpeditionResult {
   shadowXpGained: number
   essenceGained: number
   bonusRewards?: string[]
+  report?: ExpeditionReport
+  featuredShadowIds?: string[]
 }
 
 export interface ShadowExpedition {
@@ -492,6 +589,12 @@ export interface ShadowExpedition {
   searchStacks?: number
   analyzeStacks?: number
   scoutStacks?: number
+  currentPhase?: ExpeditionPhase
+  phaseHistory?: ExpeditionPhaseEntry[]
+  midEvent?: ExpeditionMidEvent
+  eventTriggered?: boolean
+  eventResolved?: boolean
+  secretSignals?: Record<string, number>
 }
 
 // ── Equipment System ───────────────────────────────────────────────
@@ -748,6 +851,7 @@ export interface CombatLog {
   penaltyApplied?: GatePenalty
   totalWaves?: number
   clearedWaves?: number
+  source?: 'gate' | 'tower'
 }
 
 export interface GateStatus {
@@ -801,6 +905,7 @@ export interface Item {
   name: string
   icon: string
   rarity: ItemRarity
+  equipmentStars?: EquipmentStars
   description: string
   acquiredAt: string
   
@@ -1236,13 +1341,24 @@ export interface Title {
 
 export interface SystemMessage {
   id: string
-  kind: 'levelup' | 'quest' | 'item' | 'title' | 'rank' | 'info' | 'shadow'
+  kind: 'levelup' | 'quest' | 'item' | 'title' | 'rank' | 'info' | 'shadow' | 'story' | 'secret'
   title: string
   lines: string[]
   createdAt: string
 }
 
 export interface SecretProgressState {
+  meta?: {
+    initializedAt?: string
+    version?: number
+    lastSignalAt?: Record<string, string>
+    recentContexts?: string[]
+  }
+  signals?: Record<string, number>
+  unlocked?: string[]
+  sealed?: Record<string, string | number | boolean>
+  seen?: string[]
+  fragmentInk?: Record<string, number>
   initializedAt?: string
   flags?: Record<string, boolean>
   counters?: Record<string, number>
@@ -1261,6 +1377,9 @@ export interface BoxReward {
   hunterXp?: number
   statRewards?: Partial<Record<StatKey, number>>
   shadowEssence?: number
+  shadowSummonTickets?: ShadowSummonTicket[]
+  shadowSummonShards?: Partial<Record<ShadowSummonShardType, number>>
+  shadowFragments?: ShadowFragmentReward[]
   items?: Item[]
   consumables?: Item[]
   message?: string

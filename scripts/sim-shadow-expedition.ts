@@ -9,6 +9,7 @@ import {
   createShadowExpeditionForDate,
   getShadowExpeditionPartyPower,
   resolveShadowExpeditionCommand,
+  resolveExpeditionMidEventChoice,
 } from '../src/lib/shadowExpeditions'
 import { SHADOW_DEFINITIONS, createOwnedShadow } from '../src/lib/shadows'
 import type { OwnedShadow, ShadowExpedition, ShadowExpeditionCommand, ShadowExpeditionType, ShadowRole } from '../src/lib/types'
@@ -127,6 +128,12 @@ const runOne = (
   const rng = createRng(seed)
   let commandIndex = 0
   while (expedition.status === 'in_progress' && !expedition.result) {
+    // Auto-resolve mid events by picking first choice
+    if (expedition.eventTriggered && !expedition.eventResolved && expedition.midEvent) {
+      const choiceId = expedition.midEvent.choices[0].id
+      expedition = resolveExpeditionMidEventChoice(expedition, choiceId, () => `sim-event-${seed}-${commandIndex++}`)
+      continue
+    }
     const command = chooseCommand(strategy, expedition, party, commandIndex)
     expedition = resolveShadowExpeditionCommand(
       expedition,

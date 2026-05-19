@@ -12,8 +12,12 @@ import {
   formatTitleEffects,
   getEquippedTitleDefinition,
 } from '../lib/game'
+import {
+  getCombatPowerTierHint,
+  getHunterCombatPowerBreakdown,
+} from '../lib/combatPower'
 import { STAT_META, type StatKey, JOB_DEFINITIONS, JOB_LINE_META } from '../lib/types'
-import { Flame, Plus } from 'lucide-react'
+import { Flame, Plus, Swords } from 'lucide-react'
 import { useState } from 'react'
 import { JobPanel } from './JobPanel'
 import { SkillPanel } from './SkillPanel'
@@ -22,6 +26,9 @@ export function HunterStatus() {
   const hunter = useGame(s => s.hunter)
   const items = useGame(s => s.items)
   const equipment = useGame(s => s.equipment)
+  const ownedShadows = useGame(s => s.ownedShadows ?? [])
+  const equippedShadowIds = useGame(s => s.equippedShadowIds ?? [])
+  const activeConsumableEffects = useGame(s => s.activeConsumableEffects ?? [])
   const setName = useGame(s => s.setHunterName)
   const setJob = useGame(s => s.setHunterJob)
   const allocate = useGame(s => s.allocateFreeStat)
@@ -41,6 +48,15 @@ export function HunterStatus() {
   // Get equipment stat bonuses
   const equippedItems = getEquippedItems(items, equipment)
   const equipmentBonuses = getEquipmentStatBonuses(equippedItems)
+  const combatPower = getHunterCombatPowerBreakdown({
+    hunter,
+    items,
+    equipment,
+    ownedShadows,
+    equippedShadowIds,
+    activeConsumableEffects,
+  })
+  const combatPowerHint = getCombatPowerTierHint(combatPower.total)
 
   // Stat effect descriptions
   const getStatEffect = (key: StatKey): string | null => {
@@ -159,6 +175,40 @@ export function HunterStatus() {
             >
               {hunter.level}
             </motion.div>
+          </div>
+        </div>
+
+        <div className="mb-5 grid grid-cols-1 gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
+          <div className="rounded-lg border border-amber-300/25 bg-amber-400/10 px-3 py-2">
+            <div className="flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <div className="system-text text-[10px] text-amber-200/70">COMBAT POWER</div>
+                <div className="flex items-baseline gap-2">
+                  <div className="text-2xl font-black tabular-nums text-amber-100">
+                    {combatPower.total.toLocaleString()}
+                  </div>
+                  <div className="text-xs text-amber-200/70">{combatPowerHint}</div>
+                </div>
+              </div>
+              <Swords className="h-5 w-5 shrink-0 text-amber-200/70" />
+            </div>
+            <div className="mt-1 text-[10px] leading-relaxed text-white/45">
+              장비 · 칭호 · 출전 그림자 · 전투 스킬 반영
+            </div>
+          </div>
+          <div className="grid grid-cols-3 gap-2 sm:w-72">
+            <div className="rounded border border-white/10 bg-white/5 px-2 py-2 text-center">
+              <div className="system-text text-[9px] text-white/40">장비</div>
+              <div className="text-xs font-bold text-purple-100">+{combatPower.equipment.toLocaleString()}</div>
+            </div>
+            <div className="rounded border border-white/10 bg-white/5 px-2 py-2 text-center">
+              <div className="system-text text-[9px] text-white/40">칭호</div>
+              <div className="text-xs font-bold text-amber-100">+{combatPower.title.toLocaleString()}</div>
+            </div>
+            <div className="rounded border border-white/10 bg-white/5 px-2 py-2 text-center">
+              <div className="system-text text-[9px] text-white/40">그림자</div>
+              <div className="text-xs font-bold text-cyan-100">+{combatPower.shadows.toLocaleString()}</div>
+            </div>
           </div>
         </div>
 

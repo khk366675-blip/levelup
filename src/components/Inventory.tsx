@@ -4,11 +4,13 @@ import { RARITY_META, EQUIPMENT_SLOT_LABEL, CATEGORY_META, type Item, type Equip
 import { SKILL_DEFINITIONS } from '../lib/seed'
 import {
   canEnhanceItem,
+  formatEquipmentStars,
   formatEnhancementLabel,
   formatStatReward,
   getEnhancedItemEffects,
   getEnhanceMaterialCandidates,
   getEnhancementLevel,
+  getEquipmentStars,
   isEnhanceableEquipment,
   MAX_ITEM_ENHANCEMENT_LEVEL,
 } from '../lib/game'
@@ -224,6 +226,7 @@ export function Inventory() {
                       {formatEnhancementLabel(equippedItem) && (
                         <span className="ml-1 text-amber-300">{formatEnhancementLabel(equippedItem)}</span>
                       )}
+                      <span className="ml-1 text-yellow-200">{formatEquipmentStars(equippedItem)}</span>
                     </div>
                     {equippedItem.effects && equippedItem.effects.length > 0 && (
                       <div className="text-[9px] text-purple-300/60 system-text mt-1 text-center">
@@ -270,6 +273,7 @@ export function Inventory() {
             const combatSkillNames = formatCombatSkillNames(item)
             const enhancementLevel = getEnhancementLevel(item)
             const enhancementLabel = formatEnhancementLabel(item)
+            const equipmentStars = getEquipmentStars(item)
             const enhanceable = isEnhanceableEquipment(item)
             const enhanceMaterials = getEnhanceMaterialCandidates(item, items, equippedItemIds)
             const canEnhance = canEnhanceItem(item, items, equippedItemIds)
@@ -298,6 +302,7 @@ export function Inventory() {
                 <div className={`text-center text-sm font-semibold ${meta.color}`}>
                   {item.name}
                   {enhancementLabel && <span className="ml-1 text-amber-300">{enhancementLabel}</span>}
+                  {item.equippable && !item.consumable && <span className="ml-1 text-yellow-200">{formatEquipmentStars(item)}</span>}
                 </div>
                 <div className="text-center text-[10px] system-text mt-0.5 uppercase tracking-wider opacity-70">
                   <span className={meta.color}>[{meta.label}]</span>
@@ -306,6 +311,9 @@ export function Inventory() {
                   )}
                   {isConsumable && (
                     <span className="ml-1 text-purple-300/60">· 소모품</span>
+                  )}
+                  {item.equippable && !item.consumable && (
+                    <span className="ml-1 text-yellow-300/70">· {equipmentStars}성</span>
                   )}
                 </div>
                 

@@ -5,6 +5,7 @@ import { Box, Crown, Gift, Sparkles, TowerControl } from 'lucide-react'
 import { useGame } from '../lib/store'
 import type { BoxReward, BoxTier, RewardBox } from '../lib/types'
 import { formatStatReward, todayKey } from '../lib/game'
+import { getShadowDefinition } from '../lib/shadows'
 import { DramaticReveal, type DramaticRevealTone, type RevealStep } from './DramaticReveal'
 
 const TIER_LABEL: Record<BoxTier, string> = {
@@ -41,6 +42,12 @@ function formatReward(reward?: BoxReward): string[] {
   return [
     ...(reward.hunterXp ? [`XP +${reward.hunterXp}`] : []),
     ...(reward.shadowEssence ? [`그림자 정수 +${reward.shadowEssence}`] : []),
+    ...(reward.shadowSummonTickets ?? []).map(ticket => `소환권: ${ticket.label}`),
+    ...Object.entries(reward.shadowSummonShards ?? {}).map(([type, amount]) => `소환 조각: ${type} +${amount}`),
+    ...(reward.shadowFragments ?? []).map(fragment => {
+      const definition = getShadowDefinition(fragment.definitionId)
+      return `조각: ${definition?.name ?? fragment.definitionId} +${fragment.amount}`
+    }),
     ...Object.entries(reward.statRewards ?? {}).map(([stat, value]) => `${stat} ${formatStatReward(value ?? 0)}`),
     ...(reward.items ?? []).map(item => `${item.icon} ${item.name}`),
     ...(reward.consumables ?? []).map(item => `${item.icon} ${item.name}`),

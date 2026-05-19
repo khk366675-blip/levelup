@@ -4,6 +4,7 @@ import { motion } from 'framer-motion'
 import {
   MAX_SHADOW_ENHANCEMENT_LEVEL,
   SHADOW_DECOMPOSE_ESSENCE,
+  SHADOW_INNATE_GRADE_LABEL,
   SHADOW_RANK_LABEL,
   SHADOW_RARITY_LABEL,
   SHADOW_ROLE_LABEL,
@@ -114,9 +115,11 @@ export function ShadowCard({
             <div className="min-w-0">
               <div className={clsx('text-[10px] system-text', rarityText[shadow.rarity])}>
                 [{SHADOW_RARITY_LABEL[shadow.rarity]}]
+                {(shadow.birthRarity ?? shadow.rarity) !== shadow.rarity ? ` / BIRTH ${SHADOW_RARITY_LABEL[shadow.birthRarity ?? shadow.rarity]}` : ''}
               </div>
               <h3 className="mt-0.5 truncate text-sm font-bold text-white/90 sm:text-base">
-                {shadow.name}{enhancement > 0 ? ` +${enhancement}` : ''}
+              {shadow.name}{enhancement > 0 ? ` +${enhancement}` : ''}
+                {shadow.innateGrade === 'S' || shadow.innateGrade === 'A' ? <span className="ml-1 text-amber-200">[{shadow.innateGrade}]</span> : null}
               </h3>
               <div className="mt-1 flex flex-wrap gap-1.5 text-[10px] system-text">
                 <span className="rounded border border-white/10 bg-ink-900/55 px-1.5 py-0.5 text-white/55">
@@ -180,6 +183,8 @@ export function ShadowCard({
           <div className="mt-1 flex flex-wrap gap-2 text-[10px] text-white/40">
             <span>Enhance {enhancement}/{MAX_SHADOW_ENHANCEMENT_LEVEL}</span>
             <span>Absorbed {shadow.absorbedCount ?? 0}</span>
+            <span>Birth {SHADOW_RARITY_LABEL[shadow.birthRarity ?? shadow.rarity]}</span>
+            <span>{SHADOW_INNATE_GRADE_LABEL[shadow.innateGrade ?? 'B']}</span>
             {(shadow.evolutionStage ?? 0) > 0 && <span className="text-emerald-200/70">Evolution Stage {shadow.evolutionStage}</span>}
           </div>
           {evolutionCheck.targetDefinition && (

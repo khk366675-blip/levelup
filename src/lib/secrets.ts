@@ -5,6 +5,7 @@ import type {
   ShadowExpedition,
   SystemMessage,
 } from './types'
+import { SECRET_HINTS, SECRET_MESSAGES } from './secretLore'
 
 type SecretSnapshot = {
   infiniteTower?: {
@@ -27,6 +28,7 @@ export type SecretEvent =
   | { context: 'gate'; outcome: 'victory' | 'defeat' | 'draw' }
   | { context: 'expedition'; outcome: 'great_success' | 'success' | 'partial' | 'failure'; expeditionType?: string; shadowIds?: string[] }
   | { context: 'shadow'; action: 'extract'; success: boolean; named?: boolean }
+  | { context: 'shadow'; action: 'summon' | 'fragment_summon'; named?: boolean }
   | { context: 'shadow'; action: 'evolve'; shadowInstanceId?: string }
   | { context: 'box'; boxType?: string; source?: string }
   | { context: 'rank'; leveledUp?: boolean; rankChanged?: boolean; skillUses?: number; challengeCardsCompleted?: number }
@@ -40,6 +42,12 @@ export type SecretEventResult = {
 
 const blankProgress = (): SecretProgressState => ({
   initializedAt: new Date().toISOString(),
+  meta: { initializedAt: new Date().toISOString(), version: 1, lastSignalAt: {}, recentContexts: [] },
+  signals: {},
+  unlocked: [],
+  sealed: {},
+  seen: [],
+  fragmentInk: {},
   flags: {},
   counters: {},
   lastSignals: {},
@@ -49,12 +57,62 @@ const blankProgress = (): SecretProgressState => ({
   sealedRewards: {},
 })
 
-const count = (progress: SecretProgressState, key: string): number => progress.counters?.[key] ?? 0
-const hasHint = (progress: SecretProgressState, key: string): boolean => progress.discoveredHints?.includes(key) ?? false
-const hasFragment = (progress: SecretProgressState, key: string): boolean => progress.unlockedFragments?.includes(key) ?? false
-const hasReward = (progress: SecretProgressState, key: string): boolean => progress.sealedRewards?.[key] === true
+const count = (progress: SecretProgressState, key: string): number => progress.signals?.[key] ?? progress.counters?.[key] ?? 0
+const hasSeen = (progress: SecretProgressState, key: string): boolean =>
+  progress.seen?.includes(key) ?? progress.discoveredHints?.includes(key) ?? false
+const hasHint = (progress: SecretProgressState, key: string): boolean => hasSeen(progress, key)
+const hasFragment = (progress: SecretProgressState, key: string): boolean =>
+  progress.unlocked?.includes(key) ?? progress.unlockedFragments?.includes(key) ?? false
+const hasReward = (progress: SecretProgressState, key: string): boolean =>
+  progress.sealed?.[key] !== undefined || progress.sealedRewards?.[key] === true
 const rewardCount = (progress: SecretProgressState, prefix: string): number =>
-  Object.keys(progress.sealedRewards ?? {}).filter(key => key.startsWith(prefix)).length
+  new Set([
+    ...Object.keys(progress.sealed ?? {}),
+    ...Object.keys(progress.sealedRewards ?? {}),
+  ].filter(key => key.startsWith(prefix))).size
+
+const unionStrings = (...arrays: Array<string[] | undefined>): string[] =>
+  Array.from(new Set(arrays.flatMap(array => array ?? [])))
+
+const mergeNumberRecords = (...records: Array<Record<string, number> | undefined>): Record<string, number> => {
+  const merged: Record<string, number> = {}
+  for (const record of records) {
+    for (const [key, value] of Object.entries(record ?? {})) {
+      merged[key] = Math.max(merged[key] ?? 0, value)
+    }
+  }
+  return merged
+}
+
+const mergeSealedRecords = (progress: SecretProgressState): Record<string, string | number | boolean> => ({
+  ...(progress.sealed ?? {}),
+  ...Object.fromEntries(Object.entries(progress.sealedRewards ?? {}).filter(([, value]) => value)),
+})
+
+const sealSecretReward = (progress: SecretProgressState, rewardId: string, value: string | number | boolean = true): boolean => {
+  if (hasReward(progress, rewardId)) return false
+  progress.sealed = { ...(progress.sealed ?? {}), [rewardId]: value }
+  progress.sealedRewards = { ...(progress.sealedRewards ?? {}), [rewardId]: true }
+  return true
+}
+
+const markSecretSeen = (progress: SecretProgressState, seenId: string): boolean => {
+  if (hasSeen(progress, seenId)) return false
+  progress.seen = [...(progress.seen ?? []), seenId]
+  return true
+}
+
+const unlockSecretOnce = (progress: SecretProgressState, unlockId: string): boolean => {
+  if (hasFragment(progress, unlockId)) return false
+  progress.unlocked = [...(progress.unlocked ?? []), unlockId]
+  progress.unlockedFragments = [...(progress.unlockedFragments ?? []), unlockId]
+  return true
+}
+
+const syncSecretSignals = (progress: SecretProgressState, signals: Record<string, number>) => {
+  progress.signals = { ...signals }
+  progress.counters = { ...signals }
+}
 
 const bump = (target: Record<string, number>, key: string, amount = 1) => {
   target[key] = (target[key] ?? 0) + amount
@@ -85,13 +143,20 @@ const deriveSnapshotCounters = (snapshot: SecretSnapshot = {}): Record<string, n
   max(counters, 'boss_boxes_opened', snapshot.rewardBoxes?.filter(box => box.type === 'boss' && box.status === 'opened').length ?? 0)
   max(counters, 'challenge_cards_completed', Object.values(snapshot.challengeCardHistory ?? {}).reduce((sum, day) => sum + day.completedCount, 0))
   max(counters, 'skill_uses', Object.values(snapshot.skillStates ?? {}).reduce((sum, skill) => sum + (skill.timesUsed ?? 0), 0))
+  if (
+    count({ counters }, 'tower_highest_milestone') >= 5 &&
+    count({ counters }, 'gate_clears') >= 1 &&
+    count({ counters }, 'expedition_success') >= 1
+  ) {
+    max(counters, 'resonance_triad', 1)
+  }
 
   return counters
 }
 
 export const createInitialSecretProgress = (snapshot: SecretSnapshot = {}): SecretProgressState => {
   const progress = blankProgress()
-  progress.counters = deriveSnapshotCounters(snapshot)
+  syncSecretSignals(progress, deriveSnapshotCounters(snapshot))
   return progress
 }
 
@@ -101,108 +166,168 @@ export const ensureSecretProgress = (
 ): SecretProgressState => {
   if (!progress) return createInitialSecretProgress(snapshot)
   const snapshotCounters = deriveSnapshotCounters(snapshot)
-  const counters = { ...(progress.counters ?? {}) }
-  for (const [key, value] of Object.entries(snapshotCounters)) {
-    counters[key] = Math.max(counters[key] ?? 0, value)
+  const affinitySignals = Object.fromEntries(
+    Object.entries(progress.hiddenAffinity ?? {}).map(([key, value]) => [`affinity.${key}`, value])
+  )
+  const signals = mergeNumberRecords(progress.counters, progress.signals, affinitySignals, snapshotCounters)
+  const initializedAt = progress.meta?.initializedAt ?? progress.initializedAt ?? new Date().toISOString()
+  const lastSignalAt = {
+    ...(progress.lastSignals ?? {}),
+    ...(progress.meta?.lastSignalAt ?? {}),
   }
+  const seen = unionStrings(progress.seen, progress.discoveredHints)
+  const unlocked = unionStrings(progress.unlocked, progress.unlockedFragments, Object.entries(progress.flags ?? {})
+    .filter(([, value]) => value)
+    .map(([key]) => `flag.${key}`))
+  const sealed = mergeSealedRecords(progress)
   return {
-    initializedAt: progress.initializedAt ?? new Date().toISOString(),
+    meta: {
+      initializedAt,
+      version: progress.meta?.version ?? 1,
+      lastSignalAt,
+      recentContexts: progress.meta?.recentContexts ?? [],
+    },
+    signals,
+    unlocked,
+    sealed,
+    seen,
+    fragmentInk: progress.fragmentInk ?? {},
+    initializedAt,
     flags: progress.flags ?? {},
-    counters,
-    lastSignals: progress.lastSignals ?? {},
+    counters: signals,
+    lastSignals: lastSignalAt,
     discoveredHints: progress.discoveredHints ?? [],
     unlockedFragments: progress.unlockedFragments ?? [],
     hiddenAffinity: progress.hiddenAffinity ?? {},
-    sealedRewards: progress.sealedRewards ?? {},
+    sealedRewards: Object.fromEntries(Object.entries(sealed).map(([key]) => [key, true])),
   }
 }
 
-const hintFor = (progress: SecretProgressState, context: SecretContext): string | undefined => {
-  const options: Record<SecretContext, Array<{ id: string; min: number; text: string }>> = {
-    tower: [
-      { id: 'tower-line-1', min: 2, text: '탑의 기록이 아주 짧게 진동했다.' },
-      { id: 'tower-line-2', min: 6, text: '발밑의 층계가 이전 전투의 흔적을 기억하는 듯하다.' },
-    ],
-    gate: [
-      { id: 'gate-line-1', min: 3, text: '협회 단말에 출처를 알 수 없는 짧은 보고가 남았다.' },
-      { id: 'gate-line-2', min: 7, text: '균열 너머에서 탑과 닮은 압력이 스쳐 지나갔다.' },
-    ],
-    expedition: [
-      { id: 'expedition-line-1', min: 2, text: '귀환 보고서 끝에 읽을 수 없는 검은 인장이 찍혔다.' },
-      { id: 'expedition-line-2', min: 6, text: '그림자들이 같은 방향으로 고개를 숙였다.' },
-    ],
-    shadow: [
-      { id: 'shadow-line-1', min: 3, text: '추출의 잔향이 평소보다 오래 손끝에 남았다.' },
-      { id: 'shadow-line-2', min: 7, text: '몇몇 그림자가 이름 없는 명령을 기다리는 듯하다.' },
-    ],
-    box: [
-      { id: 'box-line-1', min: 2, text: '상자 안쪽에 사라지는 문양이 잠깐 떠올랐다.' },
-      { id: 'box-line-2', min: 4, text: '보상 기록 사이에 낯선 여백이 생겼다.' },
-    ],
-    rank: [
-      { id: 'rank-line-1', min: 2, text: '시스템 평가 뒤편에서 다른 기준이 함께 움직였다.' },
-      { id: 'rank-line-2', min: 4, text: '성장의 기록이 세 방향으로 갈라졌다가 다시 합쳐졌다.' },
-    ],
-  }
+export const getSecretProgress = ensureSecretProgress
 
+export const incrementSecretSignal = (
+  progress: SecretProgressState | undefined,
+  key: string,
+  amount = 1
+): SecretProgressState => {
+  const next = ensureSecretProgress(progress)
+  const signals = { ...(next.signals ?? next.counters ?? {}) }
+  bump(signals, key, amount)
+  syncSecretSignals(next, signals)
+  return next
+}
+
+export const hasSecretUnlocked = (progress: SecretProgressState | undefined, id: string): boolean =>
+  progress ? hasFragment(ensureSecretProgress(progress), id) : false
+
+export const unlockSecretOncePublic = (progress: SecretProgressState | undefined, id: string): SecretProgressState => {
+  const next = ensureSecretProgress(progress)
+  unlockSecretOnce(next, id)
+  return next
+}
+
+export const markSecretSeenPublic = (progress: SecretProgressState | undefined, id: string): SecretProgressState => {
+  const next = ensureSecretProgress(progress)
+  markSecretSeen(next, id)
+  return next
+}
+
+export const sealSecretRewardPublic = (progress: SecretProgressState | undefined, rewardId: string): SecretProgressState => {
+  const next = ensureSecretProgress(progress)
+  sealSecretReward(next, rewardId)
+  return next
+}
+
+export const isSecretRewardSealed = (progress: SecretProgressState | undefined, rewardId: string): boolean =>
+  progress ? hasReward(ensureSecretProgress(progress), rewardId) : false
+
+export const capSecretBonus = (base: number, modified: number, maxRatio = 1.15): number =>
+  Math.min(modified, Math.ceil(base * maxRatio))
+
+export const applySecretModifiers = (baseValue: number, modifiers: number[], maxRatio = 1.15): number =>
+  capSecretBonus(baseValue, baseValue + modifiers.reduce((sum, value) => sum + value, 0), maxRatio)
+
+const hintFor = (progress: SecretProgressState, context: SecretContext): string | undefined => {
   const contextCount = count(progress, `${context}_signals`)
   const lastHintAt = count(progress, `last_hint_signal_${context}`)
   if (lastHintAt > 0 && contextCount - lastHintAt < 3) return undefined
-  return options[context].find(item => contextCount >= item.min && !hasHint(progress, item.id))?.id
+  const resonanceLift = Math.min(2, count(progress, 'resonance_triad'))
+  const eligible = SECRET_HINTS[context]
+    .filter(item => contextCount + resonanceLift >= item.min && !hasHint(progress, item.id))
+  return eligible[eligible.length - 1]?.id
 }
 
-const hintText: Record<string, string> = {
-  'tower-line-1': '탑의 기록이 아주 짧게 진동했다.',
-  'tower-line-2': '발밑의 층계가 이전 전투의 흔적을 기억하는 듯하다.',
-  'gate-line-1': '협회 단말에 출처를 알 수 없는 짧은 보고가 남았다.',
-  'gate-line-2': '균열 너머에서 탑과 닮은 압력이 스쳐 지나갔다.',
-  'expedition-line-1': '귀환 보고서 끝에 읽을 수 없는 검은 인장이 찍혔다.',
-  'expedition-line-2': '그림자들이 같은 방향으로 고개를 숙였다.',
-  'shadow-line-1': '추출의 잔향이 평소보다 오래 손끝에 남았다.',
-  'shadow-line-2': '몇몇 그림자가 이름 없는 명령을 기다리는 듯하다.',
-  'box-line-1': '상자 안쪽에 사라지는 문양이 잠깐 떠올랐다.',
-  'box-line-2': '보상 기록 사이에 낯선 여백이 생겼다.',
-  'rank-line-1': '시스템 평가 뒤편에서 다른 기준이 함께 움직였다.',
-  'rank-line-2': '성장의 기록이 세 방향으로 갈라졌다가 다시 합쳐졌다.',
+const hintText = (hintId: string): string | undefined =>
+  Object.values(SECRET_HINTS).flat().find(item => item.id === hintId)?.line
+
+const updateFragmentInk = (progress: SecretProgressState) => {
+  const ink = { ...(progress.fragmentInk ?? {}) }
+  const setInk = (id: string, value: number) => {
+    ink[id] = Math.max(ink[id] ?? 0, Math.min(100, Math.round(value)))
+  }
+
+  setInk('first-trace', Math.max(
+    count(progress, 'tower_boss_clears') * 100,
+    count(progress, 'gate_clears') * 34,
+    count(progress, 'expedition_success') * 20,
+    count(progress, 'gate_extractions_success') * 50,
+    Math.min(count(progress, 'tower_signals'), count(progress, 'gate_signals'), count(progress, 'expedition_signals')) * 100
+  ))
+  setInk('tower-trace-a', count(progress, 'tower_highest_milestone') * 10)
+  setInk('gate-trace-a', Math.min(count(progress, 'gate_clears') * 20, count(progress, 'tower_highest_milestone') * 20))
+  setInk('expedition-trace-a', Math.min(count(progress, 'expedition_success') * 20, count(progress, 'gate_clears') * 50))
+  setInk('cross-trace-a', count(progress, 'resonance_triad') * 34)
+  progress.fragmentInk = ink
+}
+
+const maybeEnsureFirstDiscovery = (
+  progress: SecretProgressState,
+  messages: Array<Omit<SystemMessage, 'id' | 'createdAt'>>
+): boolean => {
+  if ((progress.unlockedFragments?.length ?? 0) > 0) return false
+  const ready =
+    count(progress, 'tower_boss_clears') >= 1 ||
+    count(progress, 'gate_clears') >= 3 ||
+    count(progress, 'expedition_success') >= 5 ||
+    count(progress, 'gate_extractions_success') >= 2 ||
+    (
+      count(progress, 'tower_signals') >= 1 &&
+      count(progress, 'gate_signals') >= 1 &&
+      count(progress, 'expedition_signals') >= 1
+    )
+  if (!ready || !unlockSecretOnce(progress, 'first-trace')) return false
+  messages.push({ kind: 'secret', ...SECRET_MESSAGES.firstTrace })
+  return true
 }
 
 const maybeUnlockFragments = (
   progress: SecretProgressState,
   messages: Array<Omit<SystemMessage, 'id' | 'createdAt'>>
 ) => {
-  const fragments = progress.unlockedFragments ?? []
-  let added = 0
-  const add = (id: string) => {
-    if (hasFragment(progress, id)) return
-    fragments.push(id)
-    added += 1
-  }
+  updateFragmentInk(progress)
+  if (maybeEnsureFirstDiscovery(progress, messages)) return
 
-  if (count(progress, 'tower_highest_milestone') >= 10) add('tower-trace-a')
-  if (count(progress, 'tower_boss_clears') >= 3 && count(progress, 'expedition_success') >= 1) add('tower-trace-b')
-  if (count(progress, 'gate_clears') >= 4 && count(progress, 'tower_highest_milestone') >= 5) add('gate-trace-a')
-  if (count(progress, 'gate_extractions_success') >= 3 && count(progress, 'shadows_evolved') >= 1) add('gate-trace-b')
-  if (count(progress, 'expedition_success') >= 4 && count(progress, 'gate_clears') >= 2) add('expedition-trace-a')
-  if (count(progress, 'expedition_great_success') >= 2 && count(progress, 'tower_boss_clears') >= 1) add('expedition-trace-b')
-  if (count(progress, 'shadows_evolved') >= 1 && count(progress, 'gate_extractions_attempted') >= 2) add('shadow-trace-a')
-  if (count(progress, 'shadows_reached_level_threshold') >= 2 && count(progress, 'expedition_success') >= 2) add('shadow-trace-b')
-  if (
-    count(progress, 'tower_boss_clears') >= 2 &&
-    count(progress, 'gate_extractions_success') >= 2 &&
-    count(progress, 'expedition_success') >= 3
-  ) {
-    add('cross-trace-a')
+  const candidates: Array<{ id: string; ready: boolean }> = [
+    { id: 'tower-trace-a', ready: count(progress, 'tower_highest_milestone') >= 10 },
+    { id: 'tower-trace-b', ready: count(progress, 'tower_boss_clears') >= 3 && count(progress, 'expedition_success') >= 1 },
+    { id: 'gate-trace-a', ready: count(progress, 'gate_clears') >= 4 && count(progress, 'tower_highest_milestone') >= 5 },
+    { id: 'gate-trace-b', ready: count(progress, 'gate_extractions_success') >= 3 && count(progress, 'shadows_evolved') >= 1 },
+    { id: 'expedition-trace-a', ready: count(progress, 'expedition_success') >= 4 && count(progress, 'gate_clears') >= 2 },
+    { id: 'expedition-trace-b', ready: count(progress, 'expedition_great_success') >= 2 && count(progress, 'tower_boss_clears') >= 1 },
+    { id: 'shadow-trace-a', ready: count(progress, 'shadows_evolved') >= 1 && count(progress, 'gate_extractions_attempted') >= 2 },
+    { id: 'shadow-trace-b', ready: count(progress, 'shadows_reached_level_threshold') >= 2 && count(progress, 'expedition_success') >= 2 },
+    {
+      id: 'cross-trace-a',
+      ready: count(progress, 'tower_boss_clears') >= 2 &&
+        count(progress, 'gate_extractions_success') >= 2 &&
+        count(progress, 'expedition_success') >= 3 &&
+        count(progress, 'resonance_triad') >= 1,
+    },
+  ]
+  const next = candidates.find(candidate => candidate.ready && !hasFragment(progress, candidate.id))
+  if (next && unlockSecretOnce(progress, next.id)) {
+    messages.push({ kind: 'secret', ...SECRET_MESSAGES.fragmentTrace })
   }
-
-  if (added > 0) {
-    messages.push({
-      kind: 'info',
-      title: '기록의 여백',
-      lines: ['읽을 수 없는 기록 조각이 조용히 남았다.'],
-    })
-  }
-
-  progress.unlockedFragments = fragments
 }
 
 const maybeApplySmallReward = (
@@ -210,10 +335,13 @@ const maybeApplySmallReward = (
   event: SecretEvent,
   messages: Array<Omit<SystemMessage, 'id' | 'createdAt'>>
 ): number => {
+  const bonusBudgetUsed = rewardCount(progress, 'tower-') + rewardCount(progress, 'expedition-') + rewardCount(progress, 'box-')
+  if (bonusBudgetUsed >= 6) return 0
+
   if (event.context === 'tower' && event.outcome === 'victory' && event.boss && !hasReward(progress, `tower-${event.floor}`)) {
     if (count(progress, 'tower_boss_clears') >= 2 && count(progress, 'expedition_success') >= 2) {
-      progress.sealedRewards = { ...(progress.sealedRewards ?? {}), [`tower-${event.floor}`]: true }
-      messages.push({ kind: 'info', title: '희미한 공명', lines: ['보상 사이에 작은 잔향이 더해졌다.'] })
+      sealSecretReward(progress, `tower-${event.floor}`)
+      messages.push({ kind: 'secret', ...SECRET_MESSAGES.reward.tower })
       return 1
     }
   }
@@ -225,8 +353,8 @@ const maybeApplySmallReward = (
     !hasReward(progress, `expedition-${count(progress, 'expedition_great_success')}`)
   ) {
     if (count(progress, 'gate_clears') >= 3) {
-      progress.sealedRewards = { ...(progress.sealedRewards ?? {}), [`expedition-${count(progress, 'expedition_great_success')}`]: true }
-      messages.push({ kind: 'shadow', title: '조용한 회수', lines: ['귀환한 그림자가 작은 잔재를 바쳤다.'] })
+      sealSecretReward(progress, `expedition-${count(progress, 'expedition_great_success')}`)
+      messages.push({ kind: 'secret', ...SECRET_MESSAGES.reward.expedition })
       return 1
     }
   }
@@ -238,8 +366,8 @@ const maybeApplySmallReward = (
     !hasReward(progress, `box-${count(progress, 'boss_boxes_opened')}`)
   ) {
     if (count(progress, 'tower_highest_milestone') >= 10 && count(progress, 'gate_extractions_attempted') >= 2) {
-      progress.sealedRewards = { ...(progress.sealedRewards ?? {}), [`box-${count(progress, 'boss_boxes_opened')}`]: true }
-      messages.push({ kind: 'info', title: '상자의 잔향', lines: ['상자 바닥에 남은 빛이 정수로 가라앉았다.'] })
+      sealSecretReward(progress, `box-${count(progress, 'boss_boxes_opened')}`)
+      messages.push({ kind: 'secret', ...SECRET_MESSAGES.reward.box })
       return 1
     }
   }
@@ -263,13 +391,64 @@ const maybeMarkShadow = (
     const secretTraits = shadow.secretTraits ?? []
     if (secretTraits.includes('silent-oath')) return shadow
     changed = true
-    return { ...shadow, secretTraits: [...secretTraits, 'silent-oath'] }
+    return {
+      ...shadow,
+      secretTraits: [...secretTraits, 'silent-oath'],
+      variantKey: shadow.variantKey ?? 'silent-oath',
+      awakenedAt: shadow.awakenedAt ?? new Date().toISOString(),
+    }
   })
   if (!changed) return undefined
 
-  progress.sealedRewards = { ...(progress.sealedRewards ?? {}), [`shadow-mark-${event.shadowInstanceId}`]: true }
-  messages.push({ kind: 'shadow', title: '낯선 흔적', lines: ['그림자 하나가 말없이 새로운 흔적을 받아들였다.'] })
+  sealSecretReward(progress, `shadow-mark-${event.shadowInstanceId}`)
+  messages.push({ kind: 'secret', ...SECRET_MESSAGES.shadowMark })
   return next
+}
+
+const maybeTriggerRetrospective = (
+  progress: SecretProgressState,
+  event: SecretEvent,
+  snapshotSignals: Record<string, number>,
+  messages: Array<Omit<SystemMessage, 'id' | 'createdAt'>>
+) => {
+  if (event.context !== 'tower' && event.context !== 'gate' && event.context !== 'expedition') return
+  if (hasSeen(progress, 'retrospective.first')) return
+
+  const hasPriorWeight =
+    (snapshotSignals.tower_highest_milestone ?? 0) >= 5 ||
+    (snapshotSignals.gate_clears ?? 0) >= 3 ||
+    (snapshotSignals.expedition_success ?? 0) >= 2 ||
+    (snapshotSignals.shadows_evolved ?? 0) >= 1 ||
+    (snapshotSignals.boss_boxes_opened ?? 0) >= 1
+  if (!hasPriorWeight) return
+
+  markSecretSeen(progress, 'retrospective.first')
+  messages.push({ kind: 'story', ...SECRET_MESSAGES.retrospective[event.context] })
+}
+
+const maybeUpdateResonance = (
+  progress: SecretProgressState,
+  event: SecretEvent,
+  signals: Record<string, number>,
+  messages: Array<Omit<SystemMessage, 'id' | 'createdAt'>>
+) => {
+  if (event.context !== 'tower' && event.context !== 'gate' && event.context !== 'expedition') return
+  const recent = [...(progress.meta?.recentContexts ?? []), event.context].slice(-6)
+  const hasTriad = ['tower', 'gate', 'expedition'].every(context => recent.includes(context))
+  const actionSum = count({ signals }, 'tower_signals') + count({ signals }, 'gate_signals') + count({ signals }, 'expedition_signals')
+  const lastAt = signals.last_resonance_signal ?? 0
+
+  if (hasTriad && actionSum - lastAt >= 3) {
+    bump(signals, 'resonance_triad')
+    signals.last_resonance_signal = actionSum
+    progress.meta = { ...(progress.meta ?? {}), recentContexts: [] }
+    if (markSecretSeen(progress, 'resonance.first')) {
+      messages.push({ kind: 'secret', ...SECRET_MESSAGES.resonance })
+    }
+    return
+  }
+
+  progress.meta = { ...(progress.meta ?? {}), recentContexts: recent }
 }
 
 export const recordSecretEvent = (
@@ -278,11 +457,13 @@ export const recordSecretEvent = (
   snapshot: SecretSnapshot = {}
 ): SecretEventResult => {
   const progress = ensureSecretProgress(currentProgress, snapshot)
-  const counters = { ...(progress.counters ?? {}) }
+  const snapshotSignals = deriveSnapshotCounters(snapshot)
+  const counters = { ...(progress.signals ?? progress.counters ?? {}) }
   const hiddenAffinity = { ...(progress.hiddenAffinity ?? {}) }
   const messages: Array<Omit<SystemMessage, 'id' | 'createdAt'>> = []
 
   bump(counters, `${event.context}_signals`)
+  bump(counters, `affinity.${event.context}`)
   bump(hiddenAffinity, event.context, 1)
 
   if (event.context === 'tower') {
@@ -312,6 +493,7 @@ export const recordSecretEvent = (
       if (event.success) bump(counters, 'gate_extractions_success')
       if (event.named) bump(counters, 'gate_named_shadows_obtained')
     }
+    if (event.action === 'summon' || event.action === 'fragment_summon') bump(counters, 'shadow_summons')
     if (event.action === 'evolve') bump(counters, 'shadows_evolved')
   }
 
@@ -326,15 +508,23 @@ export const recordSecretEvent = (
     if (event.challengeCardsCompleted) bump(counters, 'challenge_cards_completed', event.challengeCardsCompleted)
   }
 
-  progress.counters = counters
   progress.hiddenAffinity = hiddenAffinity
-  progress.lastSignals = { ...(progress.lastSignals ?? {}), [event.context]: new Date().toISOString() }
+  const lastSignalAt = { ...(progress.meta?.lastSignalAt ?? progress.lastSignals ?? {}), [event.context]: new Date().toISOString() }
+  progress.meta = { ...(progress.meta ?? {}), lastSignalAt }
+  progress.lastSignals = lastSignalAt
+
+  maybeTriggerRetrospective(progress, event, snapshotSignals, messages)
+  maybeUpdateResonance(progress, event, counters, messages)
+  syncSecretSignals(progress, counters)
 
   const hintId = hintFor(progress, event.context)
   if (hintId) {
     counters[`last_hint_signal_${event.context}`] = count(progress, `${event.context}_signals`)
-    progress.discoveredHints = [...(progress.discoveredHints ?? []), hintId]
-    messages.push({ kind: 'info', title: '이상한 신호', lines: [hintText[hintId]] })
+    markSecretSeen(progress, hintId)
+    progress.discoveredHints = unionStrings(progress.discoveredHints, [hintId])
+    const line = hintText(hintId)
+    if (line) messages.push({ kind: 'secret', title: SECRET_MESSAGES.hint.title, lines: [line] })
+    syncSecretSignals(progress, counters)
   }
 
   maybeUnlockFragments(progress, messages)
@@ -345,4 +535,7 @@ export const recordSecretEvent = (
 }
 
 export const getSecretVisibleFragments = (progress: SecretProgressState | undefined): string[] =>
-  (progress?.unlockedFragments ?? []).slice(-3)
+  unionStrings(
+    progress?.unlockedFragments,
+    progress?.unlocked?.filter(id => id.includes('trace'))
+  ).slice(-3)

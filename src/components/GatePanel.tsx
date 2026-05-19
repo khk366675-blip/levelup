@@ -18,7 +18,6 @@ import { DramaticReveal, type RevealStep } from './DramaticReveal'
 import { ShadowPortrait } from './shadows/ShadowPortrait'
 import { GATE_DEFINITIONS, GATE_PENALTIES, GATE_REWARD_TABLES, MONSTER_DEFINITIONS, SKILL_DEFINITIONS } from '../lib/seed'
 import {
-  calculateCombatPower,
   calculatePlayerCombatStats,
   formatStatReward,
   getActiveGateSuccessBonus,
@@ -28,6 +27,10 @@ import {
   isShadowCombatLog,
   type GateRisk,
 } from '../lib/game'
+import {
+  getCombatPowerComparison,
+  getHunterCombatPowerBreakdown,
+} from '../lib/combatPower'
 import type { ActiveConsumableEffect, CombatLog, Item, MonsterDefinition, ShadowExtractResult, StatKey } from '../lib/types'
 import type { ManualBattleAction, ManualBattleSession, SkillDefinition } from '../lib/types'
 import {
@@ -1483,6 +1486,9 @@ export function GatePanel() {
   const equippedShadowIds = useGame(s => s.equippedShadowIds ?? [])
   const gateStatus = useGame(s => s.gateStatus)
   const combatLogs = useGame(s => s.combatLogs)
+  const latestGateCombatLog = combatLogs.find(
+    log => log.source === 'gate' || (!log.source && !log.gateInstanceId?.startsWith('tower-'))
+  )
   const manualBattleSession = useGame(s => s.manualBattleSession)
   const startGateBattle = useGame(s => s.startGateBattle)
   const startManualGateBattle = useGame(s => s.startManualGateBattle)
@@ -1515,7 +1521,15 @@ export function GatePanel() {
     jobId: hunter.jobId,
     skills: playerSkills,
   })
-  const playerPower = calculateCombatPower(combatStats)
+  const combatPower = getHunterCombatPowerBreakdown({
+    hunter,
+    items,
+    equipment,
+    ownedShadows,
+    equippedShadowIds,
+    activeConsumableEffects,
+  })
+  const playerPower = combatPower.total
   const activeGateOpen = activeGate?.status === 'active'
   const gate = activeGateOpen
     ? GATE_DEFINITIONS.find(g => g.id === activeGate.gateId)
@@ -1560,11 +1574,11 @@ export function GatePanel() {
         <GateStatusPanel />
         <EmptyGateState />
         <RecentBattleResult
-          log={combatLogs[0]}
+          log={latestGateCombatLog}
           shouldReveal={isBattleRevealing}
           onRevealStateChange={setIsBattleRevealing}
         />
-        <ShadowExtractionPanel log={combatLogs[0]} gateId={activeGate?.gateId} />
+        <ShadowExtractionPanel log={latestGateCombatLog} gateId={activeGate?.gateId} />
       </div>
     )
   }
@@ -1591,10 +1605,17 @@ export function GatePanel() {
   const penalty = GATE_PENALTIES.find(item => item.id === gate.failPenaltyId)
   const risk = estimateGateRisk(playerPower, gate.recommendedPower)
   const riskInfo = riskMeta[risk]
+  const powerComparison = getCombatPowerComparison(playerPower, gate.recommendedPower)
+  const powerComparisonClass =
+    powerComparison.tone === 'stable'
+      ? 'border-emerald-400/25 bg-emerald-400/10 text-emerald-100'
+      : powerComparison.tone === 'challenge'
+        ? 'border-amber-400/25 bg-amber-400/10 text-amber-100'
+        : 'border-rose-400/25 bg-rose-400/10 text-rose-100'
   const isInjured = Boolean(gateStatus.injuredUntil)
   const hasStamina = gateStatus.stamina >= GATE_ENTRY_COST
   const canStart = hasStamina && !isInjured && !isBattleRevealing
-  const latestCombatLog = combatLogs[0]
+  const latestCombatLog = latestGateCombatLog
   const canRetry =
     latestCombatLog?.gateInstanceId === activeGate.instanceId &&
     latestCombatLog.result === 'draw'
@@ -1633,7 +1654,7 @@ export function GatePanel() {
           onCancel={cancelManualGateBattle}
         />
         <RecentBattleResult
-          log={combatLogs[0]}
+          log={latestGateCombatLog}
           shouldReveal={isBattleRevealing}
           onRevealStateChange={setIsBattleRevealing}
         />
@@ -1679,6 +1700,15 @@ export function GatePanel() {
           <StatPill label="권장 레벨" value={`Lv.${gate.recommendedLevel}`} />
           <StatPill label="권장 전투력" value={gate.recommendedPower} />
           <StatPill label="내 전투력" value={playerPower} />
+        </div>
+
+        <div className={`mb-5 rounded-lg border px-3 py-2 text-xs ${powerComparisonClass}`}>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <span className="system-text">전투력 비교 · {powerComparison.label}</span>
+            <span className="font-mono">
+              현재 {playerPower.toLocaleString()} / 권장 {gate.recommendedPower.toLocaleString()} / 차이 {powerComparison.diff >= 0 ? '+' : ''}{powerComparison.diff.toLocaleString()}
+            </span>
+          </div>
         </div>
 
         <div className="grid lg:grid-cols-3 gap-4">
@@ -1860,11 +1890,11 @@ export function GatePanel() {
         </div>
       </div>
       <RecentBattleResult
-        log={combatLogs[0]}
+        log={latestGateCombatLog}
         shouldReveal={isBattleRevealing}
         onRevealStateChange={setIsBattleRevealing}
       />
-      <ShadowExtractionPanel log={combatLogs[0]} gateId={gate.id} />
+      <ShadowExtractionPanel log={latestGateCombatLog} gateId={gate.id} />
     </div>
   )
 }

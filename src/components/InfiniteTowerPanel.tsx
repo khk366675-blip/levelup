@@ -15,6 +15,10 @@ import { gateTurnToLogEntry } from './GatePanel'
 import type { ManualBattleAction, ManualBattleSession } from '../lib/types'
 import { getEquippedShadows } from '../lib/shadows'
 import { getPlayerCombatSkills, BASIC_ATTACK_SKILL } from '../lib/game'
+import {
+  getCombatPowerComparison,
+  getHunterCombatPowerBreakdown,
+} from '../lib/combatPower'
 import { getSecretVisibleFragments } from '../lib/secrets'
 import { SKILL_DEFINITIONS } from '../lib/seed'
 import {
@@ -113,6 +117,7 @@ export function InfiniteTowerPanel() {
   const hunter = useGame(s => s.hunter)
   const items = useGame(s => s.items)
   const equipment = useGame(s => s.equipment)
+  const activeConsumableEffects = useGame(s => s.activeConsumableEffects ?? [])
   const ownedShadows = useGame(s => s.ownedShadows ?? [])
   const equippedShadowIds = useGame(s => s.equippedShadowIds ?? [])
   const skillStates = useGame(s => s.skillStates ?? {})
@@ -139,6 +144,21 @@ export function InfiniteTowerPanel() {
   const challengeFloor = selectedFloor ?? currentFloor
   const floorType = getTowerFloorType(challengeFloor)
   const recommendedPower = getTowerRecommendedPower(challengeFloor)
+  const hunterPower = getHunterCombatPowerBreakdown({
+    hunter,
+    items,
+    equipment,
+    ownedShadows,
+    equippedShadowIds,
+    activeConsumableEffects,
+  }).total
+  const powerComparison = getCombatPowerComparison(hunterPower, recommendedPower)
+  const powerComparisonClass =
+    powerComparison.tone === 'stable'
+      ? 'border-emerald-400/25 bg-emerald-400/10 text-emerald-100'
+      : powerComparison.tone === 'challenge'
+        ? 'border-amber-400/25 bg-amber-400/10 text-amber-100'
+        : 'border-rose-400/25 bg-rose-400/10 text-rose-100'
   const monsters = getTowerMonstersForFloor(challengeFloor)
   const isBoss = floorType === 'boss'
 
@@ -461,6 +481,14 @@ export function InfiniteTowerPanel() {
 
           <div className="mb-3 space-y-1">
             <div className="text-xs text-white/55">추천 전투력: <span className="font-bold text-white/80">{recommendedPower}</span></div>
+            <div className={`rounded border px-2 py-1.5 text-[11px] ${powerComparisonClass}`}>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <span className="system-text">전투력 비교 · {powerComparison.label}</span>
+                <span className="font-mono">
+                  현재 {hunterPower.toLocaleString()} / 권장 {recommendedPower.toLocaleString()} / 차이 {powerComparison.diff >= 0 ? '+' : ''}{powerComparison.diff.toLocaleString()}
+                </span>
+              </div>
+            </div>
             {monsters.length > 0 && (
               <div className="text-xs text-white/55">
                 등장 몬스터: {monsters.map(m => m.name).join(', ')}

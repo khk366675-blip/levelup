@@ -6,9 +6,13 @@ import type {
   ShadowDefinition,
   ShadowEffect,
   ShadowEffectType,
+  ShadowInnateGrade,
   ShadowRank,
   ShadowRarity,
   ShadowRole,
+  ShadowSummonTicket,
+  ShadowSummonTicketSource,
+  ShadowSummonTicketType,
   ShadowVisualTheme,
   ShadowTrait,
   StatKey,
@@ -42,6 +46,52 @@ export const SHADOW_ROLE_LABEL: Record<ShadowRole, string> = {
   analyst: '분석',
   support: '지원',
   hunter: '사냥',
+}
+
+export const SHADOW_FRAGMENT_SUMMON_COST: Record<ShadowRarity, number> = {
+  common: 8,
+  uncommon: 12,
+  rare: 20,
+  epic: 35,
+  legendary: 60,
+}
+
+export const SHADOW_INNATE_GRADE_LABEL: Record<ShadowInnateGrade, string> = {
+  C: 'C 태생',
+  B: 'B 태생',
+  A: 'A 태생',
+  S: 'S 태생',
+}
+
+export const SHADOW_INNATE_GRADE_MULTIPLIER: Record<ShadowInnateGrade, number> = {
+  C: 0.9,
+  B: 1,
+  A: 1.22,
+  S: 1.5,
+}
+
+const rollWeightedGrade = (weights: Record<ShadowInnateGrade, number>, rng: () => number = Math.random): ShadowInnateGrade => {
+  const entries = Object.entries(weights) as Array<[ShadowInnateGrade, number]>
+  const total = entries.reduce((sum, [, weight]) => sum + weight, 0)
+  let roll = rng() * total
+  for (const [grade, weight] of entries) {
+    roll -= weight
+    if (roll <= 0) return grade
+  }
+  return 'B'
+}
+
+export const rollShadowInnateGrade = (
+  source: 'gate_extract' | 'normal_ticket' | 'rare_ticket' | 'role_ticket' | 'gate_named_ticket' | 'achievement_ticket' | 'main_s_achievement_ticket',
+  rng: () => number = Math.random
+): ShadowInnateGrade => {
+  if (source === 'main_s_achievement_ticket') return rollWeightedGrade({ C: 0, B: 0, A: 60, S: 40 }, rng)
+  if (source === 'achievement_ticket') return rollWeightedGrade({ C: 0, B: 20, A: 55, S: 25 }, rng)
+  if (source === 'gate_named_ticket') return rollWeightedGrade({ C: 0, B: 45, A: 40, S: 15 }, rng)
+  if (source === 'role_ticket') return rollWeightedGrade({ C: 25, B: 45, A: 25, S: 5 }, rng)
+  if (source === 'rare_ticket') return rollWeightedGrade({ C: 20, B: 45, A: 28, S: 7 }, rng)
+  if (source === 'normal_ticket') return rollWeightedGrade({ C: 55, B: 32, A: 11, S: 2 }, rng)
+  return rollWeightedGrade({ C: 62, B: 30, A: 7.5, S: 0.5 }, rng)
 }
 
 export const SHADOW_TRAITS: ShadowTrait[] = [
@@ -184,13 +234,25 @@ const inferShadowVisual = (definition: ShadowDefinition): ShadowVisualPatch => {
 
 export const SHADOW_DEFINITIONS: ShadowDefinition[] = ([
   { id: 'shadow-rat', name: '그림자 쥐', description: '틈새를 파고드는 작은 하급 그림자.', rarity: 'common', rank: 'lesser', role: 'scout', sourceType: 'gate_extract', sourceGateRank: 'E', basePower: 18, effects: [e('extra_attack_chance', 0.03)], evolutionTargetDefinitionId: 'shadow-scout' },
-  { id: 'rift-remnant', name: '균열의 잔영', description: '전투 시작을 아주 조금 안정시키는 잔류 마력.', rarity: 'common', rank: 'lesser', role: 'support', sourceType: 'gate_extract', sourceGateRank: 'E', basePower: 16, effects: [e('wave_start_bonus', 0.03)] },
+  { id: 'rift-remnant', name: '균열의 잔영', description: '전투 시작을 아주 조금 안정시키는 잔류 마력.', rarity: 'common', rank: 'lesser', role: 'support', sourceType: 'gate_extract', sourceGateRank: 'E', basePower: 16, effects: [e('wave_start_bonus', 0.03)], evolutionTargetDefinitionId: 'rift-mender' },
+  { id: 'dim-scribe', name: '희미한 기록병', description: '전투의 첫 약점을 더듬어 찾는 하급 분석 그림자.', rarity: 'common', rank: 'lesser', role: 'analyst', sourceType: 'gate_extract', sourceGateRank: 'E', basePower: 17, effects: [e('enemy_defense_down', 0.018)], evolutionTargetDefinitionId: 'shadow-annotator' },
   { id: 'shadow-sentry', name: '그림자 보초', description: '첫 피격을 받아내는 하급 수비 그림자.', rarity: 'common', rank: 'lesser', role: 'guard', sourceType: 'gate_extract', sourceGateRank: 'E', basePower: 17, effects: [e('damage_reduction', 0.015)] },
+  { id: 'rift-mender', name: '균열 봉합자', description: '불안정한 wave 전환을 정리하는 지원 그림자.', rarity: 'uncommon', rank: 'soldier', role: 'support', sourceType: 'gate_extract', sourceGateRank: 'E', basePower: 23, effects: [e('wave_start_bonus', 0.035), e('damage_reduction', 0.012)] },
   { id: 'shadow-scout', name: '그림자 정찰병', description: '초반 명중을 돕는 병사 그림자.', rarity: 'uncommon', rank: 'soldier', role: 'scout', sourceType: 'gate_extract', sourceGateRank: 'E', basePower: 24, effects: [e('first_turn_accuracy', 0.025)] },
   { id: 'rift-fang', name: '균열 송곳니', description: '약해진 적을 물어뜯는 공격 그림자.', rarity: 'uncommon', rank: 'soldier', role: 'assault', sourceType: 'gate_extract', sourceGateRank: 'E', basePower: 26, effects: [e('execute_damage', 0.04)] },
   { id: 'dark-vanguard', name: '어둠의 척후', description: '추출의 흐름을 조금 더 잘 붙잡는다.', rarity: 'uncommon', rank: 'soldier', role: 'hunter', sourceType: 'gate_extract', sourceGateRank: 'E', basePower: 20, effects: [e('extraction_bonus', 0.01)] },
   { id: 'black-claw', name: '검은 발톱', description: '짧은 순간 적의 빈틈을 찢는다.', rarity: 'rare', rank: 'elite', role: 'assault', sourceType: 'gate_extract', sourceGateRank: 'E', basePower: 34, effects: [e('bonus_damage', 0.025), e('extra_attack_chance', 0.02)] },
   { id: 'rift-tracker', name: '균열 추적자', description: '흩어진 전리품의 냄새를 따라간다.', rarity: 'rare', rank: 'elite', role: 'hunter', sourceType: 'gate_extract', sourceGateRank: 'E', basePower: 28, effects: [e('drop_bonus', 0.01)] },
+  { id: 'paper-wisp', name: '종이 잔영', description: '약한 기록 마력이 모인 분석형 하급 그림자.', rarity: 'common', rank: 'lesser', role: 'analyst', sourceType: 'gate_extract', sourceGateRank: 'E', basePower: 15, effects: [e('enemy_evasion_down', 0.014)], evolutionTargetDefinitionId: 'archive-reader' },
+  { id: 'ash-helper', name: '재의 보조병', description: '작은 방어 주문으로 선두를 받쳐준다.', rarity: 'common', rank: 'lesser', role: 'support', sourceType: 'gate_extract', sourceGateRank: 'E', basePower: 15, effects: [e('damage_reduction', 0.012)], evolutionTargetDefinitionId: 'ember-mender' },
+  { id: 'dull-blade', name: '무딘 칼날병', description: '낮은 위력으로 꾸준히 찌르는 공격 그림자.', rarity: 'common', rank: 'lesser', role: 'assault', sourceType: 'gate_extract', sourceGateRank: 'E', basePower: 19, effects: [e('bonus_damage', 0.016)] },
+  { id: 'cracked-guard', name: '금 간 방패병', description: '불완전한 방패를 든 하급 수비 그림자.', rarity: 'common', rank: 'lesser', role: 'guard', sourceType: 'gate_extract', sourceGateRank: 'E', basePower: 18, effects: [e('low_hp_defense', 0.018)] },
+  { id: 'ember-mender', name: '잿불 치유병', description: '불안정한 전장 흐름을 고쳐 잡는 지원 그림자.', rarity: 'uncommon', rank: 'soldier', role: 'support', sourceType: 'gate_extract', sourceGateRank: 'E', basePower: 25, effects: [e('cooldown_support', 0.01), e('wave_start_bonus', 0.025)] },
+  { id: 'archive-reader', name: '서고 판독병', description: '적의 움직임을 읽어 약점을 남긴다.', rarity: 'uncommon', rank: 'soldier', role: 'analyst', sourceType: 'gate_extract', sourceGateRank: 'E', basePower: 24, effects: [e('enemy_defense_down', 0.024)] },
+  { id: 'mist-runner', name: '안개 주자', description: '흐릿한 동선으로 첫 턴을 보조한다.', rarity: 'uncommon', rank: 'soldier', role: 'scout', sourceType: 'gate_extract', sourceGateRank: 'E', basePower: 25, effects: [e('first_turn_evasion', 0.024)] },
+  { id: 'bone-picker', name: '뼈 수집병', description: '작은 전리품도 놓치지 않는 사냥 그림자.', rarity: 'uncommon', rank: 'soldier', role: 'hunter', sourceType: 'gate_extract', sourceGateRank: 'E', basePower: 22, effects: [e('drop_bonus', 0.008), e('extraction_quality_bonus', 0.004)] },
+  { id: 'rift-librarian', name: '균열 사서', description: '하급 기록병의 상위 개체. 방어 흐름을 색인한다.', rarity: 'rare', rank: 'elite', role: 'analyst', sourceType: 'gate_extract', sourceGateRank: 'E', basePower: 36, effects: [e('enemy_defense_down', 0.032), e('skill_damage_bonus', 0.018)] },
+  { id: 'oath-carrier', name: '맹세 운반병', description: '군단의 시작 타이밍을 맞추는 지원 그림자.', rarity: 'rare', rank: 'elite', role: 'support', sourceType: 'gate_extract', sourceGateRank: 'E', basePower: 34, effects: [e('wave_start_bonus', 0.038), e('cooldown_support', 0.012)] },
 
   { id: 'ner-first-rift', name: '첫 균열의 네르', description: '첫 균열의 어둠에서 가장 또렷하게 남은 이름.', rarity: 'legendary', rank: 'named', role: 'scout', sourceType: 'gate_named', sourceGateRank: 'E', sourceGateId: 'gate-rift-alley', basePower: 46, effects: [e('first_turn_accuracy', 0.04), e('first_turn_evasion', 0.03), e('extraction_bonus', 0.02)], hiddenUntilObtained: true, isGateNamed: true, quote: '첫 발을 놓치지 않겠습니다.' },
   { id: 'rook-backstreet', name: '골목의 그림자 루크', description: '뒤틀린 골목을 지키던 수비형 네임드.', rarity: 'legendary', rank: 'named', role: 'guard', sourceType: 'gate_named', sourceGateRank: 'E', sourceGateId: 'gate-rift-backstreet', basePower: 50, effects: [e('damage_reduction', 0.04), e('guard_counter', 0.04), e('first_turn_evasion', 0.02)], hiddenUntilObtained: true, isGateNamed: true, quote: '비켜서지 마십시오.' },
@@ -200,12 +262,24 @@ export const SHADOW_DEFINITIONS: ShadowDefinition[] = ([
   { id: 'sloth-spawn', name: '나태의 종자', description: '방어 자세에 힘을 보탠다.', rarity: 'common', rank: 'soldier', role: 'guard', sourceType: 'gate_extract', sourceGateRank: 'D', basePower: 36, effects: [e('damage_reduction', 0.025)] },
   { id: 'shadow-spearman', name: '그림자 창병', description: '얇게 적 방어를 찌른다.', rarity: 'common', rank: 'soldier', role: 'assault', sourceType: 'gate_extract', sourceGateRank: 'D', basePower: 40, effects: [e('enemy_defense_down', 0.025)] },
   { id: 'sloth-guard', name: '나태의 파수병', description: '꾸준한 피해 감소를 제공한다.', rarity: 'uncommon', rank: 'elite', role: 'guard', sourceType: 'gate_extract', sourceGateRank: 'D', basePower: 48, effects: [e('damage_reduction', 0.025)] },
+  { id: 'shadow-annotator', name: '그림자 주석병', description: '전투 기록에 약점 표시를 남기는 분석 그림자.', rarity: 'uncommon', rank: 'elite', role: 'analyst', sourceType: 'gate_extract', sourceGateRank: 'D', basePower: 45, effects: [e('enemy_defense_down', 0.028), e('skill_damage_bonus', 0.015)], evolutionTargetDefinitionId: 'forgetting-scribe' },
+  { id: 'sloth-chorister', name: '나태의 성가병', description: '느린 박자로 방어 호흡을 맞추는 지원 그림자.', rarity: 'uncommon', rank: 'elite', role: 'support', sourceType: 'gate_extract', sourceGateRank: 'D', basePower: 43, effects: [e('cooldown_support', 0.012), e('damage_reduction', 0.015)], evolutionTargetDefinitionId: 'rift-instructor' },
   { id: 'shadow-chaser', name: '그림자 추격병', description: '적의 회피 동선을 좁힌다.', rarity: 'uncommon', rank: 'elite', role: 'scout', sourceType: 'gate_extract', sourceGateRank: 'D', basePower: 46, effects: [e('enemy_evasion_down', 0.025)] },
   { id: 'dark-executor', name: '어둠의 처형병', description: '마무리 구간에서 강해진다.', rarity: 'uncommon', rank: 'elite', role: 'assault', sourceType: 'gate_extract', sourceGateRank: 'D', basePower: 50, effects: [e('execute_damage', 0.055)] },
   { id: 'black-shieldman', name: '검은 방패병', description: '위기 상황의 피해를 낮춘다.', rarity: 'rare', rank: 'elite', role: 'guard', sourceType: 'gate_extract', sourceGateRank: 'D', basePower: 55, effects: [e('low_hp_defense', 0.045)] },
   { id: 'sloth-hunter', name: '나태의 사냥꾼', description: '전리품과 그림자의 흔적을 추적한다.', rarity: 'rare', rank: 'elite', role: 'hunter', sourceType: 'gate_extract', sourceGateRank: 'D', basePower: 44, effects: [e('drop_bonus', 0.015), e('extraction_bonus', 0.01)] },
   { id: 'silent-archer', name: '침묵의 궁수', description: '몇 턴마다 원거리 보조 피해를 넣는다.', rarity: 'rare', rank: 'elite', role: 'scout', sourceType: 'gate_extract', sourceGateRank: 'D', basePower: 56, effects: [e('extra_attack_chance', 0.045)] },
+  { id: 'drowsy-medic', name: '졸음 의무병', description: '느린 호흡으로 장기전 피해를 완화한다.', rarity: 'common', rank: 'soldier', role: 'support', sourceType: 'gate_extract', sourceGateRank: 'D', basePower: 35, effects: [e('damage_reduction', 0.022)], evolutionTargetDefinitionId: 'sloth-chorister' },
+  { id: 'ledger-imp', name: '장부 임프', description: '전리품과 약점 기록을 동시에 남기는 분석 그림자.', rarity: 'common', rank: 'soldier', role: 'analyst', sourceType: 'gate_extract', sourceGateRank: 'D', basePower: 34, effects: [e('enemy_defense_down', 0.022)], evolutionTargetDefinitionId: 'shadow-annotator' },
+  { id: 'rust-axeman', name: '녹슨 도끼병', description: '무거운 첫 타격을 노리는 공격 그림자.', rarity: 'common', rank: 'soldier', role: 'assault', sourceType: 'gate_extract', sourceGateRank: 'D', basePower: 41, effects: [e('execute_damage', 0.032)] },
+  { id: 'lantern-scout', name: '등불 정찰병', description: '어둠 속에서 회피선을 밝혀낸다.', rarity: 'uncommon', rank: 'elite', role: 'scout', sourceType: 'gate_extract', sourceGateRank: 'D', basePower: 47, effects: [e('first_turn_accuracy', 0.026), e('enemy_evasion_down', 0.014)], evolutionTargetDefinitionId: 'silent-archer' },
+  { id: 'mire-shield', name: '늪 방패병', description: '진흙처럼 느리지만 단단한 방어 그림자.', rarity: 'uncommon', rank: 'elite', role: 'guard', sourceType: 'gate_extract', sourceGateRank: 'D', basePower: 49, effects: [e('damage_reduction', 0.028), e('low_hp_defense', 0.018)], evolutionTargetDefinitionId: 'black-shieldman' },
+  { id: 'ravenous-pup', name: '굶주린 사냥견', description: '추출 흔적을 물고 늘어지는 사냥 그림자.', rarity: 'uncommon', rank: 'elite', role: 'hunter', sourceType: 'gate_extract', sourceGateRank: 'D', basePower: 43, effects: [e('extraction_bonus', 0.012), e('drop_bonus', 0.008)], evolutionTargetDefinitionId: 'sloth-hunter' },
+  { id: 'minute-caller', name: '분침 호출병', description: '짧은 명령으로 스킬 흐름을 앞당긴다.', rarity: 'rare', rank: 'elite', role: 'support', sourceType: 'gate_extract', sourceGateRank: 'D', basePower: 57, effects: [e('cooldown_support', 0.018), e('wave_start_bonus', 0.026)] },
+  { id: 'black-annotator', name: '검은 주석관', description: '적 방어와 스킬 타이밍을 함께 분석한다.', rarity: 'rare', rank: 'elite', role: 'analyst', sourceType: 'gate_extract', sourceGateRank: 'D', basePower: 58, effects: [e('enemy_defense_down', 0.036), e('skill_damage_bonus', 0.022)] },
+  { id: 'sloth-raider', name: '나태의 약탈병', description: '느린 적의 빈틈을 뜯어내는 사냥형 그림자.', rarity: 'rare', rank: 'elite', role: 'hunter', sourceType: 'gate_extract', sourceGateRank: 'D', basePower: 53, effects: [e('drop_bonus', 0.018), e('execute_damage', 0.024)] },
   { id: 'sloth-knight', name: '나태의 기사', description: '방어 이후 반격 각을 만든다.', rarity: 'epic', rank: 'knight', role: 'guard', sourceType: 'gate_extract', sourceGateRank: 'D', basePower: 68, effects: [e('guard_counter', 0.055), e('bonus_damage', 0.025)] },
+  { id: 'archive-duelist', name: '서고 결투병', description: '분석한 약점을 직접 찌르는 공격형 분석 그림자.', rarity: 'epic', rank: 'knight', role: 'analyst', sourceType: 'gate_extract', sourceGateRank: 'D', basePower: 69, effects: [e('enemy_defense_down', 0.04), e('bonus_damage', 0.03)] },
   { id: 'gorn-sloth-captain', name: '나태의 파수장 고른', description: '나태의 소굴 깊은 곳에서 방패를 들던 네임드.', rarity: 'legendary', rank: 'named', role: 'guard', sourceType: 'gate_named', sourceGateRank: 'D', sourceGateId: 'gate-lair-of-sloth', basePower: 82, effects: [e('damage_reduction', 0.055), e('guard_counter', 0.06), e('low_hp_defense', 0.06)], hiddenUntilObtained: true, isGateNamed: true, quote: '무너지지 않는 것이 전술입니다.' },
   { id: 'shark-black-chaser', name: '검은 추격자 샤크', description: '나태의 순찰로에서 선공을 빼앗던 네임드.', rarity: 'legendary', rank: 'named', role: 'scout', sourceType: 'gate_named', sourceGateRank: 'D', sourceGateId: 'gate-sloth-patrol', basePower: 78, effects: [e('first_turn_accuracy', 0.04), e('enemy_evasion_down', 0.035), e('extraction_bonus', 0.025)], hiddenUntilObtained: true, isGateNamed: true, quote: '도망치는 길을 먼저 지우겠습니다.' },
 
@@ -217,14 +291,31 @@ export const SHADOW_DEFINITIONS: ShadowDefinition[] = ([
   { id: 'fatigue-shieldman', name: '피로의 방패병', description: '방어 행동에 추가 안정성을 준다.', rarity: 'rare', rank: 'knight', role: 'guard', sourceType: 'gate_extract', sourceGateRank: 'C', basePower: 74, effects: [e('damage_reduction', 0.04)] },
   { id: 'rift-instructor', name: '균열의 교관', description: '장착 그림자들의 움직임을 정렬한다.', rarity: 'rare', rank: 'knight', role: 'support', sourceType: 'gate_extract', sourceGateRank: 'C', basePower: 70, effects: [e('bonus_damage', 0.025), e('wave_start_bonus', 0.025)] },
   { id: 'greed-collector', name: '탐욕의 수집가', description: '전투 기여는 낮지만 드롭 감각이 좋다.', rarity: 'rare', rank: 'knight', role: 'hunter', sourceType: 'gate_extract', sourceGateRank: 'C', basePower: 60, effects: [e('drop_bonus', 0.02)] },
+  { id: 'rift-wayfinder', name: '균열 길잡이', description: '복잡한 전장 동선을 먼저 읽어 출전을 돕는다.', rarity: 'rare', rank: 'knight', role: 'scout', sourceType: 'gate_extract', sourceGateRank: 'C', basePower: 76, effects: [e('first_turn_accuracy', 0.035), e('wave_start_bonus', 0.025)] },
   { id: 'forgetting-watcher', name: '망각의 감시자', description: '강공격의 흐름을 예측한다.', rarity: 'epic', rank: 'knight', role: 'analyst', sourceType: 'gate_extract', sourceGateRank: 'C', basePower: 86, effects: [e('enemy_defense_down', 0.045), e('damage_reduction', 0.025)] },
+  { id: 'rift-tactician', name: '균열 전술관', description: '군단의 타이밍을 엮어 스킬 피해와 wave 대응을 보조한다.', rarity: 'epic', rank: 'knight', role: 'support', sourceType: 'gate_extract', sourceGateRank: 'C', basePower: 88, effects: [e('skill_damage_bonus', 0.035), e('wave_start_bonus', 0.04)] },
   { id: 'fatigue-wall', name: '피로의 성벽', description: '큰 피해를 한 번 누그러뜨린다.', rarity: 'epic', rank: 'knight', role: 'guard', sourceType: 'gate_extract', sourceGateRank: 'C', basePower: 90, effects: [e('damage_reduction', 0.055)] },
   { id: 'rift-gladiator', name: '균열의 투사', description: '일정 턴마다 강한 보조 타격을 날린다.', rarity: 'epic', rank: 'knight', role: 'assault', sourceType: 'gate_extract', sourceGateRank: 'C', basePower: 92, effects: [e('bonus_damage', 0.04), e('extra_attack_chance', 0.055)] },
   { id: 'greed-devourer', name: '탐욕의 포식자', description: '처치 후 다음 wave 첫 행동이 강해진다.', rarity: 'epic', rank: 'knight', role: 'hunter', sourceType: 'gate_extract', sourceGateRank: 'C', basePower: 84, effects: [e('drop_bonus', 0.015), e('wave_start_bonus', 0.05)] },
+  { id: 'rift-cartographer', name: '균열 지도병', description: '복잡한 C급 게이트 동선을 지도처럼 펼친다.', rarity: 'uncommon', rank: 'elite', role: 'scout', sourceType: 'gate_extract', sourceGateRank: 'C', basePower: 59, effects: [e('first_turn_accuracy', 0.028), e('enemy_evasion_down', 0.018)], evolutionTargetDefinitionId: 'rift-wayfinder' },
+  { id: 'fatigue-cantor', name: '피로의 선창병', description: '피로한 군단의 박자를 다시 맞춘다.', rarity: 'uncommon', rank: 'elite', role: 'support', sourceType: 'gate_extract', sourceGateRank: 'C', basePower: 57, effects: [e('cooldown_support', 0.016), e('damage_reduction', 0.018)], evolutionTargetDefinitionId: 'rift-instructor' },
+  { id: 'greed-ledger', name: '탐욕 장부병', description: '전리품 가치를 미리 계산하는 분석 그림자.', rarity: 'rare', rank: 'knight', role: 'analyst', sourceType: 'gate_extract', sourceGateRank: 'C', basePower: 71, effects: [e('drop_bonus', 0.012), e('enemy_defense_down', 0.028)], evolutionTargetDefinitionId: 'forgetting-watcher' },
+  { id: 'corridor-banner', name: '회랑 기수', description: '원정과 wave 전환에서 군단을 정렬한다.', rarity: 'rare', rank: 'knight', role: 'support', sourceType: 'gate_extract', sourceGateRank: 'C', basePower: 73, effects: [e('wave_start_bonus', 0.036), e('skill_damage_bonus', 0.02)], evolutionTargetDefinitionId: 'rift-tactician' },
+  { id: 'mirror-hunter', name: '거울 사냥꾼', description: '희귀한 추출 흔적의 품질을 조금 끌어올린다.', rarity: 'rare', rank: 'knight', role: 'hunter', sourceType: 'gate_extract', sourceGateRank: 'C', basePower: 67, effects: [e('extraction_quality_bonus', 0.014), e('drop_bonus', 0.012)], evolutionTargetDefinitionId: 'greed-devourer' },
+  { id: 'iron-bastion', name: '철의 보루', description: '방패병 계열의 상위 분기. 낮은 체력에서 매우 단단하다.', rarity: 'epic', rank: 'knight', role: 'guard', sourceType: 'gate_extract', sourceGateRank: 'C', basePower: 92, effects: [e('low_hp_defense', 0.06), e('damage_reduction', 0.036)] },
+  { id: 'rift-champion', name: '균열 투장', description: '훈련병 계열의 상위 분기. 추가타와 처형을 겸한다.', rarity: 'epic', rank: 'knight', role: 'assault', sourceType: 'gate_extract', sourceGateRank: 'C', basePower: 94, effects: [e('extra_attack_chance', 0.045), e('execute_damage', 0.042)] },
+  { id: 'midnight-oracle', name: '자정의 예언병', description: '장기전에서 스킬 피해를 안정적으로 보조한다.', rarity: 'epic', rank: 'knight', role: 'support', sourceType: 'gate_extract', sourceGateRank: 'C', basePower: 86, effects: [e('cooldown_support', 0.024), e('skill_damage_bonus', 0.034)] },
   { id: 'karden-forgetting-scribe', name: '망각의 서기관 카르덴', description: '망각의 서고에서 약점을 색인하던 네임드.', rarity: 'legendary', rank: 'named', role: 'analyst', sourceType: 'gate_named', sourceGateRank: 'C', sourceGateId: 'gate-archive-of-forgetting', basePower: 110, effects: [e('enemy_defense_down', 0.06), e('cooldown_support', 0.025), e('skill_damage_bonus', 0.04)], hiddenUntilObtained: true, isGateNamed: true, quote: '기록된 약점은 다시 숨지 못합니다.' },
   { id: 'organ-fatigue-shield', name: '피로의 방패 오르간', description: '피로의 회랑을 막아섰던 방패 네임드.', rarity: 'legendary', rank: 'named', role: 'guard', sourceType: 'gate_named', sourceGateRank: 'C', sourceGateId: 'gate-corridor-of-fatigue', basePower: 114, effects: [e('damage_reduction', 0.06), e('guard_counter', 0.06), e('low_hp_defense', 0.05)], hiddenUntilObtained: true, isGateNamed: true, quote: '버티는 자가 마지막을 본다.' },
   { id: 'raban-rift-instructor', name: '균열의 교관 라반', description: '균열의 훈련장에서 군단의 합을 맞춘 네임드.', rarity: 'legendary', rank: 'named', role: 'support', sourceType: 'gate_named', sourceGateRank: 'C', sourceGateId: 'gate-rift-training-grounds', basePower: 108, effects: [e('bonus_damage', 0.045), e('wave_start_bonus', 0.055), e('extra_attack_chance', 0.025)], hiddenUntilObtained: true, isGateNamed: true, quote: '군단은 동시에 움직일 때 강해집니다.' },
   { id: 'grid-greed-hound', name: '탐욕의 사냥개 그리드', description: '탐욕의 금고에서 보물을 물고 사라지던 네임드.', rarity: 'legendary', rank: 'named', role: 'hunter', sourceType: 'gate_named', sourceGateRank: 'C', sourceGateId: 'gate-greed-vault', basePower: 106, effects: [e('drop_bonus', 0.025), e('extraction_quality_bonus', 0.02), e('wave_start_bonus', 0.04)], hiddenUntilObtained: true, isGateNamed: true, quote: '가치 있는 것은 냄새가 납니다.' },
+  { id: 'vela-rift-mender', name: '균열 봉합자 벨라', description: '골목 균열을 닫던 지원형 네임드.', rarity: 'legendary', rank: 'named', role: 'support', sourceType: 'gate_named', sourceGateRank: 'E', sourceGateId: 'gate-rift-alley', basePower: 48, effects: [e('wave_start_bonus', 0.05), e('cooldown_support', 0.018)], hiddenUntilObtained: true, isGateNamed: true, quote: '틈은 작을 때 닫아야 합니다.' },
+  { id: 'marn-backstreet-ledger', name: '골목 장부관 마른', description: '골목의 이동 경로를 기록하던 분석형 네임드.', rarity: 'legendary', rank: 'named', role: 'analyst', sourceType: 'gate_named', sourceGateRank: 'E', sourceGateId: 'gate-rift-backstreet', basePower: 49, effects: [e('enemy_defense_down', 0.048), e('first_turn_accuracy', 0.026)], hiddenUntilObtained: true, isGateNamed: true },
+  { id: 'doru-sloth-cantor', name: '나태의 선창자 도루', description: '소굴 안쪽에서 파수병들의 호흡을 맞춘 네임드.', rarity: 'legendary', rank: 'named', role: 'support', sourceType: 'gate_named', sourceGateRank: 'D', sourceGateId: 'gate-lair-of-sloth', basePower: 79, effects: [e('damage_reduction', 0.036), e('cooldown_support', 0.026), e('wave_start_bonus', 0.03)], hiddenUntilObtained: true, isGateNamed: true },
+  { id: 'sable-patrol-knife', name: '순찰검 세이블', description: '나태의 순찰로에서 선공을 빼앗던 공격형 네임드.', rarity: 'legendary', rank: 'named', role: 'assault', sourceType: 'gate_named', sourceGateRank: 'D', sourceGateId: 'gate-sloth-patrol', basePower: 80, effects: [e('bonus_damage', 0.045), e('extra_attack_chance', 0.036), e('execute_damage', 0.03)], hiddenUntilObtained: true, isGateNamed: true },
+  { id: 'mero-fatigue-reader', name: '피로 판독관 메로', description: '회랑의 피로도를 수치처럼 읽어내던 분석형 네임드.', rarity: 'legendary', rank: 'named', role: 'analyst', sourceType: 'gate_named', sourceGateRank: 'C', sourceGateId: 'gate-corridor-of-fatigue', basePower: 109, effects: [e('enemy_defense_down', 0.052), e('enemy_evasion_down', 0.03), e('skill_damage_bonus', 0.025)], hiddenUntilObtained: true, isGateNamed: true },
+  { id: 'tess-rift-wayfinder', name: '균열 길잡이 테스', description: '훈련장 깊은 길을 먼저 밟는 정찰형 네임드.', rarity: 'legendary', rank: 'named', role: 'scout', sourceType: 'gate_named', sourceGateRank: 'C', sourceGateId: 'gate-rift-training-grounds', basePower: 107, effects: [e('first_turn_accuracy', 0.046), e('first_turn_evasion', 0.036), e('wave_start_bonus', 0.036)], hiddenUntilObtained: true, isGateNamed: true },
+  { id: 'balm-greed-ledger', name: '탐욕 장부관 발름', description: '금고의 전리품 가치를 숫자로 매기던 네임드.', rarity: 'legendary', rank: 'named', role: 'analyst', sourceType: 'gate_named', sourceGateRank: 'C', sourceGateId: 'gate-greed-vault', basePower: 105, effects: [e('drop_bonus', 0.022), e('extraction_quality_bonus', 0.018), e('enemy_defense_down', 0.035)], hiddenUntilObtained: true, isGateNamed: true },
 
   { id: 'kasim-analyst', name: '분석관 카심', description: '학습이 약점 분석으로 응축된 성취 네임드.', rarity: 'legendary', rank: 'named', role: 'analyst', sourceType: 'achievement_named', sourceQuestId: 'main-kbi-cert', unlockConditionText: 'KBI 금융 AI 리터러시 자격증 합격', basePower: 118, effects: [e('category_xp_bonus', 0.03, { category: 'finance' }), e('category_xp_bonus', 0.03, { category: 'study' }), e('enemy_defense_down', 0.04)], isAchievementNamed: true, quote: '모르는 것은 분석하면 됩니다.' },
   { id: 'rao-market-watcher', name: '시장 감시자 라오', description: '공시의 흐름을 지켜보는 성취 네임드.', rarity: 'epic', rank: 'named', role: 'analyst', sourceType: 'achievement_named', sourceQuestId: 'dungeon-dart-analysis', unlockConditionText: 'DART 공시 분석 30개 기업 완료', basePower: 94, effects: [e('stat_bonus', 2, { stat: 'SEN' }), e('extraction_bonus', 0.03)], isAchievementNamed: true },
@@ -240,8 +331,19 @@ export const SHADOW_DEFINITIONS: ShadowDefinition[] = ([
   { id: 'kalt-deadline-executor', name: '시한의 집행자 칼트', description: '마감 전에 끝내는 습관의 그림자.', rarity: 'epic', rank: 'named', role: 'scout', sourceType: 'achievement_named', sourceQuestId: 'dungeon-assignment-early', unlockConditionText: '과제 선제 처리 10회 완료', basePower: 94, effects: [e('stat_bonus', 2, { stat: 'AGI' }), e('wave_start_bonus', 0.04)], isAchievementNamed: true },
   { id: 'seron-saver', name: '절약가 세론', description: '소비 통제에서 생긴 사냥형 지원 그림자.', rarity: 'epic', rank: 'named', role: 'hunter', sourceType: 'achievement_named', sourceQuestId: 'dungeon-expense-record', unlockConditionText: '월 소비 70만원 이하 3개월 또는 생활비 기록 30일 완료', basePower: 86, effects: [e('category_xp_bonus', 0.03, { category: 'finance' }), e('category_xp_bonus', 0.03, { category: 'habit' }), e('drop_bonus', 0.02)], isAchievementNamed: true },
   { id: 'lumen-dawn-vanguard', name: '새벽의 척후 루멘', description: '이른 기상의 축적이 만든 정찰 그림자.', rarity: 'epic', rank: 'named', role: 'scout', sourceType: 'achievement_named', sourceQuestId: 'daily-sleep', unlockConditionText: '7시 전 기상 90일 또는 수면 리듬 던전 완료', basePower: 90, effects: [e('category_xp_bonus', 0.03, { category: 'habit' }), e('stat_bonus', 1, { stat: 'AGI' }), e('stat_bonus', 1, { stat: 'VIT' })], isAchievementNamed: true },
+  { id: 'hexa-study-lantern', name: '학습 등불 헥사', description: '반복 학습의 불씨에서 태어난 지원 네임드.', rarity: 'epic', rank: 'named', role: 'support', sourceType: 'achievement_named', sourceCategory: 'study', unlockConditionText: '학습 계열 성취 소환권 후보', basePower: 92, effects: [e('category_xp_bonus', 0.035, { category: 'study' }), e('cooldown_support', 0.018)], isAchievementNamed: true },
+  { id: 'mira-career-auditor', name: '커리어 감사관 미라', description: '보고서와 마감의 흔적을 점검하는 분석 네임드.', rarity: 'epic', rank: 'named', role: 'analyst', sourceType: 'achievement_named', sourceCategory: 'career', unlockConditionText: '커리어 계열 성취 소환권 후보', basePower: 94, effects: [e('category_xp_bonus', 0.035, { category: 'career' }), e('enemy_defense_down', 0.034)], isAchievementNamed: true },
+  { id: 'borin-training-captain', name: '수련대장 보린', description: '훈련 기록이 만든 공격형 성취 네임드.', rarity: 'legendary', rank: 'named', role: 'assault', sourceType: 'achievement_named', sourceCategory: 'workout', unlockConditionText: '운동 계열 성취 소환권 후보', basePower: 121, effects: [e('category_xp_bonus', 0.04, { category: 'workout' }), e('bonus_damage', 0.045), e('stat_bonus', 2, { stat: 'STR' })], isAchievementNamed: true },
+  { id: 'sena-health-warden', name: '건강 감시관 세나', description: '회복 루틴을 지키는 방어형 성취 네임드.', rarity: 'epic', rank: 'named', role: 'guard', sourceType: 'achievement_named', sourceCategory: 'health', unlockConditionText: '건강 계열 성취 소환권 후보', basePower: 91, effects: [e('category_xp_bonus', 0.035, { category: 'health' }), e('damage_reduction', 0.035)], isAchievementNamed: true },
+  { id: 'orien-mind-anchor', name: '정신의 닻 오리엔', description: '흔들림을 붙잡아주는 지원형 성취 네임드.', rarity: 'legendary', rank: 'named', role: 'support', sourceType: 'achievement_named', sourceCategory: 'mind', unlockConditionText: '정신 계열 성취 소환권 후보', basePower: 116, effects: [e('category_xp_bonus', 0.045, { category: 'mind' }), e('cooldown_support', 0.025), e('damage_reduction', 0.02)], isAchievementNamed: true },
+  { id: 'pavel-finance-scout', name: '재정 정찰관 파벨', description: '숫자 흐름을 먼저 발견하는 정찰 네임드.', rarity: 'epic', rank: 'named', role: 'scout', sourceType: 'achievement_named', sourceCategory: 'finance', unlockConditionText: '재정 계열 성취 소환권 후보', basePower: 93, effects: [e('category_xp_bonus', 0.035, { category: 'finance' }), e('first_turn_accuracy', 0.035), e('drop_bonus', 0.014)], isAchievementNamed: true },
+  { id: 'naru-social-herald', name: '관계 전령 나루', description: '연결과 약속의 흐름에서 태어난 지원 네임드.', rarity: 'epic', rank: 'named', role: 'support', sourceType: 'achievement_named', sourceCategory: 'social', unlockConditionText: '관계 계열 성취 소환권 후보', basePower: 88, effects: [e('category_xp_bonus', 0.035, { category: 'social' }), e('wave_start_bonus', 0.035)], isAchievementNamed: true },
+  { id: 'voss-challenge-blade', name: '도전검 보스', description: '연속 도전의 압력을 칼날로 바꾼 네임드.', rarity: 'legendary', rank: 'named', role: 'assault', sourceType: 'achievement_named', sourceCategory: 'challenge', unlockConditionText: '도전 계열 성취 소환권 후보', basePower: 124, effects: [e('category_xp_bonus', 0.04, { category: 'challenge' }), e('skill_damage_bonus', 0.04), e('execute_damage', 0.035)], isAchievementNamed: true },
+  { id: 'runo-habit-keeper', name: '습관 보관자 루노', description: '반복을 기록하고 지키는 성취 네임드.', rarity: 'epic', rank: 'named', role: 'guard', sourceType: 'achievement_named', sourceCategory: 'habit', unlockConditionText: '습관 계열 성취 소환권 후보', basePower: 90, effects: [e('category_xp_bonus', 0.035, { category: 'habit' }), e('low_hp_defense', 0.04)], isAchievementNamed: true },
+  { id: 'elan-balance-weaver', name: '균형 직조자 엘란', description: '여러 분야를 고르게 완수한 기록이 부른 네임드.', rarity: 'legendary', rank: 'named', role: 'analyst', sourceType: 'achievement_named', sourceCategory: 'challenge', unlockConditionText: '상위 성취 소환권 후보', basePower: 120, effects: [e('category_xp_bonus', 0.025, { category: 'study' }), e('category_xp_bonus', 0.025, { category: 'workout' }), e('category_xp_bonus', 0.025, { category: 'habit' }), e('enemy_defense_down', 0.038)], isAchievementNamed: true },
 ] as ShadowDefinition[]).map(definition => ({
   ...definition,
+  birthRarity: definition.birthRarity ?? definition.rarity,
   ...inferShadowVisual(definition),
   ...SHADOW_VISUALS[definition.id],
 }))
@@ -287,13 +389,14 @@ export const getShadowEffects = (shadow: OwnedShadow): ShadowEffect[] => {
   const def = getShadowDefinition(shadow.definitionId)
   const enh = shadow.enhancementLevel ?? 0
   const lv = shadow.level ?? 1
+  const innateMul = SHADOW_INNATE_GRADE_MULTIPLIER[shadow.innateGrade ?? 'B'] ?? 1
   const combatMul = getCombatEnhancementMultiplier(enh) * getCombatLevelMultiplier(lv)
   const utilMul = getUtilityEnhancementMultiplier(enh) * getUtilityLevelMultiplier(lv)
   const applyMul = (effects: ShadowEffect[]): ShadowEffect[] => effects.map(effect => ({
     ...effect,
     value: COMBAT_EFFECT_TYPES.has(effect.type)
-      ? effect.value * combatMul
-      : effect.value * utilMul,
+      ? effect.value * innateMul * combatMul
+      : effect.value * innateMul * utilMul,
   }))
   const baseEffects = applyMul(def?.effects ?? [])
   const traitEffects = applyMul(shadow.traits.map(trait => ({ type: trait.effectType, value: trait.value })))
@@ -428,7 +531,11 @@ const rankPoolFor = (gate: GateDefinition, rarity: ShadowRarity): ShadowDefiniti
   )
 }
 
-export const createOwnedShadow = (definition: ShadowDefinition, rng: () => number = Math.random): OwnedShadow => ({
+export const createOwnedShadow = (
+  definition: ShadowDefinition,
+  rng: () => number = Math.random,
+  options: { innateGrade?: ShadowInnateGrade; innateSource?: Parameters<typeof rollShadowInnateGrade>[0] } = {}
+): OwnedShadow => ({
   instanceId: `shadow-${Date.now()}-${Math.floor(rng() * 1_000_000)}`,
   definitionId: definition.id,
   name: definition.name,
@@ -437,12 +544,44 @@ export const createOwnedShadow = (definition: ShadowDefinition, rng: () => numbe
   sourceGateId: definition.sourceGateId,
   sourceQuestId: definition.sourceQuestId,
   rarity: definition.rarity,
+  birthRarity: definition.birthRarity ?? definition.rarity,
+  innateGrade: options.innateGrade ?? rollShadowInnateGrade(options.innateSource ?? (definition.sourceType === 'gate_extract' ? 'gate_extract' : 'normal_ticket'), rng),
   rank: definition.rank,
   role: definition.role,
   traits: pickTrait(definition, definition.rarity, rng),
   isNamed: definition.rank === 'named' || definition.isGateNamed || definition.isAchievementNamed,
   isGateNamed: definition.isGateNamed,
   isAchievementNamed: definition.isAchievementNamed,
+})
+
+export const createShadowSummonTicket = (params: {
+  ticketType: ShadowSummonTicketType
+  source?: ShadowSummonTicketSource
+  label?: string
+  definitionId?: string
+  role?: ShadowRole
+  category?: Category
+  grade?: ShadowSummonTicket['grade']
+  rarityFloor?: ShadowRarity
+}): ShadowSummonTicket => ({
+  id: `shadow-ticket-${params.ticketType}-${Date.now()}-${Math.floor(Math.random() * 100_000)}`,
+  ticketType: params.ticketType,
+  kind: params.ticketType === 'achievement_named_shadow' || params.ticketType === 'category_achievement_named' ? 'achievement_named' : 'standard',
+  label: params.label ?? (
+    params.ticketType === 'normal_shadow' ? '일반 그림자 소환권' :
+    params.ticketType === 'rare_shadow' ? '희귀 그림자 소환권' :
+    params.ticketType === 'role_shadow' ? `${params.role ? SHADOW_ROLE_LABEL[params.role] : '역할'} 그림자 소환권` :
+    params.ticketType === 'gate_named_shadow' ? '게이트 네임드 그림자 소환권' :
+    params.ticketType === 'achievement_named_shadow' ? '성취 네임드 소환권' :
+    `${params.category ?? '분야'} 성취 네임드 소환권`
+  ),
+  createdAt: new Date().toISOString(),
+  source: params.source ?? 'system',
+  definitionId: params.definitionId,
+  role: params.role,
+  category: params.category,
+  grade: params.grade,
+  rarityFloor: params.rarityFloor,
 })
 
 export const rollShadowExtraction = (
@@ -472,7 +611,7 @@ export const rollShadowExtraction = (
   const rolledRarity = pickWeighted(baseWeights, rng)
   const pool = rankPoolFor(gate, rolledRarity)
   const definition = pool[Math.floor(rng() * pool.length)] ?? pool[0]
-  const shadow = createOwnedShadow(definition, rng)
+  const shadow = createOwnedShadow(definition, rng, { innateSource: 'gate_extract' })
   const prefix = definition.isGateNamed
     ? '평범한 그림자가 아닙니다.'
     : '그림자 추출에 성공했습니다.'

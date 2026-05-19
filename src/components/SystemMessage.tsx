@@ -8,6 +8,8 @@ const KIND_STYLE: Record<string, { accent: string; glow: string; tag: string }> 
   title:   { accent: 'border-pink-400/60',   glow: 'shadow-[0_0_40px_rgba(244,114,182,0.4)]', tag: 'text-pink-300' },
   shadow:  { accent: 'border-violet-400/60', glow: 'shadow-glow-purple', tag: 'text-violet-300' },
   rank:    { accent: 'border-red-400/70',    glow: 'shadow-[0_0_60px_rgba(248,113,113,0.4)]', tag: 'text-red-300' },
+  story:   { accent: 'border-sky-300/40',    glow: 'shadow-[0_0_44px_rgba(125,211,252,0.22)]', tag: 'text-sky-200' },
+  secret:  { accent: 'border-violet-200/35', glow: 'shadow-[0_0_48px_rgba(167,139,250,0.2)]', tag: 'text-violet-200' },
   info:    { accent: 'border-white/40',      glow: '', tag: 'text-white/70' },
 }
 
@@ -18,6 +20,7 @@ export function SystemMessageQueue() {
   // show only the latest
   const current = messages[0]
   const dramatic = current?.kind === 'levelup' || current?.kind === 'rank'
+  const style = current ? (KIND_STYLE[current.kind] ?? KIND_STYLE.info) : KIND_STYLE.info
 
   return (
     <AnimatePresence>
@@ -36,18 +39,18 @@ export function SystemMessageQueue() {
             exit={{ scale: 0.9, opacity: 0 }}
             transition={{ type: 'spring', stiffness: 200, damping: 20 }}
             onClick={(e) => e.stopPropagation()}
-            className={`relative panel corner-bracket ${dramatic ? 'system-message-dramatic' : ''} ${KIND_STYLE[current.kind].accent} ${KIND_STYLE[current.kind].glow}
+            className={`relative panel corner-bracket ${dramatic ? 'system-message-dramatic' : ''} ${style.accent} ${style.glow}
               p-8 min-w-[320px] max-w-md text-center`}
           >
             <div className="br" />
-            <div className={`system-text text-[11px] tracking-[0.3em] ${KIND_STYLE[current.kind].tag} mb-3`}>
+            <div className={`system-text text-[11px] tracking-[0.3em] ${style.tag} mb-3`}>
               ── SYSTEM ──
             </div>
             <motion.h2
               initial={{ letterSpacing: '0.5em', opacity: 0 }}
               animate={{ letterSpacing: '0.05em', opacity: 1 }}
               transition={{ delay: 0.1, duration: 0.4 }}
-              className={`text-2xl font-bold mb-4 ${KIND_STYLE[current.kind].tag}`}
+              className={`text-2xl font-bold mb-4 ${style.tag}`}
             >
               {current.title}
             </motion.h2>

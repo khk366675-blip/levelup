@@ -24,11 +24,12 @@ import {
   SHADOW_EXPEDITION_PARTY_MAX,
   SHADOW_EXPEDITION_UNLOCK_DAILY_COUNT,
   estimateShadowExpeditionSuccess,
+  getPhaseDisplayName,
   getShadowExpeditionPartyPower,
   getShadowExpeditionRecommendedRoleMatches,
   getTodayDailyCompletedCount,
 } from '../../lib/shadowExpeditions'
-import { SHADOW_ROLE_LABEL, getShadowDefinition } from '../../lib/shadows'
+import { SHADOW_INNATE_GRADE_LABEL, SHADOW_ROLE_LABEL, getShadowDefinition } from '../../lib/shadows'
 import type { OwnedShadow, ShadowExpeditionCommand, ShadowExpeditionLog, ShadowExpeditionOutcome, ShadowExpeditionType, ShadowRole } from '../../lib/types'
 import { ShadowExpeditionBattlefield } from './ShadowExpeditionBattlefield'
 import { ShadowPortrait } from './ShadowPortrait'
@@ -168,6 +169,8 @@ const logTone: Record<string, string> = {
   shadow: 'border-purple-300/20 bg-purple-400/8 text-purple-100/80',
   risk: 'border-rose-300/20 bg-rose-400/8 text-rose-100/80',
   reward: 'border-amber-300/20 bg-amber-400/8 text-amber-100/80',
+  phase: 'border-teal-300/20 bg-teal-400/8 text-teal-100/80',
+  event: 'border-violet-300/25 bg-violet-400/10 text-violet-100/85',
 }
 
 const barWidth = (value: number): string => `${Math.max(0, Math.min(100, value))}%`
@@ -188,6 +191,8 @@ const expeditionCinematicTone: Record<ShadowExpeditionLog['type'], CinematicLogT
   shadow: 'shadow',
   risk: 'risk',
   reward: 'reward',
+  phase: 'system',
+  event: 'shadow',
 }
 
 const expeditionCinematicBadge: Record<CinematicLogTone, string> = {
@@ -369,7 +374,7 @@ function MiniShadow({
       />
       <div className="mt-1 truncate text-[11px] font-semibold text-white/85">{shadow.name}</div>
       <div className="text-[9px] system-text text-white/45">
-        Lv {shadow.level ?? 1} / {SHADOW_ROLE_LABEL[shadow.role]}
+        Lv {shadow.level ?? 1} / {SHADOW_ROLE_LABEL[shadow.role]} / {SHADOW_INNATE_GRADE_LABEL[shadow.innateGrade ?? 'B']}
       </div>
       <div className="mt-1 flex flex-wrap gap-1">
         {recommended && (
@@ -395,6 +400,7 @@ export function ShadowExpeditionPanel() {
   const startExpedition = useGame(s => s.startShadowExpedition)
   const issueCommand = useGame(s => s.issueShadowExpeditionCommand)
   const abandonExpedition = useGame(s => s.abandonShadowExpedition)
+  const resolveMidEvent = useGame(s => s.resolveShadowExpeditionMidEvent)
   const [expanded, setExpanded] = useState(true)
   const [expeditionCinematicLogs, setExpeditionCinematicLogs] = useState<CinematicLogData[]>([])
   const [expeditionSkipSignal, setExpeditionSkipSignal] = useState(0)
@@ -550,6 +556,11 @@ export function ShadowExpeditionPanel() {
                 최근 명령: {SHADOW_EXPEDITION_COMMAND_LABEL[activeCommand]}
               </span>
             )}
+            {inProgress && expedition.currentPhase && expedition.currentPhase !== 'muster' && (
+              <span className="rounded border border-teal-300/25 bg-teal-400/10 px-2 py-0.5 text-[10px] system-text text-teal-100">
+                {getPhaseDisplayName(expedition.currentPhase, expedition.type)}
+              </span>
+            )}
           </div>
           <h3 className="text-xl font-bold text-white/95">{expedition.title}</h3>
           <p className="mt-1 max-w-3xl text-sm leading-relaxed text-white/55">{expedition.description}</p>
@@ -583,7 +594,7 @@ export function ShadowExpeditionPanel() {
 
       {compactCompleted && expedition.result && (
         <div className="relative mt-4">
-          <ResultPanel expeditionResult={expedition.result} activeShadowId={activeShadowId} selectedShadows={selectedShadows} compact />
+          <ReportPanel expeditionResult={expedition.result} activeShadowId={activeShadowId} selectedShadows={selectedShadows} ownedShadows={ownedShadows} compact />
         </div>
       )}
 
@@ -685,6 +696,10 @@ export function ShadowExpeditionPanel() {
                 <StatBar label="위험도" value={expedition.risk} kind="risk" delta={deltas.risk} />
               </div>
             </div>
+
+            {inProgress && expedition.eventTriggered && !expedition.eventResolved && expedition.midEvent && (
+              <MidEventCard event={expedition.midEvent} onChoose={choiceId => resolveMidEvent(expedition.id, choiceId)} selectedShadows={selectedShadows} />
+            )}
 
             {inProgress && (
               <div className="grid grid-cols-2 gap-2 lg:grid-cols-5">
@@ -812,7 +827,7 @@ export function ShadowExpeditionPanel() {
             </div>
 
             {completed && expedition.result && (
-              <ResultPanel expeditionResult={expedition.result} activeShadowId={activeShadowId} selectedShadows={selectedShadows} />
+              <ReportPanel expeditionResult={expedition.result} activeShadowId={activeShadowId} selectedShadows={selectedShadows} ownedShadows={ownedShadows} />
             )}
           </aside>
         </div>
@@ -821,32 +836,108 @@ export function ShadowExpeditionPanel() {
   )
 }
 
-function ResultPanel({
+function MidEventCard({
+  event,
+  selectedShadows,
+  onChoose,
+}: {
+  event: NonNullable<ReturnType<typeof useGame.getState>['shadowExpeditions'][number]['midEvent']>
+  selectedShadows: OwnedShadow[]
+  onChoose: (choiceId: string) => void
+}) {
+  return (
+    <div className="rounded-lg border border-violet-400/35 bg-violet-900/20 p-4 shadow-[0_0_24px_rgba(139,92,246,0.18)]">
+      <div className="mb-1 flex items-center gap-2 system-text text-[10px] text-violet-300/75">
+        <Sparkles className="h-3.5 w-3.5" />
+        상황 발생 — 선택이 필요합니다
+      </div>
+      <div className="mb-1 text-base font-bold text-violet-100">{event.title}</div>
+      <p className="mb-3 text-sm leading-relaxed text-white/60">{event.description}</p>
+      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+        {event.choices.map(choice => {
+          const roleMatch = choice.preferredRoles
+            ? selectedShadows.some(s => choice.preferredRoles!.includes(s.role))
+            : false
+          return (
+            <button
+              key={choice.id}
+              type="button"
+              onClick={() => onChoose(choice.id)}
+              className={clsx(
+                'relative overflow-hidden rounded-md border px-3 py-2.5 text-left text-xs transition',
+                roleMatch
+                  ? 'border-emerald-400/35 bg-emerald-400/10 text-emerald-100 hover:bg-emerald-400/18'
+                  : 'border-violet-300/25 bg-violet-400/8 text-violet-100 hover:bg-violet-400/14',
+              )}
+              title={choice.description}
+            >
+              {roleMatch && (
+                <div className="absolute inset-x-0 top-0 h-0.5 bg-gradient-to-r from-emerald-400/50 via-teal-300/30 to-transparent" />
+              )}
+              <div className="font-semibold">{choice.label}</div>
+              <div className="mt-0.5 text-[10px] opacity-70 leading-snug">{choice.description}</div>
+              <div className="mt-1.5 flex flex-wrap gap-1">
+                {typeof choice.progressDelta === 'number' && (
+                  <span className={clsx('rounded border px-1.5 py-0.5 text-[9px] system-text', choice.progressDelta >= 0 ? 'border-emerald-300/25 bg-emerald-400/10 text-emerald-100' : 'border-rose-300/25 bg-rose-400/10 text-rose-100')}>
+                    진행 {choice.progressDelta >= 0 ? '+' : ''}{choice.progressDelta}
+                  </span>
+                )}
+                {typeof choice.riskDelta === 'number' && choice.riskDelta !== 0 && (
+                  <span className={clsx('rounded border px-1.5 py-0.5 text-[9px] system-text', choice.riskDelta > 0 ? 'border-rose-300/25 bg-rose-400/10 text-rose-100' : 'border-sky-300/25 bg-sky-400/10 text-sky-100')}>
+                    위험 {choice.riskDelta > 0 ? '+' : ''}{choice.riskDelta}
+                  </span>
+                )}
+                {roleMatch && (
+                  <span className="rounded border border-emerald-300/25 bg-emerald-400/10 px-1.5 py-0.5 text-[9px] system-text text-emerald-100">역할 일치</span>
+                )}
+              </div>
+            </button>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+function ReportPanel({
   expeditionResult,
   selectedShadows,
   activeShadowId,
+  ownedShadows,
   compact = false,
 }: {
   expeditionResult: NonNullable<ReturnType<typeof useGame.getState>['shadowExpeditions'][number]['result']>
   selectedShadows: OwnedShadow[]
+  ownedShadows: OwnedShadow[]
   activeShadowId?: string
   compact?: boolean
 }) {
   const tone = outcomeTone[expeditionResult.outcome]
+  const report = expeditionResult.report
+  const featuredShadow = expeditionResult.featuredShadowIds?.[0]
+    ? ownedShadows.find(s => s.instanceId === expeditionResult.featuredShadowIds![0])
+    : undefined
+
   return (
     <div className={clsx('rounded-lg border p-3', tone.border, tone.bg, tone.glow)}>
+      {/* Header */}
       <div className="flex items-start justify-between gap-3">
         <div>
           <div className="system-text text-[10px] text-white/45">EXPEDITION RESULT</div>
           <div className={clsx('mt-1 text-2xl font-black', tone.text)}>
             {SHADOW_EXPEDITION_OUTCOME_LABEL[expeditionResult.outcome]}
           </div>
+          {report && !compact && (
+            <div className="mt-0.5 text-[11px] italic text-white/50">{report.title}</div>
+          )}
         </div>
         <div className="rounded-md border border-white/10 bg-ink-950/35 px-3 py-2 text-right">
           <div className="system-text text-[9px] text-white/35">FINAL</div>
           <div className="text-xs text-white/70">진행 {expeditionResult.progress} / 위험 {expeditionResult.risk}</div>
         </div>
       </div>
+
+      {/* Rewards */}
       <div className="mt-3 grid grid-cols-2 gap-2">
         <div className="rounded-md border border-cyan-300/20 bg-cyan-400/10 p-2">
           <div className="system-text text-[9px] text-cyan-100/55">SHADOW XP</div>
@@ -862,11 +953,40 @@ function ResultPanel({
           {expeditionResult.bonusRewards.join(' / ')}
         </div>
       )}
+
+      {/* 5-block report */}
+      {!compact && report && (
+        <div className="mt-3 space-y-1.5">
+          <div className="rounded-md border border-white/8 bg-white/4 px-3 py-2">
+            <div className="system-text text-[9px] text-white/35 mb-0.5">개요</div>
+            <div className="text-xs leading-relaxed text-white/70">{report.overview}</div>
+          </div>
+          <div className="rounded-md border border-violet-300/15 bg-violet-400/6 px-3 py-2">
+            <div className="system-text text-[9px] text-violet-200/45 mb-0.5">주목</div>
+            <div className="text-xs leading-relaxed text-violet-100/80">{report.highlight}</div>
+          </div>
+          <div className="rounded-md border border-amber-300/15 bg-amber-400/6 px-3 py-2">
+            <div className="system-text text-[9px] text-amber-200/45 mb-0.5">수확</div>
+            <div className="text-xs leading-relaxed text-amber-100/75">{report.harvest}</div>
+          </div>
+          <div className="rounded-md border border-white/8 bg-white/4 px-3 py-2">
+            <div className="system-text text-[9px] text-white/35 mb-0.5">마무리</div>
+            <div className="text-xs leading-relaxed text-white/60 italic">{report.closing}</div>
+          </div>
+        </div>
+      )}
+
+      {/* Shadow portraits */}
       {!compact && selectedShadows.length > 0 && (
         <div className="mt-3 flex gap-2 overflow-x-auto pb-1">
           {selectedShadows.map(shadow => (
             <div key={shadow.instanceId} className="min-w-[82px]">
-              <ShadowPortrait shadow={shadow} size="xs" active={activeShadowId === shadow.instanceId} highlighted />
+              <ShadowPortrait
+                shadow={shadow}
+                size="xs"
+                active={featuredShadow?.instanceId === shadow.instanceId || activeShadowId === shadow.instanceId}
+                highlighted
+              />
               <div className="mt-1 truncate text-[10px] text-white/60">{shadow.name}</div>
             </div>
           ))}

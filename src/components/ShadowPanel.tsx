@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { motion } from 'framer-motion'
-import { Eclipse, Lock, Shield, Star, Swords, X } from 'lucide-react'
+import { Eclipse, Gem, Lock, Shield, Sparkles, Star, Swords, Ticket, X } from 'lucide-react'
 import { useGame } from '../lib/store'
 import { ShadowCard as VisualShadowCard } from './shadows/ShadowCard'
 import { ShadowExpeditionPanel } from './shadows/ShadowExpeditionPanel'
@@ -23,6 +23,8 @@ import {
   getShadowXpForNextLevel,
   MAX_SHADOW_ENHANCEMENT_LEVEL,
   SHADOW_DECOMPOSE_ESSENCE,
+  SHADOW_FRAGMENT_SUMMON_COST,
+  SHADOW_INNATE_GRADE_LABEL,
 } from '../lib/shadows'
 import type { OwnedShadow, ShadowRole } from '../lib/types'
 
@@ -142,7 +144,7 @@ function ShadowCard({
           <div className="text-[10px] system-text opacity-70">[{SHADOW_RARITY_LABEL[shadow.rarity]}]</div>
           <h3 className="font-bold text-white/90 mt-0.5">{shadow.name}{(shadow.enhancementLevel ?? 0) > 0 ? ` +${shadow.enhancementLevel}` : ''}</h3>
           <div className="text-[11px] text-white/55 mt-1">
-            계급: {SHADOW_RANK_LABEL[shadow.rank]} · 역할: {SHADOW_ROLE_LABEL[shadow.role]}
+            계급: {SHADOW_RANK_LABEL[shadow.rank]} · 역할: {SHADOW_ROLE_LABEL[shadow.role]} · 태생: {SHADOW_INNATE_GRADE_LABEL[shadow.innateGrade ?? 'B']}
           </div>
         </div>
         <div className="flex flex-col items-end gap-1">
@@ -326,6 +328,12 @@ export function ShadowPanel() {
   const equippedShadows = getEquippedShadows(ownedShadows, equippedShadowIds, hunter)
   const ownedDefinitionIds = new Set(ownedShadows.map(shadow => shadow.definitionId))
   const shadowEssence = useGame(s => s.shadowEssence ?? 0)
+  const shadowSummonTickets = useGame(s => s.shadowSummonTickets ?? [])
+  const shadowSummonShards = useGame(s => s.shadowSummonShards ?? {})
+  const shadowFragments = useGame(s => s.shadowFragments ?? {})
+  const summonShadowFromTicket = useGame(s => s.summonShadowFromTicket)
+  const summonShadowFromFragments = useGame(s => s.summonShadowFromFragments)
+  const exchangeShadowSummonShards = useGame(s => s.exchangeShadowSummonShards)
   const absorbShadow = useGame(s => s.absorbShadow)
   const decomposeShadow = useGame(s => s.decomposeShadow)
   const toggleShadowLock = useGame(s => s.toggleShadowLock)
@@ -347,6 +355,22 @@ export function ShadowPanel() {
     })
     return sortShadows(list, sort, equippedShadowIds)
   }, [filter, ownedShadows, sort, equippedShadowIds])
+
+  const availableTickets = shadowSummonTickets.filter(ticket => !ticket.usedAt)
+  const fragmentEntries = Object.entries(shadowFragments)
+    .map(([definitionId, amount]) => {
+      const definition = getShadowDefinition(definitionId)
+      const cost = definition ? SHADOW_FRAGMENT_SUMMON_COST[definition.rarity] : 20
+      return { definitionId, amount, definition, cost, ready: amount >= cost }
+    })
+    .filter(entry => entry.definition)
+    .sort((a, b) => Number(b.ready) - Number(a.ready) || b.amount - a.amount)
+  const shardEntries = [
+    { type: 'normal' as const, label: '일반 조각', amount: shadowSummonShards.normal ?? 0, cost: 10, ticketType: 'normal_shadow' as const },
+    { type: 'rare' as const, label: '희귀 조각', amount: shadowSummonShards.rare ?? 0, cost: 10, ticketType: 'rare_shadow' as const },
+    { type: 'named' as const, label: '네임드 조각', amount: shadowSummonShards.named ?? 0, cost: 20, ticketType: 'gate_named_shadow' as const },
+    { type: 'achievement_named' as const, label: '성취 조각', amount: shadowSummonShards.achievement_named ?? 0, cost: 30, ticketType: 'achievement_named_shadow' as const },
+  ]
 
   const codexDefs = SHADOW_DEFINITIONS.filter(def => {
     if (filter === 'all') return true
@@ -465,6 +489,99 @@ export function ShadowPanel() {
             )
           })}
         </div>
+      </div>
+
+      <div className="panel corner-bracket p-4 border-cyan-400/20 bg-cyan-400/5">
+          <div className="br" />
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <div>
+              <div className="system-text text-[11px] text-cyan-300/70">SUMMON</div>
+              <h3 className="text-base font-bold text-cyan-50">그림자 소환</h3>
+              <p className="mt-1 text-[11px] text-white/45">미보유 후보 우선, 중복 네임드는 조각으로 전환됩니다.</p>
+            </div>
+            <div className="flex gap-2 text-[10px] system-text text-white/50">
+              <span className="rounded border border-cyan-300/20 bg-cyan-400/10 px-2 py-1">소환권 {availableTickets.length}</span>
+              <span className="rounded border border-purple-300/20 bg-purple-400/10 px-2 py-1">조각 {Object.values(shadowSummonShards).reduce((sum, amount) => sum + (amount ?? 0), 0)}</span>
+            </div>
+          </div>
+
+          {availableTickets.length > 0 ? (
+            <div className="mb-3 grid gap-2 md:grid-cols-2 xl:grid-cols-3">
+              {availableTickets.map(ticket => {
+                const definition = ticket.definitionId ? getShadowDefinition(ticket.definitionId) : undefined
+                return (
+                  <button
+                    key={ticket.id}
+                    type="button"
+                    onClick={() => summonShadowFromTicket(ticket.id)}
+                    className="flex min-h-16 items-center gap-3 rounded-md border border-cyan-300/20 bg-ink-900/55 px-3 py-2 text-left transition hover:border-cyan-300/45 hover:bg-cyan-400/10"
+                  >
+                    <Ticket className="h-5 w-5 shrink-0 text-cyan-200" />
+                    <span className="min-w-0">
+                      <span className="block truncate text-sm font-semibold text-white/85">{ticket.label}</span>
+                      <span className="block text-[10px] system-text text-white/40">
+                        {ticket.ticketType === 'category_achievement_named' ? `${ticket.category ?? '분야'} · ${ticket.grade ?? 'standard'}` : ticket.ticketType}
+                        {definition ? ` · ${SHADOW_ROLE_LABEL[definition.role]}` : ''}
+                      </span>
+                    </span>
+                  </button>
+                )
+              })}
+            </div>
+          ) : (
+            <div className="mb-3 rounded-md border border-white/10 bg-ink-900/35 px-3 py-2 text-xs text-white/45">사용 가능한 소환권이 없습니다.</div>
+          )}
+
+          <div className="mb-3 grid gap-2 md:grid-cols-2 xl:grid-cols-4">
+            {shardEntries.map(entry => (
+              <button
+                key={entry.type}
+                type="button"
+                onClick={() => exchangeShadowSummonShards(entry.ticketType)}
+                disabled={entry.amount < entry.cost}
+                className={`flex min-h-16 items-center gap-3 rounded-md border px-3 py-2 text-left transition disabled:cursor-not-allowed disabled:opacity-45 ${
+                  entry.amount >= entry.cost
+                    ? 'border-emerald-300/35 bg-emerald-400/10 hover:border-emerald-300/55'
+                    : 'border-white/10 bg-ink-900/45'
+                }`}
+              >
+                <Gem className="h-5 w-5 shrink-0 text-emerald-200" />
+                <span className="min-w-0">
+                  <span className="block truncate text-sm font-semibold text-white/85">{entry.label}</span>
+                  <span className="block text-[10px] system-text text-white/40">
+                    {entry.amount}/{entry.cost} · {entry.amount >= entry.cost ? '교환 가능' : '수집 중'}
+                  </span>
+                </span>
+              </button>
+            ))}
+          </div>
+
+          {fragmentEntries.length > 0 && (
+            <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-3">
+              {fragmentEntries.map(entry => (
+                <button
+                  key={entry.definitionId}
+                  type="button"
+                  onClick={() => summonShadowFromFragments(entry.definitionId)}
+                  disabled={!entry.ready}
+                  className={`flex min-h-16 items-center gap-3 rounded-md border px-3 py-2 text-left transition disabled:cursor-not-allowed disabled:opacity-45 ${
+                    entry.ready
+                      ? 'border-purple-300/35 bg-purple-400/10 hover:border-purple-300/55'
+                      : 'border-white/10 bg-ink-900/45'
+                  }`}
+                >
+                  <Gem className="h-5 w-5 shrink-0 text-purple-200" />
+                  <span className="min-w-0">
+                    <span className="block truncate text-sm font-semibold text-white/85">{entry.definition?.name}</span>
+                    <span className="block text-[10px] system-text text-white/40">
+                      조각 {entry.amount}/{entry.cost} · {entry.ready ? '소환 가능' : '수집 중'}
+                    </span>
+                  </span>
+                  {entry.ready && <Sparkles className="ml-auto h-4 w-4 shrink-0 text-emerald-200" />}
+                </button>
+              ))}
+            </div>
+          )}
       </div>
 
       <ShadowExpeditionPanel />

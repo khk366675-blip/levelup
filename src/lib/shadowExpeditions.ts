@@ -1,5 +1,7 @@
 import type {
   AchievementStats,
+  ExpeditionMidEvent,
+  ExpeditionPhase,
   OwnedShadow,
   ShadowDefinition,
   ShadowExpedition,
@@ -11,6 +13,15 @@ import type {
   ShadowRole,
 } from './types'
 import { getShadowDefinition } from './shadows'
+import {
+  buildExpeditionReport,
+  getCommandLog,
+  getExpeditionPhase,
+  getPhaseDisplayName,
+  getPhaseEnterLog,
+  getRoleLine,
+  pickMidEvent,
+} from './expeditionLore'
 
 export const SHADOW_EXPEDITION_UNLOCK_DAILY_COUNT = 2
 export const SHADOW_EXPEDITION_PARTY_MIN = 1
@@ -255,13 +266,13 @@ const pickActor = (
   return pool[Math.floor(rng() * pool.length)]
 }
 
-const actorLine = (command: ShadowExpeditionCommand, actor?: OwnedShadow): string => {
+export { getExpeditionPhase, getPhaseDisplayName }
+
+const actorLine = (command: ShadowExpeditionCommand, phase: ExpeditionPhase, actor?: OwnedShadow): string => {
   const name = actor?.name ?? '그림자 병사'
-  if (command === 'attack') return `${name}이 전열을 찢었다.`
-  if (command === 'defend') return `${name}이 잔재의 반격을 막았다.`
-  if (command === 'scout') return `${name}이 흔들리는 통로를 찾아냈다.`
-  if (command === 'analyze') return `${name}이 균열의 약점을 기록했다.`
-  return `${name}이 정수의 흔적을 발견했다.`
+  const contextLog = getCommandLog(command, phase)
+  const roleLine = actor ? getRoleLine(actor.role, 'command') : ''
+  return `${name} — ${contextLog}${roleLine ? ` "${roleLine}"` : ''}`
 }
 
 export const getShadowExpeditionOutcome = (progress: number, risk: number): ShadowExpeditionOutcome => {
@@ -300,6 +311,7 @@ export const resolveShadowExpeditionCommand = (
   if (expedition.status !== 'in_progress') return expedition
   if (party.length === 0) return expedition
   if (expedition.result) return expedition
+  if (expedition.eventTriggered && !expedition.eventResolved) return expedition
 
   const actor = pickActor(party, expedition, command, rng)
   const base = COMMAND_BASE[command]
@@ -319,13 +331,8 @@ export const resolveShadowExpeditionCommand = (
 
   progressDelta += clamp(Math.round((powerRatio - 1) * 18), -16, 18)
   riskDelta += powerRatio < 0.65 ? 10 : powerRatio < 0.85 ? 6 : powerRatio > 1.25 ? -4 : 0
-  if (powerRatio < 0.65) {
-    progressDelta -= 4
-  }
-  if (powerRatio < 0.45) {
-    progressDelta -= 3
-    riskDelta += 4
-  }
+  if (powerRatio < 0.65) progressDelta -= 4
+  if (powerRatio < 0.45) { progressDelta -= 3; riskDelta += 4 }
   progressDelta += roleMatches * 4 + Math.min(4, recommendedMatches * 2) + namedActorBonus + levelBonus + enhancementBonus
 
   if (command === 'defend') {
@@ -336,38 +343,54 @@ export const resolveShadowExpeditionCommand = (
     progressDelta += roleMatches * 3
   } else if (command === 'search') {
     riskDelta += roleMatches === 0 ? 4 : 0
-  } else if (command === 'attack' && !party.some(shadow => shadow.role === 'guard' || shadow.role === 'support')) {
+  } else if (command === 'attack' && !party.some(s => s.role === 'guard' || s.role === 'support')) {
     riskDelta += 5
   }
 
   if ((command === 'attack' || command === 'search') && analyzeStacks > 0) {
     progressDelta = Math.round(progressDelta * (1 + Math.min(2, analyzeStacks) * 0.1))
   }
-  if (scoutStacks > 0) {
-    riskDelta -= 6
-  }
+  if (scoutStacks > 0) riskDelta -= 6
 
   progressDelta = Math.max(1, progressDelta)
   riskDelta = Math.round(riskDelta)
 
-  const nextProgress = Math.max(0, expedition.progress + progressDelta)
+  const prevProgress = expedition.progress
+  const nextProgress = Math.max(0, prevProgress + progressDelta)
   const nextRisk = clamp(expedition.risk + riskDelta, 0, 140)
   const nextTurn = expedition.turn + 1
   const nextAnalyzeStacks = command === 'analyze' ? Math.min(2, analyzeStacks + 1) : (command === 'attack' || command === 'search' ? 0 : analyzeStacks)
   const nextScoutStacks = command === 'scout' ? 1 : 0
   const nextSearchStacks = command === 'search' ? Math.min(3, (expedition.searchStacks ?? 0) + 1) : (expedition.searchStacks ?? 0)
 
-  const logs: ShadowExpeditionLog[] = [
-    ...expedition.logs,
-    {
+  const prevPhase = expedition.currentPhase ?? getExpeditionPhase(prevProgress)
+  const nextPhase = getExpeditionPhase(nextProgress)
+
+  const logs: ShadowExpeditionLog[] = [...expedition.logs]
+
+  // Phase transition log (only once per phase, not on every command)
+  if (nextPhase !== prevPhase && nextPhase !== 'muster') {
+    const phaseMsg = getPhaseEnterLog(expedition.type, nextPhase)
+    const displayName = getPhaseDisplayName(nextPhase, expedition.type)
+    logs.push({
       id: idFactory(),
       turn: nextTurn,
-      type: 'command',
-      command,
-      actorShadowId: actor?.instanceId,
-      message: `${SHADOW_EXPEDITION_COMMAND_LABEL[command]} 명령. ${actorLine(command, actor)} 진행도 +${progressDelta}, 위험도 ${riskDelta >= 0 ? '+' : ''}${riskDelta}.`,
-    },
-  ]
+      type: 'phase',
+      phase: nextPhase,
+      message: `[${displayName}] ${phaseMsg}`,
+    })
+  }
+
+  // Main command log
+  logs.push({
+    id: idFactory(),
+    turn: nextTurn,
+    type: 'command',
+    command,
+    phase: nextPhase,
+    actorShadowId: actor?.instanceId,
+    message: `${SHADOW_EXPEDITION_COMMAND_LABEL[command]} 명령. ${actorLine(command, nextPhase, actor)} 진행도 +${progressDelta}, 위험도 ${riskDelta >= 0 ? '+' : ''}${riskDelta}.`,
+  })
 
   if (command === 'analyze') {
     logs.push({
@@ -390,27 +413,85 @@ export const resolveShadowExpeditionCommand = (
     })
   }
 
+  // Mid-event trigger: threshold phase, max 1 per expedition, ~40% chance
+  let midEvent: ExpeditionMidEvent | undefined = expedition.midEvent
+  let eventTriggered = expedition.eventTriggered ?? false
+  if (
+    nextPhase === 'threshold' &&
+    !eventTriggered &&
+    rng() < 0.42
+  ) {
+    const recentIds = (expedition.phaseHistory ?? [])
+      .filter(e => e.message?.startsWith('[EVENT]'))
+      .map(e => e.message?.replace('[EVENT]', '').trim() ?? '')
+    const candidate = pickMidEvent(expedition.type, recentIds)
+    if (candidate) {
+      midEvent = candidate
+      eventTriggered = true
+      logs.push({
+        id: idFactory(),
+        turn: nextTurn,
+        type: 'event',
+        phase: 'threshold',
+        message: `[상황 발생] ${candidate.title} — ${candidate.description}`,
+      })
+    }
+  }
+
   const shouldFinish = nextRisk >= 100 || nextProgress >= 100 || nextTurn >= expedition.maxTurns
+
+  const phaseHistory = [
+    ...(expedition.phaseHistory ?? []),
+    ...(nextPhase !== prevPhase ? [{ phase: nextPhase, enteredAt: nextTurn }] : []),
+    ...(midEvent && eventTriggered && !expedition.eventTriggered ? [{ phase: 'threshold' as ExpeditionPhase, enteredAt: nextTurn, message: `[EVENT]${midEvent.id}` }] : []),
+  ]
+
   if (!shouldFinish) {
     return {
       ...expedition,
       progress: nextProgress,
       risk: nextRisk,
       turn: nextTurn,
+      currentPhase: nextPhase,
+      phaseHistory,
       logs,
       searchStacks: nextSearchStacks,
       analyzeStacks: nextAnalyzeStacks,
       scoutStacks: nextScoutStacks,
+      midEvent: midEvent ?? expedition.midEvent,
+      eventTriggered,
+      eventResolved: expedition.eventResolved,
     }
   }
 
   const outcome = getShadowExpeditionOutcome(nextProgress, nextRisk)
   const reward = getShadowExpeditionReward(expedition.type, outcome, nextSearchStacks)
+
+  // Featured shadow for report
+  const featured = actor ?? party[0]
+  const report = buildExpeditionReport(outcome, featured?.name ?? '군단')
+
+  // Role line for finish
+  if (featured) {
+    const ctx = outcome === 'great_success' ? 'great_success' : outcome === 'failure' ? 'failure' : 'success'
+    const roleLine = getRoleLine(featured.role, ctx)
+    logs.push({
+      id: idFactory(),
+      turn: nextTurn,
+      type: 'shadow',
+      actorShadowId: featured.instanceId,
+      message: `${featured.name} — "${roleLine}"`,
+    })
+  }
+
   const result: ShadowExpeditionResult = {
     ...reward,
     progress: nextProgress,
     risk: nextRisk,
+    report,
+    featuredShadowIds: featured ? [featured.instanceId] : [],
   }
+
   logs.push({
     id: idFactory(),
     turn: nextTurn,
@@ -423,11 +504,50 @@ export const resolveShadowExpeditionCommand = (
     progress: nextProgress,
     risk: nextRisk,
     turn: nextTurn,
+    currentPhase: 'return',
+    phaseHistory,
     logs,
     result,
     status: 'completed',
     searchStacks: nextSearchStacks,
     analyzeStacks: nextAnalyzeStacks,
     scoutStacks: nextScoutStacks,
+    midEvent: midEvent ?? expedition.midEvent,
+    eventTriggered,
+    eventResolved: expedition.eventResolved,
+  }
+}
+
+export const resolveExpeditionMidEventChoice = (
+  expedition: ShadowExpedition,
+  choiceId: string,
+  idFactory: () => string = () => `exp-log-${Date.now()}-${Math.floor(Math.random() * 1_000_000)}`
+): ShadowExpedition => {
+  if (!expedition.midEvent || !expedition.eventTriggered || expedition.eventResolved) return expedition
+  const choice = expedition.midEvent.choices.find(c => c.id === choiceId)
+  if (!choice) return expedition
+
+  const nextProgress = Math.max(0, Math.min(140, expedition.progress + (choice.progressDelta ?? 0)))
+  const nextRisk = clamp(expedition.risk + (choice.riskDelta ?? 0), 0, 140)
+  const nextSearchStacks = Math.min(3, (expedition.searchStacks ?? 0) + (choice.searchStackDelta ?? 0))
+
+  const logs: ShadowExpeditionLog[] = [
+    ...expedition.logs,
+    {
+      id: idFactory(),
+      turn: expedition.turn,
+      type: 'event',
+      phase: 'threshold',
+      message: `[선택] ${choice.label} — ${choice.log}`,
+    },
+  ]
+
+  return {
+    ...expedition,
+    progress: nextProgress,
+    risk: nextRisk,
+    searchStacks: nextSearchStacks,
+    logs,
+    eventResolved: true,
   }
 }

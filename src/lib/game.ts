@@ -368,6 +368,30 @@ export const shouldProtectStreak = (hunter: HunterState, lastUsedAt: string | un
 
 export const MAX_ITEM_ENHANCEMENT_LEVEL = 5
 export const ITEM_ENHANCEMENT_EFFECT_STEP = 0.08
+export const DEFAULT_EQUIPMENT_STARS = 2
+
+export const EQUIPMENT_STAR_MULTIPLIER: Record<1 | 2 | 3 | 4 | 5, number> = {
+  1: 0.85,
+  2: 1,
+  3: 1.18,
+  4: 1.38,
+  5: 1.65,
+}
+
+export const getEquipmentStars = (item: Pick<Item, 'equipmentStars'>): 1 | 2 | 3 | 4 | 5 => {
+  const raw = Math.floor(item.equipmentStars ?? DEFAULT_EQUIPMENT_STARS)
+  if (raw <= 1) return 1
+  if (raw >= 5) return 5
+  return raw as 1 | 2 | 3 | 4 | 5
+}
+
+export const getEquipmentStarMultiplier = (item: Pick<Item, 'equipmentStars'>): number => {
+  return EQUIPMENT_STAR_MULTIPLIER[getEquipmentStars(item)]
+}
+
+export const formatEquipmentStars = (item: Pick<Item, 'equipmentStars'>): string => {
+  return '★'.repeat(getEquipmentStars(item))
+}
 
 export const getEnhancementLevel = (item: Pick<Item, 'enhancementLevel'>): number => {
   const raw = Math.floor(item.enhancementLevel ?? 0)
@@ -402,7 +426,7 @@ export const isSameEnhancementFamily = (
 }
 
 export const getEnhancedItemEffects = (item: Item): NonNullable<Item['effects']> => {
-  const multiplier = getEnhancementMultiplier(item)
+  const multiplier = getEquipmentStarMultiplier(item) * getEnhancementMultiplier(item)
   return item.effects?.map(effect => ({
     ...effect,
     value: effect.type === 'stat_bonus'
