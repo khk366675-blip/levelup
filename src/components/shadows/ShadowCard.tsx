@@ -35,11 +35,11 @@ type ShadowCardProps = {
 }
 
 const rarityFrame: Record<OwnedShadow['rarity'], string> = {
-  common: 'border-slate-400/25 bg-slate-400/5',
-  uncommon: 'border-emerald-400/30 bg-emerald-400/5',
-  rare: 'border-cyan-400/35 bg-cyan-400/5',
-  epic: 'border-purple-400/40 bg-purple-400/5',
-  legendary: 'border-amber-400/45 bg-amber-400/5',
+  common:    'border-slate-400/25  bg-slate-400/5  rarity-frame-common',
+  uncommon:  'border-emerald-400/32 bg-emerald-400/6 rarity-frame-uncommon',
+  rare:      'border-cyan-400/38   bg-cyan-400/7   rarity-frame-rare',
+  epic:      'border-purple-400/44 bg-purple-400/8  rarity-frame-epic',
+  legendary: 'border-amber-400/52  bg-amber-400/8  rarity-frame-legendary',
 }
 
 const rarityText: Record<OwnedShadow['rarity'], string> = {
@@ -95,7 +95,7 @@ export function ShadowCard({
         'panel corner-bracket overflow-hidden border p-3',
         rarityFrame[shadow.rarity],
         equipped && 'ring-2 ring-cyan-300/35 shadow-glow',
-        named && 'shadow-glow-purple',
+        named && shadow.isAchievementNamed ? 'ring-1 ring-cyan-200/40' : named ? 'named-pulse' : '',
         evolutionCheck.canEvolve && 'ring-1 ring-emerald-300/35',
         featured ? 'sm:p-4' : 'sm:p-3',
       )}
@@ -108,6 +108,7 @@ export function ShadowCard({
           active={equipped}
           highlighted={named}
           evolutionReady={evolutionCheck.canEvolve}
+          innateGrade={shadow.innateGrade}
         />
 
         <div className="min-w-0">
@@ -118,8 +119,16 @@ export function ShadowCard({
                 {(shadow.birthRarity ?? shadow.rarity) !== shadow.rarity ? ` / BIRTH ${SHADOW_RARITY_LABEL[shadow.birthRarity ?? shadow.rarity]}` : ''}
               </div>
               <h3 className="mt-0.5 truncate text-sm font-bold text-white/90 sm:text-base">
-              {shadow.name}{enhancement > 0 ? ` +${enhancement}` : ''}
-                {shadow.innateGrade === 'S' || shadow.innateGrade === 'A' ? <span className="ml-1 text-amber-200">[{shadow.innateGrade}]</span> : null}
+                {shadow.name}
+                {enhancement > 0 && (
+                  <span className={clsx('ml-1.5 text-xs font-black', enhancement >= 8 ? 'text-amber-300' : enhancement >= 4 ? 'text-amber-200/80' : 'text-amber-100/60')}>+{enhancement}</span>
+                )}
+                {shadow.innateGrade === 'S' && (
+                  <span className="ml-1.5 rounded border border-amber-300/55 bg-amber-300/18 px-1 py-px text-[9px] system-text font-bold text-amber-100">S</span>
+                )}
+                {shadow.innateGrade === 'A' && (
+                  <span className="ml-1.5 rounded border border-amber-400/40 bg-amber-400/10 px-1 py-px text-[9px] system-text text-amber-200/80">A</span>
+                )}
               </h3>
               <div className="mt-1 flex flex-wrap gap-1.5 text-[10px] system-text">
                 <span className="rounded border border-white/10 bg-ink-900/55 px-1.5 py-0.5 text-white/55">

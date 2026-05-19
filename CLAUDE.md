@@ -7864,3 +7864,415 @@ Verification:
 - `npx tsx scripts/sim-infinite-tower.ts`: pass. Tower clear bands unchanged.
 - `npx tsx scripts/sim-shadow-expedition.ts`: pass. Expedition outcomes unchanged.
 - Browser test scenario: Tower battle → Gate panel shows no tower logs; Gate battle → Gate panel shows gate log only.
+
+## 12-24 — 게임 비주얼/VFX 고급화 1차
+
+**목표:** 핵심 게임플레이 공식, 보상, 퍼시스턴스를 변경하지 않고 UI 비주얼 및 VFX의 품질을 대폭 향상.
+
+### 변경된 파일 목록
+
+**`src/index.css`**
+- VFX 유틸리티 클래스 추가 (12-24 VFX UTILITIES 섹션):
+  - `.rarity-frame-common/uncommon/rare/epic/legendary` — 레어리티별 테두리 glow/shadow
+  - `.grade-aura-s` (애니메이션: `grade-aura-s-pulse`) / `.grade-aura-a` — 태생 S/A 등급 aura
+  - `.named-pulse` — 네임드 그림자 미묘한 pulse 애니메이션
+  - `.enhancement-glow` — 고강화 아이템/그림자 glow
+  - `.skill-badge-damage/defense/buff/debuff/heal/utility` — 스킬 타입별 배지 색상
+  - `.hp-flash-damage / .hp-flash-heal` — HP 바 피격/회복 플래시
+  - `.summon-reveal` — 소환/리빌 입장 애니메이션
+  - `.boss-glow` — 보스/레전더리 glow pulse
+  - `.damage-pop` — 피해 숫자 팝업 애니메이션
+  - `.shadow-mist-legendary` — 레전더리 안개 shimmer
+  - `.mastery-bar-fill` — 숙련도 progress bar shimmer
+- 모든 신규 클래스에 `@media (prefers-reduced-motion: reduce)` 오버라이드 추가.
+
+**`src/components/shadows/ShadowPortrait.tsx`**
+- `innateGrade?: string` prop 추가
+- `innateGrade` A/S 등급 시 우상단 배지 렌더링 (S: amber, A: 흐린 amber)
+- 컨테이너에 `grade-aura-s` (S등급), `grade-aura-a` (A등급), `named-pulse` (네임드) 클래스 적용
+
+**`src/components/shadows/ShadowCard.tsx`**
+- `rarityFrame` 맵에 `rarity-frame-*` 클래스 추가 — 레어리티별 카드 glow
+- 이름 옆 enhancement 레벨 색상 분기 (8+: amber-300, 4+: amber-200/80, 기타: amber-100/60)
+- `innateGrade` S/A 배지를 이름 옆에 styled chip으로 표시
+- 성취 네임드: `ring-1 ring-cyan-200/40`, 게이트 네임드: `named-pulse` 클래스
+- `ShadowPortrait`에 `innateGrade={shadow.innateGrade}` 전달
+
+**`src/components/ShadowPanel.tsx`**
+- DEPLOYED LEGION 슬롯 개선:
+  - 네임드 슬롯: amber 계열 radial-gradient + `named-pulse`
+  - legendary 슬롯: `rarity-frame-legendary`
+  - epic 슬롯: `rarity-frame-epic`
+  - 슬롯 우상단에 role 레이블 추가
+  - 배치된 그림자 이름 아래 rank 배지 + NAMED 배지 표시
+  - 강화 레벨 표시 추가
+  - 빈 슬롯: "EMPTY" system-text
+- `ShadowPortrait`에 `innateGrade` 전달
+
+**`src/components/SkillPanel.tsx`**
+- `skillTypeBadgeClass()` — 스킬 타입 문자열 → `skill-badge-*` CSS 클래스 매핑
+- `skillTypeGlyph()` — 스킬 타입 → 글리프 (⚡/🛡/↑/↓/✦/◈)
+- 스킬 카드에 타입 글리프 + 타입별 색상 배지 표시
+- 쿨다운 뱃지 색상 분기 (즉시: emerald, CD≤2: cyan, 기타: white/55)
+- 숙련도 progress bar 추가 (`mastery-bar-fill` shimmer 클래스)
+- 스킬 카드 hover 시 border 밝아짐 효과
+
+**`src/components/Inventory.tsx`**
+- 장착 슬롯 카드: `rarity-frame-${equippedItem.rarity}` 적용, 슬롯 아이콘 색상 rarity 기반으로 변경, 별/강화 레벨 분리 표시
+- 아이템 그리드: 장비류에 `rarity-frame-*`, legendary 장비에 `boss-glow` 적용
+- 빈 슬롯: "EMPTY" system-text
+
+**`src/components/RewardBoxPanel.tsx`**
+- `TIER_CLASS`: normal→`rarity-frame-rare`, enhanced→`rarity-frame-uncommon`, superior→`rarity-frame-epic`, epic→`boss-glow`
+- epic/superior 박스에 `shadow-mist-legendary` 안개 오버레이 추가
+
+### 제약 사항 준수 확인
+- 전투 공식, 보상값, XP, 정수, 확률, 퍼시스턴스 키 변경 없음.
+- 기존 게임플레이 기능 보존.
+- `@media (prefers-reduced-motion: reduce)` 모든 신규 애니메이션 포함.
+
+Verification:
+- `npm run build`: pass (Vite chunk size warning only, 기존과 동일).
+- TypeScript 오류 없음.
+- 브라우저 시각 확인: 레어리티 glow, 태생 등급 배지, 출전 슬롯 pedestal, 스킬 타입 색상, 장비 rarity 프레임, 박스 tier glow 정상 렌더링.
+
+---
+
+## 12-24B — 그림자 개별 Portrait / 고급 실루엣 자산 파이프라인
+
+### 목표
+ShadowPortrait 컴포넌트를 자산 우선(asset-first) 렌더링 구조로 확장하여, 향후 PNG/WebP 초상화 추가 시 즉시 반영될 수 있는 파이프라인을 마련. SVG 기반 family 실루엣을 named/achievement 전용 장식 레이어로 강화. 기존 렌더링과 하위 호환 유지.
+
+### 변경 파일
+
+**`src/lib/types.ts`**
+- `ShadowDefinition`에 `portraitKey?: string` (자산 매니페스트 키, 현재 = definition ID), `assetFamily?: string` (패밀리 그룹) 선택적 필드 추가.
+
+**`src/lib/shadowPortraitAssets.ts`** (신규 생성)
+- `SHADOW_PORTRAIT_ASSETS: Record<string, string>` — 빈 매니페스트 (PNG/WebP 자산 준비 시 등록).
+- `getShadowPortraitAsset(key)` — 안전한 asset URL 조회 함수.
+- `ASSET_FAMILY_FOLDER` — 패밀리별 권장 파일 경로 가이드.
+- 렌더링 우선순위 문서: asset 이미지 → assetFamily SVG 장식 → visualKey SVG → role 폴백.
+
+**`src/lib/shadows.ts`**
+- `ShadowVisualPatch` 타입: `portraitKey`, `assetFamily` 필드 추가.
+- `SHADOW_VISUALS` (10개 기본 + 9개 named_gate + 14개 named_achievement): 모든 항목에 `portraitKey` (= 정의 ID) 및 `assetFamily` 명시.
+  - 패밀리 분류: `rat` / `scout` / `infantry` / `executor` / `scribe` / `shield` / `hound` / `named_gate` / `named_achievement`
+- `inferShadowVisual`: `portraitKey` = `definition.id`, `assetFamily` = role/named 상태 기반 자동 도출.
+
+**`src/components/shadows/ShadowPortrait.tsx`**
+- `import { getShadowPortraitAsset }` 추가.
+- `renderNamedGateDecor(accent, seed)` 신규 SVG 함수: 균열선(rift cracks) + 차원 포인트 장식 — named_gate 전용.
+- `renderAchievementDecor(accent)` 신규 SVG 함수: 왕관(crown) + 월계수(laurel) + 업적 봉인 링 — named_achievement 전용.
+- evolved 내부 헥사곤 점선 링 추가 (진화체 시각 강화).
+- 컨테이너: `portrait-family-named-gate`, `portrait-family-named-achievement`, `portrait-evolved` 클래스 조건부 적용.
+- `<img>` 오버레이: `assetUrl` 존재 시 SVG 위에 렌더링, onError 시 자동 숨김.
+
+**`src/index.css`**
+- `.portrait-family-named-gate`: 틸-시안 rift glow box-shadow.
+- `.portrait-family-named-achievement`: 골드 ceremonial halo box-shadow.
+- `.portrait-evolved` + `@keyframes portrait-evolved-pulse`: 느린 brightness shimmer.
+- `.portrait-asset-loaded` + `@keyframes portrait-asset-reveal`: 자산 이미지 fade-in.
+- `.shadow-eye-glow` + `@keyframes shadow-eye-pulse`: SVG 눈 pulse (고레어 초상화용).
+- `@media (prefers-reduced-motion)`: `.portrait-evolved`, `.portrait-asset-loaded` 애니메이션 비활성화.
+
+### 렌더링 계층 (완성)
+```
+1. SHADOW_PORTRAIT_ASSETS[portraitKey] → <img> overlay  (자산 있을 때)
+2. assetFamily === 'named_gate'        → renderNamedGateDecor SVG 레이어
+   assetFamily === 'named_achievement' → renderAchievementDecor SVG 레이어
+3. resolveProfile() → visualKey 기반 SVG 프로파일
+4. role 기반 fallback 프로파일
+```
+
+### 제약 사항 준수
+- 전투 공식, XP, 보상, 확률, 퍼시스턴스 키 변경 없음.
+- `portraitKey`/`assetFamily` 모두 선택적 — 기존 코드 무영향.
+- `getShadowPortraitAsset` 실패해도 SVG 폴백 유지 (onError 처리 포함).
+- 100+ 카드 렌더링 성능: 신규 SVG 요소 최소 (5~7개 path/circle), img onError 기반 graceful degradation.
+- 모바일 UI 이상 없음.
+
+### Verification
+- `npm run build`: exit 0 (Vite 청크 사이즈 경고만, 기존 동일).
+- `npx tsc --noEmit`: exit 0, 오류 없음.
+- 시각 확인: named_gate → 틸 균열 SVG + 포털 ellipse. named_achievement → 왕관 + 월계수 + 봉인 링. evolved → 내부 점선 헥사곤 추가. assetFamily 없는 일반 그림자 → 기존 동일.
+
+---
+
+## 12-24C — 전체 roster 카탈로그 + 신규 SVG 가족 + registry 확장
+
+### 목표
+전체 그림자 병사(104개+) 개별 초상화 최종 목표 수립.
+즉각 작업: 신규 SVG 가족 3종 추가, 전체 registry 구축, 아트 파이프라인 카탈로그 문서화.
+
+### 변경 파일
+- `src/components/shadows/ShadowPortrait.tsx`
+  - `renderSpearman`: 긴 대각선 창, 크로스가드, 창끝 삼각형. 진화시 창 두께/글로우 강화.
+  - `renderExecutor`: 넓은 어깨 + 뿔 투구 + 처형검 (대형 사각 날). 진화시 점선 원 추가.
+  - `renderRift`: 파편화된 비정형 실루엣, 균열 틈새, seed 기반 jitter. 진화시 측면 균열선.
+  - `renderSilhouette` 시그니처에 `assetFamily?: string` 추가.
+  - dispatch 순서: assetFamily 먼저 → 신규 3종 포함 → 기존 role-based 폴백.
+
+- `src/lib/shadows.ts`
+  - `inferShadowVisual` 확장: ID 패턴 기반 자동 가족 감지.
+    - `id.includes('spearman')` → `'spearman'`
+    - `id.startsWith('rift-') && role === 'assault'` → `'rift'`
+  - 이로써 shadow-spearman, rift-fang, rift-trainee, rift-gladiator, rift-champion이 자동으로 올바른 SVG 가족 사용.
+
+- `src/lib/shadowPortraitAssets.ts` — 전면 재작성
+  - `ShadowPortraitAssetStatus` 타입: `'missing' | 'planned' | 'draft' | 'final'`
+  - `ShadowPortraitRegistryEntry` 인터페이스: portraitKey, assetFamily, src, status, visualDirection, notes.
+  - `SHADOW_PORTRAIT_ASSETS`: 빈 맵 유지 (Phase별 주석 가이드 포함).
+  - `SHADOW_PORTRAIT_REGISTRY`: 전체 80개+ 그림자 등록 (E/D/C-rank + named_gate + named_achievement).
+  - `getShadowPortraitAsset`, `hasShadowPortraitAsset`, `getShadowPortraitAssetStatus` 헬퍼.
+  - `ASSET_FAMILY_FOLDER`: 아트 파이프라인 폴더 가이드.
+
+- `docs/shadow-portrait-catalog.md` — 신규 생성
+  - 전체 roster를 Phase별 표로 정리.
+  - 각 그림자의 assetFamily, status, visual direction 포함.
+  - 아트 추가 절차 (5단계) 문서화.
+
+### 아트 파이프라인 Phase 계획
+| Phase | 대상 | 우선순위 |
+|-------|------|--------|
+| Phase 1 | named_gate 18종 | 최우선 (게임 내 고가치 캐릭터) |
+| Phase 2 | named_achievement 24종 | 우선 |
+| Phase 3 | 진화 가능 베이스 (rare급) | 중간 |
+| Phase 4+ | 나머지 전체 | 점진적 |
+
+### 제약 유지
+- localStorage 키 `levelup-save` 및 persist version 변경 없음.
+- 기존 gameplay/reward 로직 무변경.
+- SVG 폴백 항상 유지 — 이미지 없어도 UI 정상 동작.
+
+### Verification
+- `npm run build`: exit 0 확인.
+- shadow-spearman → spearman SVG (긴 창), rift-fang/gladiator → rift SVG (파편 실루엣), dark-executor → executor SVG (처형검).
+- named_gate/achievement → 기존 SVG decor 정상.
+- assetFamily 없는 그림자 → 기존 role 폴백 그대로.
+
+---
+
+## 12-24D — 전체 102개 그림자 이미지 생성 프롬프트 작성
+
+### 목표
+전체 그림자 병사 102개의 개별 PNG/WebP 초상화 제작을 위한 batch 이미지 생성 프롬프트 세트 작성.  
+**코드 변경 없음. 전적으로 docs 작업.**
+
+### 생성 파일
+- `docs/shadow-portrait-generation-prompts.md` (신규)
+  - 공통 스타일 가이드 및 Negative Prompt
+  - 11개 batch × 102개 그림자 전체 커버
+  - 각 항목: portraitKey, filename, assetFamily, rarity/role, folder 경로, 복붙 가능한 English prompt
+  - Section 4 Family Spotlight: rat/spearman/executor/rift 특수 실루엣 규칙
+  - 생산 체크리스트 (11 batch × ⬜ 박스)
+
+### Batch 구조
+
+| Batch | 내용 | 수량 |
+|-------|------|------|
+| 01 | E-rank common | 8 |
+| 02 | E-rank uncommon/rare | 10 |
+| 03 | D-rank common | 9 |
+| 04 | D-rank uncommon/rare | 10 |
+| 05 | 진화 라인 핵심 | 10 |
+| 06 | C-rank 일반 | 9 |
+| 07 | C-rank 에픽 | 6 |
+| 08 | named_gate E+D | 9 |
+| 09 | named_gate C | 7 |
+| 10 | named_achievement 1/2 | 12 |
+| 11 | named_achievement 2/2 | 12 |
+| **합계** | | **102** |
+
+### 공통 스타일 원칙
+- transparent background, centered full body silhouette
+- black and deep violet shadow smoke body
+- mobile RPG card art, game UI ready
+- no text, no frame, no background scene
+- no human skin tone, no bright cartoon style
+- WebP 512×768 권장
+
+### 제약 유지
+- localStorage 키 `levelup-save`, persist version 변경 없음.
+- gameplay/reward/stat 변경 없음.
+- 코드 변경 없음. docs 전용 작업.
+
+### Verification
+- `npm run build`: 코드 변경 없으므로 기존과 동일 (exit 0).
+- `docs/shadow-portrait-generation-prompts.md` 생성 확인.
+- 전체 102개 그림자 누락 없이 커버됨.
+
+---
+
+## 12-24E — Batch 01~05 PNG asset 연결 및 표시 확인
+
+### 목표
+`src/assets/shadows/`에 저장된 Batch 01~05 PNG 파일 47개를 실제 앱에 연결하여 ShadowPortrait 카드에 이미지가 표시되도록 한다.
+
+### 발견 사항
+- 파일명이 `.png.png` 이중 확장자로 저장되어 있음.
+- Vite는 `path.extname()` 기반으로 마지막 `.png`를 인식 → 정상 처리됨.
+- TypeScript 타입 선언 누락 → `src/vite-env.d.ts` 신규 생성으로 해결.
+
+### 수정 파일
+
+| 파일 | 변경 내용 |
+|------|---------|
+| `src/vite-env.d.ts` | 신규 생성: `/// <reference types="vite/client" />` + `declare module '*.png.png'` |
+| `src/lib/shadowPortraitAssets.ts` | 47개 static import 추가, SHADOW_PORTRAIT_ASSETS 채움, 47개 status → 'draft' |
+| `src/components/shadows/ShadowPortrait.tsx` | `object-cover object-top` → `object-contain` (전신 실루엣 잘림 방지) |
+
+### 연결된 PNG 목록 (47개)
+
+| Batch | 수량 | 폴더 |
+|-------|------|------|
+| 01 E-rank common | 8 | common, rift, scribe, shield, support, infantry |
+| 02 E-rank uncommon/rare | 10 | rift, hound, infantry, support, scribe, scout |
+| 03 D-rank common | 9 | infantry, shield, spearman, support, scribe, scout |
+| 04 D-rank uncommon/rare | 10 | shield, executor, hound, scout, support, scribe |
+| 05 진화 라인 | 10 | hound, shield, scribe, rift |
+
+### 렌더링 우선순위 (변경 없음)
+1. `SHADOW_PORTRAIT_ASSETS[portraitKey]` → `<img>` overlay (연결된 PNG)
+2. named_gate/achievement SVG decor
+3. assetFamily 기반 SVG 실루엣
+4. role-based fallback
+
+### 이미지 레이아웃
+- `object-contain`: 전신 실루엣 전체 표시, 투명 배경 영역은 아래 SVG aura 노출 → 자연스러운 레이어 효과.
+- `onError`: 이미지 로드 실패 시 `display: none` → SVG fallback 자동 노출.
+
+### Build 결과
+- Exit code: 0
+- 47개 PNG 모두 `dist/assets/` 번들링 확인 (각 1.2~2.4MB).
+- JS 번들 797KB (gzip 240KB), CSS 96KB.
+- 이미지 크기 경고 (500KB 초과) — 기대 범주, 에러 아님.
+
+### 제약 유지
+- localStorage 키 `levelup-save` 변경 없음.
+- persist version 변경 없음.
+- gameplay/reward/stat/공식 변경 없음.
+- 저장 데이터 초기화 없음.
+
+---
+
+## 12-24F — Shadow Portrait 체커보드 배경 제거 및 시각 보정
+
+### 문제 진단
+- AI 생성 PNG 파일이 투명 배경 없이 **체커보드 패턴을 실 픽셀로** 포함하고 있었음.
+- 각 파일(1086×1448): ~64만~126만 px가 배경 픽셀 (전체 픽셀의 ~60-80%).
+- `object-contain` 적용 시 카드 위에 사각형 이미지가 붙은 느낌으로 보임.
+
+### 해결 방법
+
+#### 후처리 스크립트: `scripts/process-shadow-portraits.mjs`
+- **알고리즘:** BFS flood-fill — 이미지 4방향 엣지에서 시작, 연결된 밝은 회색/흰색 픽셀 제거
+- **배경 판별:** R>165 AND G>165 AND B>165 (밝은 픽셀) AND max-min < 40 (중립 회색)
+- **엣지 페더링:** 캐릭터 경계 2px 반경 부드럽게 처리
+- **trim:** 투명 여백 12px 임계값으로 제거
+- **pad:** 7% padding 추가 (전신 잘림 방지)
+- **resize:** 512×768 (fit: contain, 투명 배경)
+- **백업:** `src/assets/shadows_backup/` 에 원본 보존
+- **in-place 출력:** 기존 경로/파일명 그대로 덮어쓰기 (import 변경 불필요)
+
+#### 처리 결과
+| 항목 | 수치 |
+|------|------|
+| 처리 파일 수 | 56개 |
+| 원본 크기 | 1086×1448 |
+| 출력 크기 | 512×768 |
+| 파일 크기 변화 | 1.2~2.4 MB → 333~711 KB (평균 -65%) |
+| 실패 건수 | 0 |
+
+#### ShadowPortrait.tsx CSS 조정
+- `scale-[1.05]` — 처리된 portrait가 카드를 더 꽉 채우도록
+- `drop-shadow(0 0 7px var(--shadow-glow)) drop-shadow(0 0 14px var(--shadow-glow))` — rarity 색상 기반 글로우로 SVG aura와 자연스럽게 통합
+
+### 수정 파일
+
+| 파일 | 변경 내용 |
+|------|---------|
+| `scripts/process-shadow-portraits.mjs` | 신규 생성 (BFS flood-fill 배경 제거 스크립트) |
+| `package.json` | `process-portraits`, `process-portraits-dry` 스크립트 추가 |
+| `src/components/shadows/ShadowPortrait.tsx` | `scale-[1.05]` + `drop-shadow` 필터 추가 |
+| `src/assets/shadows_backup/` | 원본 56개 자동 백업 생성 |
+
+### npm 스크립트
+```bash
+npm run process-portraits        # 실제 처리 (in-place)
+npm run process-portraits-dry    # 미리보기 (파일 변경 없음)
+```
+
+### Build 결과
+- Exit code: 0
+- TypeScript 컴파일 통과
+- Vite 번들링: 47개 Batch 01-05 이미지 포함 (333~711 KB 범위)
+- 경고: >500KB 청크 (이미지 파일, 기대 범주)
+
+### 제약 유지
+- localStorage 키 `levelup-save` 변경 없음.
+- persist version 변경 없음.
+- gameplay/reward/stat/공식 변경 없음.
+- 저장 데이터 초기화 없음.
+- 원본 이미지 `shadows_backup/` 에 보존됨.
+
+---
+
+## 12-24G — Batch 06~11 Shadow Portrait 연결
+
+### 목표
+Batch 06~11 (55개) PNG 파일을 앱에 연결. 기존 Batch 01~05 (47개) 방식과 동일하게 처리.
+
+### 처리 순서
+
+1. `npm run process-portraits` 실행 → 신규 파일 체커보드 제거
+2. `src/lib/shadowPortraitAssets.ts` import/asset map/registry 업데이트
+3. `npm run build` 검증
+
+### Batch별 파일 위치
+
+| Batch | 내용 | 폴더 |
+|-------|------|------|
+| 06 (C-rank General) | mirror-hunter, rift-cartographer, rift-wayfinder, greed-ledger, forgetting-watcher, corridor-banner, fatigue-cantor, rift-instructor, rift-tactician | hound/, scout/, scribe/, support/ |
+| 07 (C-rank Epic) | greed-devourer, rift-gladiator, rift-champion, fatigue-wall, iron-bastion, midnight-oracle | hound/, rift/, shield/, support/ |
+| 08 (Named Gate E+D) | ner-first-rift, rook-backstreet, lark-nest-fang, vela-rift-mender, marn-backstreet-ledger, gorn-sloth-captain, shark-black-chaser, doru-sloth-cantor, sable-patrol-knife | named/ |
+| 09 (Named Gate C) | karden-forgetting-scribe, organ-fatigue-shield, raban-rift-instructor, grid-greed-hound, mero-fatigue-reader, tess-rift-wayfinder, balm-greed-ledger | named/ |
+| 10 (Named Achievement 1/2) | kasim-analyst, rao-market-watcher, charka-finance-patron, nebl-black-accountant, volen-strategist, verk-steel-knight, raven-running-shadow, moro-restraint-chef, nok-sleep-keeper, baron-cutting-watcher, irnel-registrar, kalt-deadline-executor | named/ |
+| 11 (Named Achievement 2/2) | seron-saver, lumen-dawn-vanguard, hexa-study-lantern, mira-career-auditor, borin-training-captain, sena-health-warden, orien-mind-anchor, pavel-finance-scout, naru-social-herald, voss-challenge-blade, runo-habit-keeper, elan-balance-weaver | named/ |
+
+### checkerboard 후처리 결과
+
+| 항목 | 수치 |
+|------|------|
+| 처리 파일 수 | 102개 (전체 재처리) |
+| 실패 건수 | 0 |
+| 신규 Batch 07 비named 크기 | 1.8~2.5 MB → 400~770 KB |
+| Batch 08-11 named 크기 | 1.5~2.8 MB → 400~890 KB |
+
+### 수정 파일
+
+| 파일 | 변경 내용 |
+|------|---------|
+| `src/lib/shadowPortraitAssets.ts` | Batch 06-11 import 55개 추가, SHADOW_PORTRAIT_ASSETS 55개 추가, registry status 55개 draft로 변경 |
+
+### Build 결과
+- Exit code: 0
+- 2073 modules transformed
+- 102개 PNG 이미지 dist/assets 번들링
+- 파일 크기: 329~889 KB (처리 후)
+- 경고: >500KB 청크 (이미지 파일, 기대 범주)
+
+### 최종 연결 현황
+
+| 구분 | 연결 수 |
+|------|---------|
+| Batch 01-05 | 47개 |
+| Batch 06-11 (신규) | 55개 |
+| **합계** | **102개** |
+
+### 제약 유지
+- localStorage 키 `levelup-save` 변경 없음.
+- persist version 변경 없음.
+- gameplay/reward/stat/공식 변경 없음.
+- 저장 데이터 초기화 없음.
+- ShadowPortrait.tsx 구조 변경 없음 (object-contain + scale + drop-shadow 유지).

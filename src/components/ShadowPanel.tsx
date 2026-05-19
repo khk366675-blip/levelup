@@ -5,6 +5,7 @@ import { useGame } from '../lib/store'
 import { ShadowCard as VisualShadowCard } from './shadows/ShadowCard'
 import { ShadowExpeditionPanel } from './shadows/ShadowExpeditionPanel'
 import { ShadowPortrait } from './shadows/ShadowPortrait'
+import { LockedShadowPortrait } from './shadows/LockedShadowPortrait'
 import { DramaticReveal, type RevealStep } from './DramaticReveal'
 import {
   SHADOW_DEFINITIONS,
@@ -279,21 +280,49 @@ function ShadowCard({
 
 function CodexCard({ definition, owned, ownedCount, maxEnhancement, isEquipped }: { definition: (typeof SHADOW_DEFINITIONS)[number]; owned: boolean; ownedCount: number; maxEnhancement: number; isEquipped: boolean }) {
   const effects = definition.effects.map(formatShadowEffect)
+  // 12-24H-1: locked named sealed 비주얼은 유지하되, 텍스트 숨김 여부는
+  // 시드 정의의 hiddenUntilObtained flag만으로 결정한다.
+  //   - gate_named (hiddenUntilObtained: true)        → 이름/설명/효과 숨김
+  //   - achievement_named (hiddenUntilObtained 없음)  → 이름/설명/효과 그대로 표시 (공개 목표)
+  // Portrait/frame은 두 타입 모두 sealed 시각 유지.
   const hidden = !owned && definition.hiddenUntilObtained
+  const isLockedNamed = !owned && (definition.isGateNamed || definition.isAchievementNamed)
+  const lockedSourceType: 'named_gate' | 'named_achievement' | null = isLockedNamed
+    ? (definition.isAchievementNamed ? 'named_achievement' : 'named_gate')
+    : null
+  const sealCardClass = lockedSourceType === 'named_gate'
+    ? 'locked-named-card-gate'
+    : lockedSourceType === 'named_achievement'
+      ? 'locked-named-card-achievement'
+      : ''
   return (
-    <div className={`panel corner-bracket p-4 ${rarityStyle[definition.rarity]} ${owned ? '' : 'opacity-60'}`}>
+    <div className={`panel corner-bracket p-4 ${rarityStyle[definition.rarity]} ${owned ? '' : 'opacity-80'} ${sealCardClass}`}>
       <div className="br" />
-      <ShadowPortrait definition={definition} size="md" hidden={hidden} highlighted={definition.rank === 'named'} />
+      {lockedSourceType ? (
+        <LockedShadowPortrait
+          role={definition.role}
+          rarity={definition.rarity}
+          sourceType={lockedSourceType}
+          size="md"
+        />
+      ) : (
+        <ShadowPortrait definition={definition} size="md" hidden={hidden} highlighted={definition.rank === 'named'} />
+      )}
       <div className="flex items-start justify-between gap-3">
         <div>
           <div className="text-[10px] system-text opacity-70">[{SHADOW_RARITY_LABEL[definition.rarity]}]</div>
           <h3 className="font-bold text-white/90 mt-0.5">{hidden ? '???' : definition.name}</h3>
+          {isLockedNamed && (
+            <div className={`text-[10px] system-text mt-0.5 tracking-wider ${lockedSourceType === 'named_gate' ? 'text-amber-100/75' : 'text-cyan-100/75'}`}>
+              {lockedSourceType === 'named_gate' ? '봉인된 네임드 그림자' : '미획득 성취 그림자'}
+            </div>
+          )}
           <div className="text-[11px] text-white/55 mt-1">
             계급: {SHADOW_RANK_LABEL[definition.rank]} · 역할: {SHADOW_ROLE_LABEL[definition.role]}
           </div>
         </div>
         <div className="flex flex-col items-end gap-1">
-          {owned ? <Eclipse className="w-4 h-4 text-cyan-200" /> : <Lock className="w-4 h-4 text-white/35" />}
+          {owned ? <Eclipse className="w-4 h-4 text-cyan-200" /> : <Lock className={`w-4 h-4 ${isLockedNamed ? (lockedSourceType === 'named_gate' ? 'text-amber-300/75' : 'text-cyan-200/75') : 'text-white/35'}`} />}
           {owned && (
             <div className="text-[10px] text-white/40 text-right">
               보유 {ownedCount}{maxEnhancement > 0 ? ` · 최고 +${maxEnhancement}` : ''}{isEquipped ? ' · 출전' : ''}
@@ -302,10 +331,10 @@ function CodexCard({ definition, owned, ownedCount, maxEnhancement, isEquipped }
         </div>
       </div>
       <div className="mt-3 text-[11px] text-white/55 leading-relaxed">
-        {hidden ? '해금 후 공개' : definition.description}
+        {hidden ? '균열 너머에서 존재감만 감지된다.' : definition.description}
       </div>
       <div className="mt-2 text-[11px] text-cyan-100/70 leading-relaxed">
-        {hidden ? '효과: 해금 후 공개' : effects.join(' · ')}
+        {hidden ? '효과: 봉인 해제 후 공개' : effects.join(' · ')}
       </div>
       <div className="mt-2 text-[10px] text-white/40 system-text">
         조건: {definition.unlockConditionText ?? definition.sourceGateId ?? `${definition.sourceGateRank ?? '?'}급 게이트 추출`}
@@ -466,24 +495,54 @@ export function ShadowPanel() {
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5">
           {Array.from({ length: Math.max(1, slotCount) }).map((_, index) => {
             const shadow = equippedShadows[index]
+            const isNamed = shadow && Boolean(shadow.isNamed || shadow.isGateNamed || shadow.isAchievementNamed)
+            const isLegendary = shadow?.rarity === 'legendary'
+            const isEpic = shadow?.rarity === 'epic'
             return (
-              <div key={index} className={`relative overflow-hidden rounded-lg border p-3 min-h-56 ${shadow ? 'border-cyan-400/25 bg-cyan-400/5 shadow-glow' : 'border-white/10 bg-ink-900/45'}`}>
-                <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_15%,rgba(34,211,238,0.12),transparent_42%),linear-gradient(180deg,rgba(168,85,247,0.06),transparent_60%)]" />
-                <div className="relative z-10 flex items-center gap-1.5 text-[10px] system-text text-cyan-300/60 mb-2">
+              <div
+                key={index}
+                className={[
+                  'relative overflow-hidden rounded-lg border p-3 min-h-56 transition-all',
+                  shadow
+                    ? isNamed
+                      ? 'border-amber-300/40 bg-[radial-gradient(circle_at_50%_0%,rgba(251,191,36,0.14),transparent_50%),linear-gradient(180deg,rgba(124,58,237,0.1),rgba(2,6,23,0.95))] named-pulse'
+                      : isLegendary
+                        ? 'border-amber-400/32 bg-[radial-gradient(circle_at_50%_0%,rgba(245,158,11,0.1),transparent_50%)] rarity-frame-legendary'
+                        : isEpic
+                          ? 'border-purple-400/28 bg-purple-400/5 rarity-frame-epic'
+                          : 'border-cyan-400/22 bg-cyan-400/5 shadow-glow'
+                    : 'border-white/8 bg-ink-950/60',
+                ].join(' ')}
+              >
+                {shadow && (
+                  <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,rgba(34,211,238,0.1),transparent_55%)]" />
+                )}
+                <div className="relative z-10 flex items-center gap-1.5 text-[10px] system-text text-cyan-300/55 mb-2">
                   {shadow?.role === 'guard' ? <Shield className="w-3 h-3" /> : <Swords className="w-3 h-3" />}
                   SLOT {index + 1}
+                  {shadow && <span className="ml-auto text-[9px] text-white/30">{SHADOW_ROLE_LABEL[shadow.role]}</span>}
                 </div>
                 {shadow ? (
                   <div className="relative z-10 space-y-2">
-                    <ShadowPortrait shadow={shadow} size="md" active highlighted={Boolean(shadow.isNamed)} />
-                    <div className={`text-xs font-semibold ${rarityStyle[shadow.rarity].split(' ')[0]}`}>{shadow.name}</div>
-                    <div className="text-[10px] text-white/45 mt-1">{SHADOW_ROLE_LABEL[shadow.role]} · {SHADOW_RANK_LABEL[shadow.rank]}</div>
-                    <button type="button" onClick={() => unequipShadow(shadow.instanceId)} className="mt-2 text-[10px] text-rose-200 border border-rose-400/25 rounded px-2 py-1">
+                    <ShadowPortrait shadow={shadow} size="md" active highlighted={isNamed} innateGrade={shadow.innateGrade} />
+                    <div className="space-y-0.5">
+                      <div className={`text-xs font-semibold truncate ${rarityStyle[shadow.rarity].split(' ')[0]}`}>
+                        {shadow.name}
+                        {(shadow.enhancementLevel ?? 0) > 0 && <span className="ml-1 text-amber-200/70">+{shadow.enhancementLevel}</span>}
+                      </div>
+                      <div className="text-[9px] text-white/40 system-text">{SHADOW_RANK_LABEL[shadow.rank]}</div>
+                      {isNamed && (
+                        <div className="text-[9px] rounded border border-amber-300/30 bg-amber-300/10 px-1 py-px text-amber-100 inline-block">
+                          {shadow.isAchievementNamed ? 'ACHIEVEMENT' : 'NAMED'}
+                        </div>
+                      )}
+                    </div>
+                    <button type="button" onClick={() => unequipShadow(shadow.instanceId)} className="mt-1 w-full text-[10px] text-rose-200/70 border border-rose-400/20 rounded px-2 py-1 hover:bg-rose-400/10 transition-colors">
                       해제
                     </button>
                   </div>
                 ) : (
-                  <div className="text-xs text-white/35">비어 있음</div>
+                  <div className="flex h-full items-center justify-center py-10 text-xs text-white/20 system-text">EMPTY</div>
                 )}
               </div>
             )

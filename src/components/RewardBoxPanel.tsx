@@ -16,10 +16,10 @@ const TIER_LABEL: Record<BoxTier, string> = {
 }
 
 const TIER_CLASS: Record<BoxTier, string> = {
-  normal: 'border-cyan-300/25 bg-cyan-400/8 text-cyan-100',
-  enhanced: 'border-emerald-300/30 bg-emerald-400/10 text-emerald-100',
-  superior: 'border-violet-300/35 bg-violet-400/10 text-violet-100',
-  epic: 'border-amber-300/45 bg-amber-400/12 text-amber-100 shadow-glow',
+  normal:   'border-cyan-300/28  bg-cyan-400/8   text-cyan-100 rarity-frame-rare',
+  enhanced: 'border-emerald-300/32 bg-emerald-400/9  text-emerald-100 rarity-frame-uncommon',
+  superior: 'border-violet-300/40 bg-violet-400/10 text-violet-100 rarity-frame-epic',
+  epic:     'border-amber-300/50  bg-amber-400/12  text-amber-100 boss-glow',
 }
 
 function getDisplayTier(box: RewardBox, upgradePoints: number): BoxTier {
@@ -202,6 +202,9 @@ export function RewardBoxPanel() {
                   whileHover={{ y: -2 }}
                   className={clsx('relative overflow-hidden rounded-lg border p-4', TIER_CLASS[tier])}
                 >
+                  {(tier === 'epic' || tier === 'superior') && (
+                    <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,rgba(251,191,36,0.12),transparent_55%)] shadow-mist-legendary" />
+                  )}
                   <div className="absolute -right-8 -top-8 h-24 w-24 rounded-full bg-white/8 blur-2xl" />
                   <div className="relative flex items-start justify-between gap-3">
                     <div className="min-w-0">

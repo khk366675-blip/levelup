@@ -6,15 +6,17 @@
   "scripts": {
     "dev": "vite --port 3002 --host",
     "build": "tsc && vite build",
-    "preview": "vite preview --port 3002"
+    "preview": "vite preview --port 3002",
+    "process-portraits": "node scripts/process-shadow-portraits.mjs",
+    "process-portraits-dry": "node scripts/process-shadow-portraits.mjs --dry-run"
   },
   "dependencies": {
-    "react": "^18.3.1",
-    "react-dom": "^18.3.1",
-    "zustand": "^4.5.4",
+    "clsx": "^2.1.1",
     "framer-motion": "^11.5.4",
     "lucide-react": "^0.441.0",
-    "clsx": "^2.1.1"
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "zustand": "^4.5.4"
   },
   "devDependencies": {
     "@types/react": "^18.3.5",
@@ -22,6 +24,7 @@
     "@vitejs/plugin-react": "^4.3.1",
     "autoprefixer": "^10.4.20",
     "postcss": "^8.4.45",
+    "sharp": "^0.34.5",
     "tailwindcss": "^3.4.10",
     "typescript": "^5.5.4",
     "vite": "^5.4.3"

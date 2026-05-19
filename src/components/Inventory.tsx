@@ -204,29 +204,32 @@ export function Inventory() {
             const Icon = SLOT_ICONS[slot]
             const equippedItem = getEquippedItem(slot)
             const equippedCombatSkills = equippedItem ? formatCombatSkillNames(equippedItem) : []
-            
+            const slotRarityClass = equippedItem ? `rarity-frame-${equippedItem.rarity}` : ''
+
             return (
               <div
                 key={slot}
-                className="panel corner-bracket p-3 bg-ink-900/50 border-cyan-400/20"
+                className={`panel corner-bracket p-3 bg-ink-900/50 border-cyan-400/20 ${slotRarityClass} transition-all`}
               >
                 <div className="br" />
                 <div className="flex items-center gap-2 mb-2">
-                  <Icon className="w-4 h-4 text-cyan-300/70" />
-                  <div className="text-xs system-text text-cyan-300/70">
+                  <Icon className={`w-4 h-4 ${equippedItem ? RARITY_META[equippedItem.rarity].color : 'text-cyan-300/50'}`} />
+                  <div className="text-xs system-text text-cyan-300/65">
                     {EQUIPMENT_SLOT_LABEL[slot]}
                   </div>
                 </div>
-                
+
                 {equippedItem ? (
                   <div>
                     <div className="text-2xl text-center mb-1">{equippedItem.icon}</div>
-                    <div className={`text-xs font-semibold text-center ${RARITY_META[equippedItem.rarity].color}`}>
+                    <div className={`text-xs font-semibold text-center leading-snug ${RARITY_META[equippedItem.rarity].color}`}>
                       {equippedItem.name}
+                    </div>
+                    <div className="mt-0.5 text-center text-[10px] font-bold text-yellow-200/80">
+                      {formatEquipmentStars(equippedItem)}
                       {formatEnhancementLabel(equippedItem) && (
                         <span className="ml-1 text-amber-300">{formatEnhancementLabel(equippedItem)}</span>
                       )}
-                      <span className="ml-1 text-yellow-200">{formatEquipmentStars(equippedItem)}</span>
                     </div>
                     {equippedItem.effects && equippedItem.effects.length > 0 && (
                       <div className="text-[9px] text-purple-300/60 system-text mt-1 text-center">
@@ -247,8 +250,8 @@ export function Inventory() {
                     </button>
                   </div>
                 ) : (
-                  <div className="text-center py-4 text-white/30 text-xs">
-                    비어 있음
+                  <div className="text-center py-6 text-white/20 text-[10px] system-text">
+                    EMPTY
                   </div>
                 )}
               </div>
@@ -296,7 +299,12 @@ export function Inventory() {
                 animate={{ opacity: 1, scale: 1 }}
                 transition={{ delay: i * 0.03 }}
                 whileHover={{ y: -3 }}
-                className={`relative bg-ink-800/60 border ${equipped ? 'border-amber-400/60 ring-2 ring-amber-400/40' : 'border-white/10'} ring-1 ${meta.ring} rounded-lg p-4 backdrop-blur-sm`}
+                className={[
+                  'relative bg-ink-800/60 border rounded-lg p-4 backdrop-blur-sm transition-all',
+                  equipped ? 'border-amber-400/60 ring-2 ring-amber-400/40' : `border-white/10 ring-1 ${meta.ring}`,
+                  item.equippable && !item.consumable ? `rarity-frame-${item.rarity}` : '',
+                  item.rarity === 'legendary' && 'boss-glow',
+                ].filter(Boolean).join(' ')}
               >
                 <div className="text-4xl text-center mb-2">{item.icon}</div>
                 <div className={`text-center text-sm font-semibold ${meta.color}`}>

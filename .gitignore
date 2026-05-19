@@ -40,3 +40,7 @@ Thumbs.db
 # Local data dumps / simulator outputs (one-shot)
 sim-result.md
 sim-output.txt
+
+# Shadow portrait original-image backup (created by scripts/process-shadow-portraits.mjs)
+# Processed copies live in src/assets/shadows/. Backup is local-only.
+src/assets/shadows_backup/

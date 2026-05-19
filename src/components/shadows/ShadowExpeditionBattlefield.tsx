@@ -244,12 +244,23 @@ export function ShadowExpeditionBattlefield({
                   {commandMatch && latestCommand === 'analyze' && (
                     <div className="pointer-events-none absolute -inset-2 z-10 rotate-45 rounded-md border border-purple-200/35 shadow-[0_0_20px_rgba(168,85,247,0.24)]" />
                   )}
+                  {(shadow.isNamed || shadow.isGateNamed || shadow.isAchievementNamed) && !isActor && (
+                    <div className="absolute -left-1 -top-1 z-20 rounded border border-amber-300/50 bg-amber-300/20 px-1 py-px text-[7px] system-text text-amber-100">
+                      {shadow.isAchievementNamed ? 'ACH' : 'NAMED'}
+                    </div>
+                  )}
+                  {shadow.innateGrade === 'S' && (
+                    <div className="absolute -right-1 -top-1 z-20 rounded border border-amber-200/55 bg-amber-300/22 px-1 py-px text-[7px] system-text font-bold text-amber-100">
+                      S
+                    </div>
+                  )}
                   <ShadowPortrait
                     shadow={shadow}
                     definition={definition}
                     size="sm"
                     active={isActor}
                     highlighted={isActor || commandMatch || Boolean(shadow.isNamed)}
+                    innateGrade={shadow.innateGrade}
                     className="relative z-10"
                   />
                   <div className="relative z-10 mt-1 rounded border border-white/10 bg-ink-950/70 px-1.5 py-1 text-center">
@@ -327,18 +338,30 @@ function CommandVfx({ command, searchStacks }: { command: ShadowExpeditionComman
 }
 
 function BattleMiniBar({ label, value, kind }: { label: string; value: number; kind: 'progress' | 'risk' }) {
+  const nearComplete = kind === 'progress' && value >= 85
+  const critical = kind === 'risk' && value >= 90
   return (
-    <div className="rounded-md border border-white/10 bg-ink-950/45 p-2">
-      <div className="mb-1 flex justify-between text-[9px] system-text text-white/45">
-        <span>{label}</span>
-        <span>{value}/100</span>
+    <div className={clsx(
+      'rounded-md border p-2 transition-all',
+      kind === 'risk' && critical ? 'border-rose-400/30 bg-rose-950/40' : 'border-white/10 bg-ink-950/45',
+    )}>
+      <div className="mb-1 flex justify-between text-[9px] system-text">
+        <span className={clsx(
+          kind === 'progress' ? 'text-cyan-200/65' : critical ? 'text-rose-200/75' : 'text-white/45',
+        )}>{label}</span>
+        <span className={clsx(
+          kind === 'risk' && value >= 70 ? 'text-rose-200/70' : 'text-white/45',
+          'font-bold',
+        )}>{value}/100</span>
       </div>
       <div className="h-1.5 overflow-hidden rounded-full bg-white/10">
         <div
           className={clsx(
             'h-full rounded-full transition-all duration-500',
             kind === 'progress'
-              ? 'bg-gradient-to-r from-cyan-300 to-emerald-300'
+              ? nearComplete
+                ? 'mastery-bar-fill'
+                : 'bg-gradient-to-r from-cyan-300 to-emerald-300'
               : value >= 90
                 ? 'bg-gradient-to-r from-orange-300 to-rose-500'
                 : value >= 70

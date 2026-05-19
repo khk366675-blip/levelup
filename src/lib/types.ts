@@ -426,6 +426,8 @@ export interface ShadowDefinition {
   evolutionTargetDefinitionId?: string
   visualKey?: string
   portraitVariant?: string
+  portraitKey?: string
+  assetFamily?: string
   visualTheme?: ShadowVisualTheme
   silhouetteType?: string
   accentColor?: string

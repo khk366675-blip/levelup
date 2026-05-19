@@ -2,6 +2,7 @@ import clsx from 'clsx'
 import type { CSSProperties } from 'react'
 import type { OwnedShadow, ShadowDefinition, ShadowRarity, ShadowRole } from '../../lib/types'
 import { getShadowDefinition } from '../../lib/shadows'
+import { getShadowPortraitAsset } from '../../lib/shadowPortraitAssets'
 
 type PortraitSize = 'xs' | 'sm' | 'md' | 'lg' | 'xl'
 
@@ -14,6 +15,7 @@ type ShadowPortraitProps = {
   evolutionReady?: boolean
   hidden?: boolean
   className?: string
+  innateGrade?: string
 }
 
 const rarityPalette: Record<ShadowRarity, { frame: string; glow: string; mist: string; text: string }> = {
@@ -401,13 +403,85 @@ const renderSupport = (silhouette: string, accent: string, seed: number, evolved
   </g>
 )
 
-const renderSilhouette = (silhouette: string, role: ShadowRole, accent: string, seed: number, evolved: boolean) => {
-  if (role === 'guard' || silhouette.includes('shield')) return renderGuard(silhouette, accent, evolved)
-  if (role === 'analyst' || silhouette.includes('book') || silhouette === 'scroll') return renderAnalyst(silhouette, accent, seed, evolved)
-  if (role === 'hunter' || silhouette.includes('hound') || silhouette.includes('beast') || silhouette === 'rat') return renderBeast(silhouette, accent, seed, evolved)
-  if (role === 'support' || silhouette === 'banner') return renderSupport(silhouette, accent, seed, evolved)
+const renderSpearman = (accent: string, seed: number, evolved: boolean) => (
+  <g transform={`translate(0 ${evolved ? -3 : 0})`}>
+    <path d="M58 22 C66 22 72 29 72 38 C72 47 66 54 58 54 C50 54 44 47 44 38 C44 29 50 22 58 22 Z" fill="url(#body)" />
+    <path d="M44 57 C51 50 65 50 72 57 L78 108 C63 115 49 115 38 108 Z" fill="url(#body)" />
+    <path d="M94 12 L24 114" stroke={accent} strokeWidth={evolved ? 3.2 : 2.6} strokeLinecap="round" opacity="0.88" />
+    <path d="M94 12 L101 20 L85 18 Z" fill={accent} opacity="0.75" />
+    <path d="M76 40 L70 48" stroke={accent} strokeWidth="2.4" strokeLinecap="round" opacity="0.62" />
+    <circle cx="54" cy="38" r="2" fill={accent} />
+    <circle cx="63" cy="38" r="2" fill={accent} />
+    {evolved && <path d="M94 12 L98 6 M24 114 L18 120" stroke={accent} strokeWidth="1.2" opacity="0.48" />}
+    {seed % 2 === 0 && <path d="M36 70 L20 86" stroke={accent} strokeWidth="3.5" strokeLinecap="round" opacity="0.62" />}
+  </g>
+)
+
+const renderExecutor = (accent: string, seed: number, evolved: boolean) => (
+  <g transform={`translate(0 ${evolved ? -4 : 0})`}>
+    <path d="M58 17 C71 17 80 27 80 39 C80 51 71 59 58 59 C45 59 36 51 36 39 C36 27 45 17 58 17 Z" fill="url(#body)" />
+    <path d="M16 62 C28 54 44 56 58 59 C72 56 88 54 100 62 L94 82 C78 76 66 79 58 79 C50 79 38 76 22 82 Z" fill="url(#body)" />
+    <path d="M16 62 L22 82 M100 62 L94 82" stroke={accent} strokeWidth="1.4" opacity="0.38" />
+    <path d="M73 20 L86 14 L82 114 L70 117 Z" fill="url(#steel)" stroke={accent} strokeWidth="1.4" opacity="0.94" />
+    <path d="M63 40 L98 45" stroke={accent} strokeWidth="4.5" strokeLinecap="round" opacity="0.72" />
+    <path d="M47 24 L36 11 L51 30 M69 24 L80 11 L65 30" fill={accent} opacity="0.38" />
+    <circle cx="51" cy="39" r="2.4" fill={accent} />
+    <circle cx="65" cy="39" r="2.4" fill={accent} />
+    {evolved && <circle cx="58" cy="69" r="24" fill="none" stroke={accent} strokeWidth="1.6" strokeDasharray="4 3" opacity="0.52" />}
+  </g>
+)
+
+const renderRift = (accent: string, seed: number, evolved: boolean) => {
+  const off = (seed % 6) - 3
+  return (
+    <g opacity={evolved ? 1 : 0.9}>
+      <path d={`M${52 + off} 22 C${63 + off} 17 ${71 + off} 28 ${67 + off} 39 C${63 + off} 50 ${50 + off} 49 ${46 + off} 39 C${42 + off} 28 ${48 + off} 22 ${52 + off} 22 Z`} fill="url(#body)" opacity="0.84" />
+      <path d="M36 58 L44 52 L52 63 L58 49 L64 63 L72 52 L80 58 L84 111 L32 111 Z" fill="url(#body)" opacity="0.76" />
+      <path d="M46 65 L50 82 M62 60 L65 79 M70 68 L68 90" stroke="rgba(2,6,23,0.9)" strokeWidth="2.8" />
+      <path d="M22 34 L34 40 L28 54 M82 36 L94 30 L90 48" stroke={accent} strokeWidth="1.5" fill="none" opacity="0.58" strokeLinecap="round" />
+      <circle cx={48 + off} cy={34 + off} r="2.6" fill={accent} opacity="0.85" />
+      <circle cx={61 + off} cy={32 + off} r="2.6" fill={accent} opacity="0.85" />
+      {evolved && <path d="M15 22 L22 37 L17 54 M101 22 L94 37 L99 54" stroke={accent} strokeWidth="2" fill="none" opacity="0.52" strokeLinecap="round" />}
+    </g>
+  )
+}
+
+const renderSilhouette = (assetFamily: string | undefined, silhouette: string, role: ShadowRole, accent: string, seed: number, evolved: boolean) => {
+  if (assetFamily === 'spearman') return renderSpearman(accent, seed, evolved)
+  if (assetFamily === 'executor') return renderExecutor(accent, seed, evolved)
+  if (assetFamily === 'rift') return renderRift(accent, seed, evolved)
+  if (assetFamily === 'rat') return renderBeast('rat', accent, seed, evolved)
+  if (assetFamily === 'hound') return renderBeast(silhouette.includes('chained') ? 'chained-beast' : 'hound', accent, seed, evolved)
+  if (assetFamily === 'shield' || role === 'guard' || silhouette.includes('shield')) return renderGuard(silhouette, accent, evolved)
+  if (assetFamily === 'scribe' || assetFamily === 'analyst' || role === 'analyst' || silhouette.includes('book') || silhouette === 'scroll') return renderAnalyst(silhouette, accent, seed, evolved)
+  if (assetFamily === 'hunter' || role === 'hunter' || silhouette.includes('hound') || silhouette.includes('beast') || silhouette === 'rat') return renderBeast(silhouette, accent, seed, evolved)
+  if (assetFamily === 'support' || role === 'support' || silhouette === 'banner') return renderSupport(silhouette, accent, seed, evolved)
+  if (assetFamily === 'scout' || role === 'scout') return renderSoldier(silhouette.includes('knife') ? 'scout-knife' : silhouette, accent, seed, evolved)
   return renderSoldier(silhouette, accent, seed, evolved)
 }
+
+const renderNamedGateDecor = (accent: string, seed: number) => {
+  const jitter = (seed % 8) - 4
+  return (
+    <g opacity="0.82" aria-hidden>
+      <circle cx="58" cy="14" r="3.5" fill={accent} opacity="0.3" />
+      <path d={`M58 14 L${38 + jitter} 36 L${30 + jitter} 56`} stroke={accent} strokeWidth="1.6" strokeLinecap="round" fill="none" opacity="0.38" />
+      <path d={`M58 14 L${78 - jitter} 40 L${86 - jitter} 60`} stroke={accent} strokeWidth="1.6" strokeLinecap="round" fill="none" opacity="0.38" />
+      <path d={`M58 14 L46 50 M58 14 L70 46`} stroke={accent} strokeWidth="0.9" strokeLinecap="round" fill="none" opacity="0.24" />
+      <ellipse cx="58" cy="14" rx="10" ry="5" fill="none" stroke={accent} strokeWidth="0.9" opacity="0.2" />
+    </g>
+  )
+}
+
+const renderAchievementDecor = (accent: string) => (
+  <g opacity="0.85" aria-hidden>
+    <path d="M43 23 L47 13 L53 23 L58 10 L63 23 L69 13 L73 23 L73 27 L43 27 Z" fill={accent} opacity="0.2" />
+    <circle cx="58" cy="20" r="2.5" fill={accent} opacity="0.38" />
+    <path d="M26 45 C20 56 20 72 28 82" stroke={accent} strokeWidth="1.2" fill="none" opacity="0.25" strokeLinecap="round" />
+    <path d="M90 45 C96 56 96 72 88 82" stroke={accent} strokeWidth="1.2" fill="none" opacity="0.25" strokeLinecap="round" />
+    <circle cx="58" cy="66" r="47" fill="none" stroke={accent} strokeWidth="0.8" strokeDasharray="3 5" opacity="0.16" />
+  </g>
+)
 
 export function ShadowPortrait({
   shadow,
@@ -418,6 +492,7 @@ export function ShadowPortrait({
   evolutionReady = false,
   hidden = false,
   className,
+  innateGrade,
 }: ShadowPortraitProps) {
   const def = resolveDefinition(shadow, definition)
   const rarity = def?.rarity ?? shadow?.rarity ?? 'common'
@@ -434,6 +509,13 @@ export function ShadowPortrait({
   const mistShift = (seed % 18) - 9
   const label = hidden ? 'Unknown shadow' : (def?.name ?? shadow?.name ?? 'Shadow')
   const sourceTone = def?.isAchievementNamed || shadow?.isAchievementNamed ? 'ACHIEVEMENT' : def?.isGateNamed || shadow?.isGateNamed ? 'GATE NAMED' : 'NAMED'
+  const grade = innateGrade ?? shadow?.innateGrade ?? undefined
+  const isGradeS = grade === 'S'
+  const isGradeA = grade === 'A'
+  const assetFamily = def?.assetFamily
+  const isGateNamed = assetFamily === 'named_gate'
+  const isAchievementNamed = assetFamily === 'named_achievement'
+  const assetUrl = getShadowPortraitAsset(def?.portraitKey)
   const style = {
     '--shadow-accent': accent,
     '--shadow-frame': palette.frame,
@@ -450,6 +532,12 @@ export function ShadowPortrait({
         active && 'ring-2 ring-cyan-300/35',
         highlighted && 'shadow-glow-purple',
         evolutionReady && 'shadow-glow',
+        isGradeS && !named && 'grade-aura-s',
+        isGradeA && !named && !highlighted && 'grade-aura-a',
+        named && 'named-pulse',
+        isGateNamed && 'portrait-family-named-gate',
+        isAchievementNamed && 'portrait-family-named-achievement',
+        evolved && !named && 'portrait-evolved',
         className,
       )}
       style={{
@@ -510,11 +598,27 @@ export function ShadowPortrait({
           {renderAura(profile, accent, named, evolved)}
           {renderBackgroundMotif(profile, accent, seed, named, evolved)}
           <path d="M58 10 L103 35 L103 91 L58 119 L13 91 L13 35 Z" fill="none" stroke={accent} strokeWidth={named ? 2.8 : evolved ? 2 : 1.4} opacity={named ? 0.82 : 0.42 + profile.intensity * 0.06} />
+          {evolved && (
+            <path d="M58 26 L82 39 L82 89 L58 103 L34 89 L34 39 Z" fill="none" stroke={accent} strokeWidth="1.4" strokeDasharray="5 3" opacity="0.55" />
+          )}
           <path d="M58 22 L89 40 L89 85 L58 104 L27 85 L27 40 Z" fill="none" stroke={accent} strokeDasharray={profile.rune === 'ornate' ? '2 4 8 4' : '5 7'} strokeWidth={named ? 1.25 : 1} opacity={named || evolved ? 0.38 : 0.25} transform={`rotate(${runeRotation} 58 64)`} />
-          {renderSilhouette(silhouette, role, accent, seed, evolved)}
+          {renderSilhouette(assetFamily, silhouette, role, accent, seed, evolved)}
           {renderAdvancedProps(profile, role, accent, seed, evolved, named)}
+          {isGateNamed && renderNamedGateDecor(accent, seed)}
+          {isAchievementNamed && renderAchievementDecor(accent)}
         </g>
       </svg>
+      {assetUrl && !hidden && (
+        <img
+          src={assetUrl}
+          alt={label}
+          className="portrait-asset-loaded absolute inset-0 h-full w-full object-contain scale-[1.05]"
+          style={{ filter: `drop-shadow(0 0 7px var(--shadow-glow)) drop-shadow(0 0 14px var(--shadow-glow))` }}
+          loading="lazy"
+          draggable={false}
+          onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }}
+        />
+      )}
       {hidden && (
         <div className="absolute inset-0 flex items-center justify-center bg-ink-950/45 backdrop-blur-[1px]">
           <div className="system-text text-lg text-white/35">???</div>
@@ -540,6 +644,16 @@ export function ShadowPortrait({
           className={clsx('pointer-events-none absolute inset-0 rounded-md', evolutionReady ? 'animate-shimmer' : 'animate-pulse')}
           style={{ boxShadow: `inset 0 0 22px ${active ? palette.glow : 'rgba(52, 211, 153, 0.4)'}` }}
         />
+      )}
+      {(isGradeS || isGradeA) && !hidden && (
+        <div className={clsx(
+          'absolute right-2 top-2 rounded border px-1.5 py-0.5 text-[8px] system-text font-bold',
+          isGradeS
+            ? 'border-amber-300/55 bg-amber-300/20 text-amber-100'
+            : 'border-amber-400/40 bg-amber-400/12 text-amber-200/80',
+        )}>
+          {grade}
+        </div>
       )}
       {evolved && (
         <div className="absolute bottom-2 right-2 rounded border border-emerald-300/35 bg-emerald-300/10 px-1.5 py-0.5 text-[8px] system-text text-emerald-100">

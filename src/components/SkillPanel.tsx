@@ -24,6 +24,24 @@ const sourceTone: Record<string, string> = {
   몬스터: 'border-white/10 bg-white/5 text-white/60',
 }
 
+const skillTypeBadgeClass = (type: string): string => {
+  if (type.includes('피해') || type.includes('damage') || type.includes('공격')) return 'skill-badge-damage'
+  if (type.includes('방어') || type.includes('defense') || type.includes('shield')) return 'skill-badge-defense'
+  if (type.includes('버프') || type.includes('buff') || type.includes('강화')) return 'skill-badge-buff'
+  if (type.includes('디버프') || type.includes('debuff') || type.includes('약화')) return 'skill-badge-debuff'
+  if (type.includes('회복') || type.includes('heal')) return 'skill-badge-heal'
+  return 'skill-badge-utility'
+}
+
+const skillTypeGlyph = (type: string): string => {
+  if (type.includes('피해') || type.includes('damage') || type.includes('공격')) return '⚡'
+  if (type.includes('방어') || type.includes('defense') || type.includes('shield')) return '🛡'
+  if (type.includes('버프') || type.includes('buff') || type.includes('강화')) return '↑'
+  if (type.includes('디버프') || type.includes('debuff') || type.includes('약화')) return '↓'
+  if (type.includes('회복') || type.includes('heal')) return '✦'
+  return '◈'
+}
+
 export function SkillPanel() {
   const hunter = useGame(s => s.hunter)
   const items = useGame(s => s.items)
@@ -75,20 +93,27 @@ export function SkillPanel() {
                 ? `${runtime.timesUsed ?? 0}/${nextTarget}`
                 : `${runtime.timesUsed ?? 0}회`
 
+              const typeLabel = getSkillTypeLabel(skill)
+              const typeBadge = skillTypeBadgeClass(typeLabel)
+              const typeGlyph = skillTypeGlyph(typeLabel)
+              const masteryPct = Math.min(100, ((runtime.masteryLevel ?? 0) / 5) * 100)
+              const cdTurns = getSkillCooldownTurns(skill)
+
               return (
                 <div
                   key={skill.id}
-                  className="rounded-md border border-white/10 bg-ink-900/45 px-3 py-3"
+                  className="rounded-md border border-white/12 bg-ink-900/50 px-3 py-3 transition-colors hover:border-white/20"
                 >
                   <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
+                    <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap items-center gap-1.5">
+                        <span className="text-[11px] system-text text-white/35">{typeGlyph}</span>
                         <h3 className="text-sm font-semibold text-white truncate">{skill.name}</h3>
                         <span className={clsx('text-[9px] system-text rounded border px-1.5 py-0.5', sourceTone[source] ?? sourceTone['기본'])}>
                           {source}
                         </span>
-                        <span className="text-[9px] system-text rounded border border-white/10 bg-white/5 px-1.5 py-0.5 text-white/55">
-                          {getSkillTypeLabel(skill)}
+                        <span className={clsx('text-[9px] system-text rounded border px-1.5 py-0.5', typeBadge)}>
+                          {typeLabel}
                         </span>
                       </div>
                       {provider && (
@@ -97,9 +122,16 @@ export function SkillPanel() {
                         </div>
                       )}
                     </div>
-                    <span className="shrink-0 inline-flex items-center gap-1 rounded border border-cyan-300/20 bg-cyan-400/10 px-2 py-1 text-[10px] system-text text-cyan-100">
+                    <span className={clsx(
+                      'shrink-0 inline-flex items-center gap-1 rounded border px-2 py-1 text-[10px] system-text',
+                      cdTurns === 0
+                        ? 'border-emerald-300/25 bg-emerald-400/10 text-emerald-100'
+                        : cdTurns <= 2
+                          ? 'border-cyan-300/20 bg-cyan-400/10 text-cyan-100'
+                          : 'border-white/12 bg-white/5 text-white/55',
+                    )}>
                       <TimerReset className="w-3 h-3" />
-                      CD {getSkillCooldownTurns(skill)}
+                      {cdTurns === 0 ? '즉시' : `CD ${cdTurns}턴`}
                     </span>
                   </div>
 
@@ -107,18 +139,28 @@ export function SkillPanel() {
                     {getSkillEffectiveDescription(skill, runtime)}
                   </p>
 
-                  <div className="mt-3 flex flex-wrap items-center gap-2 text-[10px] system-text">
-                    <span className="inline-flex items-center gap-1 rounded border border-amber-300/20 bg-amber-400/10 px-2 py-1 text-amber-100/75">
-                      <Sparkles className="w-3 h-3" />
-                      숙련 Lv.{runtime.masteryLevel ?? 0}
-                    </span>
-                    <span className="rounded border border-white/10 bg-white/5 px-2 py-1 text-white/45">
-                      사용 {progress}
-                    </span>
-                    {skill.recommendedUse && (
-                      <span className="rounded border border-emerald-300/20 bg-emerald-400/10 px-2 py-1 text-emerald-100/65">
-                        {skill.recommendedUse}
+                  <div className="mt-3 space-y-2">
+                    <div className="flex flex-wrap items-center gap-2 text-[10px] system-text">
+                      <span className="inline-flex items-center gap-1 rounded border border-amber-300/22 bg-amber-400/10 px-2 py-1 text-amber-100/80">
+                        <Sparkles className="w-3 h-3" />
+                        숙련 Lv.{runtime.masteryLevel ?? 0}
                       </span>
+                      <span className="rounded border border-white/10 bg-white/5 px-2 py-1 text-white/40">
+                        {progress}
+                      </span>
+                      {skill.recommendedUse && (
+                        <span className="rounded border border-emerald-300/20 bg-emerald-400/10 px-2 py-1 text-emerald-100/65">
+                          {skill.recommendedUse}
+                        </span>
+                      )}
+                    </div>
+                    {masteryPct > 0 && (
+                      <div className="h-1 overflow-hidden rounded-full bg-white/8">
+                        <div
+                          className="h-full rounded-full mastery-bar-fill transition-all"
+                          style={{ width: `${masteryPct}%` }}
+                        />
+                      </div>
                     )}
                   </div>
                 </div>

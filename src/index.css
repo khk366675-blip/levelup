@@ -419,6 +419,147 @@ body::before {
   100% { opacity: 0; transform: translate(-50%, -55%) scale(0.98); }
 }
 
+/* =====================================================
+   12-24 VFX UTILITIES
+   ===================================================== */
+
+/* rarity frame glows */
+.rarity-frame-common {
+  box-shadow: 0 0 0 1px rgba(148, 163, 184, 0.12), inset 0 0 18px rgba(2, 6, 23, 0.88);
+}
+.rarity-frame-uncommon {
+  box-shadow: 0 0 0 1px rgba(52, 211, 153, 0.22), 0 0 14px rgba(52, 211, 153, 0.07), inset 0 0 20px rgba(2, 6, 23, 0.85);
+}
+.rarity-frame-rare {
+  box-shadow: 0 0 0 1px rgba(34, 211, 238, 0.28), 0 0 20px rgba(34, 211, 238, 0.11), inset 0 0 22px rgba(2, 6, 23, 0.82);
+}
+.rarity-frame-epic {
+  box-shadow: 0 0 0 1px rgba(167, 139, 250, 0.34), 0 0 26px rgba(167, 139, 250, 0.15), inset 0 0 24px rgba(2, 6, 23, 0.8);
+}
+.rarity-frame-legendary {
+  box-shadow: 0 0 0 1px rgba(245, 158, 11, 0.45), 0 0 34px rgba(245, 158, 11, 0.2), inset 0 0 26px rgba(245, 158, 11, 0.04);
+}
+
+/* innate grade aura */
+.grade-aura-s {
+  animation: grade-aura-s-pulse 2.8s ease-in-out infinite;
+}
+.grade-aura-a {
+  box-shadow: 0 0 0 1px rgba(245, 158, 11, 0.22), 0 0 12px rgba(245, 158, 11, 0.09);
+}
+
+/* named shadow subtle pulse */
+.named-pulse {
+  animation: named-pulse 3.4s ease-in-out infinite;
+}
+
+/* high enhancement glow */
+.enhancement-glow {
+  animation: enhancement-glow 2.2s ease-in-out infinite;
+}
+
+/* skill type badge tones */
+.skill-badge-damage  { background: rgba(248, 113, 113, 0.14); border-color: rgba(248, 113, 113, 0.32); color: #fca5a5; }
+.skill-badge-defense { background: rgba(96,  165, 250, 0.14); border-color: rgba(96,  165, 250, 0.32); color: #93c5fd; }
+.skill-badge-buff    { background: rgba(52,  211, 153, 0.12); border-color: rgba(52,  211, 153, 0.28); color: #6ee7b7; }
+.skill-badge-debuff  { background: rgba(167, 139, 250, 0.14); border-color: rgba(167, 139, 250, 0.30); color: #c4b5fd; }
+.skill-badge-heal    { background: rgba(52,  211, 153, 0.10); border-color: rgba(52,  211, 153, 0.24); color: #a7f3d0; }
+.skill-badge-utility { background: rgba(245, 158, 11,  0.10); border-color: rgba(245, 158, 11,  0.26); color: #fcd34d; }
+
+/* HP bar flash on damage / heal */
+.hp-flash-damage {
+  animation: hp-flash-damage 0.55s ease-out both;
+}
+.hp-flash-heal {
+  animation: hp-flash-heal 0.5s ease-out both;
+}
+
+/* summon / reveal entrance */
+.summon-reveal {
+  animation: summon-reveal 0.52s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* boss / legendary glow pulse */
+.boss-glow {
+  animation: boss-glow 1.7s ease-in-out infinite;
+}
+
+/* floating damage pop number */
+.damage-pop {
+  animation: damage-pop 0.72s ease-out both;
+}
+
+/* legendary mist shimmer */
+.shadow-mist-legendary {
+  animation: shadow-mist-legendary 4.2s ease-in-out infinite;
+}
+
+/* mastery progress bar shimmer */
+.mastery-bar-fill {
+  background: linear-gradient(90deg, #a78bfa 0%, #f472b6 55%, #fbbf24 100%);
+  background-size: 200% 100%;
+  animation: shimmer 3s linear infinite;
+}
+
+@keyframes shimmer {
+  0%   { background-position: 200% center; }
+  100% { background-position: -200% center; }
+}
+
+@keyframes grade-aura-s-pulse {
+  0%, 100% {
+    box-shadow: 0 0 0 1px rgba(251, 191, 36, 0.38), 0 0 18px rgba(251, 191, 36, 0.14);
+  }
+  50% {
+    box-shadow: 0 0 0 2px rgba(251, 191, 36, 0.58), 0 0 30px rgba(251, 191, 36, 0.26);
+  }
+}
+
+@keyframes named-pulse {
+  0%, 100% { box-shadow: 0 0 10px rgba(167, 139, 250, 0.16); }
+  50%       { box-shadow: 0 0 24px rgba(167, 139, 250, 0.38); }
+}
+
+@keyframes enhancement-glow {
+  0%, 100% { box-shadow: 0 0 6px rgba(245, 158, 11, 0.14); }
+  50%       { box-shadow: 0 0 16px rgba(245, 158, 11, 0.32); }
+}
+
+@keyframes hp-flash-damage {
+  0%   { background-color: rgba(248, 113, 113, 0.42); }
+  100% { background-color: transparent; }
+}
+
+@keyframes hp-flash-heal {
+  0%   { background-color: rgba(52, 211, 153, 0.34); }
+  100% { background-color: transparent; }
+}
+
+@keyframes summon-reveal {
+  0%   { opacity: 0; transform: scale(0.8) translateY(14px); filter: blur(9px); }
+  100% { opacity: 1; transform: scale(1) translateY(0);      filter: blur(0);  }
+}
+
+@keyframes boss-glow {
+  0%, 100% {
+    box-shadow: 0 0 20px rgba(245, 158, 11, 0.2), 0 0 0 1px rgba(245, 158, 11, 0.26);
+  }
+  50% {
+    box-shadow: 0 0 40px rgba(245, 158, 11, 0.36), 0 0 0 2px rgba(245, 158, 11, 0.44);
+  }
+}
+
+@keyframes damage-pop {
+  0%   { opacity: 0; transform: translateY(0)    scale(0.55); }
+  30%  { opacity: 1; transform: translateY(-17px) scale(1.15); }
+  100% { opacity: 0; transform: translateY(-30px) scale(0.9);  }
+}
+
+@keyframes shadow-mist-legendary {
+  0%, 100% { opacity: 0.22; transform: translateX(-4px) scaleX(0.98); }
+  50%       { opacity: 0.48; transform: translateX(4px)  scaleX(1.02); }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .expedition-battlefield-danger,
   .expedition-bf-scan,
@@ -444,7 +585,192 @@ body::before {
   .challenge-card-selected,
   .challenge-card-complete,
   .tower-boss-warning,
-  .system-message-dramatic::after {
+  .system-message-dramatic::after,
+  .grade-aura-s,
+  .named-pulse,
+  .enhancement-glow,
+  .hp-flash-damage,
+  .hp-flash-heal,
+  .summon-reveal,
+  .boss-glow,
+  .damage-pop,
+  .shadow-mist-legendary,
+  .mastery-bar-fill,
+  .xp-bar-fill,
+  .portrait-evolved,
+  .portrait-asset-loaded {
     animation: none;
   }
 }
+
+/* =================================================
+   12-24B — PORTRAIT FAMILY / ASSET PIPELINE VFX
+   ================================================= */
+
+/* Named gate family — rift teal dimensional crack hint */
+.portrait-family-named-gate {
+  --portrait-gate-glow: rgba(34, 211, 238, 0.12);
+  box-shadow:
+    0 0 0 1px rgba(34, 211, 238, 0.14),
+    0 0 20px var(--portrait-gate-glow),
+    inset 0 0 22px rgba(2, 6, 23, 0.88);
+}
+
+/* Achievement named family — gold ceremonial halo */
+.portrait-family-named-achievement {
+  --portrait-ach-glow: rgba(251, 191, 36, 0.14);
+  box-shadow:
+    0 0 0 1px rgba(251, 191, 36, 0.2),
+    0 0 24px var(--portrait-ach-glow),
+    inset 0 0 22px rgba(2, 6, 23, 0.86);
+}
+
+/* Evolved shadows — slow brightness shimmer */
+.portrait-evolved {
+  animation: portrait-evolved-pulse 3.8s ease-in-out infinite;
+}
+
+@keyframes portrait-evolved-pulse {
+  0%, 100% { filter: brightness(1) saturate(1); }
+  50%       { filter: brightness(1.07) saturate(1.12); }
+}
+
+/* Asset image overlay — fade in from transparent */
+.portrait-asset-loaded {
+  animation: portrait-asset-reveal 0.35s ease-out both;
+}
+
+@keyframes portrait-asset-reveal {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+/* Shadow eye glow — subtle eye pulse for high-rarity SVG portraits */
+.shadow-eye-glow {
+  animation: shadow-eye-pulse 2.6s ease-in-out infinite;
+}
+
+@keyframes shadow-eye-pulse {
+  0%, 100% { opacity: 0.65; }
+  50%       { opacity: 1; }
+}
+
+/* =================================================
+   12-24H — LOCKED NAMED SHADOW SEAL VFX
+   봉인된 네임드/성취 그림자 카드 전용. 실제 이름/효과는 노출하지 않는다.
+   ================================================= */
+
+/* 공통 base */
+.locked-named-portrait {
+  --locked-primary: rgba(245, 158, 11, 1);
+  --locked-secondary: rgba(167, 139, 250, 1);
+  position: relative;
+}
+
+/* Mist haze layer */
+.locked-seal-mist {
+  background:
+    radial-gradient(circle at 50% 28%, color-mix(in srgb, var(--locked-primary) 18%, transparent), transparent 55%),
+    radial-gradient(circle at 50% 92%, color-mix(in srgb, var(--locked-secondary) 14%, transparent), transparent 60%),
+    linear-gradient(180deg, rgba(15, 23, 42, 0.55), rgba(2, 6, 23, 0.92));
+  pointer-events: none;
+  animation: locked-seal-mist-drift 5.6s ease-in-out infinite;
+}
+
+@keyframes locked-seal-mist-drift {
+  0%, 100% { opacity: 0.78; transform: translateY(0) scale(1.0); }
+  50%       { opacity: 1; transform: translateY(-2px) scale(1.03); }
+}
+
+/* Gate 봉인 — 황금/보라 균열 톤 */
+.locked-seal-gate {
+  box-shadow:
+    0 0 0 1px rgba(245, 158, 11, 0.32),
+    0 0 20px rgba(245, 158, 11, 0.18),
+    0 0 32px rgba(167, 139, 250, 0.14),
+    inset 0 0 26px rgba(2, 6, 23, 0.92);
+  animation: locked-seal-gate-pulse 4.2s ease-in-out infinite;
+}
+
+@keyframes locked-seal-gate-pulse {
+  0%, 100% {
+    box-shadow:
+      0 0 0 1px rgba(245, 158, 11, 0.32),
+      0 0 20px rgba(245, 158, 11, 0.18),
+      0 0 32px rgba(167, 139, 250, 0.14),
+      inset 0 0 26px rgba(2, 6, 23, 0.92);
+  }
+  50% {
+    box-shadow:
+      0 0 0 1px rgba(245, 158, 11, 0.5),
+      0 0 26px rgba(245, 158, 11, 0.28),
+      0 0 42px rgba(167, 139, 250, 0.22),
+      inset 0 0 26px rgba(2, 6, 23, 0.92);
+  }
+}
+
+/* Achievement 봉인 — 청록/황금 halo 톤 */
+.locked-seal-achievement {
+  box-shadow:
+    0 0 0 1px rgba(34, 211, 238, 0.32),
+    0 0 22px rgba(34, 211, 238, 0.18),
+    0 0 30px rgba(251, 191, 36, 0.14),
+    inset 0 0 24px rgba(2, 6, 23, 0.9);
+  animation: locked-seal-ach-pulse 4.6s ease-in-out infinite;
+}
+
+@keyframes locked-seal-ach-pulse {
+  0%, 100% {
+    box-shadow:
+      0 0 0 1px rgba(34, 211, 238, 0.32),
+      0 0 22px rgba(34, 211, 238, 0.18),
+      0 0 30px rgba(251, 191, 36, 0.14),
+      inset 0 0 24px rgba(2, 6, 23, 0.9);
+  }
+  50% {
+    box-shadow:
+      0 0 0 1px rgba(34, 211, 238, 0.5),
+      0 0 30px rgba(34, 211, 238, 0.3),
+      0 0 40px rgba(251, 191, 36, 0.22),
+      inset 0 0 24px rgba(2, 6, 23, 0.9);
+  }
+}
+
+/* 회전하는 sigil rune ring (얇은 점선) */
+.locked-seal-rune-rotate {
+  border: 1px dashed color-mix(in srgb, var(--locked-primary) 35%, transparent);
+  opacity: 0.45;
+  animation: locked-seal-rune-spin 18s linear infinite;
+  pointer-events: none;
+}
+
+@keyframes locked-seal-rune-spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+/* Card frame variants (CodexCard 외곽 강조) */
+.locked-named-card-gate {
+  border-color: rgba(245, 158, 11, 0.35) !important;
+  background:
+    linear-gradient(180deg, rgba(245, 158, 11, 0.04), rgba(167, 139, 250, 0.04)),
+    rgba(2, 6, 23, 0.55) !important;
+}
+
+.locked-named-card-achievement {
+  border-color: rgba(34, 211, 238, 0.32) !important;
+  background:
+    linear-gradient(180deg, rgba(34, 211, 238, 0.04), rgba(251, 191, 36, 0.04)),
+    rgba(2, 6, 23, 0.55) !important;
+}
+
+/* Reduced motion fallback */
+@media (prefers-reduced-motion: reduce) {
+  .locked-seal-mist,
+  .locked-seal-gate,
+  .locked-seal-achievement,
+  .locked-seal-rune-rotate {
+    animation: none;
+  }
+}
+
