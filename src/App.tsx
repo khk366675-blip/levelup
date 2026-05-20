@@ -27,6 +27,7 @@ import { BackupControls } from './components/BackupControls'
 import { InfiniteTowerPanel } from './components/InfiniteTowerPanel'
 import { RewardBoxPanel } from './components/RewardBoxPanel'
 import { ChallengeCardsPanel } from './components/ChallengeCardsPanel'
+import { DevQaPanel } from './components/DevQaPanel'
 
 type Tab = 'rewards' | 'daily' | 'main' | 'dungeon' | 'gate' | 'shadows' | 'inventory' | 'titles' | 'tower'
 
@@ -135,6 +136,8 @@ export default function App() {
       </header>
 
       <main className="max-w-6xl mx-auto px-4 py-6 space-y-6">
+        {import.meta.env.DEV && <DevQaPanel onOpenShadows={() => setTab('shadows')} />}
+
         <HunterStatus />
 
         {/* Tabs */}

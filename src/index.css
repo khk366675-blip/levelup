@@ -479,6 +479,37 @@ body::before {
   animation: summon-reveal 0.52s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
+.shadow-reveal-card {
+  animation: shadow-reveal-card-in 0.24s ease-out both;
+}
+
+.shadow-reveal-card::before {
+  content: '';
+  position: absolute;
+  inset: -32%;
+  background:
+    radial-gradient(circle at 50% 50%, rgba(96, 232, 255, 0.12), transparent 18%),
+    conic-gradient(from 180deg, transparent, rgba(96, 232, 255, 0.16), transparent, rgba(168, 85, 247, 0.18), transparent, rgba(251, 191, 36, 0.12), transparent);
+  animation: shadow-reveal-sigil 2.8s ease-in-out infinite;
+  opacity: 0.74;
+  pointer-events: none;
+}
+
+.shadow-reveal-high::before {
+  background:
+    radial-gradient(circle at 50% 50%, rgba(251, 191, 36, 0.16), transparent 20%),
+    conic-gradient(from 180deg, transparent, rgba(251, 191, 36, 0.22), transparent, rgba(168, 85, 247, 0.2), transparent, rgba(96, 232, 255, 0.16), transparent);
+}
+
+.shadow-reveal-core {
+  animation: shadow-reveal-core-pulse 1.7s ease-in-out infinite;
+}
+
+.shadow-reveal-rift {
+  box-shadow: 0 0 18px currentColor;
+  animation: shadow-reveal-rift-scan 1.6s ease-in-out infinite;
+}
+
 /* boss / legendary glow pulse */
 .boss-glow {
   animation: boss-glow 1.7s ease-in-out infinite;
@@ -540,6 +571,26 @@ body::before {
   100% { opacity: 1; transform: scale(1) translateY(0);      filter: blur(0);  }
 }
 
+@keyframes shadow-reveal-card-in {
+  0% { opacity: 0; transform: translateY(12px) scale(0.97); filter: blur(5px); }
+  100% { opacity: 1; transform: translateY(0) scale(1); filter: blur(0); }
+}
+
+@keyframes shadow-reveal-sigil {
+  0%, 100% { transform: rotate(0deg) scale(0.98); opacity: 0.38; }
+  50% { transform: rotate(14deg) scale(1.04); opacity: 0.78; }
+}
+
+@keyframes shadow-reveal-core-pulse {
+  0%, 100% { filter: brightness(1); }
+  50% { filter: brightness(1.12); }
+}
+
+@keyframes shadow-reveal-rift-scan {
+  0%, 100% { transform: scaleX(0.55); opacity: 0.32; }
+  50% { transform: scaleX(1); opacity: 0.82; }
+}
+
 @keyframes boss-glow {
   0%, 100% {
     box-shadow: 0 0 20px rgba(245, 158, 11, 0.2), 0 0 0 1px rgba(245, 158, 11, 0.26);
@@ -592,6 +643,10 @@ body::before {
   .hp-flash-damage,
   .hp-flash-heal,
   .summon-reveal,
+  .shadow-reveal-card,
+  .shadow-reveal-card::before,
+  .shadow-reveal-core,
+  .shadow-reveal-rift,
   .boss-glow,
   .damage-pop,
   .shadow-mist-legendary,
@@ -773,4 +828,3 @@ body::before {
     animation: none;
   }
 }
-

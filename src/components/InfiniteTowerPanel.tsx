@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import clsx from 'clsx'
 import { Swords, Trophy, Zap, Shield, FastForward, Hand, X } from 'lucide-react'
 import { useGame } from '../lib/store'
@@ -12,6 +12,8 @@ import { CinematicLogOverlay } from './CinematicLogOverlay'
 import { CombatLogPanel } from './CombatLogPanel'
 import { DramaticReveal, type RevealStep } from './DramaticReveal'
 import { gateTurnToLogEntry } from './GatePanel'
+import { MonsterIntentPanel } from './MonsterIntentPanel'
+import { SkillActionCard, skillSourceSortRank, skillTypeSortRank } from './SkillActionCard'
 import type { ManualBattleAction, ManualBattleSession } from '../lib/types'
 import { getEquippedShadows } from '../lib/shadows'
 import { getPlayerCombatSkills, BASIC_ATTACK_SKILL } from '../lib/game'
@@ -21,15 +23,23 @@ import {
 } from '../lib/combatPower'
 import { getSecretVisibleFragments } from '../lib/secrets'
 import { SKILL_DEFINITIONS } from '../lib/seed'
+import { getMonsterIntent, getSkillIntentHint } from '../lib/combatIntent'
 import {
   canUseSkill,
-  getSkillCooldownTurns,
-  getSkillEffectiveDescription,
   getSkillMastery,
-  getSkillSourceLabel,
-  getSkillTypeLabel,
   isHunterCombatSkill,
 } from '../lib/skills'
+
+const sortTowerCombatSkills = (skills: ReturnType<typeof getPlayerCombatSkills>, cooldowns: Record<string, number>) => (
+  [...skills].sort((a, b) => {
+    const aReady = (cooldowns[a.id] ?? 0) <= 0
+    const bReady = (cooldowns[b.id] ?? 0) <= 0
+    if (aReady !== bReady) return aReady ? -1 : 1
+    return skillSourceSortRank(a) - skillSourceSortRank(b)
+      || skillTypeSortRank(a) - skillTypeSortRank(b)
+      || a.name.localeCompare(b.name, 'ko')
+  })
+)
 
 function classifyTowerLogTurn(turn: { actorId?: string; actorType?: string }): CinematicLogTone {
   if (turn.actorType === 'player') return 'player'
@@ -39,7 +49,20 @@ function classifyTowerLogTurn(turn: { actorId?: string; actorType?: string }): C
   return 'system'
 }
 
-function towerTurnToCinematicLog(turn: { turnNumber: number; actorId: string; actorType?: string; targetType?: 'player' | 'monster'; message: string; skillId?: string; skillName?: string; damage?: number; outcome?: string; remainingHp?: number }, index: number): CinematicLogData | undefined {
+function splitCinematicMessage(message: string) {
+  const normalized = message.replace(/\s+/g, ' ').trim()
+  const parts = normalized.split(/(?<=[.!?。])\s+|(?<=\.)\s+/).filter(Boolean)
+  return {
+    title: parts[0] ?? normalized,
+    body: parts.length > 1 ? parts.slice(1).join(' ') : undefined,
+  }
+}
+
+function towerTurnToCinematicLog(
+  turn: { turnNumber: number; actorId: string; actorType?: string; targetType?: 'player' | 'monster'; message: string; skillId?: string; skillName?: string; damage?: number; outcome?: string; remainingHp?: number },
+  index: number,
+  session?: ManualBattleSession
+): CinematicLogData | undefined {
   if (!turn.message.trim()) return undefined
   const tone = classifyTowerLogTurn(turn)
   const isHunterSkill =
@@ -52,9 +75,47 @@ function towerTurnToCinematicLog(turn: { turnNumber: number; actorId: string; ac
     player: '헌터', shadow: '그림자', monster: '몬스터', system: '시스템',
     reward: '보상', risk: '위험', command: '명령', result: '결과', defense: '방어',
   }
+  
+  const message = splitCinematicMessage(turn.message)
+  const actualSession = (session && 'startedAt' in session) ? session : undefined
+
+  let title = isHunterSkill && turn.skillName ? `${turn.skillName} 발동` : message.title
+  let bodyText = message.body
+
+  if (actualSession) {
+    const playerMaxHp = actualSession.player.maxHp
+    const monsterMaxHp = actualSession.monster.maxHp
+
+    const isFinishingBlow = turn.targetType === 'monster' && turn.remainingHp === 0 && (turn.outcome === 'hit' || turn.outcome === 'critical')
+    const isPlayerDanger = turn.targetType === 'player' && turn.remainingHp !== undefined && playerMaxHp > 0 && (turn.remainingHp / playerMaxHp) <= 0.3
+    const isMonsterWeakness = turn.targetType === 'monster' && turn.remainingHp !== undefined && turn.remainingHp > 0 && monsterMaxHp > 0 && (turn.remainingHp / monsterMaxHp) <= 0.3
+
+    if (isFinishingBlow) {
+      title = `[🎯 결정타] ${title}`
+    } else if (isPlayerDanger) {
+      bodyText = bodyText ? `[⚠️ 위기] ${bodyText}` : `[⚠️ 위기] 생명력 급감!`
+    } else if (isMonsterWeakness) {
+      title = `[⚡ 기회] ${title}`
+    }
+  }
+
+  const outcome = turn.outcome
+  if (outcome === 'victory' || outcome === 'defeat' || outcome === 'draw' || turn.actorId === 'result') {
+    const winKeywords = ['승리', 'victory', 'Cleared']
+    const failKeywords = ['패배', 'defeat', 'Failed']
+    if (winKeywords.some(k => title.toLowerCase().includes(k.toLowerCase()))) {
+      title = `[🏆 승리] ${title}`
+    } else if (failKeywords.some(k => title.toLowerCase().includes(k.toLowerCase()))) {
+      title = `[❌ 패배] ${title}`
+    } else {
+      title = `[⏳ 무승부] ${title}`
+    }
+  }
+
   const bodyParts = [
-    turn.skillName && turn.skillName !== turn.message ? turn.skillName : undefined,
+    bodyText,
     turn.damage !== undefined ? `피해 ${Math.round(turn.damage)}` : undefined,
+    turn.skillName && turn.skillName !== turn.message ? turn.skillName : undefined,
   ].filter(Boolean)
 
   let visualDelta: CinematicLogData['visualDelta']
@@ -71,9 +132,9 @@ function towerTurnToCinematicLog(turn: { turnNumber: number; actorId: string; ac
     id: `tower-cinematic-${turn.turnNumber}-${turn.actorId}-${index}`,
     tone: isHunterSkill ? 'player' : tone,
     badge: isHunterSkill ? 'SKILL' : badgeMap[tone] ?? '전투',
-    title: isHunterSkill && turn.skillName ? `${turn.skillName} 발동` : turn.message,
+    title,
     body: isHunterSkill
-      ? [turn.message, turn.damage !== undefined ? `${Math.round(turn.damage)} 피해` : undefined].filter(Boolean).join(' · ')
+      ? [title, turn.damage !== undefined ? `${Math.round(turn.damage)} 피해` : undefined].filter(Boolean).join(' · ')
       : bodyParts.join(' · ') || undefined,
     visualDelta,
   }
@@ -81,15 +142,41 @@ function towerTurnToCinematicLog(turn: { turnNumber: number; actorId: string; ac
 
 function HpBar({ label, hp, maxHp, color }: { label: string; hp: number; maxHp: number; color: 'cyan' | 'rose' }) {
   const ratio = maxHp > 0 ? Math.max(0, Math.min(1, hp / maxHp)) : 0
-  const barColor = color === 'cyan' ? 'bg-cyan-400' : 'bg-rose-400'
+  const percent = Math.round(ratio * 100)
+  
+  const barClassName = ratio <= 0.25
+    ? 'bg-rose-400 shadow-[0_0_10px_rgba(244,63,94,0.6)] animate-pulse'
+    : ratio <= 0.5
+      ? 'bg-amber-400 shadow-[0_0_10px_rgba(245,158,11,0.4)]'
+      : color === 'cyan'
+        ? 'bg-cyan-400 shadow-[0_0_8px_rgba(34,211,238,0.4)]'
+        : 'bg-rose-400 shadow-[0_0_8px_rgba(244,63,94,0.4)]'
+
+  const isLowHp = ratio > 0 && ratio <= 0.3
+
   return (
     <div>
-      <div className="flex justify-between text-[10px] system-text mb-1">
-        <span className={color === 'cyan' ? 'text-cyan-200' : 'text-rose-200'}>{label}</span>
-        <span className="text-white/60">{Math.max(0, Math.round(hp))} / {Math.round(maxHp)}</span>
+      <div className="flex items-center justify-between gap-1 text-[10px] sm:text-xs mb-1">
+        <span className="font-semibold text-white/85 truncate flex items-center gap-1.5 min-w-0">
+          <span className="truncate">{label}</span>
+          {isLowHp && (
+            color === 'cyan' ? (
+              <span className="shrink-0 text-[8px] font-black bg-rose-500/25 text-rose-300 border border-rose-500/35 px-1 rounded tracking-tighter animate-pulse">
+                DANGER
+              </span>
+            ) : (
+              <span className="shrink-0 text-[8px] font-black bg-amber-500/25 text-amber-300 border border-amber-500/35 px-1 rounded tracking-tighter animate-pulse">
+                FINISH CHANCE
+              </span>
+            )
+          )}
+        </span>
+        <span className="system-text text-white/50 shrink-0 select-none">
+          {Math.max(0, Math.ceil(hp))}/{Math.ceil(maxHp)} · {percent}%
+        </span>
       </div>
-      <div className="h-2 bg-white/10 rounded-full overflow-hidden">
-        <div className={clsx('h-full rounded-full transition-all', barColor)} style={{ width: `${ratio * 100}%` }} />
+      <div className="h-3 sm:h-4 rounded bg-ink-950/70 border border-white/10 overflow-hidden relative">
+        <div className={`h-full ${barClassName} transition-all duration-300`} style={{ width: `${percent}%` }} />
       </div>
     </div>
   )
@@ -97,9 +184,9 @@ function HpBar({ label, hp, maxHp, color }: { label: string; hp: number; maxHp: 
 
 function StatPill({ label, value }: { label: string; value: string | number }) {
   return (
-    <div className="bg-ink-900/50 border border-white/10 rounded-md px-2.5 py-2">
-      <div className="text-[9px] system-text text-white/35">{label}</div>
-      <div className="text-sm font-bold text-white/80">{value}</div>
+    <div className="bg-ink-900/50 border border-white/10 rounded-md px-1 py-1.5 sm:px-2.5 sm:py-2 text-center sm:text-left min-w-0">
+      <div className="text-[8px] sm:text-[9px] system-text text-white/35 truncate">{label}</div>
+      <div className="text-xs sm:text-sm font-bold text-white/80 truncate">{value}</div>
     </div>
   )
 }
@@ -171,6 +258,42 @@ export function InfiniteTowerPanel() {
     : undefined
 
   const isTowerManual = manualSession?.source === 'tower'
+  const manualFloor = manualSession?.towerFloor ?? challengeFloor
+  const manualFloorType = getTowerFloorType(manualFloor)
+  const isTowerBoss = manualFloorType === 'boss'
+  const isTowerPlayerLowHp = manualSession ? manualSession.player.hp / manualSession.player.maxHp <= 0.3 : false
+
+  const manualPanelStyleClass = isTowerPlayerLowHp
+    ? 'border-rose-500 bg-rose-950/10 shadow-[inset_0_0_30px_rgba(244,63,94,0.15)] animate-pulse'
+    : isTowerBoss
+      ? 'border-amber-500 bg-amber-950/5 shadow-[inset_0_0_24px_rgba(245,158,11,0.12),0_0_20px_rgba(245,158,11,0.08)]'
+      : 'border-cyan-400/30 bg-cyan-500/5'
+
+  const towerResultRevealSteps = useMemo<RevealStep[]>(() => {
+    if (!manualSession?.result) return []
+    const isWin = manualSession.result === 'victory'
+    return isWin
+      ? [
+          {
+            title: isTowerBoss ? 'BOSS DEFEATED' : 'FLOOR CLEARED',
+            text: isTowerBoss
+              ? `무한의 탑 ${manualFloor}층의 수호자를 처단했습니다!`
+              : `무한의 탑 ${manualFloor}층 공략에 성공했습니다.`,
+            subtext: '다음 층으로 나아갈 자격을 획득했습니다.',
+            durationMs: 1200,
+            tone: isTowerBoss ? 'box' : 'success',
+          }
+        ]
+      : [
+          {
+            title: manualSession.result === 'draw' ? 'LIMIT EXCEEDED' : 'CHALLENGE FAILED',
+            text: manualSession.result === 'draw' ? '제한 행동 횟수를 초과했습니다.' : '탑의 마력에 굴복하고 말았습니다.',
+            subtext: manualSession.result === 'draw' ? '더 효율적인 무공/스킬 세팅이 필요합니다.' : '다시 전열을 가다듬고 도전하십시오.',
+            durationMs: 1200,
+            tone: 'failure',
+          }
+        ]
+  }, [manualSession?.result, manualFloor, isTowerBoss])
 
   // Auto battle: build cinematic logs when revealing
   useEffect(() => {
@@ -210,7 +333,7 @@ export function InfiniteTowerPanel() {
     if (manualSession.logs.length > prev) {
       const next = manualSession.logs
         .slice(prev)
-        .map((turn, idx) => towerTurnToCinematicLog(turn as any, prev + idx))
+        .map((turn, idx) => towerTurnToCinematicLog(turn as any, prev + idx, manualSession))
         .filter((l): l is CinematicLogData => Boolean(l))
       if (next.length > 0) {
         setManualCinematicLogs(next)
@@ -384,6 +507,9 @@ export function InfiniteTowerPanel() {
 
   const manualMonsterDef = isTowerManual && challengeFloor
     ? getTowerMonstersForFloor(challengeFloor)[0]
+    : undefined
+  const monsterIntent = isTowerManual && manualSession && manualMonsterDef
+    ? getMonsterIntent(manualSession, manualMonsterDef, SKILL_DEFINITIONS)
     : undefined
 
   return (
@@ -564,7 +690,7 @@ export function InfiniteTowerPanel() {
 
       {/* Manual battle panel */}
       {isTowerManual && manualSession && (
-        <div className="mb-4">
+        <div className={clsx("mb-4 border rounded-lg p-4 sm:p-5 transition-all duration-500 relative overflow-hidden", manualPanelStyleClass)}>
           {/* Cinematic overlay for manual actions */}
           <div className="relative mb-4">
             <CinematicLogOverlay
@@ -594,12 +720,27 @@ export function InfiniteTowerPanel() {
           <div className="flex items-center justify-between mb-3">
             <div>
               <div className="system-text text-[11px] text-cyan-300/80 mb-0.5">MANUAL TURN BATTLE</div>
-              <div className="text-sm font-bold text-cyan-100">{manualSession.gateName}</div>
+              <div className="text-sm font-bold text-cyan-100 flex items-center gap-2">
+                {manualSession.gateName}
+                {isTowerBoss && <span className="text-[9px] bg-amber-500 text-ink-950 font-black px-1.5 py-0.5 rounded animate-pulse">BOSS</span>}
+              </div>
             </div>
             <div className="text-xs system-text border border-cyan-400/25 bg-cyan-400/10 text-cyan-200 rounded px-2 py-1">
               행동 {manualSession.logs.filter(l => l.skillId !== 'system-manual-battle').length} / {manualSession.maxTurns}
             </div>
           </div>
+
+          {/* WARNING banner for boss/elite */}
+          {manualSession.logs.filter(l => l.skillId !== 'system-manual-battle').length === 0 && !isRevealing && !manualSession.result && isTowerBoss && (
+            <div className="mb-4 rounded border border-amber-500/30 bg-amber-500/10 p-3.5 text-center animate-pulse">
+              <div className="text-[10px] system-text text-amber-400 font-bold tracking-widest">
+                WARNING · TOWER GUARDIAN DETECTED
+              </div>
+              <div className="text-sm font-black text-amber-200 mt-0.5">
+                ⚠️ 무한의 탑 {manualFloor}층 보스 몬스터가 출현했습니다!
+              </div>
+            </div>
+          )}
 
           {/* HP bars */}
           <div className="grid md:grid-cols-2 gap-3 mb-4">
@@ -628,32 +769,26 @@ export function InfiniteTowerPanel() {
             </div>
           </div>
 
+          {monsterIntent && !manualSession.result && (
+            <div className="mb-4">
+              <MonsterIntentPanel intent={monsterIntent} compact />
+            </div>
+          )}
+
           {manualSession.result && !isRevealing && (
-            <div className={clsx(
-              'mb-4 rounded-lg border p-3',
-              manualSession.result === 'victory'
-                ? 'border-emerald-300/25 bg-emerald-400/8'
-                : manualSession.result === 'defeat'
-                  ? 'border-rose-300/25 bg-rose-400/8'
-                  : 'border-amber-300/25 bg-amber-400/8'
-            )}>
-              <div className={clsx(
-                'text-sm font-bold',
-                manualSession.result === 'victory'
-                  ? 'text-emerald-200'
-                  : manualSession.result === 'defeat'
-                    ? 'text-rose-200'
-                    : 'text-amber-200'
-              )}>
-                {manualSession.result === 'victory'
-                  ? '전투 승리'
-                  : manualSession.result === 'defeat'
-                    ? '전투 패배'
-                    : '무승부'}
-              </div>
-              <div className="mt-1 text-xs text-white/55">
-                모든 전투 로그 재생이 끝난 뒤 결과가 공개되었습니다.
-              </div>
+            <div className="mb-4">
+              <DramaticReveal
+                isOpen={true}
+                steps={towerResultRevealSteps}
+                tone={manualSession.result === 'victory' ? (isTowerBoss ? 'box' : 'success') : 'failure'}
+                position="inline"
+                compact
+                result={
+                  <div className="text-xs text-white/55 mt-1 leading-relaxed border-t border-white/10 pt-2 text-center">
+                    도전 정산 대기 중... 아래 '전투 포기' 혹은 창을 닫아 결과를 확인하십시오.
+                  </div>
+                }
+              />
             </div>
           )}
 
@@ -675,40 +810,56 @@ export function InfiniteTowerPanel() {
               <button type="button" disabled={manualBattleLocked} onClick={() => handleManualAction({ type: 'basic_attack' })} className="btn btn-primary text-sm min-h-12 disabled:opacity-50 disabled:cursor-not-allowed">
                 <Swords className="w-4 h-4" /> 기본 공격
               </button>
-              <button type="button" disabled={manualBattleLocked} onClick={() => handleManualAction({ type: 'defend' })} className="btn text-sm min-h-12 border-cyan-400/25 bg-cyan-400/10 text-cyan-100 disabled:opacity-50 disabled:cursor-not-allowed">
-                <Shield className="w-4 h-4" /> 방어 <span className="text-[10px] text-cyan-100/60 ml-1">피해 -40%</span>
+              <button
+                type="button"
+                disabled={manualBattleLocked}
+                onClick={() => handleManualAction({ type: 'defend' })}
+                className={clsx(
+                  "btn text-sm min-h-12 disabled:opacity-50 disabled:cursor-not-allowed relative overflow-hidden transition-all duration-300",
+                  monsterIntent?.tone === 'danger'
+                    ? "border-amber-400 bg-amber-450/20 text-amber-100 shadow-[0_0_15px_rgba(245,158,11,0.3)] animate-pulse"
+                    : "border-cyan-400/25 bg-cyan-400/10 text-cyan-100"
+                )}
+              >
+                {monsterIntent?.tone === 'danger' && (
+                  <span className="absolute top-0.5 left-1 text-[8px] font-black bg-amber-500 text-ink-950 px-1 rounded tracking-tighter">
+                    추천
+                  </span>
+                )}
+                <Shield className="w-4 h-4" />
+                <span>방어</span>
+                <span className={clsx("text-[10px] ml-1", monsterIntent?.tone === 'danger' ? "text-amber-200/80 font-bold" : "text-cyan-100/60")}>
+                  피해 -40%
+                </span>
               </button>
             </div>
+            <div className="flex items-center justify-between gap-3 pt-1">
+              <span className="system-text text-[11px] text-cyan-200/75">COMBAT SKILLS</span>
+              <span className="text-[11px] text-white/45">사용 가능 우선 · 쿨다운/사유 표시</span>
+            </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-              {playerSkills.filter(skill => skill.id !== BASIC_ATTACK_SKILL.id).map(skill => {
+              {sortTowerCombatSkills(
+                playerSkills.filter(skill => skill.id !== BASIC_ATTACK_SKILL.id),
+                manualSession.cooldowns,
+              ).map(skill => {
                 const runtime = getSkillMastery(skillStates, skill.id)
                 const cooldown = manualSession.cooldowns[skill.id] ?? 0
                 const availability = canUseSkill(skill, manualSession)
                 const disabled = !availability.canUse || manualBattleLocked
-                const description = getSkillEffectiveDescription(skill, runtime)
+                const disabledReason = manualBattleLocked
+                  ? (manualSession.result ? '전투 종료' : '연출 중')
+                  : availability.reason
                 return (
-                  <button
+                  <SkillActionCard
                     key={skill.id}
-                    type="button"
-                    onClick={() => handleManualAction({ type: 'skill', skillId: skill.id })}
+                    skill={skill}
+                    runtime={runtime}
+                    cooldownRemaining={cooldown}
                     disabled={disabled}
-                    title={description}
-                    className="min-h-[64px] rounded-md border border-purple-400/25 bg-purple-400/10 px-3 py-2 text-left text-purple-50 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-purple-400/15 transition"
-                  >
-                    <span className="flex items-center justify-between gap-2">
-                      <span className="text-sm font-semibold truncate">{skill.name}</span>
-                      <span className="shrink-0 text-[9px] system-text border border-purple-300/25 rounded px-1.5 py-0.5 text-purple-100/70">
-                        {getSkillSourceLabel(skill)}
-                      </span>
-                    </span>
-                    <span className="mt-0.5 block text-[11px] leading-snug text-white/55 line-clamp-2">{description}</span>
-                    <span className="mt-0.5 flex flex-wrap gap-1.5 text-[10px] system-text text-purple-100/70">
-                      <span>{getSkillTypeLabel(skill)}</span>
-                      <span>CD {cooldown > 0 ? cooldown : getSkillCooldownTurns(skill)}</span>
-                      <span className={cooldown > 0 ? 'text-amber-200' : 'text-emerald-200'}>{availability.reason}</span>
-                      <span>숙련 Lv.{runtime.masteryLevel ?? 0}</span>
-                    </span>
-                  </button>
+                    disabledReason={disabledReason}
+                    tacticalHint={getSkillIntentHint(skill, monsterIntent)}
+                    onClick={() => handleManualAction({ type: 'skill', skillId: skill.id })}
+                  />
                 )
               })}
             </div>
@@ -783,7 +934,7 @@ export function InfiniteTowerPanel() {
           <CombatLogPanel
             title="RECENT BATTLE LOG"
             subtitle="버튼 입력 직후 최신 행동이 위에 고정됩니다."
-            logs={manualSession.logs.map(gateTurnToLogEntry)}
+            logs={manualSession.logs.map((turn, index) => gateTurnToLogEntry(turn, index, manualSession))}
             maxVisible={6}
             latestFirst
             highlightLatest
@@ -855,7 +1006,7 @@ export function InfiniteTowerPanel() {
             <CombatLogPanel
               title="TOWER BATTLE LOG"
               subtitle={`${activeBattle.floor}층 전투 기록`}
-              logs={towerCombatLog.turns.map(gateTurnToLogEntry)}
+              logs={towerCombatLog.turns.map((turn, index) => gateTurnToLogEntry(turn, index))}
               maxVisible={5}
               highlightLatest
               compact

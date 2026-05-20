@@ -43,6 +43,7 @@ import type {
   ShadowSummonTicket,
   ShadowSummonShardType,
   AchievementTicketGrade,
+  SkillDefinition,
   SkillRuntimeState,
   Title,
   InfiniteTowerState,
@@ -127,9 +128,12 @@ import {
 import {
   getSkillCooldownTurns,
   getSkillMastery,
+  getSkillMasteryProgress,
   isHunterCombatSkill,
+  normalizeSkillStates,
   recordSkillRuntimeUse,
 } from './skills'
+import { getMonsterIntent } from './combatIntent'
 import {
   ACHIEVEMENT_SHADOWS_BY_QUEST_ID,
   SHADOW_DEFINITIONS,
@@ -936,6 +940,31 @@ const createManualSystemLog = (
   remainingHp: target.hp,
   message,
 })
+
+const createSkillMasteryLog = (
+  skill: SkillDefinition,
+  before: SkillRuntimeState,
+  after: SkillRuntimeState,
+  turnNumber: number,
+  waveNumber: number,
+  target: BattleActorState
+): BattleTurn => {
+  const progress = getSkillMasteryProgress(after)
+  const beforeLevel = before.masteryLevel ?? 0
+  const afterLevel = after.masteryLevel ?? 0
+  const progressText = progress.isMaxLevel ? 'MAX' : `${progress.currentUses}/${progress.nextLevelUses}`
+  const message = afterLevel > beforeLevel
+    ? `[${skill.name}] 숙련 Lv.${afterLevel} 도달. (${progressText})`
+    : `[${skill.name}] 숙련 +1. (${progressText})`
+  return createManualSystemLog(message, turnNumber, waveNumber, target)
+}
+
+const createMonsterIntentLog = (
+  message: string,
+  turnNumber: number,
+  waveNumber: number,
+  target: BattleActorState
+): BattleTurn => createManualSystemLog(message, turnNumber, waveNumber, target)
 
 const createManualConsumableUseLog = (
   actor: BattleActorState,
@@ -3589,6 +3618,7 @@ export const useGame = create<GameState>()(
           if (!skill || !player.skillIds.includes(skill.id) || (player.cooldowns[skill.id] ?? 0) > 0) return
           playerUsedSkill = skill.id !== BASIC_ATTACK_SKILL.id
           const mastery = playerUsedSkill ? getSkillMastery(nextSkillStates, skill.id) : undefined
+          let afterMastery: SkillRuntimeState | undefined
 
           const resolved = resolveAction({
             actor: player,
@@ -3603,6 +3633,7 @@ export const useGame = create<GameState>()(
           })
           if (playerUsedSkill) {
             nextSkillStates = recordSkillRuntimeUse(nextSkillStates, skill.id)
+            afterMastery = getSkillMastery(nextSkillStates, skill.id)
           }
           player = {
             ...resolved.actor,
@@ -3614,6 +3645,16 @@ export const useGame = create<GameState>()(
           monster = resolved.target
           activeEffects = resolved.activeEffects
           logs.push(resolved.log)
+          if (playerUsedSkill && mastery && afterMastery) {
+            logs.push(createSkillMasteryLog(
+              skill,
+              mastery,
+              afterMastery,
+              logs.length + 1,
+              waveIndex + 1,
+              monster
+            ))
+          }
         }
 
         if (!result && monster.hp > 0) {
@@ -3652,6 +3693,29 @@ export const useGame = create<GameState>()(
           const liveMonsterSkillIds = Array.from(new Set([BASIC_ATTACK_SKILL.id, ...(liveMonsterDef?.skillIds ?? [])]))
           const liveMonsterSkills = SKILL_DEFINITIONS.filter(skill => skill.ownerType === 'monster' && liveMonsterSkillIds.includes(skill.id))
           const liveAllSkills = ensureBasicAttack([...playerSkills, ...liveMonsterSkills])
+          if (liveMonsterDef) {
+            const intent = getMonsterIntent(
+              {
+                ...session,
+                waveIndex,
+                player: toManualCombatant(player),
+                monster: toManualCombatant(monster),
+                remainingMonsterIds,
+                cooldowns: player.cooldowns,
+                monsterCooldowns: monster.cooldowns,
+                activeEffects,
+                logs,
+              },
+              liveMonsterDef,
+              SKILL_DEFINITIONS
+            )
+            logs.push(createMonsterIntentLog(
+              `[${monster.name}] 예고: ${intent.label}. ${intent.responseHint}.`,
+              logs.length + 1,
+              waveIndex + 1,
+              monster
+            ))
+          }
           monster = decrementCooldowns(monster)
           const monsterContext = buildBattleSkillContext(monster, player, activeEffects, logs.length + 1)
           const monsterSkill = chooseSkill(
@@ -5182,6 +5246,7 @@ export const useGame = create<GameState>()(
           if (!skill || !player.skillIds.includes(skill.id) || (player.cooldowns[skill.id] ?? 0) > 0) return
           playerUsedSkill = skill.id !== BASIC_ATTACK_SKILL.id
           const mastery = playerUsedSkill ? getSkillMastery(nextSkillStates, skill.id) : undefined
+          let afterMastery: SkillRuntimeState | undefined
 
           const resolved = resolveAction({
             actor: player,
@@ -5196,6 +5261,7 @@ export const useGame = create<GameState>()(
           })
           if (playerUsedSkill) {
             nextSkillStates = recordSkillRuntimeUse(nextSkillStates, skill.id)
+            afterMastery = getSkillMastery(nextSkillStates, skill.id)
           }
           player = {
             ...resolved.actor,
@@ -5207,6 +5273,16 @@ export const useGame = create<GameState>()(
           monster = resolved.target
           activeEffects = resolved.activeEffects
           logs.push(resolved.log)
+          if (playerUsedSkill && mastery && afterMastery) {
+            logs.push(createSkillMasteryLog(
+              skill,
+              mastery,
+              afterMastery,
+              logs.length + 1,
+              1,
+              monster
+            ))
+          }
         }
 
         if (!result && monster.hp > 0) {
@@ -5240,6 +5316,25 @@ export const useGame = create<GameState>()(
         }
 
         if (!result && getManualActionCount(logs) < session.maxTurns) {
+          const intent = getMonsterIntent(
+            {
+              ...session,
+              player: toManualCombatant(player),
+              monster: toManualCombatant(monster),
+              cooldowns: player.cooldowns,
+              monsterCooldowns: monster.cooldowns,
+              activeEffects,
+              logs,
+            },
+            monsterDef,
+            SKILL_DEFINITIONS
+          )
+          logs.push(createMonsterIntentLog(
+            `[${monster.name}] 예고: ${intent.label}. ${intent.responseHint}.`,
+            logs.length + 1,
+            1,
+            monster
+          ))
           monster = decrementCooldowns(monster)
           const monsterContext = buildBattleSkillContext(monster, player, activeEffects, logs.length + 1)
           const monsterSkill = chooseSkill(
@@ -6285,9 +6380,8 @@ export const useGame = create<GameState>()(
         if (!persistedState.challengeCardHistory) {
           persistedState.challengeCardHistory = {}
         }
-        if (!persistedState.skillStates) {
-          persistedState.skillStates = {}
-        }
+        persistedState.skillStates = normalizeSkillStates(persistedState.skillStates ?? persistedState.skillMastery)
+        delete persistedState.skillMastery
         persistedState.secretProgress = ensureSecretProgress(persistedState.secretProgress, persistedState)
         persistedState.manualBattleSession = undefined
         return persistedState

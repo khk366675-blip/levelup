@@ -1,11 +1,12 @@
 import { useMemo, useState } from 'react'
 import { motion } from 'framer-motion'
-import { Eclipse, Gem, Lock, Shield, Sparkles, Star, Swords, Ticket, X } from 'lucide-react'
+import { Crown, Eclipse, Eye, Gem, Lock, Search, Shield, Sparkles, Star, Swords, Ticket, X } from 'lucide-react'
 import { useGame } from '../lib/store'
 import { ShadowCard as VisualShadowCard } from './shadows/ShadowCard'
 import { ShadowExpeditionPanel } from './shadows/ShadowExpeditionPanel'
 import { ShadowPortrait } from './shadows/ShadowPortrait'
 import { LockedShadowPortrait } from './shadows/LockedShadowPortrait'
+import { ShadowRevealModal, type ShadowRevealPayload } from './shadows/ShadowRevealModal'
 import { DramaticReveal, type RevealStep } from './DramaticReveal'
 import {
   SHADOW_DEFINITIONS,
@@ -27,10 +28,15 @@ import {
   SHADOW_FRAGMENT_SUMMON_COST,
   SHADOW_INNATE_GRADE_LABEL,
 } from '../lib/shadows'
-import type { OwnedShadow, ShadowRole } from '../lib/types'
+import type { OwnedShadow, ShadowInnateGrade, ShadowRarity, ShadowRole } from '../lib/types'
 
-type FilterKey = 'all' | 'normal' | 'gate_named' | 'achievement_named' | ShadowRole
-type SortKey = 'obtained' | 'rarity' | 'rank' | 'name' | 'enhancement' | 'favorite' | 'locked'
+type SourceFilterKey = 'all' | 'normal' | 'gate_named' | 'achievement_named'
+type RoleFilterKey = 'all' | ShadowRole
+type OwnershipFilterKey = 'all' | 'owned' | 'unowned'
+type StatusFilterKey = 'all' | 'equipped' | 'favorite' | 'locked' | 'evolution_ready'
+type RarityFilterKey = 'all' | ShadowRarity
+type GradeFilterKey = 'all' | ShadowInnateGrade
+type SortKey = 'obtained' | 'rarity' | 'rank' | 'name' | 'enhancement' | 'favorite' | 'locked' | 'level' | 'innateGrade' | 'evolution'
 
 const rarityStyle: Record<string, string> = {
   common: 'text-zinc-200 border-zinc-500/35 bg-zinc-500/10',
@@ -40,11 +46,15 @@ const rarityStyle: Record<string, string> = {
   legendary: 'text-amber-200 border-amber-400/55 bg-amber-400/10',
 }
 
-const filters: Array<{ key: FilterKey; label: string }> = [
-  { key: 'all', label: '전체' },
+const sourceFilters: Array<{ key: SourceFilterKey; label: string }> = [
+  { key: 'all', label: '출처 전체' },
   { key: 'normal', label: '일반' },
   { key: 'gate_named', label: '게이트 네임드' },
   { key: 'achievement_named', label: '성취 네임드' },
+]
+
+const roleFilters: Array<{ key: RoleFilterKey; label: string }> = [
+  { key: 'all', label: '역할 전체' },
   { key: 'assault', label: '공격형' },
   { key: 'guard', label: '방어형' },
   { key: 'scout', label: '정찰형' },
@@ -53,6 +63,39 @@ const filters: Array<{ key: FilterKey; label: string }> = [
   { key: 'hunter', label: '사냥형' },
 ]
 
+const ownershipFilters: Array<{ key: OwnershipFilterKey; label: string }> = [
+  { key: 'all', label: '보유 전체' },
+  { key: 'owned', label: '보유' },
+  { key: 'unowned', label: '미보유' },
+]
+
+const statusFilters: Array<{ key: StatusFilterKey; label: string }> = [
+  { key: 'all', label: '상태 전체' },
+  { key: 'equipped', label: '출전' },
+  { key: 'favorite', label: '즐겨찾기' },
+  { key: 'locked', label: '잠금' },
+  { key: 'evolution_ready', label: '진화 가능' },
+]
+
+const rarityFilters: Array<{ key: RarityFilterKey; label: string }> = [
+  { key: 'all', label: '희귀도 전체' },
+  { key: 'common', label: SHADOW_RARITY_LABEL.common },
+  { key: 'uncommon', label: SHADOW_RARITY_LABEL.uncommon },
+  { key: 'rare', label: SHADOW_RARITY_LABEL.rare },
+  { key: 'epic', label: SHADOW_RARITY_LABEL.epic },
+  { key: 'legendary', label: SHADOW_RARITY_LABEL.legendary },
+]
+
+const gradeFilters: Array<{ key: GradeFilterKey; label: string }> = [
+  { key: 'all', label: '태생 전체' },
+  { key: 'S', label: 'S 태생' },
+  { key: 'A', label: 'A 태생' },
+  { key: 'B', label: 'B 태생' },
+  { key: 'C', label: 'C 태생' },
+]
+
+const gradeOrder: ShadowInnateGrade[] = ['C', 'B', 'A', 'S']
+
 const sourceText = (shadow: OwnedShadow): string => {
   const def = getShadowDefinition(shadow.definitionId)
   if (shadow.isAchievementNamed) return def?.unlockConditionText ?? '현실 성취'
@@ -60,19 +103,11 @@ const sourceText = (shadow: OwnedShadow): string => {
   return def?.sourceGateRank ? `${def.sourceGateRank}급 게이트 추출` : '게이트 추출'
 }
 
-const sortShadows = (shadows: OwnedShadow[], sort: SortKey, equippedIds: string[]): OwnedShadow[] => {
+const sortShadows = (shadows: OwnedShadow[], sort: SortKey, equippedIds: string[], shadowEssence = 0): OwnedShadow[] => {
   const rarityScore = (shadow: OwnedShadow) => SHADOW_RARITY_ORDER.indexOf(shadow.rarity)
   const rankScore = (shadow: OwnedShadow) => ['lesser', 'soldier', 'elite', 'knight', 'marshal', 'monarch', 'named'].indexOf(shadow.rank)
+  const gradeScore = (shadow: OwnedShadow) => gradeOrder.indexOf(shadow.innateGrade ?? 'B')
   const equippedSet = new Set(equippedIds)
-  const priority = (s: OwnedShadow): number => {
-    if (sort === 'rarity') return rarityScore(s)
-    if (sort === 'rank') return rankScore(s)
-    if (sort === 'name') return 0
-    if (sort === 'enhancement') return s.enhancementLevel ?? 0
-    if (sort === 'favorite') return (s.isFavorite ? 1 : 0)
-    if (sort === 'locked') return (s.isLocked ? 1 : 0)
-    return 0
-  }
   return [...shadows].sort((a, b) => {
     // explicit sort override
     if (sort === 'rarity') return rarityScore(b) - rarityScore(a)
@@ -81,6 +116,9 @@ const sortShadows = (shadows: OwnedShadow[], sort: SortKey, equippedIds: string[
     if (sort === 'enhancement') return (b.enhancementLevel ?? 0) - (a.enhancementLevel ?? 0)
     if (sort === 'favorite') return Number(b.isFavorite) - Number(a.isFavorite)
     if (sort === 'locked') return Number(b.isLocked) - Number(a.isLocked)
+    if (sort === 'level') return (b.level ?? 1) - (a.level ?? 1)
+    if (sort === 'innateGrade') return gradeScore(b) - gradeScore(a)
+    if (sort === 'evolution') return Number(canEvolveShadow(b, shadowEssence).canEvolve) - Number(canEvolveShadow(a, shadowEssence).canEvolve)
     // default composite: equipped > favorite > locked > rarity > enhancement > obtained
     const aEquip = equippedSet.has(a.instanceId) ? 1 : 0
     const bEquip = equippedSet.has(b.instanceId) ? 1 : 0
@@ -97,6 +135,177 @@ const sortShadows = (shadows: OwnedShadow[], sort: SortKey, equippedIds: string[
     if (aEnh !== 0) return aEnh
     return new Date(b.obtainedAt).getTime() - new Date(a.obtainedAt).getTime()
   })
+}
+
+const shadowSourceKey = (shadow: OwnedShadow): SourceFilterKey => {
+  if (shadow.isGateNamed) return 'gate_named'
+  if (shadow.isAchievementNamed) return 'achievement_named'
+  return 'normal'
+}
+
+const definitionSourceKey = (definition: (typeof SHADOW_DEFINITIONS)[number]): SourceFilterKey => {
+  if (definition.isGateNamed) return 'gate_named'
+  if (definition.isAchievementNamed) return 'achievement_named'
+  return 'normal'
+}
+
+const shadowSearchText = (shadow: OwnedShadow): string => {
+  const def = getShadowDefinition(shadow.definitionId)
+  return [
+    shadow.name,
+    SHADOW_RARITY_LABEL[shadow.rarity],
+    SHADOW_RANK_LABEL[shadow.rank],
+    SHADOW_ROLE_LABEL[shadow.role],
+    SHADOW_INNATE_GRADE_LABEL[shadow.innateGrade ?? 'B'],
+    def?.sourceGateRank,
+    shadow.isGateNamed ? 'gate named 네임드 게이트' : '',
+    shadow.isAchievementNamed ? 'achievement named 성취' : '',
+  ].filter(Boolean).join(' ').toLowerCase()
+}
+
+const definitionSearchText = (definition: (typeof SHADOW_DEFINITIONS)[number], owned: boolean): string => {
+  const hidden = !owned && definition.hiddenUntilObtained
+  if (hidden) {
+    return [
+      '??? unknown locked sealed 봉인 균열 미보유',
+      SHADOW_RARITY_LABEL[definition.rarity],
+      SHADOW_RANK_LABEL[definition.rank],
+      SHADOW_ROLE_LABEL[definition.role],
+      definitionSourceKey(definition),
+    ].join(' ').toLowerCase()
+  }
+  return [
+    definition.name,
+    definition.description,
+    SHADOW_RARITY_LABEL[definition.rarity],
+    SHADOW_RANK_LABEL[definition.rank],
+    SHADOW_ROLE_LABEL[definition.role],
+    definition.unlockConditionText,
+    definition.sourceGateRank,
+    definitionSourceKey(definition),
+  ].filter(Boolean).join(' ').toLowerCase()
+}
+
+const displaySourceLabel = (shadow: OwnedShadow): string => {
+  if (shadow.isAchievementNamed) return '성취 네임드'
+  if (shadow.isGateNamed) return '게이트 네임드'
+  return '일반 그림자'
+}
+
+const shadowPowerScore = (shadow: OwnedShadow): number => {
+  const rarity = SHADOW_RARITY_ORDER.indexOf(shadow.rarity) * 1000
+  const grade = gradeOrder.indexOf(shadow.innateGrade ?? 'B') * 220
+  const level = (shadow.level ?? 1) * 18
+  const enhancement = (shadow.enhancementLevel ?? 0) * 130
+  const named = shadow.isGateNamed || shadow.isAchievementNamed || shadow.isNamed ? 650 : 0
+  return rarity + grade + level + enhancement + named
+}
+
+const findNewShadow = (before: OwnedShadow[], after: OwnedShadow[]): OwnedShadow | undefined => {
+  const beforeIds = new Set(before.map(shadow => shadow.instanceId))
+  return after.find(shadow => !beforeIds.has(shadow.instanceId))
+}
+
+const hasDefinitionBefore = (before: OwnedShadow[], shadow: OwnedShadow): boolean =>
+  before.some(item => item.definitionId === shadow.definitionId)
+
+function ShadowDetailPanel({
+  shadow,
+  equipped,
+  shadowEssence,
+}: {
+  shadow?: OwnedShadow
+  equipped: boolean
+  shadowEssence: number
+}) {
+  if (!shadow) {
+    return (
+      <div className="panel corner-bracket p-5 border-white/10 bg-ink-950/70">
+        <div className="br" />
+        <div className="flex min-h-64 items-center justify-center text-center text-sm text-white/40">
+          그림자를 선택하면 상세 정보가 표시됩니다.
+        </div>
+      </div>
+    )
+  }
+
+  const level = shadow.level ?? 1
+  const maxLevel = getShadowMaxLevel(shadow)
+  const xp = shadow.xp ?? 0
+  const xpNeeded = getShadowXpForNextLevel(level)
+  const xpPct = level >= maxLevel ? 100 : Math.min(100, Math.round((xp / xpNeeded) * 100))
+  const evolutionCheck = canEvolveShadow(shadow, shadowEssence)
+  const evolved = (shadow.evolutionStage ?? 0) > 0
+  const effects = getShadowEffects(shadow).map(formatShadowEffect)
+
+  return (
+    <div className={`panel corner-bracket overflow-hidden p-4 border ${rarityStyle[shadow.rarity]} bg-ink-950/78`}>
+      <div className="br" />
+      <div className="mb-3 flex items-center justify-between gap-3">
+        <div>
+          <div className="system-text text-[10px] text-cyan-200/60">SELECTED SHADOW</div>
+          <h3 className="mt-1 text-lg font-black text-white/95">
+            {shadow.name}
+            {(shadow.enhancementLevel ?? 0) > 0 && <span className="ml-2 text-sm text-amber-200">+{shadow.enhancementLevel}</span>}
+          </h3>
+        </div>
+        <Eye className="h-5 w-5 shrink-0 text-cyan-200/70" />
+      </div>
+
+      <ShadowPortrait shadow={shadow} size="xl" active={equipped} highlighted innateGrade={shadow.innateGrade} evolutionReady={evolutionCheck.canEvolve} />
+
+      <div className="mt-4 grid grid-cols-2 gap-2 text-[11px]">
+        <div className="rounded border border-white/10 bg-ink-900/55 px-3 py-2">
+          <div className="system-text text-[9px] text-white/35">RARITY</div>
+          <div className="font-semibold text-white/85">{SHADOW_RARITY_LABEL[shadow.rarity]}</div>
+        </div>
+        <div className="rounded border border-white/10 bg-ink-900/55 px-3 py-2">
+          <div className="system-text text-[9px] text-white/35">INNATE</div>
+          <div className="font-semibold text-white/85">{SHADOW_INNATE_GRADE_LABEL[shadow.innateGrade ?? 'B']}</div>
+        </div>
+        <div className="rounded border border-white/10 bg-ink-900/55 px-3 py-2">
+          <div className="system-text text-[9px] text-white/35">ROLE</div>
+          <div className="font-semibold text-white/85">{SHADOW_ROLE_LABEL[shadow.role]}</div>
+        </div>
+        <div className="rounded border border-white/10 bg-ink-900/55 px-3 py-2">
+          <div className="system-text text-[9px] text-white/35">RANK</div>
+          <div className="font-semibold text-white/85">{SHADOW_RANK_LABEL[shadow.rank]}</div>
+        </div>
+      </div>
+
+      <div className="mt-3 rounded border border-cyan-400/15 bg-cyan-400/5 px-3 py-2">
+        <div className="mb-1 flex items-center justify-between text-[10px] text-white/55">
+          <span>Lv {level}/{maxLevel}</span>
+          <span className="system-text">{level >= maxLevel ? 'MAX' : `${xp}/${xpNeeded} XP`}</span>
+        </div>
+        <div className="h-2 overflow-hidden rounded-full bg-white/10">
+          <div className="h-full rounded-full bg-gradient-to-r from-cyan-300 via-purple-300 to-emerald-300" style={{ width: `${xpPct}%` }} />
+        </div>
+      </div>
+
+      <div className="mt-3 flex flex-wrap gap-1.5 text-[10px] system-text">
+        <span className={`rounded border px-2 py-1 ${equipped ? 'border-cyan-300/35 bg-cyan-300/10 text-cyan-100' : 'border-white/10 bg-white/5 text-white/45'}`}>{equipped ? '출전 중' : '미출전'}</span>
+        <span className={`rounded border px-2 py-1 ${shadow.isFavorite ? 'border-yellow-300/35 bg-yellow-300/10 text-yellow-100' : 'border-white/10 bg-white/5 text-white/45'}`}>{shadow.isFavorite ? '즐겨찾기' : '일반 표시'}</span>
+        <span className={`rounded border px-2 py-1 ${shadow.isLocked ? 'border-rose-300/35 bg-rose-300/10 text-rose-100' : 'border-white/10 bg-white/5 text-white/45'}`}>{shadow.isLocked ? '잠금' : '잠금 없음'}</span>
+        <span className={`rounded border px-2 py-1 ${evolutionCheck.canEvolve ? 'border-emerald-300/35 bg-emerald-300/10 text-emerald-100' : 'border-white/10 bg-white/5 text-white/45'}`}>{evolutionCheck.canEvolve ? '진화 가능' : '진화 대기'}</span>
+        <span className={`rounded border px-2 py-1 ${evolved ? 'border-emerald-300/35 bg-emerald-300/10 text-emerald-100' : 'border-white/10 bg-white/5 text-white/45'}`}>{evolved ? '진화체' : '기본형'}</span>
+      </div>
+
+      {evolutionCheck.targetDefinition && (
+        <div className="mt-3 rounded border border-emerald-400/20 bg-emerald-400/10 px-3 py-2 text-[11px] text-emerald-100/75">
+          진화: {evolutionCheck.targetDefinition.name} · 정수 {evolutionCheck.cost}
+          {!evolutionCheck.canEvolve && evolutionCheck.reason && <span className="text-white/35"> · {evolutionCheck.reason}</span>}
+        </div>
+      )}
+
+      <div className="mt-3 text-[11px] leading-relaxed text-cyan-100/70">
+        {effects.join(' · ')}
+      </div>
+      <div className="mt-2 text-[10px] text-white/35 system-text">
+        {displaySourceLabel(shadow)} · 강화 {shadow.enhancementLevel ?? 0}/{MAX_SHADOW_ENHANCEMENT_LEVEL} · 흡수 {shadow.absorbedCount ?? 0}회
+      </div>
+    </div>
+  )
 }
 
 function ShadowCard({
@@ -303,10 +512,10 @@ function CodexCard({ definition, owned, ownedCount, maxEnhancement, isEquipped }
           role={definition.role}
           rarity={definition.rarity}
           sourceType={lockedSourceType}
-          size="md"
+          size="lg"
         />
       ) : (
-        <ShadowPortrait definition={definition} size="md" hidden={hidden} highlighted={definition.rank === 'named'} />
+        <ShadowPortrait definition={definition} size="lg" hidden={hidden} highlighted={definition.rank === 'named'} />
       )}
       <div className="flex items-start justify-between gap-3">
         <div>
@@ -349,9 +558,17 @@ export function ShadowPanel() {
   const equippedShadowIds = useGame(s => s.equippedShadowIds ?? [])
   const equipShadow = useGame(s => s.equipShadow)
   const unequipShadow = useGame(s => s.unequipShadow)
-  const [filter, setFilter] = useState<FilterKey>('all')
+  const [sourceFilter, setSourceFilter] = useState<SourceFilterKey>('all')
+  const [roleFilter, setRoleFilter] = useState<RoleFilterKey>('all')
+  const [ownershipFilter, setOwnershipFilter] = useState<OwnershipFilterKey>('all')
+  const [statusFilter, setStatusFilter] = useState<StatusFilterKey>('all')
+  const [rarityFilter, setRarityFilter] = useState<RarityFilterKey>('all')
+  const [gradeFilter, setGradeFilter] = useState<GradeFilterKey>('all')
   const [sort, setSort] = useState<SortKey>('obtained')
   const [view, setView] = useState<'owned' | 'codex'>('owned')
+  const [query, setQuery] = useState('')
+  const [selectedShadowId, setSelectedShadowId] = useState<string | undefined>()
+  const [shadowReveal, setShadowReveal] = useState<ShadowRevealPayload | undefined>()
 
   const slotCount = getShadowSlotCount(hunter)
   const equippedShadows = getEquippedShadows(ownedShadows, equippedShadowIds, hunter)
@@ -374,16 +591,24 @@ export function ShadowPanel() {
     cost: number
   } | undefined>()
 
+  const normalizedQuery = query.trim().toLowerCase()
+
   const filteredOwned = useMemo(() => {
     const list = ownedShadows.filter(shadow => {
-      if (filter === 'all') return true
-      if (filter === 'normal') return !shadow.isGateNamed && !shadow.isAchievementNamed
-      if (filter === 'gate_named') return Boolean(shadow.isGateNamed)
-      if (filter === 'achievement_named') return Boolean(shadow.isAchievementNamed)
-      return shadow.role === filter
+      if (ownershipFilter === 'unowned') return false
+      if (sourceFilter !== 'all' && shadowSourceKey(shadow) !== sourceFilter) return false
+      if (roleFilter !== 'all' && shadow.role !== roleFilter) return false
+      if (rarityFilter !== 'all' && shadow.rarity !== rarityFilter) return false
+      if (gradeFilter !== 'all' && (shadow.innateGrade ?? 'B') !== gradeFilter) return false
+      if (statusFilter === 'equipped' && !equippedShadowIds.includes(shadow.instanceId)) return false
+      if (statusFilter === 'favorite' && !shadow.isFavorite) return false
+      if (statusFilter === 'locked' && !shadow.isLocked) return false
+      if (statusFilter === 'evolution_ready' && !canEvolveShadow(shadow, shadowEssence).canEvolve) return false
+      if (normalizedQuery && !shadowSearchText(shadow).includes(normalizedQuery)) return false
+      return true
     })
-    return sortShadows(list, sort, equippedShadowIds)
-  }, [filter, ownedShadows, sort, equippedShadowIds])
+    return sortShadows(list, sort, equippedShadowIds, shadowEssence)
+  }, [equippedShadowIds, gradeFilter, normalizedQuery, ownedShadows, ownershipFilter, rarityFilter, roleFilter, shadowEssence, sort, sourceFilter, statusFilter])
 
   const availableTickets = shadowSummonTickets.filter(ticket => !ticket.usedAt)
   const fragmentEntries = Object.entries(shadowFragments)
@@ -401,13 +626,111 @@ export function ShadowPanel() {
     { type: 'achievement_named' as const, label: '성취 조각', amount: shadowSummonShards.achievement_named ?? 0, cost: 30, ticketType: 'achievement_named_shadow' as const },
   ]
 
+  const handleTicketSummon = (ticketId: string) => {
+    const before = useGame.getState()
+    const ticket = before.shadowSummonTickets?.find(item => item.id === ticketId)
+    summonShadowFromTicket(ticketId)
+    const after = useGame.getState()
+    const newShadow = findNewShadow(before.ownedShadows ?? [], after.ownedShadows ?? [])
+    if (newShadow) {
+      setSelectedShadowId(newShadow.instanceId)
+      setShadowReveal({
+        shadow: newShadow,
+        source: 'summon',
+        isNew: !hasDefinitionBefore(before.ownedShadows ?? [], newShadow),
+        isDuplicate: hasDefinitionBefore(before.ownedShadows ?? [], newShadow),
+        title: ticket?.ticketType === 'achievement_named_shadow' || ticket?.ticketType === 'category_achievement_named' ? 'ACHIEVEMENT SUMMON' : 'SHADOW SUMMON',
+        message: !hasDefinitionBefore(before.ownedShadows ?? [], newShadow)
+          ? '새 그림자가 군단에 합류했다.'
+          : '익숙한 형상이 군단의 뒤편에 다시 새겨졌다.',
+        detail: '소환권의 문양이 닫히고 그림자의 형상이 완전히 드러났다.',
+      })
+      return
+    }
+    const used = after.shadowSummonTickets?.find(item => item.id === ticketId)?.usedAt
+    if (used) {
+      setShadowReveal({
+        source: 'summon',
+        isDuplicate: true,
+        success: true,
+        ticketLabel: ticket?.label,
+        title: 'MEMORY CONVERSION',
+        message: '이미 각인된 기척이 파편의 기억으로 환원되었다.',
+        detail: '군단의 기록은 흔들렸지만 새로운 정체는 드러나지 않았다.',
+      })
+    }
+  }
+
+  const handleFragmentSummon = (definitionId: string) => {
+    const before = useGame.getState()
+    summonShadowFromFragments(definitionId)
+    const after = useGame.getState()
+    const newShadow = findNewShadow(before.ownedShadows ?? [], after.ownedShadows ?? [])
+    if (!newShadow) return
+    setSelectedShadowId(newShadow.instanceId)
+    setShadowReveal({
+      shadow: newShadow,
+      source: 'shard',
+      isNew: !hasDefinitionBefore(before.ownedShadows ?? [], newShadow),
+      isDuplicate: hasDefinitionBefore(before.ownedShadows ?? [], newShadow),
+      title: 'SHARD RESONANCE',
+      message: '조각이 맞물리며 그림자의 형상이 완성되었다.',
+      detail: '흩어진 흔적들이 하나의 병사로 응답했다.',
+    })
+  }
+
+  const handleShardExchange = (ticketType: (typeof shardEntries)[number]['ticketType']) => {
+    const before = useGame.getState()
+    exchangeShadowSummonShards(ticketType)
+    const after = useGame.getState()
+    const beforeTicketIds = new Set((before.shadowSummonTickets ?? []).map(ticket => ticket.id))
+    const ticket = (after.shadowSummonTickets ?? []).find(item => !beforeTicketIds.has(item.id))
+    if (ticket) {
+      setShadowReveal({
+        source: 'shard',
+        success: true,
+        ticketLabel: ticket.label,
+        title: 'SUMMON TICKET FORGED',
+        message: '조각의 결속이 소환권의 표식으로 완성되었다.',
+        detail: '아직 그림자의 정체는 드러나지 않았다. 표식만 군단 기록에 보관된다.',
+      })
+    }
+  }
+
   const codexDefs = SHADOW_DEFINITIONS.filter(def => {
-    if (filter === 'all') return true
-    if (filter === 'normal') return def.sourceType === 'gate_extract'
-    if (filter === 'gate_named') return def.isGateNamed
-    if (filter === 'achievement_named') return def.isAchievementNamed
-    return def.role === filter
+    const instances = ownedShadows.filter(shadow => shadow.definitionId === def.id)
+    const owned = instances.length > 0
+    if (ownershipFilter === 'owned' && !owned) return false
+    if (ownershipFilter === 'unowned' && owned) return false
+    if (sourceFilter !== 'all' && definitionSourceKey(def) !== sourceFilter) return false
+    if (roleFilter !== 'all' && def.role !== roleFilter) return false
+    if (rarityFilter !== 'all' && def.rarity !== rarityFilter) return false
+    if (gradeFilter !== 'all' && !instances.some(shadow => (shadow.innateGrade ?? 'B') === gradeFilter)) return false
+    if (statusFilter === 'equipped' && !instances.some(shadow => equippedShadowIds.includes(shadow.instanceId))) return false
+    if (statusFilter === 'favorite' && !instances.some(shadow => shadow.isFavorite)) return false
+    if (statusFilter === 'locked' && !instances.some(shadow => shadow.isLocked)) return false
+    if (statusFilter === 'evolution_ready' && !instances.some(shadow => canEvolveShadow(shadow, shadowEssence).canEvolve)) return false
+    if (normalizedQuery && !definitionSearchText(def, owned).includes(normalizedQuery)) return false
+    return true
   })
+  const featuredShadows = useMemo(() => {
+    const picked = new Map<string, OwnedShadow>()
+    const add = (shadow?: OwnedShadow) => {
+      if (shadow) picked.set(shadow.instanceId, shadow)
+    }
+    equippedShadows.forEach(add)
+    sortShadows(ownedShadows.filter(shadow => shadow.isFavorite), 'rarity', equippedShadowIds, shadowEssence).forEach(add)
+    sortShadows(ownedShadows, 'rarity', equippedShadowIds, shadowEssence)
+      .sort((a, b) => shadowPowerScore(b) - shadowPowerScore(a))
+      .forEach(add)
+    return Array.from(picked.values()).slice(0, 4)
+  }, [equippedShadowIds, equippedShadows, ownedShadows, shadowEssence])
+  const selectedShadow = useMemo(() => {
+    return ownedShadows.find(shadow => shadow.instanceId === selectedShadowId)
+      ?? featuredShadows[0]
+      ?? filteredOwned[0]
+      ?? ownedShadows[0]
+  }, [featuredShadows, filteredOwned, ownedShadows, selectedShadowId])
   const legionPower = equippedShadows.reduce((sum, shadow) => {
     const def = getShadowDefinition(shadow.definitionId)
     const levelBonus = 1 + ((shadow.level ?? 1) - 1) * 0.01
@@ -453,6 +776,7 @@ export function ShadowPanel() {
           setPendingEvolution(undefined)
         }}
       />
+      <ShadowRevealModal reveal={shadowReveal} onClose={() => setShadowReveal(undefined)} />
       <div className="panel corner-bracket overflow-hidden p-5 border-purple-400/25 bg-[radial-gradient(circle_at_50%_0%,rgba(124,58,237,0.2),transparent_36%),linear-gradient(135deg,rgba(15,23,42,0.75),rgba(2,6,23,0.94))]">
         <div className="br" />
         <div className="flex items-center justify-between gap-3 mb-4">
@@ -488,6 +812,57 @@ export function ShadowPanel() {
           )}
         </div>
 
+        <div className="mb-5 grid gap-3 xl:grid-cols-[minmax(0,1fr)_340px]">
+          <div className="rounded-lg border border-white/10 bg-ink-950/45 p-3">
+            <div className="mb-3 flex items-center gap-2">
+              <Crown className="h-4 w-4 text-amber-200" />
+              <div className="system-text text-[11px] text-amber-100/75">COMMAND GALLERY</div>
+              <div className="h-px flex-1 bg-gradient-to-r from-amber-300/25 to-transparent" />
+            </div>
+            {featuredShadows.length > 0 ? (
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                {featuredShadows.map((shadow, index) => {
+                  const equipped = equippedShadowIds.includes(shadow.instanceId)
+                  const selected = selectedShadow?.instanceId === shadow.instanceId
+                  return (
+                    <button
+                      key={shadow.instanceId}
+                      type="button"
+                      onClick={() => setSelectedShadowId(shadow.instanceId)}
+                      className={`group relative min-w-0 overflow-hidden rounded-lg border p-2 text-left transition ${
+                        selected
+                          ? 'border-amber-200/65 bg-amber-300/10 shadow-glow-lg'
+                          : 'border-white/10 bg-ink-900/55 hover:border-cyan-200/45 hover:bg-cyan-400/10'
+                      }`}
+                    >
+                      <div className="mb-2 flex items-center justify-between gap-2 text-[9px] system-text text-white/40">
+                        <span>{index === 0 ? 'VANGUARD' : equipped ? 'DEPLOYED' : shadow.isFavorite ? 'FAVORITE' : 'ELITE'}</span>
+                        <span>{SHADOW_RARITY_LABEL[shadow.rarity]}</span>
+                      </div>
+                      <ShadowPortrait shadow={shadow} size="lg" active={equipped} highlighted={Boolean(shadow.isNamed || shadow.isGateNamed || shadow.isAchievementNamed)} innateGrade={shadow.innateGrade} evolutionReady={canEvolveShadow(shadow, shadowEssence).canEvolve} />
+                      <div className="mt-2 truncate text-sm font-bold text-white/90">{shadow.name}</div>
+                      <div className="mt-1 flex flex-wrap gap-1 text-[9px] system-text text-white/45">
+                        <span>Lv {shadow.level ?? 1}</span>
+                        <span>{SHADOW_ROLE_LABEL[shadow.role]}</span>
+                        {(shadow.enhancementLevel ?? 0) > 0 && <span className="text-amber-200">+{shadow.enhancementLevel}</span>}
+                      </div>
+                    </button>
+                  )
+                })}
+              </div>
+            ) : (
+              <div className="rounded-md border border-white/10 bg-ink-900/40 p-5 text-center text-xs text-white/40">
+                군단에 합류한 그림자가 아직 없습니다.
+              </div>
+            )}
+          </div>
+          <ShadowDetailPanel
+            shadow={selectedShadow}
+            equipped={selectedShadow ? equippedShadowIds.includes(selectedShadow.instanceId) : false}
+            shadowEssence={shadowEssence}
+          />
+        </div>
+
         <div className="mb-3 flex items-center gap-3">
           <div className="system-text text-[11px] text-purple-200/80">DEPLOYED LEGION</div>
           <div className="h-px flex-1 bg-gradient-to-r from-purple-300/30 to-transparent" />
@@ -501,6 +876,15 @@ export function ShadowPanel() {
             return (
               <div
                 key={index}
+                role={shadow ? 'button' : undefined}
+                tabIndex={shadow ? 0 : undefined}
+                onClick={() => shadow && setSelectedShadowId(shadow.instanceId)}
+                onKeyDown={(event) => {
+                  if (shadow && (event.key === 'Enter' || event.key === ' ')) {
+                    event.preventDefault()
+                    setSelectedShadowId(shadow.instanceId)
+                  }
+                }}
                 className={[
                   'relative overflow-hidden rounded-lg border p-3 min-h-56 transition-all',
                   shadow
@@ -512,6 +896,8 @@ export function ShadowPanel() {
                           ? 'border-purple-400/28 bg-purple-400/5 rarity-frame-epic'
                           : 'border-cyan-400/22 bg-cyan-400/5 shadow-glow'
                     : 'border-white/8 bg-ink-950/60',
+                  shadow ? 'cursor-pointer hover:border-cyan-200/55' : '',
+                  selectedShadow?.instanceId === shadow?.instanceId ? 'ring-2 ring-amber-200/60' : '',
                 ].join(' ')}
               >
                 {shadow && (
@@ -537,7 +923,7 @@ export function ShadowPanel() {
                         </div>
                       )}
                     </div>
-                    <button type="button" onClick={() => unequipShadow(shadow.instanceId)} className="mt-1 w-full text-[10px] text-rose-200/70 border border-rose-400/20 rounded px-2 py-1 hover:bg-rose-400/10 transition-colors">
+                    <button type="button" onClick={(event) => { event.stopPropagation(); unequipShadow(shadow.instanceId) }} className="mt-1 w-full text-[10px] text-rose-200/70 border border-rose-400/20 rounded px-2 py-1 hover:bg-rose-400/10 transition-colors">
                       해제
                     </button>
                   </div>
@@ -572,7 +958,7 @@ export function ShadowPanel() {
                   <button
                     key={ticket.id}
                     type="button"
-                    onClick={() => summonShadowFromTicket(ticket.id)}
+                    onClick={() => handleTicketSummon(ticket.id)}
                     className="flex min-h-16 items-center gap-3 rounded-md border border-cyan-300/20 bg-ink-900/55 px-3 py-2 text-left transition hover:border-cyan-300/45 hover:bg-cyan-400/10"
                   >
                     <Ticket className="h-5 w-5 shrink-0 text-cyan-200" />
@@ -596,7 +982,7 @@ export function ShadowPanel() {
               <button
                 key={entry.type}
                 type="button"
-                onClick={() => exchangeShadowSummonShards(entry.ticketType)}
+                onClick={() => handleShardExchange(entry.ticketType)}
                 disabled={entry.amount < entry.cost}
                 className={`flex min-h-16 items-center gap-3 rounded-md border px-3 py-2 text-left transition disabled:cursor-not-allowed disabled:opacity-45 ${
                   entry.amount >= entry.cost
@@ -621,7 +1007,7 @@ export function ShadowPanel() {
                 <button
                   key={entry.definitionId}
                   type="button"
-                  onClick={() => summonShadowFromFragments(entry.definitionId)}
+                  onClick={() => handleFragmentSummon(entry.definitionId)}
                   disabled={!entry.ready}
                   className={`flex min-h-16 items-center gap-3 rounded-md border px-3 py-2 text-left transition disabled:cursor-not-allowed disabled:opacity-45 ${
                     entry.ready
@@ -645,25 +1031,67 @@ export function ShadowPanel() {
 
       <ShadowExpeditionPanel />
 
-      <div className="flex flex-wrap items-center gap-2">
-        <button type="button" onClick={() => setView('owned')} className={`px-3 py-2 rounded-md text-xs border ${view === 'owned' ? 'border-cyan-400/50 bg-cyan-400/15 text-cyan-100' : 'border-white/10 bg-ink-900/45 text-white/50'}`}>보유</button>
-        <button type="button" onClick={() => setView('codex')} className={`px-3 py-2 rounded-md text-xs border ${view === 'codex' ? 'border-cyan-400/50 bg-cyan-400/15 text-cyan-100' : 'border-white/10 bg-ink-900/45 text-white/50'}`}>도감</button>
-        <select value={filter} onChange={event => setFilter(event.target.value as FilterKey)} className="bg-ink-900/80 border border-white/10 rounded-md px-3 py-2 text-xs text-white/70">
-          {filters.map(item => <option key={item.key} value={item.key}>{item.label}</option>)}
-        </select>
-        <select value={sort} onChange={event => setSort(event.target.value as SortKey)} className="bg-ink-900/80 border border-white/10 rounded-md px-3 py-2 text-xs text-white/70">
-          <option value="obtained">기본순 (출전·즐겨찾기·잠금)</option>
-          <option value="rarity">희귀도순</option>
-          <option value="rank">계급순</option>
-          <option value="name">이름순</option>
-          <option value="enhancement">강화순</option>
-          <option value="favorite">즐겨찾기순</option>
-          <option value="locked">잠금순</option>
-        </select>
+      <div className="panel corner-bracket p-3 border-white/10 bg-ink-950/60">
+        <div className="br" />
+        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-[auto_auto_minmax(180px,1fr)]">
+          <div className="grid grid-cols-2 gap-2">
+            <button type="button" onClick={() => setView('owned')} className={`min-h-10 rounded-md border px-3 py-2 text-xs ${view === 'owned' ? 'border-cyan-400/50 bg-cyan-400/15 text-cyan-100' : 'border-white/10 bg-ink-900/45 text-white/50'}`}>보유</button>
+            <button type="button" onClick={() => setView('codex')} className={`min-h-10 rounded-md border px-3 py-2 text-xs ${view === 'codex' ? 'border-cyan-400/50 bg-cyan-400/15 text-cyan-100' : 'border-white/10 bg-ink-900/45 text-white/50'}`}>도감</button>
+          </div>
+          <select
+            value={ownershipFilter}
+            onChange={event => {
+              const next = event.target.value as OwnershipFilterKey
+              setOwnershipFilter(next)
+              if (next === 'unowned') setView('codex')
+            }}
+            className="min-h-10 w-full min-w-0 rounded-md border border-white/10 bg-ink-900/80 px-3 py-2 text-xs text-white/70"
+          >
+            {ownershipFilters.map(item => <option key={item.key} value={item.key}>{item.label}</option>)}
+          </select>
+          <label className="relative block min-w-0">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-white/35" />
+            <input
+              value={query}
+              onChange={event => setQuery(event.target.value)}
+              placeholder="그림자 검색"
+              className="min-h-10 w-full rounded-md border border-white/10 bg-ink-900/80 py-2 pl-9 pr-3 text-xs text-white/75 outline-none placeholder:text-white/30 focus:border-cyan-300/45"
+            />
+          </label>
+        </div>
+        <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-7">
+          <select value={sourceFilter} onChange={event => setSourceFilter(event.target.value as SourceFilterKey)} className="min-h-10 min-w-0 rounded-md border border-white/10 bg-ink-900/80 px-2 py-2 text-xs text-white/70">
+            {sourceFilters.map(item => <option key={item.key} value={item.key}>{item.label}</option>)}
+          </select>
+          <select value={roleFilter} onChange={event => setRoleFilter(event.target.value as RoleFilterKey)} className="min-h-10 min-w-0 rounded-md border border-white/10 bg-ink-900/80 px-2 py-2 text-xs text-white/70">
+            {roleFilters.map(item => <option key={item.key} value={item.key}>{item.label}</option>)}
+          </select>
+          <select value={statusFilter} onChange={event => setStatusFilter(event.target.value as StatusFilterKey)} className="min-h-10 min-w-0 rounded-md border border-white/10 bg-ink-900/80 px-2 py-2 text-xs text-white/70">
+            {statusFilters.map(item => <option key={item.key} value={item.key}>{item.label}</option>)}
+          </select>
+          <select value={rarityFilter} onChange={event => setRarityFilter(event.target.value as RarityFilterKey)} className="min-h-10 min-w-0 rounded-md border border-white/10 bg-ink-900/80 px-2 py-2 text-xs text-white/70">
+            {rarityFilters.map(item => <option key={item.key} value={item.key}>{item.label}</option>)}
+          </select>
+          <select value={gradeFilter} onChange={event => setGradeFilter(event.target.value as GradeFilterKey)} className="min-h-10 min-w-0 rounded-md border border-white/10 bg-ink-900/80 px-2 py-2 text-xs text-white/70">
+            {gradeFilters.map(item => <option key={item.key} value={item.key}>{item.label}</option>)}
+          </select>
+          <select value={sort} onChange={event => setSort(event.target.value as SortKey)} className="min-h-10 min-w-0 rounded-md border border-white/10 bg-ink-900/80 px-2 py-2 text-xs text-white/70 sm:col-span-2 xl:col-span-2">
+            <option value="obtained">기본순 (출전·즐겨찾기·잠금)</option>
+            <option value="rarity">희귀도순</option>
+            <option value="innateGrade">태생 등급순</option>
+            <option value="level">레벨순</option>
+            <option value="enhancement">강화순</option>
+            <option value="evolution">진화 가능순</option>
+            <option value="rank">계급순</option>
+            <option value="name">이름순</option>
+            <option value="favorite">즐겨찾기순</option>
+            <option value="locked">잠금순</option>
+          </select>
+        </div>
       </div>
 
       {view === 'owned' ? (
-        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-3">
+        <div className="grid gap-3 sm:grid-cols-2 2xl:grid-cols-3">
           {filteredOwned.map(shadow => {
             const equipped = equippedShadowIds.includes(shadow.instanceId)
             return (
@@ -671,6 +1099,8 @@ export function ShadowPanel() {
                 key={shadow.instanceId}
                 shadow={shadow}
                 equipped={equipped}
+                selected={selectedShadow?.instanceId === shadow.instanceId}
+                onSelect={() => setSelectedShadowId(shadow.instanceId)}
                 canEquip={equipped || equippedShadowIds.length < slotCount}
                 onEquip={() => equipShadow(shadow.instanceId)}
                 onUnequip={() => unequipShadow(shadow.instanceId)}
@@ -711,9 +1141,9 @@ export function ShadowPanel() {
             )
           })}
           {filteredOwned.length === 0 && (
-            <div className="panel corner-bracket p-10 text-center text-sm text-white/45 md:col-span-2 lg:col-span-3">
+            <div className="panel corner-bracket p-10 text-center text-sm text-white/45 sm:col-span-2 2xl:col-span-3">
               <div className="br" />
-              아직 보유한 그림자가 없습니다.
+              조건에 맞는 보유 그림자가 없습니다.
             </div>
           )}
         </div>

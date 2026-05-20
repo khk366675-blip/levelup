@@ -30,6 +30,7 @@ import {
   getTodayDailyCompletedCount,
 } from '../../lib/shadowExpeditions'
 import { SHADOW_INNATE_GRADE_LABEL, SHADOW_ROLE_LABEL, getShadowDefinition } from '../../lib/shadows'
+import { getSecretVisibleFragments } from '../../lib/secrets'
 import type { OwnedShadow, ShadowExpeditionCommand, ShadowExpeditionLog, ShadowExpeditionOutcome, ShadowExpeditionType, ShadowRole } from '../../lib/types'
 import { ShadowExpeditionBattlefield } from './ShadowExpeditionBattlefield'
 import { ShadowPortrait } from './ShadowPortrait'
@@ -371,6 +372,7 @@ function MiniShadow({
         size="xs"
         active={active}
         highlighted={selected || active || commandMatch || Boolean(shadow.isNamed)}
+        innateGrade={shadow.innateGrade}
       />
       <div className="mt-1 truncate text-[11px] font-semibold text-white/85">{shadow.name}</div>
       <div className="text-[9px] system-text text-white/45">
@@ -392,6 +394,43 @@ function MiniShadow({
   )
 }
 
+function ShadowMiniChip({
+  shadow,
+  active,
+  compact = false,
+}: {
+  shadow: OwnedShadow
+  active?: boolean
+  compact?: boolean
+}) {
+  const definition = getShadowDefinition(shadow.definitionId)
+  const isNamed = Boolean(shadow.isNamed || shadow.isGateNamed || shadow.isAchievementNamed)
+  return (
+    <div className={clsx(
+      'inline-flex min-w-0 items-center gap-2 rounded-md border bg-ink-950/55',
+      compact ? 'px-1.5 py-1' : 'px-2 py-1.5',
+      active ? 'border-amber-300/35 shadow-[0_0_18px_rgba(251,191,36,0.14)]' : isNamed ? 'border-amber-300/25' : 'border-white/10',
+    )}>
+      <div className={compact ? 'h-8 w-8 shrink-0' : 'h-10 w-10 shrink-0'}>
+        <ShadowPortrait
+          shadow={shadow}
+          definition={definition}
+          size="xs"
+          active={active}
+          highlighted={active || isNamed || shadow.innateGrade === 'S' || shadow.innateGrade === 'A'}
+          innateGrade={shadow.innateGrade}
+        />
+      </div>
+      <div className="min-w-0">
+        <div className={clsx('truncate font-semibold text-white/80', compact ? 'text-[10px]' : 'text-xs')}>{shadow.name}</div>
+        <div className="system-text text-[8px] text-white/42">
+          {SHADOW_ROLE_LABEL[shadow.role]} · {SHADOW_INNATE_GRADE_LABEL[shadow.innateGrade ?? 'B']}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export function ShadowExpeditionPanel() {
   const ownedShadows = useGame(s => s.ownedShadows ?? [])
   const shadowExpeditions = useGame(s => s.shadowExpeditions ?? [])
@@ -401,6 +440,8 @@ export function ShadowExpeditionPanel() {
   const issueCommand = useGame(s => s.issueShadowExpeditionCommand)
   const abandonExpedition = useGame(s => s.abandonShadowExpedition)
   const resolveMidEvent = useGame(s => s.resolveShadowExpeditionMidEvent)
+  const visibleTraces = useGame(s => getSecretVisibleFragments(s.secretProgress))
+  const traceCount = visibleTraces.length
   const [expanded, setExpanded] = useState(true)
   const [expeditionCinematicLogs, setExpeditionCinematicLogs] = useState<CinematicLogData[]>([])
   const [expeditionSkipSignal, setExpeditionSkipSignal] = useState(0)
@@ -471,7 +512,11 @@ export function ShadowExpeditionPanel() {
           ? 'command'
           : log.type === 'shadow'
             ? 'shadow'
-            : 'system'
+            : log.type === 'phase'
+              ? 'result'
+              : log.type === 'event'
+                ? 'defense'
+                : 'system'
 
     return {
       id: log.id,
@@ -480,11 +525,22 @@ export function ShadowExpeditionPanel() {
       label: log.command ? SHADOW_EXPEDITION_COMMAND_LABEL[log.command] : log.type.toUpperCase(),
       actorName: actor?.name,
       actorNode: actor ? (
-        <div className="w-12">
-          <ShadowPortrait shadow={actor} definition={definition} size="xs" active={log.id === activeLog?.id} highlighted />
+        <div className="w-14">
+          <ShadowPortrait
+            shadow={actor}
+            definition={definition}
+            size="xs"
+            active={log.id === activeLog?.id}
+            highlighted
+            innateGrade={actor.innateGrade}
+          />
+          <div className="mt-1 truncate text-center text-[8px] system-text text-white/40">
+            {SHADOW_ROLE_LABEL[actor.role]}
+          </div>
         </div>
       ) : undefined,
       icon: <Icon className="h-3 w-3" />,
+      meta: log.phase ? getPhaseDisplayName(log.phase, expedition.type) : log.command ? 'actor linked' : undefined,
       message: log.message,
     }
   })
@@ -559,6 +615,12 @@ export function ShadowExpeditionPanel() {
             {inProgress && expedition.currentPhase && expedition.currentPhase !== 'muster' && (
               <span className="rounded border border-teal-300/25 bg-teal-400/10 px-2 py-0.5 text-[10px] system-text text-teal-100">
                 {getPhaseDisplayName(expedition.currentPhase, expedition.type)}
+              </span>
+            )}
+            {traceCount > 0 && (
+              <span className="rounded border border-violet-200/15 bg-black/15 px-2 py-0.5 text-[10px] system-text text-violet-100/55">
+                <span className="text-violet-200/70">ARCHIVE TRACE</span>
+                <span className="ml-1 text-white/45">x{traceCount}</span>
               </span>
             )}
           </div>
@@ -855,8 +917,11 @@ function MidEventCard({
       <p className="mb-3 text-sm leading-relaxed text-white/60">{event.description}</p>
       <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
         {event.choices.map(choice => {
+          const matchingShadows = choice.preferredRoles
+            ? selectedShadows.filter(s => choice.preferredRoles!.includes(s.role))
+            : []
           const roleMatch = choice.preferredRoles
-            ? selectedShadows.some(s => choice.preferredRoles!.includes(s.role))
+            ? matchingShadows.length > 0
             : false
           return (
             <button
@@ -876,6 +941,18 @@ function MidEventCard({
               )}
               <div className="font-semibold">{choice.label}</div>
               <div className="mt-0.5 text-[10px] opacity-70 leading-snug">{choice.description}</div>
+              {matchingShadows.length > 0 && (
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  {matchingShadows.slice(0, 2).map(shadow => (
+                    <ShadowMiniChip key={shadow.instanceId} shadow={shadow} compact />
+                  ))}
+                  {matchingShadows.length > 2 && (
+                    <span className="inline-flex items-center rounded border border-emerald-300/20 bg-emerald-400/10 px-1.5 text-[9px] system-text text-emerald-100">
+                      +{matchingShadows.length - 2}
+                    </span>
+                  )}
+                </div>
+              )}
               <div className="mt-1.5 flex flex-wrap gap-1">
                 {typeof choice.progressDelta === 'number' && (
                   <span className={clsx('rounded border px-1.5 py-0.5 text-[9px] system-text', choice.progressDelta >= 0 ? 'border-emerald-300/25 bg-emerald-400/10 text-emerald-100' : 'border-rose-300/25 bg-rose-400/10 text-rose-100')}>
@@ -937,6 +1014,13 @@ function ReportPanel({
         </div>
       </div>
 
+      {featuredShadow && (
+        <div className="mt-3 rounded-md border border-amber-300/20 bg-amber-300/10 p-2">
+          <div className="mb-1 system-text text-[9px] text-amber-100/55">FEATURED SHADOW</div>
+          <ShadowMiniChip shadow={featuredShadow} active compact={compact} />
+        </div>
+      )}
+
       {/* Rewards */}
       <div className="mt-3 grid grid-cols-2 gap-2">
         <div className="rounded-md border border-cyan-300/20 bg-cyan-400/10 p-2">
@@ -986,8 +1070,10 @@ function ReportPanel({
                 size="xs"
                 active={featuredShadow?.instanceId === shadow.instanceId || activeShadowId === shadow.instanceId}
                 highlighted
+                innateGrade={shadow.innateGrade}
               />
               <div className="mt-1 truncate text-[10px] text-white/60">{shadow.name}</div>
+              <div className="system-text text-[8px] text-white/35">{SHADOW_ROLE_LABEL[shadow.role]}</div>
             </div>
           ))}
         </div>

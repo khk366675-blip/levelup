@@ -25,6 +25,8 @@ type ShadowCardProps = {
   materialCount: number
   shadowEssence: number
   featured?: boolean
+  selected?: boolean
+  onSelect?: () => void
   onEquip: () => void
   onUnequip: () => void
   onAbsorb: () => void
@@ -70,6 +72,8 @@ export function ShadowCard({
   materialCount,
   shadowEssence,
   featured = false,
+  selected = false,
+  onSelect,
   onEquip,
   onUnequip,
   onAbsorb,
@@ -95,16 +99,19 @@ export function ShadowCard({
         'panel corner-bracket overflow-hidden border p-3',
         rarityFrame[shadow.rarity],
         equipped && 'ring-2 ring-cyan-300/35 shadow-glow',
+        selected && 'ring-2 ring-amber-200/70 shadow-glow-lg',
         named && shadow.isAchievementNamed ? 'ring-1 ring-cyan-200/40' : named ? 'named-pulse' : '',
         evolutionCheck.canEvolve && 'ring-1 ring-emerald-300/35',
+        onSelect && 'cursor-pointer transition hover:border-cyan-200/55 hover:bg-white/[0.03]',
         featured ? 'sm:p-4' : 'sm:p-3',
       )}
+      onClick={onSelect}
     >
       <div className="br" />
       <div className={clsx('grid gap-3', featured ? 'md:grid-cols-[190px_1fr]' : 'grid-cols-1')}>
         <ShadowPortrait
           shadow={shadow}
-          size={featured ? 'xl' : 'md'}
+          size={featured ? 'xl' : 'lg'}
           active={equipped}
           highlighted={named}
           evolutionReady={evolutionCheck.canEvolve}
@@ -209,19 +216,19 @@ export function ShadowCard({
 
       <div className="mt-3 flex flex-col gap-2">
         {equipped ? (
-          <button type="button" onClick={onUnequip} className="btn w-full border-rose-400/25 bg-rose-400/10 text-xs text-rose-100">
+          <button type="button" onClick={(event) => { event.stopPropagation(); onUnequip() }} className="btn w-full border-rose-400/25 bg-rose-400/10 text-xs text-rose-100">
             <X className="h-3 w-3" />
             Undeploy
           </button>
         ) : (
-          <button type="button" onClick={onEquip} disabled={!canEquip} className="btn btn-primary w-full text-xs disabled:cursor-not-allowed disabled:opacity-50">
+          <button type="button" onClick={(event) => { event.stopPropagation(); onEquip() }} disabled={!canEquip} className="btn btn-primary w-full text-xs disabled:cursor-not-allowed disabled:opacity-50">
             Deploy
           </button>
         )}
         <div className="grid grid-cols-2 gap-2">
           <button
             type="button"
-            onClick={onAbsorb}
+            onClick={(event) => { event.stopPropagation(); onAbsorb() }}
             disabled={materialCount === 0 || enhancement >= MAX_SHADOW_ENHANCEMENT_LEVEL || shadow.isAchievementNamed}
             className="btn border-amber-400/25 bg-amber-400/10 px-2 text-[10px] text-amber-100 disabled:cursor-not-allowed disabled:opacity-40"
             title={shadow.isAchievementNamed ? 'Achievement named shadows cannot be absorbed.' : materialCount === 0 ? 'No material shadows.' : enhancement >= MAX_SHADOW_ENHANCEMENT_LEVEL ? 'Max enhancement.' : `Materials: ${materialCount}`}
@@ -230,7 +237,7 @@ export function ShadowCard({
           </button>
           <button
             type="button"
-            onClick={onDecompose}
+            onClick={(event) => { event.stopPropagation(); onDecompose() }}
             disabled={equipped || shadow.isAchievementNamed || shadow.isLocked}
             className="btn border-rose-400/25 bg-rose-400/10 px-2 text-[10px] text-rose-100 disabled:cursor-not-allowed disabled:opacity-40"
             title={shadow.isAchievementNamed ? 'Achievement named shadows cannot be decomposed.' : shadow.isLocked ? 'Locked.' : equipped ? 'Deployed.' : `Essence +${SHADOW_DECOMPOSE_ESSENCE[shadow.rarity] ?? 1}`}
@@ -241,7 +248,7 @@ export function ShadowCard({
         <div className="grid grid-cols-2 gap-2">
           <button
             type="button"
-            onClick={onToggleLock}
+            onClick={(event) => { event.stopPropagation(); onToggleLock() }}
             className={clsx('btn px-2 text-[10px]', shadow.isLocked ? 'border-rose-400/35 bg-rose-400/15 text-rose-100' : 'border-white/10 bg-ink-900/45 text-white/55')}
             title={shadow.isLocked ? 'Unlock' : 'Lock'}
           >
@@ -250,7 +257,7 @@ export function ShadowCard({
           </button>
           <button
             type="button"
-            onClick={onToggleFavorite}
+            onClick={(event) => { event.stopPropagation(); onToggleFavorite() }}
             className={clsx('btn px-2 text-[10px]', shadow.isFavorite ? 'border-yellow-400/35 bg-yellow-400/15 text-yellow-100' : 'border-white/10 bg-ink-900/45 text-white/55')}
             title={shadow.isFavorite ? 'Unfavorite' : 'Favorite'}
           >
@@ -261,7 +268,7 @@ export function ShadowCard({
         {evolutionCheck.targetDefinition && (
           <button
             type="button"
-            onClick={onEvolve}
+            onClick={(event) => { event.stopPropagation(); onEvolve() }}
             disabled={!evolutionCheck.canEvolve}
             className={clsx(
               'btn w-full text-[10px] disabled:cursor-not-allowed disabled:opacity-40',

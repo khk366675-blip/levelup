@@ -8276,3 +8276,227 @@ Batch 06~11 (55개) PNG 파일을 앱에 연결. 기존 Batch 01~05 (47개) 방�
 - gameplay/reward/stat/공식 변경 없음.
 - 저장 데이터 초기화 없음.
 - ShadowPortrait.tsx 구조 변경 없음 (object-contain + scale + drop-shadow 유지).
+
+---
+
+## 12-25A — 일일 박스/카드 실사용 루프 마감
+
+### 목표
+일일 박스 및 카드 기능의 실사용 루프 마감 및 UI/UX 개선.
+
+### 변경 파일
+- [RewardBoxPanel.tsx](file:///c:/Users/khdkf/levelup/src/components/RewardBoxPanel.tsx)
+- [ChallengeCardsPanel.tsx](file:///c:/Users/khdkf/levelup/src/components/ChallengeCardsPanel.tsx)
+
+### 변경 내용
+- **요약 기능 추가**: TODAY LOOP 및 TODAY CARDS 요약 추가.
+- **보급 상자 구분**: daily/weekly/boss 박스를 각각 오늘의 보급, 주간 보급, 보스 보급으로 구분.
+- **사용자 경험 개선**: 박스 preview 힌트 제공, 최근 오픈 보상 라벨 노출, 카드 진행/완료/보상 상태 표시 개선.
+- **제약 조건**: 보상 확률, 보상량, 공식 변경 없음. levelup-save 스토리지 키 및 persist version 변경 없음.
+
+### 검증 결과
+- `npx tsc --noEmit` 통과
+- `npm run build` 통과
+- 모바일 390px 화면에서 레이아웃 overflow 없음
+- Console 에러 없음
+
+---
+
+## 12-25B — 스킬 시스템 고도화 1차
+
+### 목표
+보유한 스킬 목록과 상세 내역을 효과적으로 보여주고, 전투 시 통합된 스킬 UI를 사용할 수 있도록 고도화.
+
+### 변경 파일
+- [SkillActionCard.tsx](file:///c:/Users/khdkf/levelup/src/components/SkillActionCard.tsx)
+- [SkillPanel.tsx](file:///c:/Users/khdkf/levelup/src/components/SkillPanel.tsx)
+- [GatePanel.tsx](file:///c:/Users/khdkf/levelup/src/components/GatePanel.tsx)
+- [InfiniteTowerPanel.tsx](file:///c:/Users/khdkf/levelup/src/components/InfiniteTowerPanel.tsx)
+
+### 변경 내용
+- **공용 컴포넌트 추가**: 공용으로 활용 가능한 [SkillActionCard.tsx](file:///c:/Users/khdkf/levelup/src/components/SkillActionCard.tsx) 구현.
+- **구조 개편**: SkillPanel을 보유 스킬 목록 및 상세 정보를 직관적으로 조회할 수 있는 상세 패널 구조로 정리.
+- **메타데이터 표시**: 스킬 출처(BASIC / JOB / EQUIPMENT / TITLE / SPECIAL) 및 스킬 타입(ATTACK / DEFENSE / BUFF / HEAL / UTILITY)을 시각적으로 구분하여 표시.
+- **상태 및 사유**: 스킬의 쿨다운 상태, 사용 가능 여부와 사용 불가 시 그 사유를 명확히 표시.
+- **UI 통합**: 게이트 수동 전투 및 무한의 탑 수동 전투에 사용되는 스킬 UI를 하나로 통합.
+- **제약 조건**: 스킬 수치, 쿨다운, 전투 공식 변경 없음.
+
+### 검증 결과
+- `npx tsc --noEmit` 통과
+- `npm run build` 통과
+- 모바일 390px 화면에서 레이아웃 overflow 없음
+- Console 에러 없음
+
+---
+
+## 12-25C — 스킬 숙련도/마스터리 구조 1차
+
+### 목표
+스킬의 개별 사용 횟수와 숙련도 경험치 및 레벨을 안전하게 저장하고 정규화할 수 있는 마스터리 구조 구축.
+
+### 변경 파일
+- [skills.ts](file:///c:/Users/khdkf/levelup/src/lib/skills.ts)
+- [types.ts](file:///c:/Users/khdkf/levelup/src/lib/types.ts)
+- [store.ts](file:///c:/Users/khdkf/levelup/src/lib/store.ts)
+- [SkillActionCard.tsx](file:///c:/Users/khdkf/levelup/src/components/SkillActionCard.tsx)
+- [SkillPanel.tsx](file:///c:/Users/khdkf/levelup/src/components/SkillPanel.tsx)
+
+### 변경 내용
+- **스킬 상태 구조 정리**: 스킬의 실시간 상태를 표현하는 `skillStates: Record<skillId, SkillRuntimeState>` 구조 확립.
+- **저장 필드 정의**: skillId, timesUsed, masteryXp, masteryLevel, lastUsedAt 필드 포함.
+- **정규화 및 폴백**: `normalizeSkillRuntimeState` / `normalizeSkillStates` 폴백 처리 추가. 레거시 uses / xp / level 및 skillMastery 데이터를 skillStates로 안전하게 정규화.
+- **버전 유지**: persist version 14 유지.
+- **숙련도 획득**: 수동 게이트 및 무한의 탑에서 플레이어가 스킬을 직접 발동 및 사용할 때마다 해당 스킬의 mastery 증가.
+- **시각화**: SkillActionCard 및 SkillPanel에 현재 숙련 Level, 스킬 사용 횟수, 다음 레벨까지의 진행 상태 bar 표시.
+- **제약 조건**: 스킬 수치 및 전투 공식 변경 없음.
+
+### 검증 결과
+- `npx tsc --noEmit` 통과
+- `npm run build` 통과
+- 모바일 390px 화면에서 레이아웃 overflow 없음
+- Console 에러 없음
+
+---
+
+## 12-25D — 전투 긴장감 / 몬스터 패턴 예고 1차
+
+### 목표
+수동 전투 시 몬스터의 행동 패턴과 의도를 플레이어에게 사전에 예고하여 전략적 대응과 전투 긴장감을 유도.
+
+### 변경 파일
+- [combatIntent.ts](file:///c:/Users/khdkf/levelup/src/lib/combatIntent.ts)
+- [MonsterIntentPanel.tsx](file:///c:/Users/khdkf/levelup/src/components/MonsterIntentPanel.tsx)
+- [SkillActionCard.tsx](file:///c:/Users/khdkf/levelup/src/components/SkillActionCard.tsx)
+- [GatePanel.tsx](file:///c:/Users/khdkf/levelup/src/components/GatePanel.tsx)
+- [InfiniteTowerPanel.tsx](file:///c:/Users/khdkf/levelup/src/components/InfiniteTowerPanel.tsx)
+- [store.ts](file:///c:/Users/khdkf/levelup/src/lib/store.ts)
+
+### 변경 내용
+- **몬스터 의도 파생**: 수동 전투 진행 시 세션 내 몬스터의 현재 HP, 스킬 타입, 쿨다운 상태를 기반으로 실시간 의도를 파생 및 계산.
+- **의도 유형**: 강공격/연속 공격, 방어 자세, 약점 노출, 불안정/균열 흔들림 계열 등의 행동 의도 구분 및 표시.
+- **패널 추가**: 수동 게이트 전투 및 무한의 탑 전투 UI에 MONSTER INTENT 전용 표시 패널 추가.
+- **대응 힌트 제공**: SkillActionCard에 몬스터의 현재 의도를 상쇄하거나 대처할 수 있는 짧고 직관적인 대응 가이드/힌트 노출.
+- **로그 강화**: 플레이어가 행동을 마친 후 몬스터 턴이 시작되기 직전, 몬스터의 의도가 구체적으로 담긴 예고 전투 로그 출력.
+- **제약 조건**: 몬스터 수치, 전투 공식, 스킬 기본 수치 변경 없음.
+
+### 검증 결과
+- `npx tsc --noEmit` 통과
+- `npm run build` 통과
+- 모바일 390px 화면에서 레이아웃 overflow 없음
+- Console 에러 없음
+
+---
+
+## 12-25E — 보스전/전투 드라마 강화 1차
+
+### 목표
+게이트 및 무한의 탑 수동 전투에서 보스전, 위험 구간, 막타, 승리/패배 순간이 더 극적으로 느껴지도록 연출 및 UI 비주얼 강화.
+
+### 변경 파일
+- [GatePanel.tsx](file:///c:/Users/khdkf/levelup/src/components/GatePanel.tsx)
+- [InfiniteTowerPanel.tsx](file:///c:/Users/khdkf/levelup/src/components/InfiniteTowerPanel.tsx)
+- [SkillActionCard.tsx](file:///c:/Users/khdkf/levelup/src/components/SkillActionCard.tsx)
+
+### 변경 내용
+- **보스전/위기 분위기 강화**: 
+  - 수동 전투 중 보스 몬스터 조우 시 및 플레이어/몬스터 생명력 위기(Low HP, 30% 이하) 상황에서 동적 테두리 점멸(pulse) 및 글로우 스타일 클래스 적용.
+  - 수동 전투 개시 시, 보스 및 엘리트 몬스터인 경우 화면 중앙 상단에 `WARNING` 긴장감 환기 배너 노출.
+- **전투 로그 및 시네마틱 텍스트 다듬기**:
+  - 플레이어 HP가 30% 이하일 때 `[⚠️ 위기]`, 몬스터 HP가 30% 이하일 때 `[⚡ 기회]`, 결정타 시 `[🎯 결정타]` 접두사를 전투 로그 텍스트 및 시네마틱 오버레이에 노출하여 전황을 드라마틱하게 체감할 수 있도록 개선.
+  - `gateTurnToLogEntry`와 `towerTurnToCinematicLog`에 `session` 파라미터를 넘겨 실제 HP와 전황 비율을 동적으로 트래킹.
+- **DramaticReveal 결과 모달 통합**:
+  - 기존의 무미건조한 승리/패배 텍스트 상자를 동적 인라인 `DramaticReveal` 컴포넌트로 통합하여 승리와 실패의 순간을 더 세련되고 극적으로 표현.
+- **행동 추천 연출**:
+  - 몬스터의 다음 행동 의도가 위험(`danger`) 상태일 때 '방어' 버튼에 골드/엠버 글로우 및 `[추천]` 배지를 표기하여 수동 전투의 전술적 조작 직관성 증대.
+- **모바일 최적화**:
+  - `StatPill` 및 `HpBar`의 스타일과 폰트 크기를 다듬어 390px 모바일 레이아웃 폭에서 가로 스크롤 및 텍스트 잘림 현상을 완벽히 방어.
+- **제약 조건**: 
+  - 전투 공식, 몬스터/플레이어 체력 및 스탯 수치 변경 없음. 스킬 성능 및 쿨다운 변경 없음.
+  - `levelup-save` 스토리지 키 및 persist version 변경 없음.
+
+---
+
+## 12-26A — 전체 실사용 마감 QA 및 소형 fix
+
+### 목표
+12-24H ~ 12-25E까지 누적된 대형 연출 및 비주얼/기능 업데이트 후, 주요 화면이 깨지지 않고 런타임 오류가 발생하지 않는지 전체 흐름 검증 및 실사용 마감.
+
+### 검증 결과
+- **빌드 검증**: `npx tsc --noEmit`을 통한 정적 타입 체킹 통과 및 `npm run build` 프로덕션 빌드 정상 완료 확인.
+- **보안/기밀 유지**: Locked Named Gate Shadow 및 봉인된 업적 그림자들의 실제 이미지/명칭/설명이 `???` 마스킹 및 `LockedShadowPortrait` 시각적 실루엣 힌트로 완전히 차단되는지 `CodexCard` 및 `ShadowPanel`에서 로직 검증 완료.
+- **모바일 레이아웃(390px)**: 모바일 에뮬레이션 상태에서 `DramaticReveal` 모달, `ShadowRevealModal`, 일일 루프의 탭 전환 시 화면 overflow 및 깨짐 현상이 없는지 스타일 구조 검증.
+- **제약 조건**: `levelup-save` 로컬스토리지 키 및 persist version 무갱신 준수. 게임플레이 수치, 보상 확률, 공식의 무변경 원칙 고수.
+
+## 12-26B — 비밀 서사 연결 고도화 1차 (스포일러 비공개)
+
+### 목표
+12-22~12-22C에서 깔린 quiet connective layer를 기반으로, 게이트/무한의 탑/그림자 원정/그림자 군단이 같은 세계관의 흔적을 공유한다는 분위기를 더 일관되게 전달한다. 사용자에게 정확한 조건/정체/보상은 노출하지 않으면서, 앱을 오래 사용한 사용자가 “서로 다른 기록이 한 방향을 가리키는 듯한 느낌”을 받도록 톤을 정리한다.
+
+### 변경 원칙
+- 신규 대형 시스템 추가 없음
+- B/A/S급 서사 게이트, 상위 무한의 탑 구간, 군단 대형 콘텐츠, 고난도 보고/작전 등은 보류
+- 비밀 조건/정체/보상/trait 이름/스토리 반전을 UI 또는 시스템 메시지에 직접 노출 금지
+- 전투/보상/성장/확률/추출/강화 공식 변경 없음
+- localStorage key `levelup-save` 변경 없음
+- persist version 변경 없음: v14 유지
+- 기존 저장 데이터의 secretProgress/snapshot 머지 fallback 그대로 유지
+- 이미 본 기존 hint/fragment는 다시 표시되지 않게 기존 throttle/seen 정책 그대로 사용
+
+### 수정 파일
+| 파일 | 변경 내용 |
+|---|---|
+| `src/lib/secretLore.ts` | `SecretHintLevel`에 `l4` 추가, 6개 컨텍스트(tower/gate/expedition/shadow/box/rank) 각각에 `min` 임계값이 더 높은 ambient hint 1줄 추가. 텍스트는 모두 "다른 기록과의 결" 같은 모호한 톤으로만 표현했고, 조건/정체/보상명은 포함하지 않음. |
+| `src/components/GatePanel.tsx` | 작은 `ArchiveTraceChip` 컴포넌트 추가 + `getSecretVisibleFragments` 셀렉터 후, 4개 렌더 분기(empty gate, missing data, active gate, manual battle)에서 GateStatusPanel 바로 아래에 trace 수만 표시. 카운트가 0이면 칩 자체가 숨겨짐. |
+| `src/components/shadows/ShadowExpeditionPanel.tsx` | 헤더 배지 행에 `getSecretVisibleFragments` 기반 trace chip 추가. 카운트가 0이면 숨겨짐. 보고서 텍스트/이벤트/명령 흐름은 손대지 않음. |
+
+### 비밀 서사 연결 지점 (스포일러 없는 요약)
+1. **무한의 탑** — 기존 ARCHIVE TRACE 칩 그대로 유지. 새 ambient hint pool이 더 누적된 사용자에게서 1회 더 등장 가능하도록 확장.
+2. **게이트** — 기존 ARCHIVE TRACE 칩이 없었음. Tower와 동일 패턴으로 추가하여 두 콘텐츠가 같은 흔적 기록을 공유한다는 느낌만 시각적으로 일치.
+3. **그림자 원정** — 헤더 배지 행에 동일한 trace chip을 작게 추가. 보고서 본문(개요/주목/수확/마무리), 이벤트 선택지, 명령 로그는 기존 그대로 유지.
+4. **그림자 군단** — 별도 UI 변경 없음. 기존 secret 마킹/잠금 그림자/봉인 보상 정책은 그대로 유지.
+5. **시스템 메시지** — `secret`/`story` kind의 톤(낮은 채도 violet/sky, 비dramatic) 그대로 유지. 별도 텍스트 변경 없음.
+
+### secretProgress 흐름 점검
+- `applySecretProgressEvent` 호출 위치 전수(20+ 지점) 변동 없음.
+- `recordSecretEvent` 내부 throttle: 컨텍스트별 hint는 최소 3개 signal 간격 유지. 동일 hint id는 `seen` set에 의해 한 번만 표시.
+- 새 l4 ambient hint는 `min` 값이 높아 substantial 진행을 한 사용자에게만 후순위로 픽업됨. 기존 사용자에게는 기존 l1~l3을 모두 본 뒤에야 다시 한 줄이 늘어남.
+- progress/seal/reward budget cap(`maybeApplySmallReward`의 6개 cap)은 손대지 않음.
+
+### 후속 확장 후보 (이번 작업에는 미포함)
+- B/A/S급 서사 게이트
+- 무한의 탑 상위 구간(서사 진입선)
+- 그림자 군단 대형 콘텐츠
+- 그림자 원정 고난도 보고/작전
+- 비밀 trait/variant 고도화
+
+### 검증
+- `npx tsc --noEmit` 통과
+- `npm run build` 통과 (기존 Vite chunk 크기 경고만 유지)
+- `npx tsx scripts/sim-secret-expansion.ts` 통과 — counters/visibleFragments 흐름 정상
+- `npx tsx scripts/sim-gate-current.ts` 통과 — E/D/C 게이트 밸런스 그대로
+- `npx tsx scripts/sim-infinite-tower.ts` 통과 — 보상/난이도 변화 없음
+- `npx tsx scripts/sim-shadow-expedition.ts` 통과 — 원정 결과/보상 그대로
+- DEV 서버(`localhost:3002`) 기동 확인 — 콘솔 에러 없음
+- 모바일 390px 폭에서 새 trace chip은 기존 배지/칩 옆에서 wrap 정상
+
+### 노출 방지 점검
+- 칩은 trace 카운트(`x{n}`)만 보여주며 fragment id/이름/조건/보상명은 표시하지 않음.
+- 신규 hint 텍스트는 모두 "다른 기록의 결", "다른 전장의 잔향" 같은 모호한 표현. 어떤 콘텐츠를 클리어하면 무엇이 발생하는지 추론 가능한 단서를 포함하지 않음.
+- `SECRET_MESSAGES`의 reward/shadowMark/retrospective 텍스트와 키 이름은 변경하지 않음 → 기존 정책과 일관.
+- `LockedShadowPortrait`/`???` 마스킹 정책 그대로.
+
+### 게임플레이 영향 확인
+- 전투 수치/보상 수치/확률 수치 변경 없음.
+- XP 곡선, 랭크 임계치, 스탯 multiplier, 드롭률 변경 없음.
+- 그림자 추출/강화/진화/소환 공식 변경 없음.
+- 게이트/몬스터 스탯/recommendedPower 변경 없음.
+- 무한의 탑 monster scaling/보상 변경 없음.
+- 그림자 원정 progress/risk 공식 및 reward 변경 없음.
+- 박스/카드 보상 변경 없음.
+
+### persist 및 저장 데이터
+- localStorage key 변경 없음: `levelup-save` 유지.
+- persist version 변경 없음: v14 유지.
+- 저장 스키마 변경 없음. 새 hint id는 `seen`/`discoveredHints` set에 자연스럽게 누적되며 기존 fallback과 호환.
+- 기존 사용자 데이터의 의미를 깎지 않음. 누적된 signals/seen/sealedRewards 모두 그대로 사용.
+

@@ -41,6 +41,9 @@ Thumbs.db
 sim-result.md
 sim-output.txt
 
+# Local-only QA / scratch (Playwright, ad-hoc scripts)
+scratch/
+
 # Shadow portrait original-image backup (created by scripts/process-shadow-portraits.mjs)
 # Processed copies live in src/assets/shadows/. Backup is local-only.
 src/assets/shadows_backup/

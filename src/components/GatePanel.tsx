@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState, useMemo } from 'react'
+import clsx from 'clsx'
 import {
   Activity,
   AlertTriangle,
@@ -15,7 +16,10 @@ import { useGame } from '../lib/store'
 import { CinematicLogOverlay, type CinematicLogData, type CinematicLogTone } from './CinematicLogOverlay'
 import { CombatLogPanel, type CombatLogEntry, type CombatLogEntryTone } from './CombatLogPanel'
 import { DramaticReveal, type RevealStep } from './DramaticReveal'
+import { MonsterIntentPanel } from './MonsterIntentPanel'
 import { ShadowPortrait } from './shadows/ShadowPortrait'
+import { ShadowRevealModal, type ShadowRevealPayload } from './shadows/ShadowRevealModal'
+import { SkillActionCard, skillSourceSortRank, skillTypeSortRank } from './SkillActionCard'
 import { GATE_DEFINITIONS, GATE_PENALTIES, GATE_REWARD_TABLES, MONSTER_DEFINITIONS, SKILL_DEFINITIONS } from '../lib/seed'
 import {
   calculatePlayerCombatStats,
@@ -41,16 +45,35 @@ import {
   getShadowDefinition,
   getShadowExtractionChance,
 } from '../lib/shadows'
+import { getMonsterIntent, getSkillIntentHint } from '../lib/combatIntent'
 import {
   canUseSkill,
-  getSkillCooldownTurns,
-  getSkillEffectiveDescription,
   getSkillMastery,
-  getSkillSourceLabel,
-  getSkillTypeLabel,
 } from '../lib/skills'
+import { getSecretVisibleFragments } from '../lib/secrets'
 
 const GATE_ENTRY_COST = 20
+
+function ArchiveTraceChip({ count }: { count: number }) {
+  if (count <= 0) return null
+  return (
+    <div className="rounded border border-violet-200/15 bg-black/15 px-3 py-2 text-[11px] text-violet-100/55">
+      <span className="system-text text-violet-200/60">ARCHIVE TRACE</span>
+      <span className="ml-2 text-white/45">x{count}</span>
+    </div>
+  )
+}
+
+const sortCombatSkills = (skills: SkillDefinition[], cooldowns: Record<string, number>) => (
+  [...skills].sort((a, b) => {
+    const aReady = (cooldowns[a.id] ?? 0) <= 0
+    const bReady = (cooldowns[b.id] ?? 0) <= 0
+    if (aReady !== bReady) return aReady ? -1 : 1
+    return skillSourceSortRank(a) - skillSourceSortRank(b)
+      || skillTypeSortRank(a) - skillTypeSortRank(b)
+      || a.name.localeCompare(b.name, 'ko')
+  })
+)
 
 const riskMeta: Record<GateRisk, { label: string; className: string }> = {
   low: { label: '위험도 낮음', className: 'text-emerald-300 border-emerald-400/40 bg-emerald-400/10' },
@@ -104,9 +127,9 @@ function formatConsumable(effect: ActiveConsumableEffect): string {
 
 function StatPill({ label, value }: { label: string; value: string | number }) {
   return (
-    <div className="bg-ink-900/50 border border-white/10 rounded-md px-2.5 py-2">
-      <div className="text-[9px] system-text text-white/35">{label}</div>
-      <div className="text-sm font-semibold text-white/85 mt-0.5">{value}</div>
+    <div className="bg-ink-900/50 border border-white/10 rounded-md px-1 py-1.5 sm:px-2.5 sm:py-2 text-center sm:text-left min-w-0">
+      <div className="text-[8px] sm:text-[9px] system-text text-white/35 truncate">{label}</div>
+      <div className="text-xs sm:text-sm font-bold text-white/80 truncate">{value}</div>
     </div>
   )
 }
@@ -183,12 +206,46 @@ function getGateLogLabel(turn: CombatLog['turns'][number], tone: CombatLogEntryT
   return outcomeMeta[turn.outcome]?.label ?? 'LOG'
 }
 
-export function gateTurnToLogEntry(turn: CombatLog['turns'][number], index: number): CombatLogEntry {
+export function gateTurnToLogEntry(
+  turn: CombatLog['turns'][number],
+  index: number,
+  session?: ManualBattleSession
+): CombatLogEntry {
   const tone = classifyGateLogTurn(turn)
   const metaParts = [
     turn.skillName,
     turn.damage !== undefined ? `DMG ${Math.round(turn.damage)}` : undefined,
   ].filter(Boolean)
+
+  const actualSession = (session && 'startedAt' in session) ? session : undefined
+
+  let message = turn.message
+  if (actualSession) {
+    const playerMaxHp = actualSession.player.maxHp
+    const monsterMaxHp = actualSession.monster.maxHp
+
+    const isFinishingBlow = turn.targetType === 'monster' && turn.remainingHp === 0 && (turn.outcome === 'hit' || turn.outcome === 'critical')
+    const isPlayerDanger = turn.targetType === 'player' && turn.remainingHp !== undefined && playerMaxHp > 0 && (turn.remainingHp / playerMaxHp) <= 0.3
+    const isMonsterWeakness = turn.targetType === 'monster' && turn.remainingHp !== undefined && turn.remainingHp > 0 && monsterMaxHp > 0 && (turn.remainingHp / monsterMaxHp) <= 0.3
+
+    if (isFinishingBlow) {
+      message = `[🎯 결정타] ${message}`
+    } else if (isPlayerDanger) {
+      message = `[⚠️ 위기] ${message}`
+    } else if (isMonsterWeakness) {
+      message = `[⚡ 기회] ${message}`
+    }
+  }
+
+  if (tone === 'result') {
+    if (includesAny(message, ['승리', 'victory', 'Cleared'])) {
+      message = `[🏆 승리] ${message}`
+    } else if (includesAny(message, ['패배', 'defeat', 'Failed'])) {
+      message = `[❌ 패배] ${message}`
+    } else {
+      message = `[⏳ 무승부] ${message}`
+    }
+  }
 
   return {
     id: `${turn.turnNumber}-${turn.actorId}-${turn.skillId ?? 'basic'}-${index}`,
@@ -198,7 +255,7 @@ export function gateTurnToLogEntry(turn: CombatLog['turns'][number], index: numb
     label: getGateLogLabel(turn, tone),
     actorName: tone === 'system' || tone === 'result' || tone === 'reward' ? undefined : turn.actorName,
     meta: metaParts.join(' / ') || undefined,
-    message: turn.message,
+    message,
   }
 }
 
@@ -228,7 +285,11 @@ function splitCinematicMessage(message: string) {
   }
 }
 
-function gateTurnToCinematicLog(turn: CombatLog['turns'][number], index: number): CinematicLogData | undefined {
+function gateTurnToCinematicLog(
+  turn: CombatLog['turns'][number],
+  index: number,
+  session?: ManualBattleSession
+): CinematicLogData | undefined {
   if (!shouldShowCinematicGateLog(turn)) return undefined
   const isHunterSkill =
     turn.actorType === 'player' &&
@@ -238,8 +299,41 @@ function gateTurnToCinematicLog(turn: CombatLog['turns'][number], index: number)
     turn.skillId !== 'system-manual-battle'
   const tone = classifyGateLogTurn(turn) as CinematicLogTone
   const message = splitCinematicMessage(turn.message)
+  
+  const actualSession = (session && 'startedAt' in session) ? session : undefined
+
+  let title = isHunterSkill && turn.skillName ? `${turn.skillName} 발동` : message.title
+  let bodyText = message.body
+
+  if (actualSession) {
+    const playerMaxHp = actualSession.player.maxHp
+    const monsterMaxHp = actualSession.monster.maxHp
+
+    const isFinishingBlow = turn.targetType === 'monster' && turn.remainingHp === 0 && (turn.outcome === 'hit' || turn.outcome === 'critical')
+    const isPlayerDanger = turn.targetType === 'player' && turn.remainingHp !== undefined && playerMaxHp > 0 && (turn.remainingHp / playerMaxHp) <= 0.3
+    const isMonsterWeakness = turn.targetType === 'monster' && turn.remainingHp !== undefined && turn.remainingHp > 0 && monsterMaxHp > 0 && (turn.remainingHp / monsterMaxHp) <= 0.3
+
+    if (isFinishingBlow) {
+      title = `[🎯 결정타] ${title}`
+    } else if (isPlayerDanger) {
+      bodyText = bodyText ? `[⚠️ 위기] ${bodyText}` : `[⚠️ 위기] 생명력 급감!`
+    } else if (isMonsterWeakness) {
+      title = `[⚡ 기회] ${title}`
+    }
+  }
+
+  if (tone === 'result') {
+    if (includesAny(title, ['승리', 'victory', 'Cleared'])) {
+      title = `[🏆 승리] ${title}`
+    } else if (includesAny(title, ['패배', 'defeat', 'Failed'])) {
+      title = `[❌ 패배] ${title}`
+    } else {
+      title = `[⏳ 무승부] ${title}`
+    }
+  }
+
   const bodyParts = [
-    message.body,
+    bodyText,
     turn.damage !== undefined ? `피해 ${Math.round(turn.damage)}` : undefined,
     turn.skillName && turn.skillName !== turn.actorName ? turn.skillName : undefined,
   ].filter(Boolean)
@@ -258,9 +352,9 @@ function gateTurnToCinematicLog(turn: CombatLog['turns'][number], index: number)
     id: `gate-cinematic-${turn.turnNumber}-${turn.actorId}-${turn.skillId ?? 'basic'}-${index}`,
     tone: isHunterSkill ? 'player' : tone,
     badge: isHunterSkill ? 'SKILL' : cinematicGateBadge[tone],
-    title: isHunterSkill && turn.skillName ? `${turn.skillName} 발동` : message.title,
+    title,
     body: isHunterSkill
-      ? [message.title, turn.damage !== undefined ? `${Math.round(turn.damage)} 피해` : undefined].filter(Boolean).join(' · ')
+      ? [title, turn.damage !== undefined ? `${Math.round(turn.damage)} 피해` : undefined].filter(Boolean).join(' · ')
       : bodyParts.join(' · ') || undefined,
     visualDelta,
   }
@@ -404,48 +498,27 @@ function ShadowExtractionPanel({
   const ownedDefinitionIds = new Set(ownedShadows.map(shadow => shadow.definitionId))
   const relatedResult = lastResult?.gateInstanceId === log.gateInstanceId ? lastResult : undefined
   const visibleResult = revealingResult?.gateInstanceId === log.gateInstanceId ? undefined : relatedResult
-  const revealTone = revealingResult?.success
-    ? revealingResult.shadow?.isGateNamed || revealingResult.shadow?.rarity === 'legendary'
-      ? 'rank'
-      : 'shadow'
-    : 'failure'
-  const revealSteps: RevealStep[] = revealingResult
-    ? [
-        {
-          title: 'SHADOW EXTRACTION',
-          text: '검은 기운이 잔해 위로 모여든다...',
-          subtext: `${gate.name}의 균열이 낮게 울립니다.`,
-          durationMs: 900,
-          tone: 'shadow',
-        },
-        {
-          title: 'RESONANCE',
-          text: revealingResult.success ? '당신의 감각이 그림자의 핵을 붙잡는다.' : '영혼이 거칠게 저항한다.',
-          subtext: `추출 성공률 ${Math.round(revealingResult.chance * 100)}%`,
-          durationMs: 950,
-          tone: 'shadow',
-        },
-        {
-          title: 'JUDGEMENT',
-          text: '그림자가 형체를 갖추기 시작한다...',
-          durationMs: 850,
-          tone: revealingResult.success ? 'shadow' : 'failure',
-          emphasis: true,
-        },
-        {
-          title: revealingResult.success ? 'ARISE' : 'FAILED',
-          text: revealingResult.success
-            ? (revealingResult.shadow?.isGateNamed ? '이름 있는 그림자가 굴복했다.' : '그림자가 무릎을 꿇었다.')
-            : '형체가 무너졌다.',
-          subtext: revealingResult.success
-            ? '새로운 병사가 군단에 합류했습니다.'
-            : '아직 당신의 힘이 닿지 않았습니다.',
-          durationMs: 1200,
-          tone: revealTone,
-          emphasis: true,
-        },
-      ]
-    : []
+  const extractionReveal: ShadowRevealPayload | undefined = revealingResult
+    ? revealingResult.success && revealingResult.shadow
+      ? {
+          shadow: revealingResult.shadow,
+          source: 'extraction',
+          success: true,
+          isNew: true,
+          isNamed: Boolean(revealingResult.shadow.isGateNamed || revealingResult.shadow.isAchievementNamed || revealingResult.shadow.isNamed),
+          title: 'ARISE',
+          message: '그림자가 군단에 합류했다.',
+          detail: `${gate.name}의 균열이 닫히며 새 형상이 군단의 기록에 새겨졌다.`,
+        }
+      : {
+          source: 'extraction',
+          success: false,
+          rarity: revealingResult.rolledRarity,
+          title: 'TRACE LOST',
+          message: '잔상이 흩어지고 균열이 닫혔다.',
+          detail: '그림자의 형상이 응답했지만 붙잡히기 전에 사라졌다.',
+        }
+    : undefined
 
   const handleExtraction = () => {
     if (attempted) return
@@ -459,32 +532,7 @@ function ShadowExtractionPanel({
   return (
     <div className="panel corner-bracket p-4 border-purple-400/25 bg-purple-500/5">
       <div className="br" />
-      <DramaticReveal
-        isOpen={Boolean(revealingResult)}
-        steps={revealSteps}
-        tone={revealTone}
-        position="modal"
-        result={revealingResult && (
-          <div className={revealingResult.success ? 'text-center text-emerald-100' : 'text-center text-amber-100'}>
-            {revealingResult.success && revealingResult.shadow ? (
-              <>
-                <div className="system-text text-[10px] text-white/45">EXTRACTED SHADOW</div>
-                <div className="mt-1 text-xl font-black">
-                  [{SHADOW_RARITY_LABEL[revealingResult.shadow.rarity]}] {revealingResult.shadow.name}
-                </div>
-                <div className="mt-1 text-xs text-white/55">{revealingResult.message}</div>
-              </>
-            ) : (
-              <>
-                <div className="system-text text-[10px] text-white/45">TRACE LOST</div>
-                <div className="mt-1 text-sm font-bold">{revealingResult.message}</div>
-              </>
-            )}
-          </div>
-        )}
-        onComplete={() => setRevealingResult(undefined)}
-        onSkip={() => setRevealingResult(undefined)}
-      />
+      <ShadowRevealModal reveal={extractionReveal} onClose={() => setRevealingResult(undefined)} />
       <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-3">
         <div>
           <div className="system-text text-[11px] text-purple-300/80 mb-1">SHADOW EXTRACTION</div>
@@ -688,7 +736,7 @@ function RecentBattleResult({
           key={`${log.battleId}-${revealComplete ? 'complete' : 'revealing'}`}
           title="BATTLE LOG"
           subtitle={revealComplete ? '최근 행동 우선 / 전체 로그 펼치기 가능' : `${revealedLogCount} / ${log.turns.length} 전송 중`}
-          logs={visibleTurns.map(gateTurnToLogEntry)}
+          logs={visibleTurns.map((turn, index) => gateTurnToLogEntry(turn, index))}
           maxVisible={revealComplete ? 5 : 6}
           latestFirst={revealComplete}
           highlightLatest
@@ -944,19 +992,19 @@ function ManualBattlePanel({
         <button type="button" onClick={() => onAction({ type: 'defend' })} className="btn text-sm min-h-11 border-cyan-400/25 bg-cyan-400/10 text-cyan-100">
           방어
         </button>
-        {skills.map(skill => {
+        {sortCombatSkills(skills, session.cooldowns).map(skill => {
           const cooldown = session.cooldowns[skill.id] ?? 0
+          const availability = canUseSkill(skill, session)
           return (
-            <button
+            <SkillActionCard
               key={skill.id}
-              type="button"
+              skill={skill}
+              cooldownRemaining={cooldown}
+              disabled={!availability.canUse}
+              disabledReason={availability.reason}
+              compact
               onClick={() => onAction({ type: 'skill', skillId: skill.id })}
-              disabled={cooldown > 0}
-              className="btn text-sm min-h-11 border-purple-400/25 bg-purple-400/10 text-purple-100 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              <span className="block truncate">{skill.name}</span>
-              {cooldown > 0 && <span className="ml-1 text-[10px] system-text">CD {cooldown}</span>}
-            </button>
+            />
           )
         })}
         <button type="button" onClick={() => onAction({ type: 'auto_finish' })} className="btn text-sm min-h-11 border-amber-400/25 bg-amber-400/10 text-amber-100">
@@ -970,7 +1018,7 @@ function ManualBattlePanel({
       <CombatLogPanel
         title="RECENT BATTLE LOG"
         subtitle="버튼 입력 직후 최신 행동이 위에 고정됩니다."
-        logs={session.logs.map(gateTurnToLogEntry)}
+        logs={session.logs.map((turn, index) => gateTurnToLogEntry(turn, index, session))}
         maxVisible={6}
         latestFirst
         highlightLatest
@@ -1019,39 +1067,42 @@ function ManualBattlePanel({
   )
 }
 
-const manualSkillOwnerLabel: Partial<Record<SkillDefinition['ownerType'], string>> = {
-  common: '기본',
-  job: '직업',
-  equipment: '장비',
-  monster: '몬스터',
-}
-
-const manualSkillTypeLabel: Partial<Record<SkillDefinition['type'], string>> = {
-  attack: '공격',
-  buff: '강화',
-  debuff: '약화',
-  heal: '회복',
-}
-
 function ManualHpBar({ label, hp, maxHp, tone }: { label: string; hp: number; maxHp: number; tone: 'cyan' | 'rose' }) {
   const ratio = maxHp > 0 ? Math.max(0, Math.min(1, hp / maxHp)) : 0
   const percent = Math.round(ratio * 100)
   const barClassName = ratio <= 0.25
-    ? 'bg-rose-300'
+    ? 'bg-rose-400 shadow-[0_0_10px_rgba(244,63,94,0.6)] animate-pulse'
     : ratio <= 0.5
-      ? 'bg-amber-300'
+      ? 'bg-amber-400 shadow-[0_0_10px_rgba(245,158,11,0.4)]'
       : tone === 'cyan'
-        ? 'bg-cyan-300'
-        : 'bg-rose-300'
+        ? 'bg-cyan-400 shadow-[0_0_8px_rgba(34,211,238,0.4)]'
+        : 'bg-rose-400 shadow-[0_0_8px_rgba(244,63,94,0.4)]'
+
+  const isLowHp = ratio > 0 && ratio <= 0.3
 
   return (
     <div>
-      <div className="flex items-center justify-between gap-3 text-xs mb-1">
-        <span className="font-semibold text-white/80 truncate">{label}</span>
-        <span className="system-text text-white/50 shrink-0">{Math.ceil(Math.max(0, hp))} / {Math.ceil(maxHp)} · {percent}%</span>
+      <div className="flex items-center justify-between gap-1 text-[10px] sm:text-xs mb-1">
+        <span className="font-semibold text-white/85 truncate flex items-center gap-1.5 min-w-0">
+          <span className="truncate">{label}</span>
+          {isLowHp && (
+            tone === 'cyan' ? (
+              <span className="shrink-0 text-[8px] font-black bg-rose-500/25 text-rose-300 border border-rose-500/35 px-1 rounded tracking-tighter animate-pulse">
+                DANGER
+              </span>
+            ) : (
+              <span className="shrink-0 text-[8px] font-black bg-amber-500/25 text-amber-300 border border-amber-500/35 px-1 rounded tracking-tighter animate-pulse">
+                FINISH CHANCE
+              </span>
+            )
+          )}
+        </span>
+        <span className="system-text text-white/50 shrink-0 select-none">
+          {Math.ceil(Math.max(0, hp))}/{Math.ceil(maxHp)} · {percent}%
+        </span>
       </div>
-      <div className="h-4 rounded bg-ink-950/70 border border-white/10 overflow-hidden">
-        <div className={`h-full ${barClassName} transition-all`} style={{ width: `${percent}%` }} />
+      <div className="h-3 sm:h-4 rounded bg-ink-950/70 border border-white/10 overflow-hidden relative">
+        <div className={`h-full ${barClassName} transition-all duration-300`} style={{ width: `${percent}%` }} />
       </div>
     </div>
   )
@@ -1092,6 +1143,47 @@ function ManualBattlePanelV2({
   const equippedShadows = getEquippedShadows(ownedShadows, equippedShadowIds, hunter)
   const activeShadowId = [...visibleLogs].reverse().map(turn => getShadowActorInstanceId(turn.actorId)).find(Boolean)
   const battleLocked = isRevealing || Boolean(session.result)
+  const monsterIntent = monsterDefinition ? getMonsterIntent(session, monsterDefinition, SKILL_DEFINITIONS) : undefined
+
+  const isBoss = monsterDefinition?.rank === 'S'
+  const isElite = monsterDefinition?.rank === 'A' || monsterDefinition?.rank === 'B'
+  const isPlayerLowHp = session.player.hp / session.player.maxHp <= 0.3
+  
+  const panelStyleClass = isPlayerLowHp
+    ? 'border-rose-500 bg-rose-950/10 shadow-[inset_0_0_30px_rgba(244,63,94,0.15)] animate-pulse'
+    : isBoss
+      ? 'border-amber-500 bg-amber-950/5 shadow-[inset_0_0_24px_rgba(245,158,11,0.12),0_0_20px_rgba(245,158,11,0.08)]'
+      : isElite
+        ? 'border-purple-400/50 bg-purple-950/5 shadow-[inset_0_0_20px_rgba(167,139,250,0.08)]'
+        : 'border-cyan-400/30 bg-cyan-500/5'
+
+  const resultRevealSteps = useMemo<RevealStep[]>(() => {
+    if (!session.result) return []
+    const isWin = session.result === 'victory'
+    return isWin
+      ? [
+          {
+            title: isBoss ? 'BOSS CLEARED' : isElite ? 'ELITE CLEARED' : 'GATE CLEARED',
+            text: isBoss 
+              ? `${session.gateName}의 보스를 처단했습니다!` 
+              : isElite 
+                ? `${session.gateName}의 정예 몬스터를 격퇴했습니다.` 
+                : '게이트의 균열을 안정화했습니다.',
+            subtext: '경험치와 정수, 전리품이 곧 헌터 인벤토리에 지급됩니다.',
+            durationMs: 1200,
+            tone: isBoss ? 'box' : 'success',
+          }
+        ]
+      : [
+          {
+            title: session.result === 'draw' ? 'LIMIT EXCEEDED' : 'GATE FAILED',
+            text: session.result === 'draw' ? '시간을 초과하여 균열 돌파에 실패했습니다.' : '차원 폭주를 견디지 못하고 쓰러졌습니다.',
+            subtext: session.result === 'draw' ? '헌터의 세팅을 강화하고 재도전해 주십시오.' : '부상 치료 완료 후 다시 도전할 수 있습니다.',
+            durationMs: 1200,
+            tone: 'failure',
+          }
+        ]
+  }, [session.result, session.gateName, isBoss, isElite])
 
   useEffect(() => {
     if (sessionKeyRef.current !== session.startedAt) {
@@ -1117,7 +1209,7 @@ function ManualBattlePanelV2({
     if (session.logs.length > previousCount) {
       const nextLogs = session.logs
         .slice(previousCount)
-        .map((turn, index) => gateTurnToCinematicLog(turn, previousCount + index))
+        .map((turn, index) => gateTurnToCinematicLog(turn, previousCount + index, session))
         .filter((item): item is CinematicLogData => Boolean(item))
       if (nextLogs.length > 0) {
         setManualCinematicLogs(nextLogs)
@@ -1214,7 +1306,7 @@ function ManualBattlePanelV2({
   }
 
   return (
-    <div className={`panel corner-bracket relative overflow-hidden p-4 sm:p-5 border ${result?.className ?? 'border-cyan-400/30 bg-cyan-500/5'}`}>
+    <div className={`panel corner-bracket relative overflow-hidden p-4 sm:p-5 border transition-all duration-500 ${panelStyleClass}`}>
       <div className="br" />
       <CinematicLogOverlay
         logs={manualCinematicLogs}
@@ -1240,7 +1332,11 @@ function ManualBattlePanelV2({
       <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-3 mb-5">
         <div>
           <div className="system-text text-[11px] text-cyan-300/80 mb-1">MANUAL TURN BATTLE</div>
-          <h3 className="text-xl font-bold text-cyan-100">{session.gateName}</h3>
+          <h3 className="text-xl font-bold text-cyan-100 flex items-center gap-2">
+            {session.gateName}
+            {isBoss && <span className="text-[10px] bg-amber-500 text-ink-950 font-black px-1.5 py-0.5 rounded animate-pulse">BOSS</span>}
+            {!isBoss && isElite && <span className="text-[10px] bg-purple-500 text-white font-black px-1.5 py-0.5 rounded">ELITE</span>}
+          </h3>
           <div className="flex flex-wrap gap-2 mt-2">
             <span className="text-[10px] system-text border border-cyan-400/25 bg-cyan-400/10 text-cyan-200 rounded px-2 py-1">
               Wave {session.waveIndex + 1} / {totalWaves}
@@ -1258,10 +1354,31 @@ function ManualBattlePanelV2({
         </div>
       </div>
 
-      {result && !isRevealing && (
-        <div className="mb-5 border border-white/10 rounded-lg p-3 bg-ink-900/35">
-          <div className="text-sm font-semibold text-white/85">{result.title}</div>
-          <div className="text-xs text-white/55 leading-relaxed mt-1">{result.description}</div>
+      {actionCount === 0 && !isRevealing && !session.result && (isBoss || isElite) && (
+        <div className="mb-5 rounded border border-amber-500/30 bg-amber-500/10 p-3.5 text-center animate-pulse">
+          <div className="text-[10px] system-text text-amber-400 font-bold tracking-widest">
+            WARNING · DANGEROUS ENTITY ENCOUNTERED
+          </div>
+          <div className="text-sm font-black text-amber-200 mt-0.5">
+            {isBoss ? '⚠️ 강력한 균열의 지배자가 감지되었습니다!' : '⚡ 정예 차원 개체가 출현했습니다!'}
+          </div>
+        </div>
+      )}
+
+      {session.result && !isRevealing && (
+        <div className="mb-5">
+          <DramaticReveal
+            isOpen={true}
+            steps={resultRevealSteps}
+            tone={session.result === 'victory' ? (isBoss ? 'box' : 'success') : 'failure'}
+            position="inline"
+            compact
+            result={
+              <div className="text-xs text-white/55 mt-1 leading-relaxed border-t border-white/10 pt-2 text-center">
+                게이트 정산 대기 중... 아래 '전투 완료/닫기' 버튼을 눌러 결과 화면으로 돌아가십시오.
+              </div>
+            }
+          />
         </div>
       )}
 
@@ -1295,6 +1412,12 @@ function ManualBattlePanelV2({
         </div>
       </div>
 
+      {monsterIntent && !session.result && (
+        <div className="mb-5">
+          <MonsterIntentPanel intent={monsterIntent} />
+        </div>
+      )}
+
       <div className="mb-5">
         <ShadowBattleRoster shadows={equippedShadows} activeShadowId={activeShadowId} compact />
       </div>
@@ -1304,40 +1427,51 @@ function ManualBattlePanelV2({
           <button type="button" disabled={battleLocked} onClick={() => onAction({ type: 'basic_attack' })} className="btn btn-primary text-sm min-h-14 disabled:opacity-50 disabled:cursor-not-allowed">
             기본 공격
           </button>
-          <button type="button" disabled={battleLocked} onClick={() => onAction({ type: 'defend' })} className="btn text-sm min-h-14 border-cyan-400/25 bg-cyan-400/10 text-cyan-100 disabled:opacity-50 disabled:cursor-not-allowed">
+          <button
+            type="button"
+            disabled={battleLocked}
+            onClick={() => onAction({ type: 'defend' })}
+            className={clsx(
+              "btn text-sm min-h-14 disabled:opacity-50 disabled:cursor-not-allowed relative overflow-hidden transition-all duration-300",
+              monsterIntent?.tone === 'danger'
+                ? "border-amber-400 bg-amber-450/20 text-amber-100 shadow-[0_0_15px_rgba(245,158,11,0.3)] animate-pulse"
+                : "border-cyan-400/25 bg-cyan-400/10 text-cyan-100"
+            )}
+          >
+            {monsterIntent?.tone === 'danger' && (
+              <span className="absolute top-1 left-1 text-[8px] font-black bg-amber-500 text-ink-950 px-1 rounded tracking-tighter">
+                추천
+              </span>
+            )}
             <span>방어</span>
-            <span className="ml-1 text-[10px] system-text text-cyan-100/60">피해 -40%</span>
+            <span className={clsx("ml-1 text-[10px] system-text", monsterIntent?.tone === 'danger' ? "text-amber-200/80 font-bold" : "text-cyan-100/60")}>
+              피해 -40%
+            </span>
           </button>
         </div>
+        <div className="flex items-center justify-between gap-3 pt-1">
+          <span className="system-text text-[11px] text-cyan-200/75">COMBAT SKILLS</span>
+          <span className="text-[11px] text-white/45">사용 가능 우선 · 출처/타입/쿨다운 표시</span>
+        </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-          {skills.map(skill => {
+          {sortCombatSkills(skills, session.cooldowns).map(skill => {
             const runtime = getSkillMastery(skillStates, skill.id)
             const cooldown = session.cooldowns[skill.id] ?? 0
             const availability = canUseSkill(skill, session)
-            const description = getSkillEffectiveDescription(skill, runtime)
+            const disabledReason = battleLocked
+              ? (session.result ? '전투 종료' : '연출 중')
+              : availability.reason
             return (
-              <button
+              <SkillActionCard
                 key={skill.id}
-                type="button"
+                skill={skill}
+                runtime={runtime}
+                cooldownRemaining={cooldown}
+                disabled={battleLocked || !availability.canUse}
+                disabledReason={disabledReason}
+                tacticalHint={getSkillIntentHint(skill, monsterIntent)}
                 onClick={() => onAction({ type: 'skill', skillId: skill.id })}
-                disabled={battleLocked || cooldown > 0}
-                title={description}
-                className="min-h-[72px] rounded-md border border-purple-400/25 bg-purple-400/10 px-3 py-2 text-left text-purple-50 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-purple-400/15 transition"
-              >
-                <span className="flex items-center justify-between gap-2">
-                  <span className="text-sm font-semibold truncate">{skill.name}</span>
-                  <span className="shrink-0 text-[9px] system-text border border-purple-300/25 rounded px-1.5 py-0.5 text-purple-100/70">
-                    {getSkillSourceLabel(skill) ?? manualSkillOwnerLabel[skill.ownerType]}
-                  </span>
-                </span>
-                <span className="mt-1 block text-[11px] leading-snug text-white/55 line-clamp-2">{description}</span>
-                <span className="mt-1 flex flex-wrap gap-1.5 text-[10px] system-text text-purple-100/70">
-                  <span>{getSkillTypeLabel(skill) ?? manualSkillTypeLabel[skill.type]}</span>
-                  <span>CD {cooldown > 0 ? cooldown : getSkillCooldownTurns(skill)}</span>
-                  <span>숙련 Lv.{runtime.masteryLevel ?? 0}</span>
-                  <span className={cooldown > 0 ? 'text-amber-200' : 'text-emerald-200'}>{availability.reason}</span>
-                </span>
-              </button>
+              />
             )
           })}
         </div>
@@ -1409,7 +1543,7 @@ function ManualBattlePanelV2({
       <CombatLogPanel
         title="RECENT BATTLE LOG"
         subtitle="버튼 입력 직후 최신 행동이 위에 고정됩니다."
-        logs={session.logs.map(gateTurnToLogEntry)}
+        logs={session.logs.map((turn, index) => gateTurnToLogEntry(turn, index, session))}
         maxVisible={6}
         latestFirst
         highlightLatest
@@ -1494,6 +1628,8 @@ export function GatePanel() {
   const startManualGateBattle = useGame(s => s.startManualGateBattle)
   const performManualBattleAction = useGame(s => s.performManualBattleAction)
   const cancelManualGateBattle = useGame(s => s.cancelManualGateBattle)
+  const visibleTraces = useGame(s => getSecretVisibleFragments(s.secretProgress))
+  const traceCount = visibleTraces.length
 
   const equippedItems = getEquippedItems(items, equipment)
   const equippedShadows = getEquippedShadows(ownedShadows, equippedShadowIds, hunter)
@@ -1548,6 +1684,7 @@ export function GatePanel() {
     return (
       <div className="space-y-4">
         <GateStatusPanel />
+        <ArchiveTraceChip count={traceCount} />
         <ManualBattlePanelV2
           session={manualBattleSession}
           skills={manualPlayerSkills.filter(skill => skill.id !== 'basic-attack')}
@@ -1572,6 +1709,7 @@ export function GatePanel() {
     return (
       <div className="space-y-4">
         <GateStatusPanel />
+        <ArchiveTraceChip count={traceCount} />
         <EmptyGateState />
         <RecentBattleResult
           log={latestGateCombatLog}
@@ -1587,6 +1725,7 @@ export function GatePanel() {
     return (
       <div className="space-y-4">
         <GateStatusPanel />
+        <ArchiveTraceChip count={traceCount} />
         <div className="panel corner-bracket p-8 text-center border-rose-400/30">
           <div className="br" />
           <AlertTriangle className="w-8 h-8 text-rose-300 mx-auto mb-3" />
@@ -1645,6 +1784,7 @@ export function GatePanel() {
     return (
       <div className="space-y-4">
         <GateStatusPanel />
+        <ArchiveTraceChip count={traceCount} />
         <ManualBattlePanelV2
           session={manualBattleSession}
           skills={manualPlayerSkills.filter(skill => skill.id !== 'basic-attack')}
@@ -1665,6 +1805,7 @@ export function GatePanel() {
   return (
     <div className="space-y-4">
       <GateStatusPanel />
+      <ArchiveTraceChip count={traceCount} />
 
       <div className="panel corner-bracket p-5 bg-gradient-to-br from-amber-500/10 via-ink-800/60 to-cyan-500/5 border-amber-400/30">
         <div className="br" />

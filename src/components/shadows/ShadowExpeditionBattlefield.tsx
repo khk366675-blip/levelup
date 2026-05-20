@@ -4,6 +4,7 @@ import { SHADOW_EXPEDITION_COMMAND_LABEL } from '../../lib/shadowExpeditions'
 import { SHADOW_ROLE_LABEL, getShadowDefinition } from '../../lib/shadows'
 import { CinematicLogOverlay, type CinematicLogData } from '../CinematicLogOverlay'
 import type {
+  ExpeditionPhase,
   OwnedShadow,
   ShadowExpedition,
   ShadowExpeditionCommand,
@@ -46,6 +47,24 @@ const roleAura: Record<ShadowRole, string> = {
   hunter: 'from-amber-300/40 to-violet-300/5',
 }
 
+const roleFormation: Record<ShadowRole, { x: number; y: number; lane: string; anchor: string }> = {
+  guard: { x: 50, y: 42, lane: 'FRONT', anchor: 'border-sky-200/35 bg-sky-300/10 text-sky-100' },
+  assault: { x: 50, y: 49, lane: 'VANGUARD', anchor: 'border-rose-200/35 bg-rose-300/10 text-rose-100' },
+  scout: { x: 30, y: 58, lane: 'LEFT FLANK', anchor: 'border-cyan-200/35 bg-cyan-300/10 text-cyan-100' },
+  hunter: { x: 70, y: 58, lane: 'RIGHT FLANK', anchor: 'border-amber-200/35 bg-amber-300/10 text-amber-100' },
+  analyst: { x: 40, y: 72, lane: 'REAR ANALYSIS', anchor: 'border-purple-200/35 bg-purple-300/10 text-purple-100' },
+  support: { x: 60, y: 72, lane: 'REAR SUPPORT', anchor: 'border-emerald-200/35 bg-emerald-300/10 text-emerald-100' },
+}
+
+const phaseVisual: Record<ExpeditionPhase, { label: string; className: string; grid: string }> = {
+  muster: { label: 'MUSTER', className: 'from-slate-300/8 via-white/4 to-transparent', grid: 'border-white/8' },
+  deploy: { label: 'DEPLOY', className: 'from-cyan-300/12 via-blue-300/7 to-transparent', grid: 'border-cyan-200/12' },
+  contact: { label: 'CONTACT', className: 'from-rose-300/12 via-orange-300/7 to-transparent', grid: 'border-rose-200/12' },
+  threshold: { label: 'THRESHOLD', className: 'from-purple-300/14 via-cyan-300/8 to-transparent', grid: 'border-purple-200/14' },
+  resolution: { label: 'RESOLUTION', className: 'from-emerald-300/14 via-cyan-300/7 to-transparent', grid: 'border-emerald-200/14' },
+  return: { label: 'RETURN', className: 'from-amber-300/12 via-slate-200/6 to-transparent', grid: 'border-amber-200/12' },
+}
+
 const battlefieldTheme: Record<ShadowExpeditionType, { board: string; floor: string; accent: string; label: string; particles: string }> = {
   training: {
     board: 'bg-[radial-gradient(circle_at_50%_70%,rgba(59,130,246,0.2),transparent_38%),linear-gradient(180deg,rgba(15,23,42,0.85),rgba(2,6,23,0.96))]',
@@ -84,14 +103,6 @@ const outcomeClass: Record<ShadowExpeditionOutcome, string> = {
   failure: 'expedition-outcome-failure',
 }
 
-const formations: Record<number, Array<{ x: number; y: number; scale?: string }>> = {
-  1: [{ x: 50, y: 55, scale: 'scale-110' }],
-  2: [{ x: 38, y: 56 }, { x: 62, y: 56 }],
-  3: [{ x: 50, y: 48, scale: 'scale-105' }, { x: 34, y: 64 }, { x: 66, y: 64 }],
-  4: [{ x: 38, y: 47 }, { x: 62, y: 47 }, { x: 32, y: 66 }, { x: 68, y: 66 }],
-  5: [{ x: 41, y: 45 }, { x: 59, y: 45 }, { x: 29, y: 66 }, { x: 50, y: 68 }, { x: 71, y: 66 }],
-}
-
 type ShadowExpeditionBattlefieldProps = {
   expedition: ShadowExpedition
   selectedShadows: OwnedShadow[]
@@ -107,6 +118,25 @@ type ShadowExpeditionBattlefieldProps = {
 }
 
 const barWidth = (value: number): string => `${Math.max(0, Math.min(100, value))}%`
+
+const clampPosition = (value: number, min: number, max: number): number => Math.max(min, Math.min(max, value))
+
+const getRolePosition = (shadow: OwnedShadow, index: number, party: OwnedShadow[]) => {
+  const base = roleFormation[shadow.role]
+  const sameRoleIndex = party.slice(0, index).filter(item => item.role === shadow.role).length
+  const sameLaneIndex = party.slice(0, index).filter(item => roleFormation[item.role].lane === base.lane).length
+  const direction = sameRoleIndex % 2 === 0 ? -1 : 1
+  const spread = Math.ceil(sameRoleIndex / 2) * 8
+  const laneDrop = sameLaneIndex > 0 ? Math.min(8, sameLaneIndex * 4) : 0
+
+  return {
+    x: clampPosition(base.x + direction * spread, 18, 82),
+    y: clampPosition(base.y + laneDrop, 33, 78),
+    lane: base.lane,
+    anchor: base.anchor,
+    scale: shadow.role === 'guard' || shadow.role === 'assault' ? 'scale-105' : '',
+  }
+}
 
 export function ShadowExpeditionBattlefield({
   expedition,
@@ -124,7 +154,9 @@ export function ShadowExpeditionBattlefield({
   const theme = battlefieldTheme[expedition.type]
   const Icon = latestCommand ? commandIcon[latestCommand] : Sparkles
   const commandMatchedRoles = latestCommand ? commandRoles[latestCommand] : []
-  const positions = formations[Math.max(1, Math.min(5, selectedShadows.length))] ?? formations[1]
+  const currentPhase = expedition.currentPhase ?? 'muster'
+  const phase = phaseVisual[currentPhase]
+  const actor = latestActorShadowId ? selectedShadows.find(shadow => shadow.instanceId === latestActorShadowId) : undefined
   const riskHigh = expedition.risk >= 70
   const riskCritical = expedition.risk >= 90
   const progressReady = expedition.progress >= 100
@@ -143,10 +175,13 @@ export function ShadowExpeditionBattlefield({
       aria-label="그림자 원정 전장"
     >
       <div className="pointer-events-none absolute inset-0 opacity-80" aria-hidden>
+        <div className={clsx('absolute inset-0 bg-gradient-to-br', phase.className)} />
         <div className="absolute inset-x-5 top-7 h-px bg-gradient-to-r from-transparent via-white/12 to-transparent" />
         <div className="absolute inset-x-8 top-12 h-px bg-gradient-to-r from-transparent via-white/8 to-transparent" />
-        <div className="absolute inset-x-[16%] bottom-[18%] h-[34%] rounded-[50%] border border-white/10 bg-ink-950/25 blur-[0.2px]" />
+        <div className={clsx('absolute inset-x-[16%] bottom-[18%] h-[34%] rounded-[50%] border bg-ink-950/25 blur-[0.2px]', phase.grid)} />
         <div className={clsx('absolute inset-x-[20%] bottom-[19%] h-[28%] rounded-[50%] border', theme.floor)} />
+        <div className="absolute left-1/2 top-[56%] h-[72%] w-px -translate-x-1/2 -translate-y-1/2 bg-gradient-to-b from-transparent via-white/10 to-transparent" />
+        <div className="absolute left-[17%] right-[17%] top-[58%] h-px bg-gradient-to-r from-transparent via-white/10 to-transparent" />
         <div className="absolute left-1/2 top-[58%] h-28 w-28 -translate-x-1/2 -translate-y-1/2 rounded-full border border-white/10 opacity-60" />
         <div className="absolute left-1/2 top-[58%] h-20 w-20 -translate-x-1/2 -translate-y-1/2 rotate-45 rounded-md border border-white/8 opacity-60" />
         <div className="absolute inset-0 bg-[linear-gradient(90deg,transparent_0%,rgba(255,255,255,0.035)_50%,transparent_100%)] expedition-bf-scan" />
@@ -176,7 +211,7 @@ export function ShadowExpeditionBattlefield({
         <div>
           <div className={clsx('system-text text-[10px]', theme.accent)}>{theme.label}</div>
           <div className="text-xs text-white/45">
-            TURN {expedition.turn} / {expedition.maxTurns}
+            TURN {expedition.turn} / {expedition.maxTurns} · {phase.label}
           </div>
         </div>
         <div className={clsx(
@@ -188,7 +223,21 @@ export function ShadowExpeditionBattlefield({
         </div>
       </div>
 
-      <div className="relative z-10 mt-2 h-52 sm:h-56">
+      {actor && (
+        <div className="relative z-10 mt-2 flex items-center gap-2 rounded-md border border-amber-300/20 bg-amber-300/10 px-2 py-1.5">
+          <div className="h-8 w-8 shrink-0">
+            <ShadowPortrait shadow={actor} definition={getShadowDefinition(actor.definitionId)} size="xs" active highlighted />
+          </div>
+          <div className="min-w-0">
+            <div className="system-text text-[9px] text-amber-100/60">ACTIVE ACTOR</div>
+            <div className="truncate text-xs font-bold text-amber-50">
+              {actor.name} <span className="font-normal text-white/45">/ {SHADOW_ROLE_LABEL[actor.role]}</span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div className="relative z-10 mt-2 h-60 sm:h-64">
         <div className="pointer-events-none absolute inset-0" aria-hidden>
           {latestCommand && <CommandVfx command={latestCommand} searchStacks={expedition.searchStacks ?? 0} />}
           {typeof progressDelta === 'number' && (
@@ -215,13 +264,16 @@ export function ShadowExpeditionBattlefield({
         ) : (
           selectedShadows.slice(0, 5).map((shadow, index) => {
             const definition = getShadowDefinition(shadow.definitionId)
-            const position = positions[index]
+            const position = getRolePosition(shadow, index, selectedShadows.slice(0, 5))
             const isActor = latestActorShadowId === shadow.instanceId
             const commandMatch = commandMatchedRoles.includes(shadow.role)
+            const isNamed = Boolean(shadow.isNamed || shadow.isGateNamed || shadow.isAchievementNamed)
+            const isHighGrade = shadow.innateGrade === 'S' || shadow.innateGrade === 'A'
+            const isEvolved = Boolean(shadow.evolvedFromDefinitionId || shadow.evolutionStage)
             return (
               <div
                 key={shadow.instanceId}
-                className="absolute w-[76px] -translate-x-1/2 -translate-y-1/2 sm:w-[86px]"
+                className="absolute w-[86px] -translate-x-1/2 -translate-y-1/2 sm:w-[96px]"
                 style={{ left: `${position.x}%`, top: `${position.y}%` }}
               >
                 <div
@@ -232,7 +284,13 @@ export function ShadowExpeditionBattlefield({
                     isActor && 'expedition-unit-acting z-20',
                   )}
                 >
-                  <div className={clsx('absolute inset-x-1 bottom-1 h-10 rounded-full bg-gradient-to-t blur-xl', roleAura[shadow.role], commandMatch && 'opacity-100', !commandMatch && 'opacity-55')} />
+                  <div className={clsx('absolute inset-x-1 bottom-1 h-12 rounded-full bg-gradient-to-t blur-xl', roleAura[shadow.role], (commandMatch || isActor || isHighGrade || isNamed) && 'opacity-100', !(commandMatch || isActor || isHighGrade || isNamed) && 'opacity-55')} />
+                  {(isHighGrade || isNamed || isEvolved) && (
+                    <div className={clsx(
+                      'pointer-events-none absolute -inset-2 rounded-full border shadow-[0_0_22px_currentColor]',
+                      isNamed ? 'border-amber-200/35 text-amber-200/30' : isEvolved ? 'border-emerald-200/30 text-emerald-200/25' : 'border-cyan-200/30 text-cyan-200/25',
+                    )} />
+                  )}
                   {isActor && (
                     <div className="absolute -right-1 -top-1 z-20 rounded border border-amber-200/50 bg-amber-300/20 px-1.5 py-0.5 text-[8px] system-text text-amber-100">
                       ACTING
@@ -257,9 +315,9 @@ export function ShadowExpeditionBattlefield({
                   <ShadowPortrait
                     shadow={shadow}
                     definition={definition}
-                    size="sm"
+                    size="md"
                     active={isActor}
-                    highlighted={isActor || commandMatch || Boolean(shadow.isNamed)}
+                    highlighted={isActor || commandMatch || isNamed || isHighGrade || isEvolved}
                     innateGrade={shadow.innateGrade}
                     className="relative z-10"
                   />
@@ -268,6 +326,9 @@ export function ShadowExpeditionBattlefield({
                     <div className="system-text text-[8px] text-white/40">
                       Lv {shadow.level ?? 1}
                       {(shadow.enhancementLevel ?? 0) > 0 ? ` +${shadow.enhancementLevel}` : ''} / {SHADOW_ROLE_LABEL[shadow.role]}
+                    </div>
+                    <div className={clsx('mt-1 rounded border px-1 py-px text-[7px] system-text', position.anchor)}>
+                      {position.lane}
                     </div>
                   </div>
                 </div>

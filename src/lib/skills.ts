@@ -27,6 +27,19 @@ export const JOB_COMBAT_SKILL_IDS: Partial<Record<JobId, string[]>> = {
 }
 
 export const SKILL_MASTERY_THRESHOLDS = [0, 5, 15, 35] as const
+export const MAX_SKILL_MASTERY_LEVEL = SKILL_MASTERY_THRESHOLDS.length - 1
+
+type LegacySkillRuntimeState = Partial<SkillRuntimeState> & {
+  uses?: number
+  xp?: number
+  level?: number
+  lastUsedAt?: string
+}
+
+const toSafeInt = (value: unknown, fallback = 0): number => {
+  const numeric = Number(value)
+  return Number.isFinite(numeric) ? Math.max(0, Math.floor(numeric)) : fallback
+}
 
 export const getSkillCooldownTurns = (skill: SkillDefinition): number =>
   Math.max(0, skill.cooldown ?? skill.cooldownTurns ?? 0)
@@ -132,25 +145,52 @@ export const getSkillProviderItem = (skill: SkillDefinition, equippedItems: Item
 }
 
 export const getSkillMasteryLevelFromUses = (timesUsed = 0): number => {
-  if (timesUsed >= SKILL_MASTERY_THRESHOLDS[3]) return 3
-  if (timesUsed >= SKILL_MASTERY_THRESHOLDS[2]) return 2
-  if (timesUsed >= SKILL_MASTERY_THRESHOLDS[1]) return 1
+  const safeUses = toSafeInt(timesUsed)
+  for (let level = MAX_SKILL_MASTERY_LEVEL; level >= 0; level -= 1) {
+    if (safeUses >= SKILL_MASTERY_THRESHOLDS[level]) return level
+  }
   return 0
+}
+
+export const normalizeSkillRuntimeState = (
+  skillId: string,
+  state?: LegacySkillRuntimeState
+): SkillRuntimeState => {
+  const timesUsed = toSafeInt(state?.timesUsed ?? state?.uses)
+  const masteryXp = toSafeInt(state?.masteryXp ?? state?.xp, timesUsed)
+  const progressValue = Math.max(timesUsed, masteryXp)
+  const derivedLevel = getSkillMasteryLevelFromUses(progressValue)
+  const storedLevel = state?.masteryLevel ?? state?.level
+  const masteryLevel = Math.min(
+    MAX_SKILL_MASTERY_LEVEL,
+    Math.max(derivedLevel, toSafeInt(storedLevel, derivedLevel))
+  )
+
+  return {
+    skillId,
+    timesUsed,
+    masteryXp,
+    masteryLevel,
+    ...(state?.lastUsedAt ? { lastUsedAt: state.lastUsedAt } : {}),
+  }
+}
+
+export const normalizeSkillStates = (
+  skillStates: Record<string, LegacySkillRuntimeState> | undefined
+): Record<string, SkillRuntimeState> => {
+  if (!skillStates) return {}
+  return Object.fromEntries(
+    Object.entries(skillStates)
+      .filter(([skillId]) => Boolean(skillId))
+      .map(([skillId, state]) => [skillId, normalizeSkillRuntimeState(skillId, state)])
+  )
 }
 
 export const getSkillMastery = (
   skillStates: Record<string, SkillRuntimeState> | undefined,
   skillId: string
 ): SkillRuntimeState => {
-  const state = skillStates?.[skillId]
-  const timesUsed = state?.timesUsed ?? 0
-  const masteryXp = state?.masteryXp ?? timesUsed
-  return {
-    skillId,
-    timesUsed,
-    masteryXp,
-    masteryLevel: state?.masteryLevel ?? getSkillMasteryLevelFromUses(timesUsed),
-  }
+  return normalizeSkillRuntimeState(skillId, skillStates?.[skillId])
 }
 
 export const recordSkillRuntimeUse = (
@@ -168,12 +208,39 @@ export const recordSkillRuntimeUse = (
       timesUsed,
       masteryXp,
       masteryLevel: getSkillMasteryLevelFromUses(timesUsed),
+      lastUsedAt: new Date().toISOString(),
     },
   }
 }
 
 export const getNextMasteryUseTarget = (timesUsed = 0): number | undefined =>
   SKILL_MASTERY_THRESHOLDS.find(threshold => threshold > timesUsed)
+
+export const getSkillMasteryProgress = (runtime?: SkillRuntimeState) => {
+  const normalized = normalizeSkillRuntimeState(runtime?.skillId ?? 'unknown', runtime)
+  const level = normalized.masteryLevel ?? 0
+  const currentUses = normalized.timesUsed ?? 0
+  const currentXp = normalized.masteryXp ?? currentUses
+  const levelStartUses = SKILL_MASTERY_THRESHOLDS[level] ?? 0
+  const nextLevelUses = getNextMasteryUseTarget(currentUses)
+  const isMaxLevel = !nextLevelUses
+  const usesNeeded = nextLevelUses ? Math.max(1, nextLevelUses - levelStartUses) : 1
+  const usesIntoLevel = isMaxLevel ? usesNeeded : Math.max(0, currentUses - levelStartUses)
+  const percent = isMaxLevel ? 100 : Math.round(Math.min(1, usesIntoLevel / usesNeeded) * 100)
+
+  return {
+    level,
+    maxLevel: MAX_SKILL_MASTERY_LEVEL,
+    currentUses,
+    currentXp,
+    levelStartUses,
+    nextLevelUses,
+    usesIntoLevel,
+    usesNeeded,
+    percent,
+    isMaxLevel,
+  }
+}
 
 export const getSkillMasteryEffectBonus = (skill: SkillDefinition, masteryLevel = 0): number => {
   const safeLevel = Math.max(0, Math.min(3, masteryLevel))

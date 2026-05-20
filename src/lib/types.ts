@@ -750,6 +750,7 @@ export interface SkillRuntimeState {
   masteryXp?: number
   masteryLevel?: number
   timesUsed?: number
+  lastUsedAt?: string
 }
 
 export interface ActiveCombatEffect {
