@@ -131,7 +131,7 @@ const runOne = (
     // Auto-resolve mid events by picking first choice
     if (expedition.eventTriggered && !expedition.eventResolved && expedition.midEvent) {
       const choiceId = expedition.midEvent.choices[0].id
-      expedition = resolveExpeditionMidEventChoice(expedition, choiceId, () => `sim-event-${seed}-${commandIndex++}`)
+      expedition = resolveExpeditionMidEventChoice(expedition, choiceId, () => `sim-event-${seed}-${commandIndex++}`, party)
       continue
     }
     const command = chooseCommand(strategy, expedition, party, commandIndex)

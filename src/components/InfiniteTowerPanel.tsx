@@ -442,7 +442,7 @@ export function InfiniteTowerPanel() {
     ? activeBattle.result.outcome === 'victory'
       ? [
           {
-            title: resultIsBoss ? 'BOSS CLEARED' : 'FLOOR CLEARED',
+            title: resultIsBoss ? 'BOSS REWARD CLEARED' : 'FLOOR CLEARED',
             text: resultIsBoss ? `${activeBattle.floor}층의 주인이 쓰러졌다.` : `${activeBattle.floor}층을 돌파했다.`,
             subtext: activeBattle.result.firstClear ? '첫 클리어 보상이 열립니다.' : '반복 클리어 보상이 정산됩니다.',
             durationMs: 950,
@@ -451,7 +451,10 @@ export function InfiniteTowerPanel() {
           {
             title: 'REWARD',
             text: activeBattle.result.rewards.boxType ? '보스 박스가 전리품에 추가되었다.' : '탑의 보상이 정산된다.',
-            subtext: activeBattle.result.rewards.hunterXp ? `XP +${activeBattle.result.rewards.hunterXp}` : undefined,
+            subtext: [
+              activeBattle.result.rewards.hunterXp ? `XP +${activeBattle.result.rewards.hunterXp}` : undefined,
+              activeBattle.result.rewards.gold ? `Gold +${activeBattle.result.rewards.gold}` : undefined,
+            ].filter(Boolean).join(' / ') || undefined,
             durationMs: 1050,
             tone: activeBattle.result.rewards.boxType ? 'rank' : 'success',
             emphasis: true,
@@ -528,6 +531,11 @@ export function InfiniteTowerPanel() {
             {activeBattle.result.rewards.shadowEssence ? (
               <div className="rounded-md border border-purple-300/20 bg-purple-400/10 px-3 py-2 text-purple-100">
                 그림자 정수 +{activeBattle.result.rewards.shadowEssence}
+              </div>
+            ) : null}
+            {activeBattle.result.rewards.gold ? (
+              <div className="rounded-md border border-amber-300/25 bg-amber-400/10 px-3 py-2 text-amber-100">
+                Gold +{activeBattle.result.rewards.gold}
               </div>
             ) : null}
             {activeBattle.result.rewards.boxType ? (
@@ -960,6 +968,8 @@ export function InfiniteTowerPanel() {
             </div>
             <div className="text-xs text-white/55 space-y-0.5">
               {activeBattle.result.rewards.hunterXp ? <div>XP +{activeBattle.result.rewards.hunterXp}</div> : null}
+              {activeBattle.result.rewards.gold ? <div>Gold +{activeBattle.result.rewards.gold}</div> : null}
+              {activeBattle.result.rewards.shadowXp ? <div>Shadow XP +{activeBattle.result.rewards.shadowXp}</div> : null}
               {activeBattle.result.rewards.shadowEssence ? <div>정수 +{activeBattle.result.rewards.shadowEssence}</div> : null}
               {activeBattle.result.rewards.boxType ? <div className="text-amber-300/80">보스 박스 획득</div> : null}
               {activeBattle.result.firstClear ? <div className="text-emerald-300/70">첫 클리어 보상</div> : null}

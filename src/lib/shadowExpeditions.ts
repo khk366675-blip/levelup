@@ -11,8 +11,14 @@ import type {
   ShadowExpeditionResult,
   ShadowExpeditionType,
   ShadowRole,
+  ShadowStatKey,
 } from './types'
 import { getShadowDefinition } from './shadows'
+import {
+  getShadowCombatUnitProfile,
+  type ShadowCombatUnitProfile,
+  type ShadowPassiveDefinition,
+} from './shadowSkills'
 import {
   buildExpeditionReport,
   getCommandLog,
@@ -57,6 +63,28 @@ type ExpeditionTemplate = {
   recommendedRoles: ShadowRole[]
   maxTurns: number
   startRisk: number
+}
+
+export interface ShadowExpeditionUnitAggregate {
+  expeditionPower: number
+  scoutUtility: number
+  commandTempo: number
+  riskControl: number
+  supportStability: number
+  searchSense: number
+  bossHuntPressure: number
+  synergyCoordination: number
+}
+
+const EMPTY_SHADOW_EXPEDITION_AGGREGATE: ShadowExpeditionUnitAggregate = {
+  expeditionPower: 0,
+  scoutUtility: 0,
+  commandTempo: 0,
+  riskControl: 0,
+  supportStability: 0,
+  searchSense: 0,
+  bossHuntPressure: 0,
+  synergyCoordination: 0,
 }
 
 export const SHADOW_EXPEDITION_TEMPLATES: ExpeditionTemplate[] = [
@@ -141,6 +169,50 @@ const COMMAND_ROLE_MATCH: Record<ShadowExpeditionCommand, ShadowRole[]> = {
   search: ['hunter', 'scout'],
 }
 
+const COMMAND_STAT_WEIGHTS: Record<ShadowExpeditionCommand, Array<[ShadowStatKey, number]>> = {
+  attack: [
+    ['shadowAttack', 0.44],
+    ['shadowFinisher', 0.34],
+    ['shadowBossing', 0.22],
+  ],
+  defend: [
+    ['shadowDefense', 0.42],
+    ['shadowDurability', 0.3],
+    ['shadowSurvival', 0.28],
+  ],
+  scout: [
+    ['shadowSpeed', 0.36],
+    ['shadowControl', 0.3],
+    ['shadowExpedition', 0.34],
+  ],
+  analyze: [
+    ['shadowControl', 0.42],
+    ['shadowSuppression', 0.3],
+    ['shadowSupport', 0.28],
+  ],
+  search: [
+    ['shadowExpedition', 0.42],
+    ['shadowSynergy', 0.3],
+    ['shadowSupport', 0.28],
+  ],
+}
+
+const COMMAND_PASSIVE_STAT_KEYS: Record<ShadowExpeditionCommand, ShadowStatKey[]> = {
+  attack: ['shadowAttack', 'shadowFinisher', 'shadowBossing'],
+  defend: ['shadowDefense', 'shadowDurability', 'shadowSurvival'],
+  scout: ['shadowSpeed', 'shadowControl', 'shadowExpedition'],
+  analyze: ['shadowControl', 'shadowSuppression', 'shadowSupport'],
+  search: ['shadowExpedition', 'shadowSynergy', 'shadowSupport'],
+}
+
+const PASSIVE_QUALITY_WEIGHT: Record<ShadowPassiveDefinition['qualityTier'], number> = {
+  basic: 0.35,
+  refined: 0.55,
+  elite: 0.75,
+  legendary: 0.9,
+  unique: 1,
+}
+
 const COMMAND_BASE: Record<ShadowExpeditionCommand, { progress: [number, number]; risk: [number, number] }> = {
   attack: { progress: [22, 32], risk: [8, 14] },
   defend: { progress: [8, 14], risk: [-25, -15] },
@@ -150,6 +222,14 @@ const COMMAND_BASE: Record<ShadowExpeditionCommand, { progress: [number, number]
 }
 
 const clamp = (value: number, min: number, max: number): number => Math.max(min, Math.min(max, value))
+
+const boundedBonus = (value: number, scale: number, cap: number): number => {
+  const safeValue = Math.max(0, value)
+  return cap * (safeValue / (safeValue + scale))
+}
+
+const weighted = (...entries: Array<[number, number]>): number =>
+  Math.round(entries.reduce((sum, [value, weight]) => sum + value * weight, 0))
 
 const range = (rng: () => number, min: number, max: number): number =>
   Math.round(min + rng() * (max - min))
@@ -224,7 +304,13 @@ export const getShadowExpeditionPower = (
   const levelMultiplier = 1 + ((shadow.level ?? 1) - 1) * 0.015
   const roleMatchMultiplier = expedition?.recommendedRoles.includes(shadow.role) ? 1.15 : 1
   const namedMultiplier = shadow.isNamed || shadow.isGateNamed || shadow.isAchievementNamed ? 1.08 : 1
-  return Math.round(basePower * rarityMultiplier * enhancementMultiplier * levelMultiplier * roleMatchMultiplier * namedMultiplier)
+  const profileAggregate = getShadowExpeditionUnitAggregateFromProfile(getShadowCombatUnitProfile(shadow, definition))
+  const expeditionProfileMultiplier = 1 + boundedBonus(
+    profileAggregate.expeditionPower + profileAggregate.searchSense * 0.25 + profileAggregate.synergyCoordination * 0.15,
+    520,
+    0.03,
+  )
+  return Math.round(basePower * rarityMultiplier * enhancementMultiplier * levelMultiplier * roleMatchMultiplier * namedMultiplier * expeditionProfileMultiplier)
 }
 
 export const getShadowExpeditionPartyPower = (
@@ -236,6 +322,155 @@ export const getShadowExpeditionPartyPower = (
   const matchedRoles = new Set(shadows.filter(shadow => expedition.recommendedRoles.includes(shadow.role)).map(shadow => shadow.role))
   const diversityBonus = matchedRoles.size >= 3 ? 0.1 : matchedRoles.size >= 2 ? 0.05 : 0
   return Math.round(base * (1 + diversityBonus))
+}
+
+const getShadowExpeditionUnitAggregateFromProfile = (profile: ShadowCombatUnitProfile): ShadowExpeditionUnitAggregate => {
+  const stats = profile.stats
+  return {
+    expeditionPower: weighted(
+      [stats.shadowExpedition, 0.42],
+      [stats.shadowSpeed, 0.14],
+      [stats.shadowSupport, 0.18],
+      [stats.shadowSynergy, 0.26],
+    ),
+    scoutUtility: weighted(
+      [stats.shadowSpeed, 0.36],
+      [stats.shadowControl, 0.32],
+      [stats.shadowExpedition, 0.24],
+      [stats.shadowSynergy, 0.08],
+    ),
+    commandTempo: weighted(
+      [stats.shadowSpeed, 0.5],
+      [stats.shadowControl, 0.18],
+      [stats.shadowExpedition, 0.18],
+      [stats.shadowSynergy, 0.14],
+    ),
+    riskControl: weighted(
+      [stats.shadowControl, 0.28],
+      [stats.shadowDefense, 0.22],
+      [stats.shadowDurability, 0.18],
+      [stats.shadowSurvival, 0.22],
+      [stats.shadowExpedition, 0.1],
+    ),
+    supportStability: weighted(
+      [stats.shadowSupport, 0.38],
+      [stats.shadowSurvival, 0.24],
+      [stats.shadowDurability, 0.16],
+      [stats.shadowSynergy, 0.22],
+    ),
+    searchSense: weighted(
+      [stats.shadowExpedition, 0.44],
+      [stats.shadowSynergy, 0.24],
+      [stats.shadowSpeed, 0.18],
+      [stats.shadowSupport, 0.14],
+    ),
+    bossHuntPressure: weighted(
+      [stats.shadowBossing, 0.38],
+      [stats.shadowFinisher, 0.24],
+      [stats.shadowAttack, 0.2],
+      [stats.shadowSuppression, 0.18],
+    ),
+    synergyCoordination: weighted(
+      [stats.shadowSynergy, 0.44],
+      [stats.shadowSupport, 0.22],
+      [stats.shadowControl, 0.18],
+      [stats.shadowExpedition, 0.16],
+    ),
+  }
+}
+
+const getShadowExpeditionProfiles = (shadows: OwnedShadow[]): ShadowCombatUnitProfile[] =>
+  shadows.map(shadow => getShadowCombatUnitProfile(shadow))
+
+export const getShadowExpeditionUnitAggregate = (shadow: OwnedShadow): ShadowExpeditionUnitAggregate =>
+  getShadowExpeditionUnitAggregateFromProfile(getShadowCombatUnitProfile(shadow))
+
+const getShadowExpeditionPartyAggregateFromProfiles = (profiles: ShadowCombatUnitProfile[]): ShadowExpeditionUnitAggregate =>
+  profiles.reduce((total, profile) => {
+    const aggregate = getShadowExpeditionUnitAggregateFromProfile(profile)
+    return {
+      expeditionPower: total.expeditionPower + aggregate.expeditionPower,
+      scoutUtility: total.scoutUtility + aggregate.scoutUtility,
+      commandTempo: total.commandTempo + aggregate.commandTempo,
+      riskControl: total.riskControl + aggregate.riskControl,
+      supportStability: total.supportStability + aggregate.supportStability,
+      searchSense: total.searchSense + aggregate.searchSense,
+      bossHuntPressure: total.bossHuntPressure + aggregate.bossHuntPressure,
+      synergyCoordination: total.synergyCoordination + aggregate.synergyCoordination,
+    }
+  }, { ...EMPTY_SHADOW_EXPEDITION_AGGREGATE })
+
+export const getShadowExpeditionPartyAggregate = (shadows: OwnedShadow[]): ShadowExpeditionUnitAggregate =>
+  getShadowExpeditionPartyAggregateFromProfiles(getShadowExpeditionProfiles(shadows))
+
+const getCommandStatScore = (profile: ShadowCombatUnitProfile, command: ShadowExpeditionCommand): number =>
+  weighted(...COMMAND_STAT_WEIGHTS[command].map(([key, weight]) => [profile.stats[key], weight] as [number, number]))
+
+const getPartyCommandStatScore = (profiles: ShadowCombatUnitProfile[], command: ShadowExpeditionCommand): number =>
+  profiles.reduce((sum, profile) => sum + getCommandStatScore(profile, command), 0)
+
+const getRiskControlScoreForCommand = (
+  aggregate: ShadowExpeditionUnitAggregate,
+  command: ShadowExpeditionCommand,
+): number => {
+  if (command === 'attack') return aggregate.riskControl * 0.32 + aggregate.supportStability * 0.26 + aggregate.bossHuntPressure * 0.18
+  if (command === 'defend') return aggregate.riskControl * 0.42 + aggregate.supportStability * 0.34 + aggregate.synergyCoordination * 0.16
+  if (command === 'scout') return aggregate.scoutUtility * 0.38 + aggregate.riskControl * 0.32 + aggregate.commandTempo * 0.18
+  if (command === 'analyze') return aggregate.riskControl * 0.3 + aggregate.supportStability * 0.24 + aggregate.synergyCoordination * 0.22
+  return aggregate.searchSense * 0.28 + aggregate.riskControl * 0.26 + aggregate.supportStability * 0.24
+}
+
+const getPassiveCommandAffinity = (passive: ShadowPassiveDefinition, command: ShadowExpeditionCommand): number => {
+  const relevantKeys = COMMAND_PASSIVE_STAT_KEYS[command]
+  const statAffinity = relevantKeys.reduce((sum, key) => sum + (passive.statScaling[key] ?? 0), 0)
+  const roleAffinity = passive.roleTags.some(role => COMMAND_ROLE_MATCH[command].includes(role)) ? 0.28 : 0
+  const effectAffinity =
+    passive.effectKind === 'survival' && (command === 'defend' || command === 'scout') ? 0.32
+      : passive.effectKind === 'cooldown' && (command === 'analyze' || command === 'search') ? 0.22
+        : passive.effectKind === 'synergy' && (command === 'search' || command === 'analyze') ? 0.32
+          : passive.effectKind === 'bossing' && (command === 'attack' || command === 'search') ? 0.24
+            : passive.effectKind === 'trigger_boost' ? 0.14
+              : 0
+  const sourceAffinity = passive.source === 'unique' ? 0.18 : passive.source === 'prototype' ? 0.12 : 0
+  return (statAffinity + roleAffinity + effectAffinity + sourceAffinity) * PASSIVE_QUALITY_WEIGHT[passive.qualityTier]
+}
+
+const getExpeditionPassiveInfluence = (
+  profiles: ShadowCombatUnitProfile[],
+  command: ShadowExpeditionCommand,
+): number =>
+  profiles.reduce((sum, profile) => (
+    sum + profile.passives.reduce((passiveSum, passive) => passiveSum + getPassiveCommandAffinity(passive, command), 0)
+  ), 0)
+
+const getCommandProfileModifiers = (
+  profiles: ShadowCombatUnitProfile[],
+  aggregate: ShadowExpeditionUnitAggregate,
+  command: ShadowExpeditionCommand,
+  roleMatches: number,
+): { progressMultiplier: number; riskMitigation: number; roleMatchProgress: number; passiveInfluence: number } => {
+  const partySize = Math.max(1, profiles.length)
+  const commandScore = getPartyCommandStatScore(profiles, command)
+  const passiveInfluence = getExpeditionPassiveInfluence(profiles, command)
+  const tempoSupport = aggregate.commandTempo * 0.18 + aggregate.synergyCoordination * 0.14
+  const progressMultiplier = Math.min(0.04, boundedBonus(commandScore + tempoSupport, partySize * 520, 0.032) + boundedBonus(passiveInfluence, partySize * 2.2, 0.008))
+  const riskCap = command === 'defend' || command === 'scout' ? 3 : 4
+  const riskMitigation = Math.round(Math.min(riskCap, boundedBonus(getRiskControlScoreForCommand(aggregate, command), partySize * 420, riskCap) + boundedBonus(passiveInfluence, partySize * 1.6, 1.5)))
+  const roleMatchProgress = roleMatches > 0
+    ? Math.round(Math.min(1, boundedBonus(aggregate.synergyCoordination + passiveInfluence * 40, partySize * 640, 1)))
+    : 0
+  return { progressMultiplier, riskMitigation, roleMatchProgress, passiveInfluence }
+}
+
+const getOutcomeProfileAdjustment = (
+  profiles: ShadowCombatUnitProfile[],
+  aggregate: ShadowExpeditionUnitAggregate,
+): { progress: number; risk: number } => {
+  const partySize = Math.max(1, profiles.length)
+  return {
+    progress: Math.round(boundedBonus(aggregate.expeditionPower + aggregate.synergyCoordination * 0.35, partySize * 640, 1)),
+    risk: Math.round(boundedBonus(aggregate.riskControl + aggregate.supportStability * 0.3, partySize * 680, 1)),
+  }
 }
 
 export const getShadowExpeditionRecommendedRoleMatches = (
@@ -313,6 +548,8 @@ export const resolveShadowExpeditionCommand = (
   if (expedition.result) return expedition
   if (expedition.eventTriggered && !expedition.eventResolved) return expedition
 
+  const profiles = getShadowExpeditionProfiles(party)
+  const expeditionAggregate = getShadowExpeditionPartyAggregateFromProfiles(profiles)
   const actor = pickActor(party, expedition, command, rng)
   const base = COMMAND_BASE[command]
   const partyPower = getShadowExpeditionPartyPower(party, expedition)
@@ -325,6 +562,7 @@ export const resolveShadowExpeditionCommand = (
   const enhancementBonus = actor?.enhancementLevel ?? 0
   const analyzeStacks = expedition.analyzeStacks ?? 0
   const scoutStacks = expedition.scoutStacks ?? 0
+  const profileModifiers = getCommandProfileModifiers(profiles, expeditionAggregate, command, roleMatches)
 
   let progressDelta = range(rng, base.progress[0], base.progress[1])
   let riskDelta = range(rng, base.risk[0], base.risk[1])
@@ -351,6 +589,8 @@ export const resolveShadowExpeditionCommand = (
     progressDelta = Math.round(progressDelta * (1 + Math.min(2, analyzeStacks) * 0.1))
   }
   if (scoutStacks > 0) riskDelta -= 6
+  progressDelta = Math.round(progressDelta * (1 + profileModifiers.progressMultiplier)) + profileModifiers.roleMatchProgress
+  riskDelta -= profileModifiers.riskMitigation
 
   progressDelta = Math.max(1, progressDelta)
   riskDelta = Math.round(riskDelta)
@@ -391,6 +631,18 @@ export const resolveShadowExpeditionCommand = (
     actorShadowId: actor?.instanceId,
     message: `${SHADOW_EXPEDITION_COMMAND_LABEL[command]} 명령. ${actorLine(command, nextPhase, actor)} 진행도 +${progressDelta}, 위험도 ${riskDelta >= 0 ? '+' : ''}${riskDelta}.`,
   })
+
+  if (profileModifiers.progressMultiplier >= 0.04 || profileModifiers.riskMitigation >= 3 || profileModifiers.roleMatchProgress >= 3) {
+    logs.push({
+      id: idFactory(),
+      turn: nextTurn,
+      type: 'shadow',
+      command,
+      phase: nextPhase,
+      actorShadowId: actor?.instanceId,
+      message: '군단 조율이 안정적이었다. 역할과 그림자 특성이 명령 처리를 소폭 보정했다.',
+    })
+  }
 
   if (command === 'analyze') {
     logs.push({
@@ -464,7 +716,8 @@ export const resolveShadowExpeditionCommand = (
     }
   }
 
-  const outcome = getShadowExpeditionOutcome(nextProgress, nextRisk)
+  const outcomeAdjustment = getOutcomeProfileAdjustment(profiles, expeditionAggregate)
+  const outcome = getShadowExpeditionOutcome(nextProgress + outcomeAdjustment.progress, nextRisk - outcomeAdjustment.risk)
   const reward = getShadowExpeditionReward(expedition.type, outcome, nextSearchStacks)
 
   // Featured shadow for report
@@ -521,14 +774,27 @@ export const resolveShadowExpeditionCommand = (
 export const resolveExpeditionMidEventChoice = (
   expedition: ShadowExpedition,
   choiceId: string,
-  idFactory: () => string = () => `exp-log-${Date.now()}-${Math.floor(Math.random() * 1_000_000)}`
+  idFactory: () => string = () => `exp-log-${Date.now()}-${Math.floor(Math.random() * 1_000_000)}`,
+  party: OwnedShadow[] = [],
 ): ShadowExpedition => {
   if (!expedition.midEvent || !expedition.eventTriggered || expedition.eventResolved) return expedition
   const choice = expedition.midEvent.choices.find(c => c.id === choiceId)
   if (!choice) return expedition
 
-  const nextProgress = Math.max(0, Math.min(140, expedition.progress + (choice.progressDelta ?? 0)))
-  const nextRisk = clamp(expedition.risk + (choice.riskDelta ?? 0), 0, 140)
+  const profiles = getShadowExpeditionProfiles(party)
+  const aggregate = getShadowExpeditionPartyAggregateFromProfiles(profiles)
+  const preferredRoleMatches = choice.preferredRoles?.filter(role => party.some(shadow => shadow.role === role)).length ?? 0
+  const eventProgressBonus = preferredRoleMatches > 0
+    ? Math.round(boundedBonus(aggregate.expeditionPower + aggregate.synergyCoordination * 0.3, Math.max(1, party.length) * 520, 4))
+    : 0
+  const eventRiskMitigation = party.length > 0
+    ? Math.round(boundedBonus(aggregate.riskControl + aggregate.supportStability * 0.35, Math.max(1, party.length) * 560, preferredRoleMatches > 0 ? 4 : 2))
+    : 0
+  const progressDelta = (choice.progressDelta ?? 0) + eventProgressBonus
+  const riskDelta = (choice.riskDelta ?? 0) - eventRiskMitigation
+
+  const nextProgress = Math.max(0, Math.min(140, expedition.progress + progressDelta))
+  const nextRisk = clamp(expedition.risk + riskDelta, 0, 140)
   const nextSearchStacks = Math.min(3, (expedition.searchStacks ?? 0) + (choice.searchStackDelta ?? 0))
 
   const logs: ShadowExpeditionLog[] = [
@@ -541,6 +807,16 @@ export const resolveExpeditionMidEventChoice = (
       message: `[선택] ${choice.label} — ${choice.log}`,
     },
   ]
+
+  if (eventProgressBonus > 0 || eventRiskMitigation > 0) {
+    logs.push({
+      id: idFactory(),
+      turn: expedition.turn,
+      type: 'event',
+      phase: 'threshold',
+      message: `역할 대응이 맞아 상황 처리가 안정화되었다. 진행도 +${eventProgressBonus}, 위험도 -${eventRiskMitigation}.`,
+    })
+  }
 
   return {
     ...expedition,

@@ -153,7 +153,7 @@ for (const build of builds) {
 console.log('--- 보상 샘플 (첫 클리어) ---')
 for (const floor of [1, 5, 10, 15, 20, 25, 30]) {
   const reward = calculateTowerReward(floor, 'victory', true)
-  console.log(`  ${floor}층 | XP ${reward.hunterXp ?? 0} | 정수 ${reward.shadowEssence ?? 0} | 박스 ${reward.boxType ?? '-'} | 아이템 확률 ${((reward.itemDropChance ?? 0) * 100).toFixed(0)}%`)
+  console.log(`  ${floor}층 | XP ${reward.hunterXp ?? 0} | Gold ${reward.gold ?? 0} | 정수 ${reward.shadowEssence ?? 0} | 박스 ${reward.boxType ?? '-'} | 아이템 확률 ${((reward.itemDropChance ?? 0) * 100).toFixed(0)}%`)
 }
 
 console.log('\n=== 시뮬레이션 완료 ===')

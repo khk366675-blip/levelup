@@ -47,6 +47,7 @@ function getDisplayTier(box: RewardBox, upgradePoints: number): BoxTier {
   if (box.type !== 'daily' || box.status !== 'available' || !box.label.startsWith(todayKey())) {
     return box.tier
   }
+  if (upgradePoints >= 6) return 'epic'
   if (upgradePoints >= 4) return 'superior'
   if (upgradePoints >= 2) return 'enhanced'
   return 'normal'
@@ -62,6 +63,7 @@ function formatReward(reward?: BoxReward): string[] {
   if (!reward) return []
   return [
     ...(reward.hunterXp ? [`XP +${reward.hunterXp}`] : []),
+    ...(reward.gold ? [`Gold +${reward.gold}`] : []),
     ...(reward.shadowEssence ? [`그림자 정수 +${reward.shadowEssence}`] : []),
     ...(reward.shadowSummonTickets ?? []).map(ticket => `소환권: ${ticket.label}`),
     ...Object.entries(reward.shadowSummonShards ?? {}).map(([type, amount]) => `소환 조각: ${type} +${amount}`),
@@ -100,7 +102,8 @@ function rewardLineClass(line: string): string {
   if (line.startsWith('소환권:')) return 'border-cyan-300/35 bg-cyan-400/12 text-cyan-100 shadow-glow'
   if (line.startsWith('소환 조각:') || line.startsWith('조각:')) return 'border-purple-300/35 bg-purple-400/12 text-purple-100'
   if (line.startsWith('그림자 정수')) return 'border-emerald-300/30 bg-emerald-400/10 text-emerald-100'
-  return 'border-white/10 bg-white/5 text-white/75'
+  if (line.startsWith('Gold')) return 'border-amber-300/30 bg-amber-400/10 text-amber-100'
+  return 'border-slate-500/18 bg-slate-400/6 text-white/72'
 }
 
 function RewardLineIcon({ line }: { line: string }) {
@@ -114,10 +117,10 @@ function RewardLineIcon({ line }: { line: string }) {
 function previewRewardHints(box: RewardBox, tier: BoxTier): string[] {
   const tierBonus = tier === 'normal' ? undefined : `${TIER_LABEL[tier]} 보정`
   const base = box.type === 'boss'
-    ? ['XP/정수', '장비/소모품', '그림자 신호']
+    ? ['XP/Gold/정수', '장비/소모품', '그림자 신호']
     : box.type === 'weekly'
-      ? ['XP/정수', '스탯/아이템', '그림자 신호']
-      : ['XP/정수', '소량 스탯', '낮은 확률 신호']
+      ? ['XP/Gold/정수', '스탯/아이템', '그림자 신호']
+      : ['XP/Gold/정수', '소량 스탯', '낮은 확률 신호']
   return tierBonus ? [tierBonus, ...base] : base
 }
 
@@ -248,7 +251,7 @@ export function RewardBoxPanel() {
           setRevealGrowth({})
         }}
       />
-      <div className="panel corner-bracket border-white/10 bg-ink-950/60 p-3">
+      <div className="panel corner-bracket border-cyan-300/12 bg-ink-950/60 p-3">
         <div className="br" />
         <div className="grid gap-2 md:grid-cols-[1.2fr_1fr_1fr]">
           <div className="rounded-md border border-cyan-300/20 bg-cyan-400/8 px-3 py-2">
@@ -280,7 +283,7 @@ export function RewardBoxPanel() {
             <div className="system-text text-[11px] text-cyan-300/75">REWARD BOXES</div>
             <h3 className="text-lg font-bold text-cyan-50">박스 보상</h3>
           </div>
-          <div className="rounded-md border border-white/10 bg-white/5 px-2.5 py-1 text-[10px] system-text text-white/55">
+          <div className="rounded-md border border-cyan-300/12 bg-cyan-400/5 px-2.5 py-1 text-[10px] system-text text-white/55">
             열기 가능 {available.length}
           </div>
         </div>
@@ -289,16 +292,16 @@ export function RewardBoxPanel() {
           <div className="rounded-md border border-amber-300/20 bg-amber-400/8 px-3 py-2 leading-relaxed text-amber-100/75 sm:col-span-2">
             오늘의 박스는 열기 전 완료한 도전 카드 수에 따라 강화됩니다. 이미 연 박스에는 추가 강화가 적용되지 않습니다.
           </div>
-          <div className="rounded-md border border-white/10 bg-white/5 px-3 py-2 text-white/55">
+          <div className="rounded-md border border-cyan-300/12 bg-cyan-400/5 px-3 py-2 text-white/55">
             <span className="system-text text-white/35">NEXT TIER</span>
             <div className="mt-1 font-semibold text-white/80">
-              {upgradePoints >= 4 ? 'Superior 적용 중' : upgradePoints >= 2 ? 'Enhanced 적용 중 · +4에 Superior' : `+${Math.max(0, 2 - upgradePoints)} 강화점에 Enhanced`}
+              {upgradePoints >= 6 ? '3장 완전 달성으로 Epic 적용 중' : upgradePoints >= 4 ? 'Superior 적용 중 · +6에 Epic' : upgradePoints >= 2 ? 'Enhanced 적용 중 · +4에 Superior' : `+${Math.max(0, 2 - upgradePoints)} 강화점에 Enhanced`}
             </div>
           </div>
         </div>
 
         {available.length === 0 ? (
-          <div className="rounded-md border border-white/10 bg-ink-900/35 px-3 py-5 text-center text-sm text-white/45">
+          <div className="rounded-md border border-cyan-300/12 bg-ink-900/35 px-3 py-5 text-center text-sm text-white/45">
             지금 열 수 있는 박스가 없습니다.
           </div>
         ) : (
@@ -330,18 +333,18 @@ export function RewardBoxPanel() {
                         <span className="truncate text-sm font-bold">{box.label}</span>
                       </div>
                       <div className="flex flex-wrap gap-1.5 text-[10px] system-text">
-                        <span className="rounded border border-white/15 bg-black/15 px-1.5 py-0.5">{BOX_TYPE_META[box.type].short}</span>
-                        <span className="rounded border border-white/15 bg-black/15 px-1.5 py-0.5">{TIER_LABEL[tier]}</span>
-                        {box.floor ? <span className="rounded border border-white/15 bg-black/15 px-1.5 py-0.5">{box.floor}층</span> : null}
+                        <span className="rounded border border-cyan-300/14 bg-black/15 px-1.5 py-0.5">{BOX_TYPE_META[box.type].short}</span>
+                        <span className="rounded border border-cyan-300/14 bg-black/15 px-1.5 py-0.5">{TIER_LABEL[tier]}</span>
+                        {box.floor ? <span className="rounded border border-cyan-300/14 bg-black/15 px-1.5 py-0.5">{box.floor}층</span> : null}
                       </div>
                     </div>
                     <Box className="h-8 w-8 shrink-0 opacity-70" />
                   </div>
-                  <div className="relative mt-3 rounded-md border border-white/10 bg-black/15 px-3 py-2">
+                  <div className="relative mt-3 rounded-md border border-cyan-300/12 bg-black/15 px-3 py-2">
                     <div className="mb-1 text-[10px] system-text text-white/42">PREVIEW</div>
                     <div className="flex flex-wrap gap-1.5">
                       {previewRewardHints(box, tier).map(line => (
-                        <span key={line} className="rounded border border-white/12 bg-white/5 px-1.5 py-0.5 text-[10px] text-white/65">
+                        <span key={line} className="rounded border border-cyan-300/12 bg-cyan-400/5 px-1.5 py-0.5 text-[10px] text-white/65">
                           {line}
                         </span>
                       ))}
@@ -351,7 +354,7 @@ export function RewardBoxPanel() {
                   <button
                     type="button"
                     onClick={() => handleOpenBox(box.id)}
-                    className="mt-4 flex min-h-11 w-full items-center justify-center gap-2 rounded-md border border-white/15 bg-white/10 text-sm font-bold text-white hover:bg-white/15 transition"
+                    className="mt-4 flex min-h-11 w-full items-center justify-center gap-2 rounded-md border border-cyan-300/22 bg-cyan-400/10 text-sm font-bold text-cyan-50 hover:bg-cyan-400/15 transition"
                   >
                     <Sparkles className="h-4 w-4" />
                     열기
@@ -364,12 +367,12 @@ export function RewardBoxPanel() {
       </div>
 
       {recentOpened.length > 0 && (
-        <div className="panel corner-bracket p-4 border-white/10">
+        <div className="panel corner-bracket p-4 border-cyan-300/12">
           <div className="br" />
           <div className="system-text mb-3 text-[11px] text-white/45">RECENT REVEALS</div>
           <div className="space-y-2">
             {recentOpened.map(box => (
-              <div key={box.id} className="rounded-md border border-white/10 bg-white/5 p-3">
+              <div key={box.id} className="rounded-md border border-cyan-300/12 bg-cyan-400/5 p-3">
                 <div className="mb-1 flex items-center justify-between gap-3">
                   <div className="min-w-0">
                     <div className="truncate text-sm font-semibold text-white/80">{box.label}</div>

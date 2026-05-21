@@ -14,6 +14,7 @@ import {
   isEnhanceableEquipment,
   MAX_ITEM_ENHANCEMENT_LEVEL,
 } from '../lib/game'
+import { compareEquipmentForSlot, getEquipmentPowerBreakdown } from '../lib/equipmentPower'
 import { Package, Sword, Shield, Gem, Scroll, X, Sparkles } from 'lucide-react'
 
 const SLOT_ICONS: Record<EquipmentSlot, typeof Sword> = {
@@ -21,6 +22,13 @@ const SLOT_ICONS: Record<EquipmentSlot, typeof Sword> = {
   armor: Shield,
   accessory: Gem,
   artifact: Scroll,
+}
+
+const comparisonTone: Record<ReturnType<typeof compareEquipmentForSlot>['verdict'], string> = {
+  better: 'border-emerald-300/25 bg-emerald-400/10 text-emerald-100',
+  sidegrade: 'border-cyan-300/20 bg-cyan-400/8 text-cyan-100/80',
+  situational: 'border-amber-300/25 bg-amber-400/10 text-amber-100',
+  weaker: 'border-white/10 bg-white/5 text-white/50',
 }
 
 function formatItemEffects(item: Item): string[] {
@@ -205,6 +213,7 @@ export function Inventory() {
             const equippedItem = getEquippedItem(slot)
             const equippedCombatSkills = equippedItem ? formatCombatSkillNames(equippedItem) : []
             const slotRarityClass = equippedItem ? `rarity-frame-${equippedItem.rarity}` : ''
+            const equippedPower = equippedItem ? getEquipmentPowerBreakdown(equippedItem) : undefined
 
             return (
               <div
@@ -231,6 +240,19 @@ export function Inventory() {
                         <span className="ml-1 text-amber-300">{formatEnhancementLabel(equippedItem)}</span>
                       )}
                     </div>
+                    {equippedPower && (
+                      <div className="mt-1.5 rounded border border-white/10 bg-black/18 px-2 py-1 text-center">
+                        <div className="text-[9px] system-text text-white/35">{equippedPower.slotRoleLabel}</div>
+                        <div className="text-[10px] font-bold tabular-nums text-white/70">VALUE {equippedPower.totalEquipmentValue}</div>
+                        <div className="mt-1 flex flex-wrap justify-center gap-1">
+                          {equippedPower.topTags.slice(0, 2).map(tag => (
+                            <span key={tag} className="rounded border border-cyan-300/15 bg-cyan-300/8 px-1.5 py-0.5 text-[8px] system-text text-cyan-100/60">
+                              {tag}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                     {equippedItem.effects && equippedItem.effects.length > 0 && (
                       <div className="text-[9px] text-purple-300/60 system-text mt-1 text-center">
                         {formatItemEffects(equippedItem).slice(0, 2).join(', ')}
@@ -277,6 +299,9 @@ export function Inventory() {
             const enhancementLevel = getEnhancementLevel(item)
             const enhancementLabel = formatEnhancementLabel(item)
             const equipmentStars = getEquipmentStars(item)
+            const equipmentPower = canEquip ? getEquipmentPowerBreakdown(item) : undefined
+            const currentSlotItem = item.slot ? getEquippedItem(item.slot) : undefined
+            const equipmentComparison = canEquip && !equipped ? compareEquipmentForSlot(item, currentSlotItem) : undefined
             const enhanceable = isEnhanceableEquipment(item)
             const enhanceMaterials = getEnhanceMaterialCandidates(item, items, equippedItemIds)
             const canEnhance = canEnhanceItem(item, items, equippedItemIds)
@@ -324,6 +349,22 @@ export function Inventory() {
                     <span className="ml-1 text-yellow-300/70">· {equipmentStars}성</span>
                   )}
                 </div>
+
+                {equipmentPower && (
+                  <div className="mt-2 rounded border border-white/10 bg-black/18 p-2">
+                    <div className="flex items-center justify-between gap-2 text-[10px] system-text">
+                      <span className="text-cyan-100/60">{equipmentPower.slotRoleLabel}</span>
+                      <span className="font-bold tabular-nums text-white/70">VALUE {equipmentPower.totalEquipmentValue}</span>
+                    </div>
+                    <div className="mt-1.5 flex flex-wrap justify-center gap-1">
+                      {equipmentPower.topTags.slice(0, 2).map(tag => (
+                        <span key={tag} className="rounded border border-cyan-300/15 bg-cyan-300/8 px-1.5 py-0.5 text-[8px] system-text text-cyan-100/65">
+                          {tag}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
                 
                 {effects.length > 0 && (
                   <div className="text-[9px] text-purple-300/70 system-text mt-2 text-center space-y-0.5">
@@ -348,6 +389,19 @@ export function Inventory() {
                 )}
                 
                 <div className="text-xs text-white/50 text-center mt-2 leading-snug">{item.description}</div>
+
+                {equipmentComparison && (
+                  <div
+                    className={`mt-2 rounded border px-2 py-1.5 text-[10px] leading-relaxed ${comparisonTone[equipmentComparison.verdict]}`}
+                    title={`${equipmentComparison.keyReason} ${equipmentComparison.recommendation}`}
+                  >
+                    <div className="flex items-center justify-between gap-2 system-text">
+                      <span>{equipmentComparison.label}</span>
+                      <span>{equipmentComparison.totalDelta >= 0 ? '+' : ''}{equipmentComparison.totalDelta}</span>
+                    </div>
+                    <div className="mt-0.5 text-white/55">{equipmentComparison.recommendation}</div>
+                  </div>
+                )}
 
                 <div className="mt-3 rounded-md border border-white/10 bg-white/5 p-2">
                   <div className="flex items-center justify-between gap-2 text-[10px] system-text">

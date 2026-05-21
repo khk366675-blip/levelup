@@ -24,7 +24,7 @@ export function getTowerFloorType(floor: number): TowerFloorType {
 export function getTowerRecommendedPower(floor: number): number {
   const base = 200 + floor * 80
   const isBoss = floor % 5 === 0
-  return Math.round(base * (isBoss ? 1.35 : 1.0))
+  return Math.round(base * (isBoss ? 1.42 : 1.0))
 }
 
 export function getTowerMonsterIds(floor: number): string[] {
@@ -53,7 +53,7 @@ export function getBaseMonsterForTower(monsterId: string): MonsterDefinition | u
 export function scaleMonsterForFloor(base: MonsterDefinition, floor: number): MonsterDefinition {
   const isBoss = floor % 5 === 0
   const multiplier = 1 + (floor - 1) * 0.028
-  const bossMultiplier = isBoss ? 1.18 : 1.0
+  const bossMultiplier = isBoss ? 1.22 : 1.0
   const finalMult = multiplier * bossMultiplier
 
   const scale = (v: number) => Math.max(1, Math.round(v * finalMult))
@@ -156,14 +156,17 @@ export function calculateTowerReward(
   if (isFirstClear) {
     if (isBoss) {
       return {
-        hunterXp: Math.round(floor * 28),
-        shadowEssence: Math.round(5 + floor / 5),
+        hunterXp: Math.round(floor * 31),
+        gold: Math.round(95 + floor * 12),
+        shadowXp: Math.max(2, Math.round(floor / 2)),
+        shadowEssence: Math.round(7 + floor / 4),
         boxType: 'boss',
-        itemDropChance: 0.35,
+        itemDropChance: 0.42,
       }
     }
     return {
       hunterXp: Math.round(floor * 12),
+      gold: Math.round(10 + floor * 3),
       shadowEssence: floor <= 5 ? 1 : 2,
       itemDropChance: 0.12,
     }
@@ -172,13 +175,16 @@ export function calculateTowerReward(
   // repeat clear
   if (isBoss) {
     return {
-      hunterXp: Math.round(floor * 6),
-      shadowEssence: Math.round(1 + floor / 10),
-      itemDropChance: 0.08,
+      hunterXp: Math.round(floor * 7),
+      gold: Math.round(36 + floor * 5),
+      shadowXp: Math.max(1, Math.round(floor / 4)),
+      shadowEssence: Math.round(2 + floor / 8),
+      itemDropChance: 0.11,
     }
   }
   return {
     hunterXp: Math.round(floor * 3),
+    gold: Math.round(4 + floor),
     shadowEssence: 1,
     itemDropChance: 0.04,
   }

@@ -7,6 +7,7 @@ import {
   getAvailableSkills,
   getEquippedSkillItems,
   getNextMasteryUseTarget,
+  getSkillDefinitionSource,
   getSkillEffectiveDescription,
   getSkillMastery,
   getSkillMasteryProgress,
@@ -33,9 +34,13 @@ export function SkillPanel() {
       ),
     [hunter, items, equipment, titles]
   )
+  const defaultDetailSkill = useMemo(
+    () => skills.find(skill => getSkillDefinitionSource(skill) !== 'basic'),
+    [skills],
+  )
   const selectedSkill = useMemo(
-    () => skills.find(skill => skill.id === selectedSkillId) ?? skills[0],
-    [selectedSkillId, skills],
+    () => skills.find(skill => skill.id === selectedSkillId && getSkillDefinitionSource(skill) !== 'basic') ?? defaultDetailSkill,
+    [selectedSkillId, skills, defaultDetailSkill],
   )
   const selectedRuntime = selectedSkill ? getSkillMastery(skillStates, selectedSkill.id) : undefined
   const selectedProgress = selectedRuntime ? getSkillMasteryProgress(selectedRuntime) : undefined
@@ -75,13 +80,13 @@ export function SkillPanel() {
             <div className="rounded-md border border-cyan-300/18 bg-cyan-400/8 px-3 py-2 text-xs leading-relaxed text-white/62">
               헌터 스킬은 게이트와 무한의 탑 수동 전투에서 사용됩니다. 직접 사용할수록 숙련도가 쌓이고, 전투 중에는 사용 가능 스킬과 쿨다운을 먼저 보여줍니다.
             </div>
-            <div className="flex flex-wrap gap-1.5 rounded-md border border-white/10 bg-ink-900/35 px-3 py-2 text-[10px] system-text text-white/50">
+            <div className="flex flex-wrap gap-1.5 rounded-md border border-cyan-300/12 bg-ink-900/35 px-3 py-2 text-[10px] system-text text-white/50">
               {Object.entries(sourceCounts).map(([source, count]) => (
-                <span key={source} className="rounded border border-white/12 bg-white/5 px-1.5 py-0.5">
+                <span key={source} className="rounded border border-cyan-300/12 bg-cyan-400/5 px-1.5 py-0.5">
                   {source} {count}
                 </span>
               ))}
-              <span className="rounded border border-white/12 bg-white/5 px-1.5 py-0.5">COMBAT READY</span>
+              <span className="rounded border border-cyan-300/12 bg-cyan-400/5 px-1.5 py-0.5">COMBAT READY</span>
             </div>
           </div>
 
@@ -96,16 +101,16 @@ export function SkillPanel() {
                     skill={skill}
                     runtime={runtime}
                     providerName={provider?.name}
-                    selected={selectedSkill?.id === skill.id}
+                    selected={selectedSkill?.id === skill.id && getSkillDefinitionSource(skill) !== 'basic'}
                     informational
-                    onClick={() => setSelectedSkillId(skill.id)}
+                    onClick={() => setSelectedSkillId(getSkillDefinitionSource(skill) === 'basic' ? undefined : skill.id)}
                   />
                 )
               })}
             </div>
 
             {selectedSkill && selectedRuntime && selectedProgress && (
-              <aside className="rounded-md border border-white/12 bg-ink-950/55 p-3">
+              <aside className="rounded-md border border-cyan-300/18 bg-ink-950/55 p-3 shadow-[0_0_18px_rgba(34,211,238,0.06)]">
                 <div className="mb-2 flex items-center gap-2 system-text text-[10px] text-cyan-100/65">
                   <Info className="h-3.5 w-3.5" />
                   SKILL DETAIL
@@ -128,11 +133,11 @@ export function SkillPanel() {
                   {getSkillEffectiveDescription(selectedSkill, selectedRuntime)}
                 </p>
                 <div className="mt-3 grid grid-cols-2 gap-2 text-[11px]">
-                  <div className="rounded border border-white/10 bg-white/5 px-2 py-2">
+                  <div className="rounded border border-cyan-300/12 bg-cyan-400/5 px-2 py-2">
                     <div className="system-text text-[9px] text-white/35">사용 횟수</div>
                     <div className="font-semibold text-white/80">{selectedRuntime.timesUsed ?? 0}회</div>
                   </div>
-                  <div className="rounded border border-white/10 bg-white/5 px-2 py-2">
+                  <div className="rounded border border-cyan-300/12 bg-cyan-400/5 px-2 py-2">
                     <div className="system-text text-[9px] text-white/35">다음 숙련</div>
                     <div className="font-semibold text-white/80">
                       {getNextMasteryUseTarget(selectedRuntime.timesUsed) ?? '최대'}
@@ -163,9 +168,21 @@ export function SkillPanel() {
                 )}
               </aside>
             )}
+            {!selectedSkill && (
+              <aside className="rounded-md border border-cyan-300/14 bg-cyan-950/20 p-3 shadow-[0_0_16px_rgba(34,211,238,0.05)]">
+                <div className="mb-2 flex items-center gap-2 system-text text-[10px] text-cyan-100/65">
+                  <Info className="h-3.5 w-3.5" />
+                  BASIC ACTIONS
+                </div>
+                <h3 className="text-sm font-black text-white/82">기본 행동</h3>
+                <p className="mt-2 text-xs leading-relaxed text-white/55">
+                  기본 공격은 전투 목록에서만 간단히 확인합니다. 직업, 장비, 칭호 스킬을 얻으면 이 영역에 전투 스킬 상세가 표시됩니다.
+                </p>
+              </aside>
+            )}
           </div>
 
-          <div className="rounded-md border border-white/10 bg-ink-900/35 px-3 py-2 text-[11px] leading-relaxed text-white/45">
+          <div className="rounded-md border border-cyan-300/12 bg-ink-900/35 px-3 py-2 text-[11px] leading-relaxed text-white/45">
             칭호/특수 스킬 슬롯은 구조만 열어두었습니다. 실제 해금형 스킬트리와 장비 강화 연동은 이후 작업에서 확장합니다.
           </div>
         </div>

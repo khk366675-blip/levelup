@@ -8,7 +8,9 @@
     "build": "tsc && vite build",
     "preview": "vite preview --port 3002",
     "process-portraits": "node scripts/process-shadow-portraits.mjs",
-    "process-portraits-dry": "node scripts/process-shadow-portraits.mjs --dry-run"
+    "process-portraits-dry": "node scripts/process-shadow-portraits.mjs --dry-run",
+    "process-tickets": "node scripts/process-ticket-assets.mjs",
+    "process-tickets-dry": "node scripts/process-ticket-assets.mjs --dry-run"
   },
   "dependencies": {
     "clsx": "^2.1.1",

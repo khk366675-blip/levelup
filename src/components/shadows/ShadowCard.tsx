@@ -15,6 +15,8 @@ import {
   getShadowMaxLevel,
   getShadowXpForNextLevel,
 } from '../../lib/shadows'
+import { getShadowCombatProfile } from '../../lib/shadowStats'
+import { getShadowCombatUnitProfile } from '../../lib/shadowSkills'
 import type { OwnedShadow } from '../../lib/types'
 import { ShadowPortrait } from './ShadowPortrait'
 
@@ -90,6 +92,13 @@ export function ShadowCard({
   const evolutionCheck = canEvolveShadow(shadow, shadowEssence)
   const enhancement = shadow.enhancementLevel ?? 0
   const named = Boolean(shadow.isNamed || shadow.isGateNamed || shadow.isAchievementNamed)
+  const combatProfile = getShadowCombatProfile(shadow)
+  const unitProfile = getShadowCombatUnitProfile(shadow)
+  const combatBadges = [
+    combatProfile.roleTag,
+    unitProfile.activeSkills[0]?.shortLabel,
+    ...combatProfile.topStats.map(stat => stat.shortLabel),
+  ].filter((badge): badge is string => Boolean(badge)).slice(0, 4)
 
   return (
     <motion.div
@@ -138,6 +147,9 @@ export function ShadowCard({
                 )}
               </h3>
               <div className="mt-1 flex flex-wrap gap-1.5 text-[10px] system-text">
+                <span className="rounded border border-amber-300/25 bg-amber-300/10 px-1.5 py-0.5 text-amber-100">
+                  SCP {combatProfile.totalPower.toLocaleString()}
+                </span>
                 <span className="rounded border border-white/10 bg-ink-900/55 px-1.5 py-0.5 text-white/55">
                   {SHADOW_RANK_LABEL[shadow.rank]}
                 </span>
@@ -149,6 +161,13 @@ export function ShadowCard({
                     {shadow.isAchievementNamed ? 'ACHIEVEMENT' : shadow.isGateNamed ? 'GATE NAMED' : 'NAMED'}
                   </span>
                 )}
+              </div>
+              <div className="mt-1.5 flex flex-wrap gap-1 text-[9px] system-text">
+                {combatBadges.map(badge => (
+                  <span key={badge} className="rounded border border-cyan-300/20 bg-cyan-300/8 px-1.5 py-0.5 text-cyan-100/70">
+                    {badge}
+                  </span>
+                ))}
               </div>
             </div>
             <div className="flex shrink-0 flex-col items-end gap-1">

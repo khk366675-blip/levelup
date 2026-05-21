@@ -15,6 +15,7 @@ import type {
   CombatLog,
   ConsumableEffect,
   ConsumableEffectType,
+  Difficulty,
   EquipmentStars,
   EquipmentSlot,
   EquipmentState,
@@ -30,6 +31,7 @@ import type {
   MonsterDefinition,
   OwnedShadow,
   Quest,
+  Rank,
   RandomQuestTemplate,
   RewardBox,
   SecretProgressState,
@@ -152,7 +154,10 @@ import {
   getShadowDefinition,
   getShadowSlotCount,
   getShadowXpReward,
+  getStandardShadowSummonPool,
+  isStandardShadowSummonTicketType,
   MAX_SHADOW_ENHANCEMENT_LEVEL,
+  pickStandardShadowSummonDefinition,
   rollShadowInnateGrade,
   rollShadowExtraction,
   SHADOW_DECOMPOSE_ESSENCE,
@@ -181,6 +186,14 @@ import {
   recordSecretEvent,
   type SecretEvent,
 } from './secrets'
+import {
+  SHOP_PRODUCTS,
+  getEquipmentStarWeights,
+  getShopDrawQualitySource,
+  getShopDrawWeights,
+  type EquipmentQualitySource,
+  type ShopReward,
+} from './shop'
 
 interface GameState {
   hunter: HunterState
@@ -206,6 +219,7 @@ interface GameState {
   equippedShadowIds: string[]
   shadowExtractHistory?: ShadowExtractResult[]
   lastShadowExtractResult?: ShadowExtractResult
+  gold?: number
   shadowEssence?: number
   shadowSummonTickets?: ShadowSummonTicket[]
   shadowSummonShards?: Partial<Record<ShadowSummonShardType, number>>
@@ -222,6 +236,7 @@ interface GameState {
   selectedChallengeCardIds?: string[]
   lastChallengeCardDate?: string
   challengeCardHistory?: Record<string, { completedIds: string[]; completedCount: number }>
+  shopPurchases?: Record<string, number>
   skillStates?: Record<string, SkillRuntimeState>
   secretProgress?: SecretProgressState
   initialized: boolean
@@ -286,6 +301,7 @@ interface GameState {
   equipShadow: (shadowId: string) => void
   unequipShadow: (shadowId: string) => void
   grantAchievementNamedShadows: () => void
+  applyMainQuestCompletionBonus: (quest: Quest) => void
   summonShadowFromTicket: (ticketId: string) => void
   summonShadowFromFragments: (definitionId: string) => void
   exchangeShadowSummonShards: (ticketType: 'normal_shadow' | 'rare_shadow' | 'role_shadow' | 'gate_named_shadow' | 'achievement_named_shadow', role?: OwnedShadow['role']) => void
@@ -314,6 +330,7 @@ interface GameState {
   ensureDailyRewardSystems: () => void
   openRewardBox: (boxId: string) => void
   selectChallengeCards: (cardIds: string[]) => void
+  purchaseShopProduct: (productId: string) => void
 
   // achievements
   recordAppOpen: () => void
@@ -528,8 +545,6 @@ const pickWeightedGateRarity = (rewardTable: GateRewardTable, titleRarityBonus =
   return weighted[0]?.[0]
 }
 
-type EquipmentQualitySource = 'normal' | 'weekly' | 'boss' | 'high_boss'
-
 const rollWeightedNumber = <T extends number | string>(weights: Record<string, number>): T => {
   const entries = Object.entries(weights).filter(([, weight]) => weight > 0)
   const total = entries.reduce((sum, [, weight]) => sum + weight, 0)
@@ -543,10 +558,7 @@ const rollWeightedNumber = <T extends number | string>(weights: Record<string, n
 }
 
 const rollEquipmentStars = (source: EquipmentQualitySource = 'normal'): EquipmentStars => {
-  if (source === 'high_boss') return rollWeightedNumber<EquipmentStars>({ 1: 5, 2: 20, 3: 35, 4: 30, 5: 10 })
-  if (source === 'boss') return rollWeightedNumber<EquipmentStars>({ 1: 10, 2: 30, 3: 35, 4: 20, 5: 5 })
-  if (source === 'weekly') return rollWeightedNumber<EquipmentStars>({ 1: 25, 2: 38, 3: 25, 4: 10, 5: 2 })
-  return rollWeightedNumber<EquipmentStars>({ 1: 45, 2: 35, 3: 15, 4: 4.5, 5: 0.5 })
+  return rollWeightedNumber<EquipmentStars>(getEquipmentStarWeights(source))
 }
 
 const instantiateItem = (
@@ -1198,7 +1210,7 @@ const isAchievementShadowUnlockReady = (s: GameState, definitionId: string): boo
   const questId = definition?.sourceQuestId
   if (!questId) return false
   const quest = s.quests.find(q => q.id === questId)
-  if (quest?.type === 'main' || quest?.type === 'dungeon') return Boolean(quest.completed)
+  if (quest?.type === 'dungeon') return Boolean(quest.completed)
   if (quest?.type === 'daily') {
     const dailyCount = s.achievementStats.dailyCompletions.byQuestId[questId] ?? 0
     if (dailyCount >= 90) return true
@@ -1276,6 +1288,40 @@ const buildAchievementShadowTicketGrants = (
   return { tickets, messages, claims: claimed }
 }
 
+const buildMainQuestCompletionBonus = (
+  quest: Quest
+): { tickets: ShadowSummonTicket[]; shards: Partial<Record<ShadowSummonShardType, number>>; messages: SystemMessage[] } => {
+  const tickets: ShadowSummonTicket[] = []
+  const shards: Partial<Record<ShadowSummonShardType, number>> = {}
+  const messages: SystemMessage[] = []
+  const d = quest.difficulty
+  if (d === 'boss' || d === 'apex') {
+    tickets.push(createShadowSummonTicket({ ticketType: 'rare_shadow', source: 'achievement', label: `${quest.title} 달성 — 고급 소환권` }))
+    tickets.push(createShadowSummonTicket({ ticketType: 'rare_shadow', source: 'achievement', label: `${quest.title} 달성 — 고급 소환권` }))
+    shards.rare = (shards.rare ?? 0) + 2
+    shards.normal = (shards.normal ?? 0) + 3
+  } else if (d === 'elite') {
+    tickets.push(createShadowSummonTicket({ ticketType: 'rare_shadow', source: 'achievement', label: `${quest.title} 달성 — 고급 소환권` }))
+    tickets.push(createShadowSummonTicket({ ticketType: 'rare_shadow', source: 'achievement', label: `${quest.title} 달성 — 고급 소환권` }))
+    shards.normal = (shards.normal ?? 0) + 3
+  } else {
+    tickets.push(createShadowSummonTicket({ ticketType: 'normal_shadow', source: 'achievement', label: `${quest.title} 달성 — 소환권` }))
+    shards.normal = (shards.normal ?? 0) + 2
+  }
+  const rewardLines: string[] = []
+  for (const t of tickets) rewardLines.push(t.label ?? '소환권 획득')
+  if (shards.rare) rewardLines.push(`고급 소환 조각 +${shards.rare}`)
+  if (shards.normal) rewardLines.push(`소환 조각 +${shards.normal}`)
+  messages.push({
+    id: uid(),
+    kind: 'shadow' as const,
+    title: '메인 퀘스트 달성 보상',
+    lines: ['성취 기록에 새겨졌습니다.', ...rewardLines],
+    createdAt: todayISO(),
+  })
+  return { tickets, shards, messages }
+}
+
 const createGateBattleOutcomeUpdate = (
   s: GameState,
   activeGate: ActiveGate,
@@ -1287,6 +1333,7 @@ const createGateBattleOutcomeUpdate = (
   const rewardTable = GATE_REWARD_TABLES.find(r => r.id === gate.rewardTableId)
   const penalty = GATE_PENALTIES.find(p => p.id === gate.failPenaltyId)
   let nextHunter = s.hunter
+  let nextGold = s.gold ?? 0
   let nextItems = s.items
   let nextShadowSummonTickets = s.shadowSummonTickets ?? []
   let nextShadowSummonShards = s.shadowSummonShards ?? {}
@@ -1326,6 +1373,9 @@ const createGateBattleOutcomeUpdate = (
       nextHunter = xpResult.hunter
       leveledUpOutcome = xpResult.outcome
       gateRewards.push({ type: 'xp', amount: xpReward })
+      const goldReward = getGateGoldReward(gate.rank)
+      nextGold += goldReward
+      gateRewards.push({ type: 'gold', amount: goldReward })
 
       const titleDropBonus = getTitleDropBonus(s.hunter)
       const titleRarityBonus = getTitleRarityBonus(s.hunter)
@@ -1394,6 +1444,7 @@ const createGateBattleOutcomeUpdate = (
 
   const baseState: Partial<GameState> = {
       hunter: nextHunter,
+      gold: nextGold,
       items: nextItems,
       shadowSummonTickets: nextShadowSummonTickets,
       shadowSummonShards: nextShadowSummonShards,
@@ -1482,9 +1533,9 @@ const createChallengeCard = (
   condition: ChallengeCardCondition
 ): ChallengeCard => {
   const rewardByDifficulty: Record<ChallengeCard['difficulty'], ChallengeCard['reward']> = {
-    easy: { hunterXp: 15, shadowEssence: 1, boxUpgradePoints: 1 },
-    normal: { hunterXp: 35, shadowEssence: 2, boxUpgradePoints: 2 },
-    hard: { hunterXp: 80, shadowEssence: 5, boxUpgradePoints: 3 },
+    easy: { hunterXp: 15, gold: 22, shadowEssence: 1, boxUpgradePoints: 1 },
+    normal: { hunterXp: 35, gold: 36, shadowEssence: 2, boxUpgradePoints: 2 },
+    hard: { hunterXp: 80, gold: 60, shadowEssence: 5, boxUpgradePoints: 3 },
   }
   return {
     id: `${date}-${slug}`,
@@ -1532,11 +1583,30 @@ const generateChallengeCardsForToday = (quests: Quest[], date = todayKey()): Cha
     createChallengeCard(date, 'body-mind', 'hard', 'life', '몸과 머리 모두 사용', '운동/건강 1개와 학습/커리어/금융 1개를 각각 완료합니다.', { type: 'completeWorkoutAndStudy', target: 1 }),
   ]
 
-  return [
+  const cards = [
     ...pickChallengeCards(easyPool, 2),
     ...pickChallengeCards(normalPool, 2),
     ...pickChallengeCards(hardPool, 1),
   ]
+  return cards.map(card => {
+    if (card.id === `${date}-daily-3`) {
+      return {
+        ...card,
+        title: 'Daily 4개 완료',
+        description: '오늘 가능한 Daily 퀘스트 4개를 완료합니다.',
+        condition: { ...card.condition, target: 4 },
+      }
+    }
+    if (card.id === `${date}-daily-5`) {
+      return {
+        ...card,
+        title: 'Daily 6개 완료',
+        description: '오늘 가능한 Daily 퀘스트 6개를 완료합니다.',
+        condition: { ...card.condition, target: 6 },
+      }
+    }
+    return card
+  })
 }
 
 const getCompletedSelectedChallengeCards = (s: GameState): ChallengeCard[] => {
@@ -1547,6 +1617,7 @@ const getCompletedSelectedChallengeCards = (s: GameState): ChallengeCard[] => {
 const getDailyBoxTierForState = (s: GameState): BoxTier => {
   const upgradePoints = getCompletedSelectedChallengeCards(s)
     .reduce((sum, card) => sum + card.reward.boxUpgradePoints, 0)
+  if (upgradePoints >= 6) return 'epic'
   if (upgradePoints >= 4) return 'superior'
   if (upgradePoints >= 2) return 'enhanced'
   return 'normal'
@@ -1611,17 +1682,153 @@ const getItemFromPool = (
   return pick ? instantiateItem(pick, qualitySource) : undefined
 }
 
+const itemRarityOrder: Item['rarity'][] = ['common', 'uncommon', 'rare', 'epic', 'legendary']
+
+const pickWeightedRarity = (weights: Partial<Record<Item['rarity'], number>>): Item['rarity'] => {
+  const entries = Object.entries(weights) as Array<[Item['rarity'], number]>
+  const total = entries.reduce((sum, [, weight]) => sum + weight, 0)
+  let roll = Math.random() * total
+  for (const [rarity, weight] of entries) {
+    roll -= weight
+    if (roll <= 0) return rarity
+  }
+  return entries[entries.length - 1]?.[0] ?? 'common'
+}
+
+const drawShopEquipment = (
+  slot: EquipmentSlot | 'random',
+  drawTier: Extract<ShopReward, { kind: 'equipment_draw' }>['drawTier']
+): Item | undefined => {
+  const actualSlot: EquipmentSlot = slot === 'random'
+    ? (['weapon', 'armor', 'accessory', 'artifact'] as EquipmentSlot[])[Math.floor(Math.random() * 4)]
+    : slot
+  const weights = getShopDrawWeights(drawTier)
+  const wantedRarity = pickWeightedRarity(weights)
+  const minIndex = drawTier === 'rare' ? itemRarityOrder.indexOf('rare') : 0
+  const wantedIndex = itemRarityOrder.indexOf(wantedRarity)
+  const pool = ITEM_POOL.filter(item =>
+    item.equippable === true &&
+    item.consumable !== true &&
+    item.slot === actualSlot &&
+    itemRarityOrder.indexOf(item.rarity) >= minIndex &&
+    item.rarity === wantedRarity
+  )
+  const fallbackPool = ITEM_POOL.filter(item =>
+    item.equippable === true &&
+    item.consumable !== true &&
+    item.slot === actualSlot &&
+    itemRarityOrder.indexOf(item.rarity) >= minIndex &&
+    itemRarityOrder.indexOf(item.rarity) <= Math.max(wantedIndex, minIndex)
+  )
+  const pickPool = pool.length > 0 ? pool : fallbackPool
+  const pick = pickPool[Math.floor(Math.random() * pickPool.length)]
+  return pick ? instantiateItem(pick, getShopDrawQualitySource(drawTier)) : undefined
+}
+
+const getQuestGoldReward = (quest: Quest): number => {
+  if (quest.type === 'daily') {
+    const byDifficulty: Record<Difficulty, number> = {
+      easy: 18, normal: 24, hard: 34, elite: 46, apex: 60, boss: 75,
+    }
+    return byDifficulty[quest.difficulty] ?? 18
+  }
+  if (quest.type === 'main') {
+    const byDifficulty: Record<Difficulty, number> = {
+      easy: 120, normal: 160, hard: 220, elite: 320, apex: 480, boss: 650,
+    }
+    return byDifficulty[quest.difficulty] ?? 120
+  }
+  return 0
+}
+
+const getDungeonStepGoldReward = (quest: Quest): number => {
+  const byDifficulty: Record<Difficulty, number> = {
+    easy: 5, normal: 7, hard: 10, elite: 14, apex: 20, boss: 26,
+  }
+  return byDifficulty[quest.difficulty] ?? 7
+}
+
+const getDungeonClearGoldReward = (quest: Quest): number => {
+  const byDifficulty: Record<Difficulty, number> = {
+    easy: 60, normal: 80, hard: 115, elite: 165, apex: 240, boss: 320,
+  }
+  const base = byDifficulty[quest.difficulty] ?? 80
+  return quest.resetCycle === 'monthly' ? Math.round(base * 1.25) : base
+}
+
+const getGateGoldReward = (rank: Rank): number => {
+  const byRank: Partial<Record<Rank, number>> = {
+    E: 25,
+    D: 34,
+    C: 46,
+    B: 62,
+    A: 82,
+    S: 105,
+    National: 140,
+  }
+  return byRank[rank] ?? 25
+}
+
+const getBoxGoldReward = (box: RewardBox, tierMultiplier: number): number => {
+  if (box.type === 'daily') return Math.round((42 + Math.floor(Math.random() * 19)) * tierMultiplier)
+  if (box.type === 'weekly') return Math.round((190 + Math.floor(Math.random() * 81)) * tierMultiplier)
+  const floor = box.floor ?? 5
+  return Math.round((120 + floor * 7 + Math.floor(Math.random() * 45)) * tierMultiplier)
+}
+
+const applyShopReward = (
+  reward: ShopReward,
+  acc: {
+    items: Item[]
+    tickets: ShadowSummonTicket[]
+    shards: Partial<Record<ShadowSummonShardType, number>>
+    essence: number
+    lines: string[]
+  }
+) => {
+  if (reward.kind === 'shadow_ticket') {
+    for (let i = 0; i < reward.quantity; i++) {
+      const ticket = createShadowSummonTicket({ ticketType: reward.ticketType, source: 'system' })
+      acc.tickets.push(ticket)
+      acc.lines.push(`${ticket.label} x1`)
+    }
+    return
+  }
+  if (reward.kind === 'shadow_shards') {
+    acc.shards = addShadowSummonShards(acc.shards, reward.shards)
+    for (const [type, amount] of Object.entries(reward.shards)) {
+      acc.lines.push(`${type} 조각 +${amount}`)
+    }
+    return
+  }
+  if (reward.kind === 'shadow_essence') {
+    acc.essence += reward.amount
+    acc.lines.push(`그림자 정수 +${reward.amount}`)
+    return
+  }
+  if (reward.kind === 'equipment_draw') {
+    for (let i = 0; i < reward.quantity; i++) {
+      const item = drawShopEquipment(reward.slot, reward.drawTier)
+      if (!item) continue
+      acc.items.push(item)
+      acc.lines.push(`${item.icon} ${item.name} (${item.equipmentStars ?? 2}성)`)
+    }
+    return
+  }
+  for (const child of reward.rewards) {
+    applyShopReward(child, acc)
+  }
+}
+
 const shadowRarityOrder: Array<OwnedShadow['rarity']> = ['common', 'uncommon', 'rare', 'epic', 'legendary']
 
 const pickStandardShadowDefinition = (
   maxRarity: OwnedShadow['rarity'] = 'rare'
 ) => {
-  const maxIndex = shadowRarityOrder.indexOf(maxRarity)
-  const pool = SHADOW_DEFINITIONS.filter(def =>
-    def.sourceType === 'gate_extract' &&
-    shadowRarityOrder.indexOf(def.rarity) <= maxIndex
-  )
-  return pool[Math.floor(Math.random() * pool.length)] ?? pool[0]
+  const ticketType = shadowRarityOrder.indexOf(maxRarity) >= shadowRarityOrder.indexOf('epic')
+    ? 'rare_shadow'
+    : 'normal_shadow'
+  return pickStandardShadowSummonDefinition(ticketType)
 }
 
 const rollShadowFragmentReward = (
@@ -1669,28 +1876,28 @@ const rollBoxShadowSummonReward = (box: RewardBox, tierMultiplier: number): Pick
   const roll = (chance: number) => Math.random() < chance
 
   if (box.type === 'daily') {
-    if (roll(0.03 * mult)) addShard('normal', 1)
-    if (roll(0.005 * mult)) addShard('rare', 1)
-    if (roll(0.002 * mult)) tickets.push(createShadowSummonTicket({ ticketType: 'normal_shadow', source: 'reward_box' }))
-    if (roll(0.0003 * mult)) tickets.push(createShadowSummonTicket({ ticketType: 'rare_shadow', source: 'reward_box' }))
+    if (roll(0.035 * mult)) addShard('normal', 1)
+    if (roll(0.007 * mult)) addShard('rare', 1)
+    if (roll(0.0025 * mult)) tickets.push(createShadowSummonTicket({ ticketType: 'normal_shadow', source: 'reward_box' }))
+    if (roll(0.00035 * mult)) tickets.push(createShadowSummonTicket({ ticketType: 'rare_shadow', source: 'reward_box' }))
     if (roll(Math.min(0.00005, 0.00005 * mult))) addShard('achievement_named', 1)
   } else if (box.type === 'weekly') {
-    if (roll(0.10 * mult)) addShard('normal', 2)
-    if (roll(0.03 * mult)) addShard('rare', 1)
-    if (roll(0.02 * mult)) tickets.push(createShadowSummonTicket({ ticketType: 'normal_shadow', source: 'reward_box' }))
-    if (roll(0.005 * mult)) tickets.push(createShadowSummonTicket({ ticketType: 'rare_shadow', source: 'reward_box' }))
+    if (roll(0.12 * mult)) addShard('normal', 2)
+    if (roll(0.04 * mult)) addShard('rare', 1)
+    if (roll(0.024 * mult)) tickets.push(createShadowSummonTicket({ ticketType: 'normal_shadow', source: 'reward_box' }))
+    if (roll(0.006 * mult)) tickets.push(createShadowSummonTicket({ ticketType: 'rare_shadow', source: 'reward_box' }))
     if (roll(0.003 * mult)) tickets.push(createRoleTicket(['assault', 'guard', 'scout', 'analyst', 'support', 'hunter'][Math.floor(Math.random() * 6)] as OwnedShadow['role'], 'reward_box'))
     if (roll(0.001 * mult)) addShard('named', 1)
     if (roll(0.0002)) tickets.push(createShadowSummonTicket({ ticketType: 'gate_named_shadow', source: 'reward_box' }))
   } else {
     const bossMult = mult * highFloorMult
-    if (roll(0.20 * bossMult)) addShard('normal', 2)
-    if (roll(0.08 * bossMult)) addShard('rare', 1)
-    if (roll(0.02 * bossMult)) addShard('named', 1)
-    if (roll(0.05 * bossMult)) tickets.push(createShadowSummonTicket({ ticketType: 'normal_shadow', source: 'reward_box' }))
-    if (roll(0.02 * bossMult)) tickets.push(createShadowSummonTicket({ ticketType: 'rare_shadow', source: 'reward_box' }))
-    if (roll(0.01 * bossMult)) tickets.push(createRoleTicket(['assault', 'guard', 'scout', 'analyst', 'support', 'hunter'][Math.floor(Math.random() * 6)] as OwnedShadow['role'], 'reward_box'))
-    if (roll(0.003 * bossMult)) tickets.push(createShadowSummonTicket({ ticketType: 'gate_named_shadow', source: 'reward_box' }))
+    if (roll(0.26 * bossMult)) addShard('normal', 2)
+    if (roll(0.11 * bossMult)) addShard('rare', 1)
+    if (roll(0.03 * bossMult)) addShard('named', 1)
+    if (roll(0.065 * bossMult)) tickets.push(createShadowSummonTicket({ ticketType: 'normal_shadow', source: 'reward_box' }))
+    if (roll(0.026 * bossMult)) tickets.push(createShadowSummonTicket({ ticketType: 'rare_shadow', source: 'reward_box' }))
+    if (roll(0.013 * bossMult)) tickets.push(createRoleTicket(['assault', 'guard', 'scout', 'analyst', 'support', 'hunter'][Math.floor(Math.random() * 6)] as OwnedShadow['role'], 'reward_box'))
+    if (roll(0.004 * bossMult)) tickets.push(createShadowSummonTicket({ ticketType: 'gate_named_shadow', source: 'reward_box' }))
     if (roll(Math.min(0.002, 0.0005 * bossMult))) tickets.push(createShadowSummonTicket({ ticketType: 'achievement_named_shadow', source: 'reward_box', grade: 'standard' }))
   }
 
@@ -1727,13 +1934,10 @@ const getTicketCandidatePool = (s: GameState, ticket: ShadowSummonTicket) => {
   if (ticket.ticketType === 'gate_named_shadow') {
     return SHADOW_DEFINITIONS.filter(def => def.isGateNamed)
   }
-  const rarityLimit = ticket.ticketType === 'rare_shadow' ? 'epic' : 'rare'
-  const maxIndex = shadowRarityOrder.indexOf(rarityLimit)
-  return SHADOW_DEFINITIONS.filter(def =>
-    def.sourceType === 'gate_extract' &&
-    shadowRarityOrder.indexOf(def.rarity) <= maxIndex &&
-    (!ticket.role || def.role === ticket.role)
-  )
+  if (isStandardShadowSummonTicketType(ticket.ticketType)) {
+    return getStandardShadowSummonPool()
+  }
+  return getStandardShadowSummonPool()
 }
 
 const innateSourceForTicket = (ticket: ShadowSummonTicket): Parameters<typeof rollShadowInnateGrade>[0] => {
@@ -1776,12 +1980,27 @@ const rollSmallSummonReward = (source: 'challenge_card' | 'gate'): Pick<BoxRewar
   }
 }
 
+const rollChallengeFullCompletionBonus = (): Pick<BoxReward, 'hunterXp' | 'gold' | 'shadowEssence' | 'shadowSummonTickets' | 'shadowSummonShards'> => {
+  const extra = rollSmallSummonReward('challenge_card')
+  const shards = addShadowSummonShards({ normal: 1 }, extra.shadowSummonShards)
+  if (Math.random() < 0.15) {
+    shards.rare = (shards.rare ?? 0) + 1
+  }
+  return {
+    hunterXp: 25,
+    gold: 85,
+    shadowEssence: 2,
+    shadowSummonTickets: extra.shadowSummonTickets,
+    shadowSummonShards: shards,
+  }
+}
+
 const rollBoxReward = (s: GameState, box: RewardBox): BoxReward => {
   const tierMultiplier: Record<BoxTier, number> = {
     normal: 1,
-    enhanced: 1.25,
-    superior: 1.55,
-    epic: 1.9,
+    enhanced: 1.3,
+    superior: 1.68,
+    epic: 2.0,
   }
   const mult = tierMultiplier[box.tier]
   const floor = box.floor ?? 0
@@ -1793,6 +2012,7 @@ const rollBoxReward = (s: GameState, box: RewardBox): BoxReward => {
   const statKeys: StatKey[] = ['STR', 'VIT', 'AGI', 'INT', 'PER', 'SEN']
   const stat = statKeys[Math.floor(Math.random() * statKeys.length)]
   const reward: BoxReward = {
+    gold: getBoxGoldReward(box, mult),
     statRewards: { [stat]: roundStatValue((box.type === 'daily' ? 0.05 : 0.12) * mult) },
     items: [],
     consumables: [],
@@ -1805,8 +2025,9 @@ const rollBoxReward = (s: GameState, box: RewardBox): BoxReward => {
       const consumable = getItemFromPool(item => item.consumable === true, 'rare', qualitySource)
       if (consumable) reward.consumables?.push(consumable)
     }
-    if (Math.random() < 0.055 * mult) {
-      const equipment = getItemFromPool(item => item.equippable === true && item.consumable !== true, box.tier === 'superior' ? 'rare' : 'uncommon', qualitySource)
+    if (Math.random() < 0.058 * mult) {
+      const dailyMaxRarity = box.tier === 'normal' ? 'uncommon' : 'rare'
+      const equipment = getItemFromPool(item => item.equippable === true && item.consumable !== true, dailyMaxRarity, qualitySource)
       if (equipment) reward.items?.push(equipment)
     }
     reward.message = '오늘의 루틴에 작은 추진력이 더해졌습니다.'
@@ -1827,11 +2048,11 @@ const rollBoxReward = (s: GameState, box: RewardBox): BoxReward => {
     reward.hunterXp = Math.round((30 + rewardFloor * 3) * mult)
     reward.shadowEssence = Math.round((5 + rewardFloor / 2) * mult)
     reward.statRewards = { [stat]: roundStatValue((0.16 + rewardFloor * 0.003) * mult) }
-    if (Math.random() < 0.28) {
+    if (Math.random() < 0.34) {
       const consumable = getItemFromPool(item => item.consumable === true, 'epic', qualitySource)
       if (consumable) reward.consumables?.push(consumable)
     }
-    if (Math.random() < (box.tier === 'epic' ? 0.78 : 0.62)) {
+    if (Math.random() < (box.tier === 'epic' ? 0.84 : 0.68)) {
       const equipment = getItemFromPool(item => item.equippable === true && item.consumable !== true, box.tier === 'epic' ? 'epic' : 'rare', qualitySource)
       if (equipment) reward.items?.push(equipment)
     }
@@ -1902,11 +2123,13 @@ const applyChallengeProgress = (s: GameState, event: ChallengeProgressEvent): Pa
   if (completedNow.length === 0) return {}
 
   let nextHunter = s.hunter
+  let nextGold = s.gold ?? 0
   let nextShadowEssence = s.shadowEssence ?? 0
   const nextMessages: SystemMessage[] = []
   for (const card of completedNow) {
     const xpResult = applyXp(nextHunter, card.reward.hunterXp, 'challenge')
     nextHunter = xpResult.hunter
+    nextGold += card.reward.gold ?? 0
     nextShadowEssence += card.reward.shadowEssence
     nextMessages.push({
       id: uid(),
@@ -1915,6 +2138,7 @@ const applyChallengeProgress = (s: GameState, event: ChallengeProgressEvent): Pa
       lines: [
         `[${card.title}]`,
         `XP +${card.reward.hunterXp}`,
+        ...(card.reward.gold ? [`Gold +${card.reward.gold}`] : []),
         `그림자 정수 +${card.reward.shadowEssence}`,
         `박스 강화 +${card.reward.boxUpgradePoints}`,
       ],
@@ -1939,15 +2163,40 @@ const applyChallengeProgress = (s: GameState, event: ChallengeProgressEvent): Pa
   const oldDay = oldHistory[date] ?? { completedIds: [], completedCount: 0 }
   const completedIds = Array.from(new Set([...oldDay.completedIds, ...completedNow.map(card => card.id)]))
   const completedThreeNow = oldDay.completedCount < 3 && completedIds.length >= 3
-  const summonBonus = completedThreeNow ? rollSmallSummonReward('challenge_card') : {}
-  if (summonBonus.shadowSummonTickets?.length || summonBonus.shadowSummonShards) {
+  const fullCompletionBonus = completedThreeNow ? rollChallengeFullCompletionBonus() : {}
+  if (completedThreeNow) {
+    const bonusXp = fullCompletionBonus.hunterXp ?? 0
+    if (bonusXp > 0) {
+      const beforeLevel = nextHunter.level
+      const xpResult = applyXp(nextHunter, bonusXp, 'challenge')
+      nextHunter = xpResult.hunter
+      if (xpResult.outcome?.leveledUp) {
+        nextMessages.push({
+          id: uid(),
+          kind: 'levelup',
+          title: 'LEVEL UP',
+          lines: [
+            `Lv.${beforeLevel} -> Lv.${xpResult.outcome.newLevel}`,
+            `자동 분배: ${formatStatGains(xpResult.outcome.autoStatGains)}`,
+            `자유 배분권 +${xpResult.outcome.freeStatPointsGained}`,
+          ],
+          createdAt: todayISO(),
+        })
+      }
+    }
+    nextShadowEssence += fullCompletionBonus.shadowEssence ?? 0
+    nextGold += fullCompletionBonus.gold ?? 0
     nextMessages.push({
       id: uid(),
       kind: 'shadow',
-      title: '도전 카드 소환 보너스',
+      title: '도전 카드 완전 달성 보너스',
       lines: [
-        ...(summonBonus.shadowSummonTickets ?? []).map(ticket => ticket.label),
-        ...Object.entries(summonBonus.shadowSummonShards ?? {}).map(([type, amount]) => `${type} 조각 +${amount}`),
+        '선택 카드 3/3 완료',
+        ...(bonusXp ? [`XP +${bonusXp}`] : []),
+        ...(fullCompletionBonus.gold ? [`Gold +${fullCompletionBonus.gold}`] : []),
+        ...(fullCompletionBonus.shadowEssence ? [`그림자 정수 +${fullCompletionBonus.shadowEssence}`] : []),
+        ...(fullCompletionBonus.shadowSummonTickets ?? []).map(ticket => ticket.label),
+        ...Object.entries(fullCompletionBonus.shadowSummonShards ?? {}).map(([type, amount]) => `${type} 조각 +${amount}`),
       ],
       createdAt: todayISO(),
     })
@@ -1963,13 +2212,17 @@ const applyChallengeProgress = (s: GameState, event: ChallengeProgressEvent): Pa
 
   return applySecretProgressEvent(s, { context: 'rank', challengeCardsCompleted: completedNow.length }, {
     hunter: nextHunter,
+    gold: nextGold,
     shadowEssence: nextShadowEssence,
     todayChallengeCards: nextCards,
     challengeCardHistory,
     rewardBoxes: weekly.rewardBoxes,
     lastWeeklyBoxWeek: weekly.lastWeeklyBoxWeek,
-    shadowSummonTickets: [...(s.shadowSummonTickets ?? []), ...(summonBonus.shadowSummonTickets ?? [])],
-    shadowSummonShards: addShadowSummonShards(s.shadowSummonShards, summonBonus.shadowSummonShards),
+    shadowSummonTickets: [
+      ...(s.shadowSummonTickets ?? []),
+      ...(fullCompletionBonus.shadowSummonTickets ?? []),
+    ],
+    shadowSummonShards: addShadowSummonShards(s.shadowSummonShards, fullCompletionBonus.shadowSummonShards),
     messages: [...s.messages, ...nextMessages],
   })
 }
@@ -1995,6 +2248,7 @@ export const useGame = create<GameState>()(
       equippedShadowIds: [],
       shadowExtractHistory: [],
       lastShadowExtractResult: undefined,
+      gold: 0,
       shadowEssence: 0,
       shadowSummonTickets: [],
       shadowSummonShards: {},
@@ -2010,6 +2264,7 @@ export const useGame = create<GameState>()(
       selectedChallengeCardIds: [],
       lastChallengeCardDate: undefined,
       challengeCardHistory: {},
+      shopPurchases: {},
       skillStates: {},
       secretProgress: undefined,
       initialized: false,
@@ -2100,6 +2355,7 @@ export const useGame = create<GameState>()(
         const rewardItems = [...(reward.items ?? []), ...(reward.consumables ?? [])]
         set(applySecretProgressEvent(s, { context: 'box', boxType: effectiveBox.type, source: effectiveBox.source }, {
           hunter: nextHunter,
+          gold: (s.gold ?? 0) + (reward.gold ?? 0),
           shadowEssence: (s.shadowEssence ?? 0) + (reward.shadowEssence ?? 0),
           shadowSummonTickets: [...(s.shadowSummonTickets ?? []), ...(reward.shadowSummonTickets ?? [])],
           shadowSummonShards: addShadowSummonShards(s.shadowSummonShards, reward.shadowSummonShards),
@@ -2117,6 +2373,46 @@ export const useGame = create<GameState>()(
           get().checkJobAwakening()
         }, 0)
       },
+
+      purchaseShopProduct: (productId) => set((s) => {
+        const product = SHOP_PRODUCTS.find(item => item.id === productId)
+        if (!product) return {}
+        if ((s.gold ?? 0) < product.priceGold) return {}
+        if ((s.shadowEssence ?? 0) < (product.priceEssence ?? 0)) return {}
+
+        const grants = {
+          items: [] as Item[],
+          tickets: [] as ShadowSummonTicket[],
+          shards: {} as Partial<Record<ShadowSummonShardType, number>>,
+          essence: 0,
+          lines: [] as string[],
+        }
+        applyShopReward(product.reward, grants)
+
+        const spentLines = [
+          `Gold -${product.priceGold}`,
+          ...(product.priceEssence ? [`그림자 정수 -${product.priceEssence}`] : []),
+        ]
+
+        return {
+          gold: (s.gold ?? 0) - product.priceGold,
+          shadowEssence: (s.shadowEssence ?? 0) - (product.priceEssence ?? 0) + grants.essence,
+          shadowSummonTickets: [...(s.shadowSummonTickets ?? []), ...grants.tickets],
+          shadowSummonShards: addShadowSummonShards(s.shadowSummonShards, grants.shards),
+          items: [...s.items, ...grants.items],
+          messages: [...s.messages, {
+            id: uid(),
+            kind: grants.items.length > 0 ? 'item' : grants.tickets.length > 0 || Object.keys(grants.shards).length > 0 ? 'shadow' : 'info',
+            title: '상점 구매 완료',
+            lines: [
+              product.name,
+              ...spentLines,
+              ...grants.lines,
+            ],
+            createdAt: todayISO(),
+          }],
+        }
+      }),
 
       recordAppOpen: () => set((s) => {
         const now = todayISO()
@@ -4209,6 +4505,7 @@ export const useGame = create<GameState>()(
 
         let nextHunter = s.hunter
         let nextItems = s.items
+        let nextGold = s.gold ?? 0
         let nextShadowEssence = s.shadowEssence ?? 0
         let nextOwnedShadows = s.ownedShadows ?? []
         const newMessages: SystemMessage[] = []
@@ -4233,6 +4530,9 @@ export const useGame = create<GameState>()(
           }
           if (rewards.shadowEssence && rewards.shadowEssence > 0) {
             nextShadowEssence += rewards.shadowEssence
+          }
+          if (rewards.gold && rewards.gold > 0) {
+            nextGold += rewards.gold
           }
           if (rewards.itemDropChance && Math.random() < rewards.itemDropChance) {
             const poolItem = ITEM_POOL[Math.floor(Math.random() * ITEM_POOL.length)]
@@ -4289,6 +4589,7 @@ export const useGame = create<GameState>()(
             lines: [
               `무한의 탑 ${floor}층을 클리어했습니다.`,
               ...(rewards.hunterXp ? [`XP +${rewards.hunterXp}`] : []),
+              ...(rewards.gold ? [`Gold +${rewards.gold}`] : []),
               ...(rewards.shadowEssence ? [`정수 +${rewards.shadowEssence}`] : []),
               ...(rewards.boxType ? ['보스 박스 획득'] : []),
             ],
@@ -4304,6 +4605,7 @@ export const useGame = create<GameState>()(
           }, {
             hunter: nextHunter,
             items: nextItems,
+            gold: nextGold,
             shadowEssence: nextShadowEssence,
             ownedShadows: nextOwnedShadows,
             rewardBoxes: nextRewardBoxes,
@@ -4460,15 +4762,31 @@ export const useGame = create<GameState>()(
         }
       }),
 
+      applyMainQuestCompletionBonus: (quest) => set((s) => {
+        const bonus = buildMainQuestCompletionBonus(quest)
+        return {
+          shadowSummonTickets: [...(s.shadowSummonTickets ?? []), ...bonus.tickets],
+          shadowSummonShards: addShadowSummonShards(s.shadowSummonShards, bonus.shards),
+          messages: [...s.messages, ...bonus.messages],
+        }
+      }),
+
       summonShadowFromTicket: (ticketId) => set((s) => {
         const tickets = s.shadowSummonTickets ?? []
         const ticket = tickets.find(item => item.id === ticketId && !item.usedAt)
         if (!ticket) return {}
-        const pool = getTicketCandidatePool(s, ticket)
         const ownedDefinitionIds = new Set((s.ownedShadows ?? []).map(shadow => shadow.definitionId))
-        const unownedPool = pool.filter(def => !ownedDefinitionIds.has(def.id))
-        const candidatePool = unownedPool.length > 0 ? unownedPool : pool
-        const definition = candidatePool[Math.floor(Math.random() * candidatePool.length)]
+        const pool = getTicketCandidatePool(s, ticket)
+        const definition = isStandardShadowSummonTicketType(ticket.ticketType)
+          ? pickStandardShadowSummonDefinition(ticket.ticketType, Math.random, {
+              role: ticket.ticketType === 'role_shadow' ? ticket.role : undefined,
+              excludeDefinitionIds: ownedDefinitionIds,
+            })
+          : (() => {
+              const unownedPool = pool.filter(def => !ownedDefinitionIds.has(def.id))
+              const candidatePool = unownedPool.length > 0 ? unownedPool : pool
+              return candidatePool[Math.floor(Math.random() * candidatePool.length)]
+            })()
         if (!definition) return {}
         if ((definition.isAchievementNamed || definition.isGateNamed) && ownedDefinitionIds.has(definition.id)) {
           const shardType: ShadowSummonShardType = definition.isAchievementNamed ? 'achievement_named' : 'named'
@@ -4787,7 +5105,10 @@ export const useGame = create<GameState>()(
       resolveShadowExpeditionMidEvent: (expeditionId, choiceId) => set((s) => {
         const expedition = (s.shadowExpeditions ?? []).find(item => item.id === expeditionId)
         if (!expedition || !expedition.midEvent || expedition.eventResolved) return {}
-        const resolved = resolveExpeditionMidEventChoice(expedition, choiceId, uid)
+        const party = expedition.selectedShadowIds
+          .map(id => (s.ownedShadows ?? []).find(shadow => shadow.instanceId === id))
+          .filter((shadow): shadow is OwnedShadow => Boolean(shadow))
+        const resolved = resolveExpeditionMidEventChoice(expedition, choiceId, uid, party)
         return {
           shadowExpeditions: (s.shadowExpeditions ?? []).map(item => item.id === expeditionId ? resolved : item),
         }
@@ -4919,6 +5240,7 @@ export const useGame = create<GameState>()(
 
         let nextHunter = s.hunter
         let nextItems = s.items
+        let nextGold = s.gold ?? 0
         let nextShadowEssence = s.shadowEssence ?? 0
         let nextOwnedShadows = s.ownedShadows ?? []
         const newMessages: SystemMessage[] = []
@@ -4943,6 +5265,9 @@ export const useGame = create<GameState>()(
           }
           if (rewards.shadowEssence && rewards.shadowEssence > 0) {
             nextShadowEssence += rewards.shadowEssence
+          }
+          if (rewards.gold && rewards.gold > 0) {
+            nextGold += rewards.gold
           }
           if (rewards.itemDropChance && Math.random() < rewards.itemDropChance) {
             const poolItem = ITEM_POOL[Math.floor(Math.random() * ITEM_POOL.length)]
@@ -5000,6 +5325,7 @@ export const useGame = create<GameState>()(
             lines: [
               `무한의 탑 ${floor}층을 클리어했습니다.`,
               ...(rewards.hunterXp ? [`XP +${rewards.hunterXp}`] : []),
+              ...(rewards.gold ? [`Gold +${rewards.gold}`] : []),
               ...(rewards.shadowEssence ? [`정수 +${rewards.shadowEssence}`] : []),
               ...(rewards.boxType ? ['보스 박스 획득'] : []),
             ],
@@ -5015,6 +5341,7 @@ export const useGame = create<GameState>()(
           }, {
             hunter: nextHunter,
             items: nextItems,
+            gold: nextGold,
             shadowEssence: nextShadowEssence,
             ownedShadows: nextOwnedShadows,
             rewardBoxes: nextRewardBoxes,
@@ -5393,6 +5720,7 @@ export const useGame = create<GameState>()(
           }
 
           let nextHunter = s.hunter
+          let nextGold = s.gold ?? 0
           let nextShadowEssence = s.shadowEssence ?? 0
           let nextOwnedShadows = s.ownedShadows ?? []
           const newMessages: SystemMessage[] = []
@@ -5417,6 +5745,9 @@ export const useGame = create<GameState>()(
             }
             if (rewards.shadowEssence && rewards.shadowEssence > 0) {
               nextShadowEssence += rewards.shadowEssence
+            }
+            if (rewards.gold && rewards.gold > 0) {
+              nextGold += rewards.gold
             }
             if (rewards.itemDropChance && Math.random() < rewards.itemDropChance) {
               const poolItem = ITEM_POOL[Math.floor(Math.random() * ITEM_POOL.length)]
@@ -5473,6 +5804,7 @@ export const useGame = create<GameState>()(
               lines: [
                 `무한의 탑 ${floor}층을 클리어했습니다.`,
                 ...(rewards.hunterXp ? [`XP +${rewards.hunterXp}`] : []),
+                ...(rewards.gold ? [`Gold +${rewards.gold}`] : []),
                 ...(rewards.shadowEssence ? [`정수 +${rewards.shadowEssence}`] : []),
                 ...(rewards.boxType ? ['보스 박스 획득'] : []),
               ],
@@ -5488,6 +5820,7 @@ export const useGame = create<GameState>()(
             }, {
               hunter: nextHunter,
               items: nextItems,
+              gold: nextGold,
               shadowEssence: nextShadowEssence,
               ownedShadows: nextOwnedShadows,
               rewardBoxes: nextRewardBoxes,
@@ -5786,6 +6119,7 @@ export const useGame = create<GameState>()(
         const shadowXpBonus = getEquippedShadowCategoryXpBonus(equippedShadows, q.category)
         const additiveXpBonus = jobCategoryBonus + equipmentXpBonus + consumableXpBonus + titleXpBonus + shadowXpBonus
         const xp = Math.round(baseXp * statMultiplier * (1 + additiveXpBonus))
+        const questGold = getQuestGoldReward(q)
 
         // Bump category progress BEFORE applyXp so this completion counts for level-up.
         const bumpedProgress = {
@@ -5842,6 +6176,7 @@ export const useGame = create<GameState>()(
           lines: [
             `[${q.title}]`,
             `+${xp} XP 획득${xp !== baseXp ? ` (기본 ${baseXp})` : ''}`,
+            ...(questGold ? [`Gold +${questGold}`] : []),
             ...Object.entries(statRewards).map(([k, v]) => `· ${k} ${formatStatReward(v ?? 0)}`),
           ],
           createdAt: todayISO(),
@@ -5889,6 +6224,7 @@ export const useGame = create<GameState>()(
 
         const baseState: Partial<GameState> = {
           hunter: { ...newHunter, stats: newStats, streak, lastActiveDate: today },
+          gold: (s.gold ?? 0) + questGold,
           quests: updatedQuests,
           items: [...s.items, ...drops],
           messages: [...s.messages, ...newMessages],
@@ -5913,7 +6249,7 @@ export const useGame = create<GameState>()(
             get().rollGateSpawn('daily_completion')
           }
           if (q.type === 'main') {
-            get().grantAchievementNamedShadows()
+            get().applyMainQuestCompletionBonus(q)
             get().rollGateSpawn('main_completion')
           }
         }, 0)
@@ -5959,11 +6295,12 @@ export const useGame = create<GameState>()(
           const stepXp = Math.round(baseStepXp * getPartialRewardMultiplierWithEquipment(s.hunter, equippedItems, combinedStatBonuses) * getTitleXpMultiplier(s.hunter, q.category) * (1 + shadowXpBonus))
           const { hunter: newHunter, outcome } = applyXp(hunterIn, stepXp, q.category)
 
+          const stepGold = getDungeonStepGoldReward(q)
           const newMessages: SystemMessage[] = [{
             id: uid(),
             kind: 'quest',
             title: '던전 진행',
-            lines: [`[${q.title}]`, `${cur}/${total} 단계`, `+${stepXp} XP${stepXp !== baseStepXp ? ` (기본 ${baseStepXp})` : ''}`],
+            lines: [`[${q.title}]`, `${cur}/${total} 단계`, `+${stepXp} XP${stepXp !== baseStepXp ? ` (기본 ${baseStepXp})` : ''}`, ...(stepGold ? [`Gold +${stepGold}`] : [])],
             createdAt: todayISO(),
           }]
           if (outcome.leveledUp) {
@@ -5980,6 +6317,7 @@ export const useGame = create<GameState>()(
 
           const baseState: Partial<GameState> = {
             hunter: newHunter,
+            gold: (s.gold ?? 0) + stepGold,
             quests: s.quests.map(x => x.id === id ? { ...x, currentSteps: cur } : x),
             messages: [...s.messages, ...newMessages],
             achievementStats: stats,
@@ -6037,12 +6375,14 @@ export const useGame = create<GameState>()(
         
         // Consume next_quest consumable effects
         const updatedConsumableEffects = consumeNextQuestEffects(s.activeConsumableEffects, q.category)
+        const clearGold = getDungeonClearGoldReward(q)
         const messages: SystemMessage[] = [
           {
             id: uid(), kind: 'quest', title: '던전 클리어!',
             lines: [
               `[${q.title}]`,
               `+${xp} XP${xp !== baseXp ? ` (기본 ${baseXp})` : ''}`,
+              ...(clearGold ? [`Gold +${clearGold}`] : []),
               ...Object.entries(statRewards).map(([k, v]) => `· ${k} ${formatStatReward(v ?? 0)}`),
             ],
             createdAt: todayISO(),
@@ -6074,6 +6414,7 @@ export const useGame = create<GameState>()(
 
         const baseState: Partial<GameState> = {
           hunter: { ...newHunter, stats: newStats },
+          gold: (s.gold ?? 0) + clearGold,
           quests: s.quests.map(x => x.id === id ? { ...x, currentSteps: total, completed: true } : x),
           items: [...s.items, drop],
           messages: [...s.messages, ...messages],
@@ -6206,6 +6547,7 @@ export const useGame = create<GameState>()(
         equippedShadowIds: [],
         shadowExtractHistory: [],
         lastShadowExtractResult: undefined,
+        gold: 0,
         shadowEssence: 0,
         shadowSummonTickets: [],
         shadowSummonShards: {},
@@ -6222,6 +6564,7 @@ export const useGame = create<GameState>()(
         selectedChallengeCardIds: [],
         lastChallengeCardDate: undefined,
         challengeCardHistory: {},
+        shopPurchases: {},
         skillStates: {},
         secretProgress: undefined,
         initialized: true,
@@ -6330,6 +6673,9 @@ export const useGame = create<GameState>()(
         if (!('lastShadowExtractResult' in persistedState)) {
           persistedState.lastShadowExtractResult = undefined
         }
+        if (!('gold' in persistedState)) {
+          persistedState.gold = 0
+        }
         if (!('shadowEssence' in persistedState)) {
           persistedState.shadowEssence = 0
         }
@@ -6379,6 +6725,9 @@ export const useGame = create<GameState>()(
         }
         if (!persistedState.challengeCardHistory) {
           persistedState.challengeCardHistory = {}
+        }
+        if (!persistedState.shopPurchases) {
+          persistedState.shopPurchases = {}
         }
         persistedState.skillStates = normalizeSkillStates(persistedState.skillStates ?? persistedState.skillMastery)
         delete persistedState.skillMastery

@@ -95,11 +95,11 @@ const commandTone: Record<ShadowExpeditionCommand, { border: string; bg: string;
 }
 
 const commandHint: Record<ShadowExpeditionCommand, { title: string; bias: string }> = {
-  attack: { title: '진행도를 크게 올리지만 위험도도 증가', bias: '진행도↑ / 위험↑' },
-  defend: { title: '위험도를 낮추고 원정대를 정비', bias: '위험↓ / 정비' },
-  scout: { title: '위험 경로를 찾아 다음 턴을 안정화', bias: '위험↓ / 안정' },
-  analyze: { title: '약점을 기록해 다음 공격/수색 보조', bias: '준비 / 진행도' },
-  search: { title: '정수 보너스를 노리지만 위험도가 오른다', bias: '보상↑ / 위험↑' },
+  attack: { title: 'ATK/FIN/BOSS가 높으면 진행 보정', bias: '진행도↑ / 위험↑' },
+  defend: { title: 'DEF/DUR/SURV가 높으면 위험 제어', bias: '위험↓ / 정비' },
+  scout: { title: 'SPD/CTRL/EXPED가 높으면 안정화', bias: '위험↓ / 안정' },
+  analyze: { title: 'CTRL/SUPP/SUP가 높으면 다음 명령 보조', bias: '준비 / 진행도' },
+  search: { title: 'EXPED/SYN/SUP가 높으면 수색 안정', bias: '보상↑ / 위험↑' },
 }
 
 const expeditionTheme: Record<ShadowExpeditionType, { icon: typeof Crosshair; panel: string; border: string; accent: string; wash: string; label: string }> = {

@@ -22,6 +22,8 @@ import type {
 } from './types'
 import { CATEGORY_META, STAT_META, TITLE_DEFINITIONS } from './types'
 import { getShadowEffects } from './shadows'
+import { resolveShadowActionRuntime, type ShadowRuntimeEvent } from './shadowCombatRuntime'
+import { getShadowCombatAggregate, getShadowCombatModifiers } from './shadowStats'
 import {
   getAvailableCombatSkillsForLoadout,
   getSkillCooldownTurns,
@@ -907,7 +909,8 @@ const sumShadowEffects = (shadows: OwnedShadow[], type: string): number =>
     .filter(effect => effect.type === type)
     .reduce((inner, effect) => inner + effect.value, 0), 0)
 
-export const isShadowCombatLog = (log: BattleTurn): boolean => log.skillId === 'shadow-support-action'
+export const isShadowCombatLog = (log: BattleTurn): boolean =>
+  log.skillId === 'shadow-support-action' || log.skillId === 'shadow-action-runtime'
 
 const createShadowLog = (params: {
   shadow: OwnedShadow
@@ -935,6 +938,48 @@ const createShadowLog = (params: {
   message: params.message,
 })
 
+const createShadowActionRuntimeLog = (params: {
+  event: ShadowRuntimeEvent
+  monster: BattleActorState
+  damage?: number
+  turnNumber: number
+  waveNumber?: number
+  waveLabel?: string
+  message: string
+}): BattleTurn => ({
+  turnNumber: params.turnNumber,
+  waveNumber: params.waveNumber,
+  waveLabel: params.waveLabel,
+  actorType: 'player',
+  actorId: `shadow:${params.event.shadow.instanceId}`,
+  actorName: params.event.shadow.name,
+  targetType: params.event.targetType === 'player' ? 'player' : 'monster',
+  targetId: params.event.targetType === 'player' ? 'player' : params.monster.id,
+  targetName: params.event.targetType === 'player' ? '헌터' : params.monster.name,
+  skillId: 'shadow-action-runtime',
+  skillName: params.event.abilityName ?? params.event.sourceName,
+  outcome: params.damage && params.damage > 0 ? 'hit' : params.event.targetType === 'player' ? 'buff' : 'debuff',
+  damage: params.damage,
+  remainingHp: params.monster.hp,
+  message: params.message,
+})
+
+const isBossLikeShadowTarget = (monster: BattleActorState): boolean => {
+  const id = monster.id.toLowerCase()
+  return id.includes('boss') || id.startsWith('tower-') || id.includes('monarch') || id.includes('abyss')
+}
+
+const applyPlayerDamageReductionMax = (
+  effects: ActiveCombatEffect[],
+  effect: ActiveCombatEffect & { kind: 'damage_reduction'; targetId: 'player' },
+): ActiveCombatEffect[] => {
+  const existing = effects.find(item => item.targetId === 'player' && item.kind === 'damage_reduction')
+  if (existing && existing.value >= effect.value && existing.remainingTurns >= effect.remainingTurns) {
+    return effects
+  }
+  return applyOrRefreshCombatEffect(effects, effect)
+}
+
 export const resolveShadowSupportActions = (params: {
   shadows?: OwnedShadow[]
   player: BattleActorState
@@ -958,24 +1003,32 @@ export const resolveShadowSupportActions = (params: {
   const playerStats = getEffectiveBattleActorStats(params.player, activeEffects)
   const monsterStats = getEffectiveBattleActorStats(monster, activeEffects)
   const rosterDamageBonus = Math.min(0.12, sumShadowEffects(shadows, 'bonus_damage'))
+  const isBossTarget = isBossLikeShadowTarget(monster)
+  const playerLowHp = params.player.hp / Math.max(1, params.player.maxHp) <= 0.4
+  const shadowAggregates = new Map(shadows.map(shadow => [shadow.instanceId, getShadowCombatAggregate(shadow)]))
 
   for (const shadow of shadows) {
     if (monster.hp <= 0) break
     const effects = getShadowEffects(shadow)
-    const bonusDamage = Math.min(0.12, effects.filter(effect => effect.type === 'bonus_damage').reduce((sum, effect) => sum + effect.value, 0) + rosterDamageBonus * 0.35)
+    const shadowModifiers = getShadowCombatModifiers(
+      shadowAggregates.get(shadow.instanceId) ?? getShadowCombatAggregate(shadow),
+      { boss: isBossTarget, lowHp: playerLowHp },
+    )
+    const bonusDamage = Math.min(0.16, effects.filter(effect => effect.type === 'bonus_damage').reduce((sum, effect) => sum + effect.value, 0) + rosterDamageBonus * 0.35 + shadowModifiers.assistDamageBonus + shadowModifiers.bossDamageBonus)
     const executeDamage = monster.hp / monster.maxHp <= 0.3
-      ? Math.min(0.1, effects.filter(effect => effect.type === 'execute_damage').reduce((sum, effect) => sum + effect.value, 0))
+      ? Math.min(0.14, effects.filter(effect => effect.type === 'execute_damage').reduce((sum, effect) => sum + effect.value, 0) + shadowModifiers.finisherDamageBonus)
       : 0
-    const extraAttackChance = Math.min(0.16, effects.filter(effect => effect.type === 'extra_attack_chance').reduce((sum, effect) => sum + effect.value, 0))
+    const extraAttackChance = Math.min(0.18, effects.filter(effect => effect.type === 'extra_attack_chance').reduce((sum, effect) => sum + effect.value, 0) + shadowModifiers.assistChanceBonus)
     const waveStartBonus = params.phase === 'wave_start'
-      ? Math.min(0.12, effects.filter(effect => effect.type === 'wave_start_bonus').reduce((sum, effect) => sum + effect.value, 0))
+      ? Math.min(0.14, effects.filter(effect => effect.type === 'wave_start_bonus').reduce((sum, effect) => sum + effect.value, 0) + shadowModifiers.supportChanceBonus * 0.6)
       : 0
     const skillDamageBonus = params.playerUsedSkill
-      ? Math.min(0.08, effects.filter(effect => effect.type === 'skill_damage_bonus').reduce((sum, effect) => sum + effect.value, 0))
+      ? Math.min(0.105, effects.filter(effect => effect.type === 'skill_damage_bonus').reduce((sum, effect) => sum + effect.value, 0) + shadowModifiers.supportSkillBonus)
       : 0
     const guardCounter = params.phase === 'player_defend'
-      ? Math.min(0.12, effects.filter(effect => effect.type === 'guard_counter').reduce((sum, effect) => sum + effect.value, 0))
+      ? Math.min(0.145, effects.filter(effect => effect.type === 'guard_counter').reduce((sum, effect) => sum + effect.value, 0) + shadowModifiers.guardCounterChanceBonus)
       : 0
+    const defenseDownForDamage = Math.min(0.105, sumShadowEffects([shadow], 'enemy_defense_down') + shadowModifiers.controlStrengthBonus + shadowModifiers.bossControlBonus)
 
     let chance = 0.10
     if (shadow.role === 'assault') chance += 0.15
@@ -986,7 +1039,7 @@ export const resolveShadowSupportActions = (params: {
     if (shadow.role === 'hunter') chance += 0.06
     chance += extraAttackChance + waveStartBonus + skillDamageBonus + guardCounter
 
-    if (params.rng() > Math.min(0.55, chance)) continue
+    if (params.rng() > Math.min(0.58, chance)) continue
 
     const rolePower =
       shadow.role === 'assault' ? 0.28 :
@@ -1005,7 +1058,7 @@ export const resolveShadowSupportActions = (params: {
     const power = rolePower * rarityPower * rankPower * (1 + bonusDamage + executeDamage + waveStartBonus + skillDamageBonus + guardCounter)
     const damage = calculateDamage({
       attackerAtk: playerStats.atk,
-      defenderDef: Math.max(0, monsterStats.def * (1 - Math.min(0.08, sumShadowEffects([shadow], 'enemy_defense_down')))),
+      defenderDef: Math.max(0, monsterStats.def * (1 - defenseDownForDamage)),
       skillPower: power,
       randomFactor: 0.9 + params.rng() * 0.2,
       isCritical: false,
@@ -1017,9 +1070,9 @@ export const resolveShadowSupportActions = (params: {
     if (shadow.role === 'assault') {
       message = `${nameLabel}이(가) 빈틈을 찔렀다. ${damage} 피해.`
     } else if (shadow.role === 'guard') {
-      const guardReduction = Math.min(0.12, effects.filter(effect => effect.type === 'damage_reduction').reduce((sum, effect) => sum + effect.value, 0))
+      const guardReduction = Math.min(0.155, effects.filter(effect => effect.type === 'damage_reduction').reduce((sum, effect) => sum + effect.value, 0) + shadowModifiers.guardReductionBonus + shadowModifiers.survivalReductionBonus)
       if (guardReduction > 0) {
-        activeEffects = applyOrRefreshCombatEffect(activeEffects, {
+        activeEffects = applyPlayerDamageReductionMax(activeEffects, {
           sourceSkillId: `shadow-guard-${shadow.instanceId}`,
           kind: 'damage_reduction',
           value: guardReduction,
@@ -1043,6 +1096,16 @@ export const resolveShadowSupportActions = (params: {
       message = `${nameLabel}이(가) 전리품의 냄새를 추적했다. ${damage} 피해.`
     }
 
+    if (shadow.role !== 'guard' && shadowModifiers.survivalReductionBonus > 0) {
+      activeEffects = applyPlayerDamageReductionMax(activeEffects, {
+        sourceSkillId: `shadow-survival-${shadow.instanceId}`,
+        kind: 'damage_reduction',
+        value: shadowModifiers.survivalReductionBonus,
+        remainingTurns: 1,
+        targetId: 'player',
+      })
+    }
+
     monster = { ...monster, hp: Math.max(0, monster.hp - damage) }
     logs.push(createShadowLog({
       shadow,
@@ -1054,8 +1117,8 @@ export const resolveShadowSupportActions = (params: {
       message,
     }))
 
-    const defenseDown = Math.min(0.04, effects.filter(effect => effect.type === 'enemy_defense_down').reduce((sum, effect) => sum + effect.value, 0))
-    if (defenseDown > 0 && params.rng() < 0.35) {
+    const defenseDown = Math.min(0.055, effects.filter(effect => effect.type === 'enemy_defense_down').reduce((sum, effect) => sum + effect.value, 0) + shadowModifiers.controlStrengthBonus + shadowModifiers.bossControlBonus)
+    if (defenseDown > 0 && params.rng() < Math.min(0.42, 0.35 + shadowModifiers.controlProcBonus)) {
       activeEffects = applyOrRefreshCombatEffect(activeEffects, {
         sourceSkillId: `shadow-defense-down-${shadow.instanceId}`,
         kind: 'stat',
@@ -1064,6 +1127,100 @@ export const resolveShadowSupportActions = (params: {
         remainingTurns: 2,
         targetId: monster.id,
       })
+    }
+  }
+
+  if (monster.hp > 0) {
+    const runtimeResolved = resolveShadowActionRuntime({
+      shadows,
+      player: params.player,
+      monster,
+      activeEffects,
+      rng: params.rng,
+      turnNumber: params.turnNumber,
+      phase: params.phase,
+      playerUsedSkill: params.playerUsedSkill,
+      maxActionsPerRound: 1,
+    })
+
+    for (const event of runtimeResolved.events) {
+      if (monster.hp <= 0) break
+      const freshMonsterStats = getEffectiveBattleActorStats(monster, activeEffects)
+      const freshPlayerStats = getEffectiveBattleActorStats(params.player, activeEffects)
+      const sourceLabel =
+        event.sourceAbility === 'unique' ? '고유 그림자 스킬' :
+        event.sourceAbility === 'prototype' ? '그림자 프로토타입' :
+        event.sourceAbility === 'template' ? '그림자 전술' :
+        '그림자 스킬'
+      let damage = 0
+      let message = `${sourceLabel} 발동: ${event.sourceName}.`
+
+      if (event.effectKind === 'damage' || event.effectKind === 'hybrid') {
+        damage = calculateDamage({
+          attackerAtk: freshPlayerStats.atk,
+          defenderDef: freshMonsterStats.def,
+          skillPower: Math.min(0.11, event.valuePreview),
+          randomFactor: 0.95 + params.rng() * 0.1,
+          isCritical: false,
+        })
+        monster = { ...monster, hp: Math.max(0, monster.hp - damage) }
+        message = `${sourceLabel} 발동: ${event.sourceName}. ${damage} 피해.`
+      } else if (event.effectKind === 'guard' || event.effectKind === 'survival') {
+        const reduction = Math.min(event.effectKind === 'guard' ? 0.065 : 0.055, event.valuePreview)
+        activeEffects = applyPlayerDamageReductionMax(activeEffects, {
+          sourceSkillId: `shadow-action-${event.skillId ?? event.passiveId ?? event.sourceShadowId}`,
+          kind: 'damage_reduction',
+          value: reduction,
+          remainingTurns: 1,
+          targetId: 'player',
+        })
+        message = `${sourceLabel} 발동: ${event.sourceName}. 받는 피해 ${Math.round(reduction * 100)}% 감소.`
+      } else if (event.effectKind === 'control' || event.effectKind === 'bossing' || (event.effectKind === 'trigger_boost' && (event.runtimeCategory === 'control' || event.runtimeCategory === 'bossing'))) {
+        const defenseDown = Math.min(event.effectKind === 'bossing' ? 0.05 : 0.045, event.valuePreview)
+        activeEffects = applyOrRefreshCombatEffect(activeEffects, {
+          sourceSkillId: `shadow-action-${event.skillId ?? event.passiveId ?? event.sourceShadowId}`,
+          kind: 'stat',
+          stat: 'def',
+          value: -Math.max(1, Math.round(monster.def * defenseDown)),
+          remainingTurns: event.effectKind === 'bossing' ? 2 : 1,
+          targetId: monster.id,
+        })
+        message = `${sourceLabel} 발동: ${event.sourceName}. 적 방어 흐름 약화.`
+      } else if (event.effectKind === 'support' || event.effectKind === 'cooldown' || event.effectKind === 'synergy' || event.effectKind === 'trigger_boost') {
+        const atkBoost = Math.min(0.04, event.valuePreview)
+        activeEffects = applyOrRefreshCombatEffect(activeEffects, {
+          sourceSkillId: `shadow-action-${event.skillId ?? event.passiveId ?? event.sourceShadowId}`,
+          kind: 'stat',
+          stat: event.runtimeCategory === 'tempo' ? 'speed' : 'atk',
+          value: Math.max(1, Math.round((event.runtimeCategory === 'tempo' ? params.player.speed : params.player.atk) * atkBoost)),
+          remainingTurns: 1,
+          targetId: 'player',
+        })
+        message = event.runtimeCategory === 'tempo'
+          ? `${sourceLabel} 발동: ${event.sourceName}. 행동 흐름 보정.`
+          : `${sourceLabel} 발동: ${event.sourceName}. 다음 공격 흐름 보조.`
+      } else if (event.effectKind === 'stat_shift') {
+        const speedBoost = Math.min(0.035, event.valuePreview)
+        activeEffects = applyOrRefreshCombatEffect(activeEffects, {
+          sourceSkillId: `shadow-action-${event.skillId ?? event.passiveId ?? event.sourceShadowId}`,
+          kind: 'stat',
+          stat: 'speed',
+          value: Math.max(1, Math.round(params.player.speed * speedBoost)),
+          remainingTurns: 1,
+          targetId: 'player',
+        })
+        message = `${sourceLabel} 발동: ${event.sourceName}. 행동 흐름 보정.`
+      }
+
+      logs.push(createShadowActionRuntimeLog({
+        event,
+        monster,
+        damage: damage > 0 ? damage : undefined,
+        turnNumber: params.turnNumber,
+        waveNumber: params.waveNumber,
+        waveLabel: params.waveLabel,
+        message,
+      }))
     }
   }
 

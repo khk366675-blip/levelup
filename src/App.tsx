@@ -4,9 +4,11 @@ import {
   Award,
   Calendar,
   Compass,
+  Coins,
   Eclipse,
   Gift,
   Package,
+  ShoppingBag,
   Skull,
   Swords,
   Plus,
@@ -27,12 +29,14 @@ import { BackupControls } from './components/BackupControls'
 import { InfiniteTowerPanel } from './components/InfiniteTowerPanel'
 import { RewardBoxPanel } from './components/RewardBoxPanel'
 import { ChallengeCardsPanel } from './components/ChallengeCardsPanel'
+import { ShopPanel } from './components/ShopPanel'
 import { DevQaPanel } from './components/DevQaPanel'
 
-type Tab = 'rewards' | 'daily' | 'main' | 'dungeon' | 'gate' | 'shadows' | 'inventory' | 'titles' | 'tower'
+type Tab = 'rewards' | 'shop' | 'daily' | 'main' | 'dungeon' | 'gate' | 'shadows' | 'inventory' | 'titles' | 'tower'
 
 const TABS: { key: Tab; label: string; icon: typeof Calendar }[] = [
   { key: 'rewards',   label: '보상',           icon: Gift },
+  { key: 'shop',      label: '상점',           icon: ShoppingBag },
   { key: 'shadows',   label: '군단',         icon: Eclipse },
   { key: 'daily',     label: '일일 퀘스트', icon: Calendar },
   { key: 'main',      label: '메인 퀘스트', icon: Compass },
@@ -48,6 +52,7 @@ export default function App() {
   const [addOpen, setAddOpen] = useState(false)
   const quests = useGame(s => s.quests)
   const hunter = useGame(s => s.hunter)
+  const gold = useGame(s => s.gold ?? 0)
   const removeQuest = useGame(s => s.removeQuest)
   const reset = useGame(s => s.hardReset)
   const init = useGame(s => s.resetDailiesIfNewDay)
@@ -106,7 +111,7 @@ export default function App() {
       {/* Header */}
       <header className="sticky top-0 z-30 backdrop-blur-md bg-ink-900/60 border-b border-cyan-400/15">
         <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
-          <div className="flex items-center gap-3">
+          <div className="flex min-w-0 flex-wrap items-center gap-2 sm:gap-3">
             <motion.div
               animate={{ rotate: [0, 4, -4, 0] }}
               transition={{ duration: 4, repeat: Infinity }}
@@ -121,10 +126,14 @@ export default function App() {
               <div className="text-[10px] text-cyan-300/50 system-text -mt-0.5">HUNTER SYSTEM v1.0</div>
             </div>
             {equippedTitle && (
-              <div className="ml-2 text-xs text-amber-300 border border-amber-400/30 rounded-full px-2.5 py-0.5 system-text bg-amber-400/5">
+              <div className="text-xs text-amber-300 border border-amber-400/30 rounded-full px-2.5 py-0.5 system-text bg-amber-400/5">
                 칭호: {equippedTitle.name}
               </div>
             )}
+            <div className="flex items-center gap-1.5 rounded-full border border-amber-300/25 bg-amber-400/10 px-2.5 py-0.5 text-xs font-bold tabular-nums text-amber-100 shadow-[0_0_16px_rgba(251,191,36,0.08)]">
+              <Coins className="h-3.5 w-3.5" />
+              {gold.toLocaleString()} Gold
+            </div>
           </div>
           <div className="flex items-center gap-1.5 flex-wrap justify-end">
             <BackupControls />
@@ -183,6 +192,15 @@ export default function App() {
                   <RewardBoxPanel />
                   <ChallengeCardsPanel />
                 </div>
+              </Section>
+            )}
+
+            {tab === 'shop' && (
+              <Section
+                title="상점"
+                subtitle="Gold로 소환권과 장비권을 보급합니다"
+              >
+                <ShopPanel />
               </Section>
             )}
 

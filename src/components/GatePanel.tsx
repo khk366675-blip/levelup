@@ -395,6 +395,8 @@ function RewardSummary({ log }: { log: CombatLog }) {
         <div key={`${reward.type}-${index}`} className="text-xs text-white/70">
           {reward.type === 'xp' ? (
             <span className="text-cyan-200">XP +{reward.amount ?? 0}</span>
+          ) : reward.type === 'gold' ? (
+            <span className="text-amber-200">Gold +{reward.amount ?? 0}</span>
           ) : (
             <span>
               전리품:{' '}

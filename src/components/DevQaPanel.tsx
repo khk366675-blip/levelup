@@ -272,6 +272,7 @@ const injectQaState = (state: GameState, mode: 'all' | 'summon' | 'expedition' |
   if (mode === 'summon') {
     return {
       ...basePatch,
+      gold: Math.max(state.gold ?? 0, 1500),
       shadowEssence: Math.max(state.shadowEssence ?? 0, 180),
       shadowSummonTickets: [
         ...(state.shadowSummonTickets ?? []).filter(ticket => !ticket.id.startsWith(QA_TICKET_PREFIX)),
@@ -344,6 +345,7 @@ const injectQaState = (state: GameState, mode: 'all' | 'summon' | 'expedition' |
     ...basePatch,
     ownedShadows: withShadows.ownedShadows,
     equippedShadowIds: withShadows.equippedShadowIds,
+    gold: Math.max(state.gold ?? 0, 1500),
     shadowEssence: Math.max(state.shadowEssence ?? 0, 180),
     shadowSummonTickets: [
       ...(state.shadowSummonTickets ?? []).filter(ticket => !ticket.id.startsWith(QA_TICKET_PREFIX)),

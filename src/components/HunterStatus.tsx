@@ -16,6 +16,7 @@ import {
   getCombatPowerTierHint,
   getHunterCombatPowerBreakdown,
 } from '../lib/combatPower'
+import { getEquipmentPowerBreakdown } from '../lib/equipmentPower'
 import { STAT_META, type StatKey, JOB_DEFINITIONS, JOB_LINE_META } from '../lib/types'
 import { Flame, Plus, Swords } from 'lucide-react'
 import { useState } from 'react'
@@ -57,6 +58,10 @@ export function HunterStatus() {
     activeConsumableEffects,
   })
   const combatPowerHint = getCombatPowerTierHint(combatPower.total)
+  const shadowCombat = combatPower.shadowCombat
+  const equipmentPowerSummaries = equippedItems.map(item => getEquipmentPowerBreakdown(item))
+  const equipmentAnalysisValue = equipmentPowerSummaries.reduce((sum, item) => sum + item.totalEquipmentValue, 0)
+  const equipmentAnalysisTags = Array.from(new Set(equipmentPowerSummaries.flatMap(item => item.topTags))).slice(0, 3)
 
   // Stat effect descriptions
   const getStatEffect = (key: StatKey): string | null => {
@@ -178,7 +183,7 @@ export function HunterStatus() {
           </div>
         </div>
 
-        <div className="mb-5 grid grid-cols-1 gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
+        <div className="mb-5">
           <div className="rounded-lg border border-amber-300/25 bg-amber-400/10 px-3 py-2">
             <div className="flex items-center justify-between gap-3">
               <div className="min-w-0">
@@ -195,20 +200,54 @@ export function HunterStatus() {
             <div className="mt-1 text-[10px] leading-relaxed text-white/45">
               장비 · 칭호 · 출전 그림자 · 전투 스킬 반영
             </div>
-          </div>
-          <div className="grid grid-cols-3 gap-2 sm:w-72">
-            <div className="rounded border border-white/10 bg-white/5 px-2 py-2 text-center">
-              <div className="system-text text-[9px] text-white/40">장비</div>
-              <div className="text-xs font-bold text-purple-100">+{combatPower.equipment.toLocaleString()}</div>
-            </div>
-            <div className="rounded border border-white/10 bg-white/5 px-2 py-2 text-center">
-              <div className="system-text text-[9px] text-white/40">칭호</div>
-              <div className="text-xs font-bold text-amber-100">+{combatPower.title.toLocaleString()}</div>
-            </div>
-            <div className="rounded border border-white/10 bg-white/5 px-2 py-2 text-center">
-              <div className="system-text text-[9px] text-white/40">그림자</div>
-              <div className="text-xs font-bold text-cyan-100">+{combatPower.shadows.toLocaleString()}</div>
-            </div>
+            {equipmentAnalysisValue > 0 && (
+              <div className="mt-2 flex flex-wrap items-center gap-1.5 text-[9px] system-text">
+                <span className="rounded border border-amber-300/18 bg-amber-300/8 px-2 py-0.5 text-amber-100/65">
+                  EQUIP VALUE {equipmentAnalysisValue.toLocaleString()}
+                </span>
+                {equipmentAnalysisTags.map(tag => (
+                  <span key={tag} className="rounded border border-white/10 bg-white/5 px-1.5 py-0.5 text-white/45">
+                    {tag}
+                  </span>
+                ))}
+              </div>
+            )}
+            {shadowCombat.totalPower > 0 && (
+              <div className="mt-2 rounded border border-cyan-300/15 bg-cyan-300/5 p-2">
+                <div className="flex items-center justify-between gap-2">
+                  <div>
+                    <div className="system-text text-[9px] text-cyan-100/55">SHADOW ANALYSIS POWER</div>
+                    <div className="text-sm font-black tabular-nums text-cyan-100">
+                      SCP {shadowCombat.totalPower.toLocaleString()}
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap justify-end gap-1 text-[9px] system-text">
+                    {shadowCombat.topStats.map(stat => (
+                      <span key={stat.key} className="rounded border border-cyan-300/20 bg-cyan-300/10 px-1.5 py-0.5 text-cyan-100/70">
+                        {stat.shortLabel}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+                <div className="mt-2 grid grid-cols-5 gap-1 text-[9px]">
+                  {[
+                    ['Assist', shadowCombat.assistPower],
+                    ['Guard', shadowCombat.guardPower],
+                    ['Control', shadowCombat.controlPower],
+                    ['Boss', shadowCombat.bossPower],
+                    ['Exped', shadowCombat.expeditionPower],
+                  ].map(([label, value]) => (
+                    <div key={label} className="rounded bg-ink-950/45 px-1.5 py-1 text-center">
+                      <div className="system-text text-white/35">{label}</div>
+                      <div className="tabular-nums text-white/65">{Number(value).toLocaleString()}</div>
+                    </div>
+                  ))}
+                </div>
+                <div className="mt-1.5 text-[9px] leading-relaxed text-white/35">
+                  Display-only shadow language. Hunter combat power and battle results are unchanged.
+                </div>
+              </div>
+            )}
           </div>
         </div>
 

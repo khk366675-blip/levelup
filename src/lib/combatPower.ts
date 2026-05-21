@@ -9,6 +9,7 @@ import {
 } from './game'
 import { SKILL_DEFINITIONS } from './seed'
 import { getEquippedShadows, getEquippedShadowStatBonuses } from './shadows'
+import { getShadowArmyCombatPower, type ShadowArmyCombatPowerBreakdown } from './shadowStats'
 
 export interface HunterCombatPowerInput {
   hunter: HunterState
@@ -26,6 +27,7 @@ export interface HunterCombatPowerBreakdown {
   title: number
   skills: number
   shadows: number
+  shadowCombat: ShadowArmyCombatPowerBreakdown
   misc: number
   combatStats: PlayerCombatStats
 }
@@ -93,6 +95,7 @@ export const getHunterCombatPowerBreakdown = ({
   const equippedShadows = getEquippedShadows(ownedShadows, equippedShadowIds, hunter)
   const titleStatBonuses = getEquippedTitleEffects(hunter).statBonus ?? {}
   const shadowStatBonuses = getEquippedShadowStatBonuses(equippedShadows)
+  const shadowCombat = getShadowArmyCombatPower(equippedShadows)
 
   const base = powerFor({ hunter, stats: hunter.stats, equippedItems: [], includeSkills: false })
   const withEquipment = powerFor({ hunter, stats: hunter.stats, equippedItems, includeSkills: false })
@@ -115,6 +118,7 @@ export const getHunterCombatPowerBreakdown = ({
     equipment: Math.max(0, withEquipment.power - base.power),
     title: Math.max(0, withTitle.power - withEquipment.power),
     shadows: Math.max(0, withShadows.power - withTitle.power),
+    shadowCombat,
     skills: Math.max(0, withSkills.power - withShadows.power),
     misc: Math.max(0, final.power - withSkills.power),
     combatStats: final.combatStats,

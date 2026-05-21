@@ -28,6 +28,19 @@ import {
   SHADOW_FRAGMENT_SUMMON_COST,
   SHADOW_INNATE_GRADE_LABEL,
 } from '../lib/shadows'
+import {
+  SHADOW_STAT_GROUPS,
+  SHADOW_STAT_LABEL,
+  getShadowArmyCombatPower,
+  getShadowCombatProfile,
+} from '../lib/shadowStats'
+import {
+  formatShadowPassiveSummary,
+  formatShadowSkillSummary,
+  formatShadowTriggerSummary,
+  getShadowAbilitySourceLabel,
+  getShadowCombatUnitProfile,
+} from '../lib/shadowSkills'
 import type { OwnedShadow, ShadowInnateGrade, ShadowRarity, ShadowRole } from '../lib/types'
 
 type SourceFilterKey = 'all' | 'normal' | 'gate_named' | 'achievement_named'
@@ -237,6 +250,15 @@ function ShadowDetailPanel({
   const evolutionCheck = canEvolveShadow(shadow, shadowEssence)
   const evolved = (shadow.evolutionStage ?? 0) > 0
   const effects = getShadowEffects(shadow).map(formatShadowEffect)
+  const combatProfile = getShadowCombatProfile(shadow)
+  const unitProfile = getShadowCombatUnitProfile(shadow)
+  const breakdownItems = [
+    { label: 'Assist', value: combatProfile.assistPower },
+    { label: 'Guard', value: combatProfile.guardPower },
+    { label: 'Control', value: combatProfile.controlPower },
+    { label: 'Boss', value: combatProfile.bossPower },
+    { label: 'Expedition', value: combatProfile.expeditionPower },
+  ]
 
   return (
     <div className={`panel corner-bracket overflow-hidden p-4 border ${rarityStyle[shadow.rarity]} bg-ink-950/78`}>
@@ -300,6 +322,163 @@ function ShadowDetailPanel({
 
       <div className="mt-3 text-[11px] leading-relaxed text-cyan-100/70">
         {effects.join(' · ')}
+      </div>
+      <div className="mt-3 rounded-lg border border-purple-300/18 bg-purple-300/8 p-3">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <div className="system-text text-[9px] text-purple-100/60">SHADOW UNIT PROFILE</div>
+            <div className="mt-0.5 text-sm font-black text-white/90">
+              {unitProfile.qualityCap.toUpperCase()} SKILL MODEL
+            </div>
+          </div>
+          <div className="text-right">
+            <div className="system-text text-[9px] text-cyan-100/50">2.5D LANE</div>
+            <div className="mt-0.5 text-[11px] font-semibold uppercase text-cyan-100/75">
+              {unitProfile.actionProfile.boardLane}
+            </div>
+          </div>
+        </div>
+        <div className="mt-2 flex flex-wrap gap-1.5">
+          {unitProfile.summaryBadges.map(badge => (
+            <span key={badge} className="rounded border border-purple-300/25 bg-purple-300/10 px-2 py-1 text-[10px] system-text text-purple-100/75">
+              {badge}
+            </span>
+          ))}
+        </div>
+        <div className="mt-3 grid gap-2 md:grid-cols-2">
+          <div className="rounded border border-white/10 bg-ink-950/45 p-2">
+            <div className="mb-1 system-text text-[9px] text-white/40">ACTIVE CANDIDATES</div>
+            {unitProfile.activeSkills.length > 0 ? (
+              <div className="space-y-1.5">
+                {unitProfile.activeSkills.map(skill => (
+                  <div key={skill.id} className="rounded border border-cyan-300/15 bg-cyan-300/8 px-2 py-1.5">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-[11px] font-bold text-cyan-100/85">{skill.name}</span>
+                      <span className="system-text text-[9px] text-cyan-100/50">{getShadowAbilitySourceLabel(skill)}</span>
+                    </div>
+                    <div className="mt-0.5 text-[10px] leading-relaxed text-white/45">
+                      {formatShadowSkillSummary(skill)}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-[10px] text-white/35">No active candidate assigned yet.</div>
+            )}
+          </div>
+          <div className="rounded border border-white/10 bg-ink-950/45 p-2">
+            <div className="mb-1 system-text text-[9px] text-white/40">PASSIVE CANDIDATES</div>
+            {unitProfile.passives.length > 0 ? (
+              <div className="space-y-1.5">
+                {unitProfile.passives.map(passive => (
+                  <div key={passive.id} className="rounded border border-emerald-300/15 bg-emerald-300/8 px-2 py-1.5">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-[11px] font-bold text-emerald-100/85">{passive.name}</span>
+                      <span className="system-text text-[9px] text-emerald-100/50">{getShadowAbilitySourceLabel(passive)}</span>
+                    </div>
+                    <div className="mt-0.5 text-[10px] leading-relaxed text-white/45">
+                      {formatShadowPassiveSummary(passive)}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-[10px] text-white/35">No passive candidate assigned yet.</div>
+            )}
+          </div>
+        </div>
+        <details className="mt-2 rounded border border-white/10 bg-ink-950/50">
+          <summary className="cursor-pointer px-3 py-2 text-[10px] system-text text-white/55 hover:text-purple-100">
+            Unit behavior / trigger profile
+          </summary>
+          <div className="grid gap-2 border-t border-white/10 p-3 text-[10px] text-white/50 sm:grid-cols-2">
+            <div>
+              <div className="system-text text-[9px] text-white/35">PREFERRED ACTIONS</div>
+              <div className="mt-1 text-white/70">{unitProfile.behavior.preferredActions.join(' / ')}</div>
+            </div>
+            <div>
+              <div className="system-text text-[9px] text-white/35">ACTION CUE</div>
+              <div className="mt-1 text-white/70">{unitProfile.actionProfile.actionCue}</div>
+            </div>
+            <div>
+              <div className="system-text text-[9px] text-white/35">GRADE TUNING</div>
+              <div className="mt-1 text-white/70">
+                Proc x{unitProfile.gradeTuning.procStability.toFixed(2)} · Scale x{unitProfile.gradeTuning.effectScaling.toFixed(2)}
+              </div>
+            </div>
+            <div>
+              <div className="system-text text-[9px] text-white/35">PRIMARY TRIGGER</div>
+              <div className="mt-1 text-white/70">
+                {formatShadowTriggerSummary(unitProfile.activeSkills[0]?.trigger ?? unitProfile.passives[0]?.condition)}
+              </div>
+            </div>
+          </div>
+        </details>
+        <div className="mt-2 text-[9px] leading-relaxed text-white/35">
+          Skill/passive entries are derived v2 candidates for future ShadowActionEvent runtime. Current Gate/Tower runtime remains on the existing bridge layer.
+        </div>
+      </div>
+      <div className="mt-3 rounded-lg border border-amber-300/20 bg-amber-300/8 p-3">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <div className="system-text text-[9px] text-amber-100/60">SHADOW COMBAT POWER</div>
+            <div className="mt-0.5 text-2xl font-black tabular-nums text-amber-100">
+              {combatProfile.totalPower.toLocaleString()}
+            </div>
+          </div>
+          <div className="text-right">
+            <div className="system-text text-[9px] text-cyan-100/55">ROLE IDENTITY</div>
+            <div className="mt-0.5 max-w-40 text-[11px] font-semibold text-cyan-100/80">
+              {combatProfile.roleIdentity}
+            </div>
+          </div>
+        </div>
+        <div className="mt-2 system-text text-[9px] text-white/35">TOP STRENGTHS</div>
+        <div className="mt-1 flex flex-wrap gap-1.5">
+          {combatProfile.topStats.map(stat => (
+            <span key={stat.key} className="rounded border border-cyan-300/25 bg-cyan-300/10 px-2 py-1 text-[10px] system-text text-cyan-100/75">
+              {stat.label} {stat.value}
+            </span>
+          ))}
+        </div>
+        <div className="mt-3 grid grid-cols-2 gap-2 text-[10px] sm:grid-cols-5">
+          {breakdownItems.map(item => (
+            <div key={item.label} className="rounded border border-white/10 bg-ink-950/45 px-2 py-1.5">
+              <div className="system-text text-[8px] text-white/35">{item.label}</div>
+              <div className="font-bold tabular-nums text-white/80">{item.value.toLocaleString()}</div>
+            </div>
+          ))}
+        </div>
+        <details className="mt-3 rounded border border-white/10 bg-ink-950/50">
+          <summary className="cursor-pointer px-3 py-2 text-[10px] system-text text-white/55 hover:text-cyan-100">
+            Detailed shadow stats
+          </summary>
+          <div className="space-y-3 border-t border-white/10 p-3">
+            {SHADOW_STAT_GROUPS.map(group => (
+              <div key={group.title}>
+                <div className="mb-1.5 system-text text-[9px] text-white/40">{group.title}</div>
+                <div className="grid gap-1.5">
+                  {group.keys.map(key => {
+                    const value = combatProfile.stats[key]
+                    const pct = Math.min(100, Math.round((value / Math.max(1, combatProfile.topStats[0]?.value ?? value)) * 100))
+                    return (
+                      <div key={key} className="grid grid-cols-[88px_1fr_44px] items-center gap-2 text-[10px]">
+                        <span className="truncate text-white/55">{SHADOW_STAT_LABEL[key]}</span>
+                        <div className="h-1.5 overflow-hidden rounded-full bg-white/10">
+                          <div className="h-full rounded-full bg-gradient-to-r from-cyan-300/75 to-purple-300/75" style={{ width: `${pct}%` }} />
+                        </div>
+                        <span className="text-right tabular-nums text-white/70">{value}</span>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            ))}
+          </div>
+        </details>
+        <div className="mt-2 text-[9px] leading-relaxed text-white/35">
+          Rarity is base potential, innate grade is born talent, level is bond growth, enhancement is investment, evolution is role expansion, named status is unique potential.
+        </div>
       </div>
       <div className="mt-2 text-[10px] text-white/35 system-text">
         {displaySourceLabel(shadow)} · 강화 {shadow.enhancementLevel ?? 0}/{MAX_SHADOW_ENHANCEMENT_LEVEL} · 흡수 {shadow.absorbedCount ?? 0}회
@@ -495,6 +674,9 @@ function CodexCard({ definition, owned, ownedCount, maxEnhancement, isEquipped }
   //   - achievement_named (hiddenUntilObtained 없음)  → 이름/설명/효과 그대로 표시 (공개 목표)
   // Portrait/frame은 두 타입 모두 sealed 시각 유지.
   const hidden = !owned && definition.hiddenUntilObtained
+  const unlockConditionLabel = hidden
+    ? '봉인 해제 후 공개'
+    : definition.unlockConditionText ?? definition.sourceGateId ?? `${definition.sourceGateRank ?? '?'}급 게이트 추출`
   const isLockedNamed = !owned && (definition.isGateNamed || definition.isAchievementNamed)
   const lockedSourceType: 'named_gate' | 'named_achievement' | null = isLockedNamed
     ? (definition.isAchievementNamed ? 'named_achievement' : 'named_gate')
@@ -546,7 +728,7 @@ function CodexCard({ definition, owned, ownedCount, maxEnhancement, isEquipped }
         {hidden ? '효과: 봉인 해제 후 공개' : effects.join(' · ')}
       </div>
       <div className="mt-2 text-[10px] text-white/40 system-text">
-        조건: {definition.unlockConditionText ?? definition.sourceGateId ?? `${definition.sourceGateRank ?? '?'}급 게이트 추출`}
+        조건: {unlockConditionLabel}
       </div>
     </div>
   )
@@ -731,12 +913,7 @@ export function ShadowPanel() {
       ?? filteredOwned[0]
       ?? ownedShadows[0]
   }, [featuredShadows, filteredOwned, ownedShadows, selectedShadowId])
-  const legionPower = equippedShadows.reduce((sum, shadow) => {
-    const def = getShadowDefinition(shadow.definitionId)
-    const levelBonus = 1 + ((shadow.level ?? 1) - 1) * 0.01
-    const enhanceBonus = 1 + (shadow.enhancementLevel ?? 0) * 0.06
-    return sum + Math.round((def?.basePower ?? 0) * levelBonus * enhanceBonus)
-  }, 0)
+  const legionPower = getShadowArmyCombatPower(equippedShadows).totalPower
   const evolutionSteps: RevealStep[] = pendingEvolution
     ? [
         {
@@ -824,6 +1001,7 @@ export function ShadowPanel() {
                 {featuredShadows.map((shadow, index) => {
                   const equipped = equippedShadowIds.includes(shadow.instanceId)
                   const selected = selectedShadow?.instanceId === shadow.instanceId
+                  const combatProfile = getShadowCombatProfile(shadow)
                   return (
                     <button
                       key={shadow.instanceId}
@@ -842,8 +1020,10 @@ export function ShadowPanel() {
                       <ShadowPortrait shadow={shadow} size="lg" active={equipped} highlighted={Boolean(shadow.isNamed || shadow.isGateNamed || shadow.isAchievementNamed)} innateGrade={shadow.innateGrade} evolutionReady={canEvolveShadow(shadow, shadowEssence).canEvolve} />
                       <div className="mt-2 truncate text-sm font-bold text-white/90">{shadow.name}</div>
                       <div className="mt-1 flex flex-wrap gap-1 text-[9px] system-text text-white/45">
+                        <span className="text-amber-100">SCP {combatProfile.totalPower.toLocaleString()}</span>
                         <span>Lv {shadow.level ?? 1}</span>
                         <span>{SHADOW_ROLE_LABEL[shadow.role]}</span>
+                        {combatProfile.topStats.slice(0, 2).map(stat => <span key={stat.key}>{stat.shortLabel}</span>)}
                         {(shadow.enhancementLevel ?? 0) > 0 && <span className="text-amber-200">+{shadow.enhancementLevel}</span>}
                       </div>
                     </button>

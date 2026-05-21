@@ -303,6 +303,20 @@ export const RARITY_META: Record<ItemRarity, { label: string; color: string; rin
 // Shadow Soldier System (12-11)
 export type ShadowRarity = 'common' | 'uncommon' | 'rare' | 'epic' | 'legendary'
 export type ShadowInnateGrade = 'C' | 'B' | 'A' | 'S'
+export type ShadowStatKey =
+  | 'shadowAttack'
+  | 'shadowDefense'
+  | 'shadowDurability'
+  | 'shadowSpeed'
+  | 'shadowCrit'
+  | 'shadowFinisher'
+  | 'shadowControl'
+  | 'shadowSuppression'
+  | 'shadowSupport'
+  | 'shadowSurvival'
+  | 'shadowBossing'
+  | 'shadowExpedition'
+  | 'shadowSynergy'
 
 export type ShadowSummonTicketType =
   | 'normal_shadow'
@@ -418,6 +432,12 @@ export interface ShadowDefinition {
   unlockConditionText?: string
   basePower: number
   effects: ShadowEffect[]
+  shadowStats?: Partial<Record<ShadowStatKey, number>>
+  shadowSkillIds?: string[]
+  shadowPassiveIds?: string[]
+  shadowUniqueSkillIds?: string[]
+  shadowUniquePassiveIds?: string[]
+  shadowUniqueActionCue?: string
   possibleTraits?: string[]
   quote?: string
   hiddenUntilObtained?: boolean
@@ -868,7 +888,7 @@ export interface GateStatus {
 }
 
 export interface GateReward {
-  type: 'xp' | 'item'
+  type: 'xp' | 'item' | 'gold'
   amount?: number
   itemId?: string
   itemName?: string
@@ -1378,6 +1398,7 @@ export type BoxSource = 'daily_login' | 'weekly_activity' | 'tower_boss' | 'chal
 
 export interface BoxReward {
   hunterXp?: number
+  gold?: number
   statRewards?: Partial<Record<StatKey, number>>
   shadowEssence?: number
   shadowSummonTickets?: ShadowSummonTicket[]
@@ -1434,6 +1455,7 @@ export interface ChallengeCardCondition {
 
 export interface ChallengeCardReward {
   hunterXp: number
+  gold?: number
   shadowEssence: number
   boxUpgradePoints: number
 }
@@ -1602,6 +1624,7 @@ export interface TowerBattleResult {
 
 export interface TowerReward {
   hunterXp?: number
+  gold?: number
   shadowXp?: number
   shadowEssence?: number
   itemDropChance?: number

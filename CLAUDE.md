@@ -8500,3 +8500,2121 @@ Batch 06~11 (55개) PNG 파일을 앱에 연결. 기존 Batch 01~05 (47개) 방�
 - 저장 스키마 변경 없음. 새 hint id는 `seen`/`discoveredHints` set에 자연스럽게 누적되며 기존 fallback과 호환.
 - 기존 사용자 데이터의 의미를 깎지 않음. 누적된 signals/seen/sealedRewards 모두 그대로 사용.
 
+
+---
+
+## 12-27A 보상 체감 / 난이도 재조정 1차 완료
+
+### 목표
+카드 3장 완전 달성과 무한의 탑 보스 클리어가 더 기억에 남는 성취처럼 느껴지도록, 반복 보상은 작게 유지하면서 완전 달성/보스층/강화 박스의 체감 보상을 소폭 상향했다.
+
+### 수정 파일
+| 파일 | 변경 내용 |
+|---|---|
+| `src/lib/store.ts` | 카드 완전 달성 보너스, daily box epic 보정, 박스 보상 테이블, 카드 normal/hard 일부 요구량 조정 |
+| `src/lib/infiniteTower.ts` | 보스층 권장 전투력/스케일링 소폭 상향, 보스 first/repeat clear 보상 상향 |
+| `src/components/ChallengeCardsPanel.tsx` | 3장 완전 달성 reveal 제목/요약 칩 보강 |
+| `src/components/RewardBoxPanel.tsx` | 3장 완전 달성 시 daily box Epic preview/tier 표시 보강 |
+| `src/components/InfiniteTowerPanel.tsx` | 보스 클리어 reveal 제목과 Shadow XP 결과 표시 보강 |
+| `scripts/sim-box-card-rewards.ts` | 변경된 박스/카드 보상 기대값 반영 |
+
+### 카드 3장 완전 달성 보상
+- 오늘 선택한 카드 3장을 모두 완료한 순간 1회만 지급한다.
+- 보너스: XP +25, 그림자 정수 +2, normal 소환 조각 +1 확정.
+- 추가로 rare 소환 조각 +1은 15% 확률, 일반/희귀 소환권 신호는 아주 낮은 확률로만 유지.
+- `challengeCardHistory[date].completedCount < 3 && completedIds.length >= 3` 조건으로 중복 지급을 막는다.
+
+### 박스 강화 보상 변경
+- 카드 완료로 얻는 daily box upgrade point가 6 이상이면 daily box도 `epic` tier까지 상승한다.
+- tier multiplier 조정: enhanced 1.25 -> 1.30, superior 1.55 -> 1.68, epic 1.90 -> 2.00.
+- daily box 장비 확률 5.5% -> 5.8% * tier multiplier, enhanced 이상 daily box 장비 상한을 rare까지 허용.
+- daily/weekly/boss box의 소환 조각/티켓 신호 확률을 소폭 상향했다.
+- boss box 소모품 확률 28% -> 34%, 장비 확률 superior 62% -> 68%, epic 78% -> 84%.
+
+### 무한의 탑 보스 보상 변경
+- 보스 첫 클리어: XP floor*28 -> floor*31, 그림자 정수 `5 + floor/5` -> `7 + floor/4`, itemDropChance 35% -> 42%, Shadow XP 추가.
+- 보스 반복 클리어: XP floor*6 -> floor*7, 그림자 정수 `1 + floor/10` -> `2 + floor/8`, itemDropChance 8% -> 11%, Shadow XP 추가.
+- 기존처럼 보스 박스는 first clear + 미수령 보스층에만 지급한다.
+
+### 난이도 조정
+- 무한의 탑 보스층 권장 전투력 계수 1.35 -> 1.42.
+- 무한의 탑 보스층 monster scale 보정 1.18 -> 1.22.
+- 카드 일부 요구량 소폭 상향: normal daily count 3 -> 4, hard daily count 5 -> 6.
+- 초반 일반층/일반 게이트/고레벨 게이트 구조는 변경하지 않았다.
+
+### 보상 인플레이션 방지
+- 카드 완전 달성 보너스는 하루 1회, small XP/정수/조각 중심으로 제한.
+- daily box Epic은 카드 3장 완전 달성급 upgrade point에서만 적용된다.
+- boss box는 기존 `bossRewardsClaimed[floor]` 경로를 유지해 보스층마다 first clear 1회 지급만 가능하다.
+- repeat boss reward는 box 없이 XP/정수/Shadow XP/item chance만 소폭 상향했다.
+
+### 검증
+- `npx tsc --noEmit` 통과.
+- `npm run build` 통과. 기존 Vite chunk size 경고만 유지.
+- `npx tsx scripts/sim-box-card-rewards.ts` 통과.
+  - perfect day avg: XP 203.00, essence 약 14.0, equipment 약 0.11~0.12, consumables 약 0.16, normalShards 약 1.07, rareShards 약 0.17.
+  - perfect week avg: XP 1614.00, essence 약 108.0, equipment 약 1.22, consumables 약 1.68, normalShards 약 7.91, rareShards 약 1.22.
+  - floor 15 boss box avg: XP 126.00, essence 21.00, equipment 약 0.69, consumables 약 0.34, normalShards 약 0.87, rareShards 약 0.18.
+- `npx tsx scripts/sim-infinite-tower.ts` 통과.
+  - 보스층 권장 전투력은 5층 852, 10층 1420, 15층 1988, 20층 2556, 25층 3124, 30층 3692로 상승.
+  - 보스 first clear 보상 샘플: 5층 XP 155/정수 8/item 42%, 30층 XP 930/정수 15/item 42%.
+- `npx tsx scripts/sim-gate-current.ts` 통과. E/D/C 게이트 밸런스는 기존 기준 유지.
+- DEV 서버 `http://localhost:3002` 확인.
+- 모바일 390px viewport 확인: `scrollWidth === clientWidth`, horizontal overflow 없음.
+- Browser console error: 0.
+
+### 저장 데이터 / 보안 제약
+- localStorage key 변경 없음: `levelup-save` 유지.
+- persist version 변경 없음: v14 유지.
+- 기존 저장 데이터 초기화/삭제 없음.
+- 새 저장 필드 추가 없음. 기존 optional reward/ticket/shard 필드와 challengeCardHistory를 사용.
+- secret/hidden 조건/정체/보상명 노출 없음.
+- B/A/S급 상위 게이트 또는 고레벨 신규 콘텐츠 구현 없음.
+
+## 12-27B 골드/상점/소환권/장비권 수급 완화 1차 완료
+
+### 목표
+12-23B에서 늘어난 그림자/장비 풀, `innateGrade`, `equipmentStars` 체계를 실제 플레이에서 더 자주 만질 수 있도록 Gold 재화와 상점 루프를 추가했다. 12-27A 보상 상향 위에 얹는 작업이므로 Gold는 자주 체감되지만, 고급권/유물권은 주간 제한과 고가격으로 통제했다.
+
+### 수정 파일
+| 파일 | 변경 내용 |
+|---|---|
+| `src/lib/types.ts` | `BoxReward`, `ChallengeCardReward`, `TowerReward`에 `gold` 추가. `GateReward`에 `gold` 타입 추가. |
+| `src/lib/shop.ts` | 상점 상품 정의, 일일/주간 구매 키, 제한 라벨 유틸 추가. |
+| `src/lib/store.ts` | `gold`, `shopPurchases` optional 저장 필드와 fallback, 구매 처리, 장비권 즉시 장비 생성, 소환권/조각/정수 구매 반영, 보상 흐름 Gold 지급 추가. |
+| `src/components/ShopPanel.tsx` | Gold/정수 표시, 상품 카드, 가격/제한/구매 가능 상태, confirm 구매 UI 추가. |
+| `src/App.tsx` | `상점` 탭 추가. |
+| `src/components/HunterStatus.tsx` | 상태창에 Gold 보유량 표시. |
+| `src/components/RewardBoxPanel.tsx` | 박스 reward/reveal/preview에 Gold 표시. |
+| `src/components/ChallengeCardsPanel.tsx` | 카드 보상 합계와 카드 칩에 Gold 표시, 완전 달성 보너스 Gold 문구 반영. |
+| `src/components/InfiniteTowerPanel.tsx` | 무한의 탑 보상 reveal/result에 Gold 표시. |
+| `src/components/GatePanel.tsx` | 게이트 전투 로그 보상에 Gold 표시. |
+| `src/components/DevQaPanel.tsx` | DEV QA 프리셋에 Gold 1500 보정 추가. |
+| `src/lib/infiniteTower.ts` | 무한의 탑 일반층/보스층 first/repeat clear Gold 보상 추가. |
+| `scripts/sim-box-card-rewards.ts` | 카드/박스 Gold 기대값 출력 추가. |
+| `scripts/sim-infinite-tower.ts` | 탑 보상 샘플에 Gold 출력 추가. |
+| `scripts/sim-shop-economy.ts` | 7일/30일 상점 경제 시뮬레이션 신규 추가. |
+
+### Gold 저장 구조
+- `GameState.gold?: number` 추가. 기존 저장 데이터에는 없으므로 migrate/fallback에서 `0`으로 보정한다.
+- `GameState.shopPurchases?: Record<string, number>` 추가. 키는 `daily:{date}:{productId}` 또는 `weekly:{week}:{productId}` 구조라 날짜/주차가 바뀌면 자연스럽게 제한이 리셋된다.
+- persist version은 v14 유지.
+
+### Gold 수급처
+- Daily quest 완료: easy 18, normal 24, hard 34, elite 46, apex 60, boss 75.
+- Challenge card 완료: easy 22, normal 36, hard 60.
+- 카드 3장 완전 달성: 기존 XP +25/정수 +2/normal 조각 +1/rare 15%에 Gold +85 추가.
+- Reward box 개봉: daily는 tier multiplier 반영, weekly는 superior 기준 평균 약 386 Gold, boss box는 층수와 tier multiplier 반영.
+- Infinite tower: 일반층은 소량 Gold, 보스층 first clear는 `95 + floor * 12`, repeat는 `36 + floor * 5`.
+- Gate victory: E 25, D 34, C 46, B 62, A 82, S 105, National 140.
+
+### 상점 상품
+| 상품 | 가격 | 제한 | 효과 |
+|---|---:|---|---|
+| 일반 그림자 소환권 | 120 Gold | 일일 2 | 기존 `normal_shadow` ticket 지급 |
+| 무기 장비권 | 90 Gold | 일일 2 | weapon 장비 즉시 획득 |
+| 방어구 장비권 | 90 Gold | 일일 2 | armor 장비 즉시 획득 |
+| 장신구 장비권 | 100 Gold | 일일 2 | accessory 장비 즉시 획득 |
+| 그림자 정수 팩 | 80 Gold | 일일 3 | 정수 +4 |
+| 정수 조각 교환 | 60 Gold + 정수 6 | 일일 2 | normal 조각 +3 |
+| 고급 소환 조각 묶음 | 450 Gold | 주간 2 | rare 조각 +3 |
+| 고급 그림자 소환권 | 900 Gold + 정수 12 | 주간 1 | `rare_shadow` ticket 지급 |
+| 유물 장비권 | 650 Gold | 주간 1 | artifact 장비 즉시 획득 |
+| 희귀 장비권 | 750 Gold | 주간 1 | rare 이상 장비 즉시 획득 |
+| 그림자 조각 묶음 | 350 Gold + 정수 8 | 주간 2 | normal +4, rare +1 |
+| 선택형 장비권 묶음 | 500 Gold | 주간 1 | weapon/armor/accessory 각 1개 즉시 획득 |
+
+### 장비권/소환권 연결
+- 장비권은 별도 저장 ticket을 만들지 않고 구매 즉시 기존 `ITEM_POOL`에서 슬롯 필터링 후 장비를 생성한다.
+- `instantiateItem`을 통과하므로 `equipmentStars`가 정상 부여된다.
+- 표준 장비권은 common~legendary 저확률 분포, 유물권은 artifact 슬롯과 weekly 품질 별 분포, 희귀 장비권은 rare 이상과 boss 품질 별 분포를 사용한다.
+- 그림자 소환권은 기존 `createShadowSummonTicket` 경로를 사용한다. 실제 그림자 획득/reveal은 기존 ShadowPanel 소환 흐름을 그대로 탄다.
+- named/achievement/gate named 확률 구조는 상점 일반/고급권에서 새로 우회하지 않았다.
+
+### 그림자 정수 활용처
+- `정수 조각 교환`: 정수 + Gold로 normal 조각 구매.
+- `그림자 조각 묶음`: 정수 + Gold로 normal/rare 조각 묶음 구매.
+- 정수를 Gold로 직접 무제한 교환하는 구조는 추가하지 않았다.
+
+### 인플레이션 방지
+- 고급 그림자 소환권, 유물 장비권, 희귀 장비권, 조각 묶음은 주간 제한.
+- 일반 소환권/표준 장비권은 자주 살 수 있지만 일일 제한으로 막았다.
+- Gold는 반복 보상에 넓게 추가했지만, 상점 가격 대비 첫 주에는 일반권/표준권 중심으로 소비되도록 조정했다.
+- 상점 구매 제한은 날짜/주차 키 기반이라 저장 필드가 없던 기존 유저도 안전하게 시작한다.
+
+### sim 결과
+- `npx tsx scripts/sim-shop-economy.ts` 통과.
+  - 7일 steady: 남은 Gold 317, 일반 소환권 7개, normal 조각 25, 표준 장비권 14회.
+  - 30일 steady: 남은 Gold 714, 일반 소환권 30개, normal 조각 106, rare 조각 16, 표준 장비권 60회, 유물권 3회.
+  - 30일 weekly-priority: 남은 Gold 644, 고급 소환권 4개, rare 조각 1, 표준 장비권 59회, 희귀 장비권 1회, 유물권 1회.
+- `npx tsx scripts/sim-box-card-rewards.ts` 통과.
+  - perfect day avg: XP 203.00, Gold 약 305.04, essence 14.00, equipment 약 0.12, consumables 약 0.16, normalShards 약 1.07, rareShards 약 0.16.
+  - perfect week avg: XP 1614.00, Gold 약 2521.21, essence 약 107.99, equipment 약 1.23, consumables 약 1.68, normalShards 약 7.88, rareShards 약 1.21.
+  - floor 15 boss box avg: XP 126.00, Gold 약 414.83, essence 21.00, equipment 약 0.68, consumables 약 0.34.
+- `npx tsx scripts/sim-infinite-tower.ts` 통과.
+  - 보스 first clear Gold 샘플: 5층 155, 10층 215, 15층 275, 20층 335, 25층 395, 30층 455.
+- `npx tsx scripts/sim-gate-current.ts` 통과. E/D/C 게이트 승률 기준 유지.
+
+### 검증
+- `npx tsc --noEmit` 통과.
+- `npm run build` 통과. 기존 Vite chunk size 경고만 유지.
+- DEV 서버 `http://127.0.0.1:3000`에서 확인.
+- 모바일 390px viewport 확인: `documentElement.scrollWidth === 390`, `body.scrollWidth === 390`, horizontal overflow 없음.
+- 상점 탭/상품 목록/가격/제한 표시 확인.
+- Gold 주입 후 구매 가능 상태와 구매 후 Gold 차감 확인.
+- 박스 preview/reward에 Gold 표시 확인.
+- console/page error 0.
+
+### 저장 데이터/보안 제약
+- localStorage key 변경 없음: `levelup-save` 유지.
+- persist version 변경 없음: v14 유지.
+- 기존 장비/그림자/인벤토리 삭제 없음.
+- 기존 진행도 무효화 없음.
+- 신규 필드는 optional/fallback 처리.
+- secret/hidden 조건/정체/보상명 노출 없음.
+- B/A/S급 상위 게이트 또는 고레벨 신규 콘텐츠 구현 없음.
+
+## 12-27C 상태창 정리 + 상점 티켓 UI 고급화 + 스킬창 표시 오류 수정 완료
+
+12-27B의 Gold/ShopPanel/장비권/소환권 구조 위에서 UI 정리만 수행했다. Gold 가격, 보상량, 구매 제한, 장비/그림자 확률, 전투/스킬 수치, 저장 key, persist version은 변경하지 않았다.
+
+### 수정 파일
+| 파일 | 내용 |
+| --- | --- |
+| `src/App.tsx` | 헤더 칭호 영역 옆에 Gold 칩 추가. |
+| `src/components/HunterStatus.tsx` | 전투력 오른쪽 Gold/장비/칭호/그림자 보조 카드 제거. |
+| `src/components/ShopPanel.tsx` | 상품 카드 UI를 티켓형 프레임으로 재구성하고 `data-ticket-visual-key` 매핑 추가. |
+| `src/components/SkillPanel.tsx` | 기본 공격을 오른쪽 상세 패널 기본 선택에서 제외하고, basic만 있을 때 compact 안내 상태 표시. |
+| `src/components/SkillActionCard.tsx` | 선택 ring/비활성 테두리를 cyan/slate 계열로 완화. |
+| `src/components/RewardBoxPanel.tsx` | RewardBoxPanel의 흰색 외곽/칩/preview/open 버튼 테두리를 cyan/slate 계열로 정리. |
+| `src/components/ChallengeCardsPanel.tsx` | ChallengeCardsPanel의 흰색 카운트/설명/선택 ring을 violet 계열로 정리. |
+| `CLAUDE.md` | 12-27C 완료 이력 추가. |
+
+### 상태창 정리
+- HunterStatus 전투력 카드 오른쪽의 Gold/장비/칭호/그림자 수치 카드 묶음을 제거했다.
+- Gold는 앱 최상단 헤더의 칭호 칩 옆에서만 확인되도록 이동했다.
+- 장비/칭호/그림자 개수 카드는 상태창에서 제거했고, 전투력 설명 문구만 유지했다.
+- 390px에서 전투력 카드 구간 horizontal overflow 없음 확인.
+
+### 상점 티켓 UI
+- ShopPanel 상품을 실물 티켓처럼 보이도록 재구성했다.
+- `ticketVisualKey` 성격의 `data-ticket-visual-key`와 `TICKET_VISUALS` 매핑을 추가해 추후 이미지 티켓 아트 연결 여지를 열어두었다.
+- 각 상품 카드에 절취선, 좌우 펀칭, 홀로그램 광택, 티켓 스텁, 타입별 아이콘/색상/문양을 적용했다.
+- 적용 키: `shadow-normal`, `shadow-rare`, `shadow-rare-shards`, `equipment-weapon`, `equipment-armor`, `equipment-accessory`, `equipment-relic`, `equipment-rare`, `equipment-choice`, `essence-pack`, `essence-exchange`, `shadow-bundle`.
+- PRICE / LIMIT / 구매 가능 여부 / 버튼 상태는 유지했다.
+- 상품 가격, 제한, reward 처리, 장비권/소환권 지급 로직은 변경하지 않았다.
+
+### SkillPanel 기본 공격 상세 처리
+- 초기 상세 선택은 basic source가 아닌 첫 non-basic 스킬만 대상으로 한다.
+- 기본 공격/집중 베기/방어 태세처럼 basic skill만 있는 경우 오른쪽 상세 패널은 `BASIC ACTIONS` compact 안내 상태를 표시한다.
+- 기본 공격은 목록에는 남아 있고 전투 중 사용 로직도 변경하지 않았다.
+- 스킬 수치, 쿨다운, mastery 로직 변경 없음.
+
+### 흰색 테두리 강조 정리
+- RewardBoxPanel / ChallengeCardsPanel / SkillPanel / SkillActionCard에서 큰 흰색 ring/border 강조를 제거하거나 cyan/violet/slate 계열로 완화했다.
+- 이번 대상 컴포넌트 기준 `border-white` / `ring-white` 클래스 없음 확인.
+- 접근성 focus 동작은 건드리지 않았다.
+
+### 검증 결과
+- `npx tsc --noEmit` 통과.
+- `npm run build` 통과. 기존 Vite chunk size warning만 유지.
+- Browser/in-app 확인: 헤더 Gold 표시, HunterStatus 전투력 보조 카드 제거, SkillPanel basic compact 안내 표시 확인.
+- Playwright 390px 확인:
+  - HunterStatus overflow 0, combat segment에 Gold 보조 카드 없음.
+  - ShopPanel ticket card 12개, PRICE/LIMIT/구매 버튼 12개, ticket visual key 12종 확인.
+  - SkillPanel 오른쪽 상세 heading은 `기본 행동`, `BASIC ACTIONS` 안내 상태 확인.
+  - console/page error 0.
+- production preview `http://127.0.0.1:4173` 확인:
+  - DEV QA 미노출.
+  - 390px overflow 0.
+  - console/page error 0.
+
+### 저장/게임플레이/보안
+- localStorage key 변경 없음: `levelup-save` 유지.
+- persist version 변경 없음: v14 유지.
+- 신규 저장 필드 없음.
+- Gold 가격/보상량/구매 제한 변경 없음.
+- 장비/그림자 확률 변경 없음.
+- 전투/스킬 수치 변경 없음.
+- 기존 저장 데이터 초기화/삭제/무효화 없음.
+- secret/hidden 조건/정체/보상명 노출 없음.
+- B/A/S급 상위 게이트 또는 고레벨 신규 콘텐츠 구현 없음.
+
+
+---
+
+## 12-27D 상점 제한 제거 + 확률 표시 + 티켓 이미지 고도화 완료
+
+12-27B/12-27C의 Gold 상점과 티켓형 UI 위에서 구매 제한을 제거하고, 확률형 상품의 확률 표시와 티켓 비주얼 구조를 고도화했다. 가격과 Gold 수급량은 유지했고, 실제 장비/그림자 확률은 몰래 바꾸지 않고 UI가 같은 확률 소스를 읽도록 정리했다.
+
+### 수정 파일
+| 파일 | 내용 |
+| --- | --- |
+| `src/lib/shop.ts` | daily/weekly limit 제거, 상품 category 추가, 장비권 rarity/star 확률 테이블과 그림자 innateGrade 확률 테이블을 공용 export로 정리. |
+| `src/lib/shadows.ts` | `rollShadowInnateGrade`가 `SHADOW_INNATE_GRADE_WEIGHTS_BY_SOURCE` 공용 테이블을 사용하도록 변경. |
+| `src/lib/store.ts` | 상점 구매 시 `shopPurchases`/limit 체크와 구매 횟수 증가 중단. 장비권 draw가 `shop.ts`의 공용 확률 helper를 사용하도록 변경. |
+| `src/lib/shopProbabilities.ts` | 상점 확률 표시용 section/row helper 추가. 그림자 소환권, 장비권, 혼합 상품 확률을 실제 소스에서 산출. |
+| `src/lib/ticketVisuals.ts` | 상품별 `ticketVisualKey`, art kind, CSS tone, future asset manifest 구조 추가. |
+| `src/components/TicketVisual.tsx` | 이미지 asset 우선, 없으면 SVG/CSS fallback으로 소환권/장비권 아트 렌더링. |
+| `src/components/ShopPanel.tsx` | LIMIT 영역 제거, TYPE/전략 선택/확률 버튼/accordion panel 추가, 상품 category chip 적용. |
+| `scripts/sim-shop-economy.ts` | 구매 제한 제거 후 전략형 소비 시뮬레이션으로 갱신. |
+| `CLAUDE.md` | 12-27D 완료 이력 추가. |
+
+### 구매 제한 제거
+- `SHOP_PRODUCTS`에서 `limitPeriod`와 `limit`를 제거했다.
+- ShopPanel disabled 기준은 Gold 부족 / 정수 부족만 남겼다.
+- Store 구매 처리에서도 limit 체크와 `shopPurchases` 증가를 중단했다.
+- 기존 저장 데이터의 `shopPurchases` 필드는 optional 호환용으로 유지한다. migration, persist version 변경, 저장 데이터 삭제 없음.
+- 상점 카드의 LIMIT 박스는 TYPE/전략 선택 영역으로 교체했다.
+- 가격은 12-27B 수치를 유지했다.
+
+### 확률 표시 구조
+- 상품 카드마다 `확률` 버튼을 추가하고, 카드 하단 accordion으로 `PROBABILITY` panel을 연다.
+- 일반/고급 그림자 소환권:
+  - 현재 ticket candidate pool 기준 그림자 rarity 분포 표시.
+  - `rollShadowInnateGrade`와 동일한 innateGrade weight 표시.
+  - 상점 일반/고급권은 gate_extract 풀만 사용하므로 직접 네임드 소환 없음으로 안전 표시.
+- 장비권:
+  - `SHOP_EQUIPMENT_DRAW_RARITY_WEIGHTS` 기준 장비 rarity 확률 표시.
+  - `EQUIPMENT_STAR_WEIGHTS_BY_SOURCE` 기준 equipmentStars 확률 표시.
+  - 슬롯/pool 정보 표시.
+- 희귀 장비권/유물 장비권:
+  - 실제 `drawTier`별 rarity weight와 quality source를 표시.
+- 조각/정수형 고정 상품:
+  - 확률 추첨 없이 RESULT 보상만 표시.
+- hidden/secret 대상 이름, 조건, 정체는 UI에 표시하지 않는다. 비공개 대상은 “비공개 대상”으로만 표현한다.
+
+### 실제 확률과 UI 확률 동기화
+- 장비권 실제 draw와 UI가 모두 `getShopDrawWeights`, `getShopDrawQualitySource`, `getEquipmentStarWeights`를 사용한다.
+- `rollEquipmentStars`는 `EQUIPMENT_STAR_WEIGHTS_BY_SOURCE` 공용 테이블을 사용한다.
+- `rollShadowInnateGrade`는 `SHADOW_INNATE_GRADE_WEIGHTS_BY_SOURCE` 공용 테이블을 사용한다.
+- 그림자 소환권 rarity 표시는 실제 `getTicketCandidatePool`과 같은 조건인 sourceType `gate_extract` + ticket별 rarity limit 기준으로 pool count를 계산한다.
+
+### 티켓 비주얼 고도화
+- `TicketVisual` 컴포넌트로 티켓 아트 렌더링을 분리했다.
+- 그림자권은 룬 원형진, 균열 aura, 그림자 실루엣 fallback SVG를 사용한다.
+- 고급 그림자권은 보라/금빛 aura를 강화했다.
+- 무기/방어구/장신구/유물/희귀 장비권은 슬롯별 SVG fallback을 다르게 렌더링한다.
+- `TICKET_ASSET_MANIFEST`와 `getTicketVisualAsset(key)`를 추가해 추후 `src/assets/tickets/` 계열 이미지 연결을 쉽게 만들었다.
+- 현재 실제 이미지 파일은 추가하지 않고 CSS/SVG fallback만 사용한다.
+
+### 검증 결과
+- `npx tsc --noEmit` 통과.
+- `npm run build` 통과. 기존 Vite chunk size warning만 유지.
+- `npx tsx scripts/sim-shop-economy.ts` 통과.
+  - 7일 steady: Gold 97, normal ticket eq 9.1, standard equipment 20, purchases 35.
+  - 30일 steady: Gold 184, normal ticket eq 47.0, rare ticket eq 1.2, standard equipment 91, purchases 163.
+  - 30일 weekly-priority: Gold 404, rare tickets 2, standard equipment 90, rare equipment 1, relic 1, purchases 149.
+- `npx tsx scripts/sim-box-card-rewards.ts` 통과.
+  - perfect day avg: XP 203.00, Gold 약 304.99, essence 약 14.02.
+  - perfect week avg: XP 1614.00, Gold 약 2520.96, essence 약 108.02.
+  - floor 15 boss box avg: XP 126.00, Gold 약 414.95, essence 21.00.
+- Browser/in-app 시도 후 Playwright로 실제 DOM 확인:
+  - ShopPanel ticket card 12개.
+  - ticket visual key 12종 확인.
+  - 카드 범위 내 LIMIT / NO LIMIT / 일일 / 주간 문구 없음.
+  - `전략 선택` 문구 확인.
+  - 0 Gold 상태에서 모든 상품은 `Gold 부족`으로 disabled.
+  - 확률 accordion 정상 open.
+  - 첫 그림자권 패널에서 `PROBABILITY`, 그림자 등급, 태생 등급 표시 확인.
+  - secret/hidden 단어 및 조건/정체 노출 없음.
+  - 390px overflow 0, console/page error 0.
+- production preview `http://127.0.0.1:4173` 확인:
+  - DEV QA 미노출.
+  - 390px overflow 0.
+  - console/page error 0.
+
+### 저장/게임플레이/보안
+- localStorage key 변경 없음: `levelup-save` 유지.
+- persist version 변경 없음: v14 유지.
+- 기존 장비/그림자/진행도 삭제 없음.
+- `shopPurchases`는 저장 호환용으로 남아 있지만 구매 제한에는 사용하지 않는다.
+- Gold 수급량 변경 없음.
+- 상품 가격 대폭 변경 없음. 이번 작업에서는 가격 유지.
+- 장비/그림자 실제 확률은 공용 테이블로 이동/동기화했을 뿐 수치 변경 없음.
+
+---
+
+## 12-27F 교환형 상품 이미지 연결 + 티켓/팩 배경 보정 완료
+
+### 목표
+상점의 `정수+Gold -> 일반 조각 교환` 상품이 일반 뽑기권 티켓처럼 보이지 않도록 전용 resource exchange 이미지를 연결하고, 티켓/팩 이미지 외곽의 흰 배경/halo가 앱에서 덜 떠 보이도록 UI 렌더링 프레임을 보정했다.
+
+### 수정 파일
+| 파일 | 내용 |
+| --- | --- |
+| `src/lib/shop.ts` | `ShopProduct.visualKey` optional 메타 추가, `essence-normal-shards`에 `exchange_essence_gold_to_shard` 지정. |
+| `src/lib/ticketVisuals.ts` | `exchange_essence_gold_to_shard` key와 `exchange-essence-gold-to-shard.png` asset manifest 연결. 기존 `essence-exchange` alias는 호환용으로 유지. |
+| `src/components/ShopPanel.tsx` | 교환형 상품을 일반 상품과 같은 카드 프레임/타이포/비주얼/PRICE/TYPE/버튼 구조로 통합하고, 확률 accordion 대신 `FIXED TRADE`/`RESOURCE TRADE` 정보를 표시. |
+| `src/components/TicketVisual.tsx` | dark radial backing, subtle glow, inner vignette, edge mask, 밝기/대비 필터로 티켓/팩 이미지의 흰 외곽/plate 느낌 완화. 이미지 실패 시 기존 SVG fallback 유지. |
+| `src/assets/tickets/exchange-essence-gold-to-shard.png` | 교환형 상품 전용 이미지 asset. |
+
+### 교환형 이미지 연결
+- 연결 key: `exchange_essence_gold_to_shard`.
+- 연결 파일: `src/assets/tickets/exchange-essence-gold-to-shard.png`.
+- `essence-normal-shards` 상품은 해당 key를 사용한다.
+- 상품은 확률형이 아니므로 확률 accordion을 표시하지 않고 같은 카드 시스템 안에서 `FIXED TRADE` 정보를 표시한다.
+- TYPE chip은 `EXCHANGE` / resource trade 성격을 유지한다.
+- 별도 `ExchangeProductCard` 레이아웃을 제거하고 일반 상점 카드의 동일한 비율, 상단 타이포, 비주얼 영역, PRICE/TYPE stub, 구매 버튼 리듬을 공유한다.
+
+### 티켓/팩 배경 보정
+- 이미지 뒤에 어두운 radial gradient frame과 blur glow backing을 추가했다.
+- 기존의 밝은 `mix-blend-screen` overlay는 제거하고, inner vignette와 edge mask로 흰 checker/halo 외곽을 완화했다.
+- `object-contain`은 유지하되 이미지를 소폭 확대해 작은 카드 프레임 안에서 흰 외곽이 덜 드러나게 했다.
+- 교환형 이미지는 exchange tone에 맞춰 emerald glow/filter를 적용했다.
+
+### 저장/게임플레이 제약
+- localStorage key 변경 없음: `levelup-save` 유지.
+- persist version 변경 없음: v14 유지.
+- 기존 저장 데이터 초기화/삭제 없음.
+- Gold 가격/수급량 변경 없음.
+- 상품 가격/확률/보상/구매 로직 변경 없음.
+- 장비/그림자 확률 변경 없음.
+- secret/hidden 조건/정체 노출 없음.
+- B/A/S급 상위 게이트 구현 없음.
+- secret/hidden 조건/정체/보상명 노출 없음.
+- B/A/S급 상위 게이트 구현 없음.
+
+---
+
+## 12-27G 티켓/팩 PNG 실제 배경 픽셀 제거 완료
+
+12-24F Shadow Portrait 처리와 같은 유형으로, 상점 티켓/팩 PNG의 흰색/체커보드 배경이 투명 alpha가 아니라 이미지 내부에 실제 픽셀로 들어간 문제를 asset 단계에서 정리했다. ShopPanel/TicketVisual의 dark frame/vignette/glow는 유지하되, 흰 plate를 CSS로 덮는 방식이 아니라 원본 asset의 바깥 배경 픽셀을 제거했다.
+
+### 수정 파일
+| 파일 | 내용 |
+| --- | --- |
+| `scripts/process-ticket-assets.mjs` | 티켓 이미지 전용 BFS flood-fill 배경 제거 스크립트 추가. |
+| `package.json` | `process-tickets`, `process-tickets-dry` 스크립트 추가. |
+| `src/assets/tickets/*` | 대상 티켓/팩/교환 PNG 12개 in-place 처리. 파일명/경로 유지. |
+| `src/assets/tickets_backup/*` | 처리 전 원본 12개 백업 생성. |
+| `CLAUDE.md` | 12-27G 완료 이력 추가. |
+
+### 처리 방식
+- 대상: `src/assets/tickets/*.png` 중 상점에서 쓰는 12개 파일.
+- 실제 파일명은 기존 import와 호환되도록 그대로 유지했다. 기존 `.png.png` 파일명도 변경하지 않았다.
+- 원본은 `src/assets/tickets_backup/`에 먼저 복사했다.
+- 4방향 엣지에서 시작하는 BFS flood-fill로 연결된 밝은 흰색/회색/체커보드 계열 픽셀만 alpha 0으로 변경했다.
+- 배경 판 제거 후 경계부에 약한 alpha feather를 적용했다.
+- resize/trim은 하지 않았다. 모든 처리본은 원본과 같은 1086x1448 캔버스를 유지한다.
+
+### 처리 결과
+- 처리 파일 수: 12개.
+- 제거 픽셀 예시:
+  - `exchange-essence-gold-to-shard.png`: 481,555 px
+  - `pack-shadow-essence-small.png.png`: 959,406 px
+  - `ticket-shadow-normal.png.png`: 764,449 px
+  - `ticket-equipment-relic.png.png`: 756,328 px
+- 처리 후 alpha 비율 기준으로 각 asset에 약 29.8%~61.0%의 투명 영역이 생겼다.
+
+### 유지 사항
+- 이미지 import 경로/파일명 변경 없음.
+- `TICKET_ASSET_MANIFEST` 매핑 변경 없음.
+- ShopPanel/TicketVisual 카드 구조와 dark frame/vignette/glow 유지.
+- 가격/확률/보상/구매 로직 변경 없음.
+- localStorage key 변경 없음: `levelup-save` 유지.
+- persist version 변경 없음: v14 유지.
+- 기존 저장 데이터 초기화/삭제 없음.
+
+---
+
+## 12-28A 장비권/소환권 사용 결과 연출 강화 완료
+
+상점에서 소환권/장비권을 구매하는 전 단계는 12-27B~G 구조를 유지하고, 실제 사용 결과가 더 명확하게 느껴지도록 결과 표시 레이어만 강화했다. 확률, 가격, Gold 수급량, 보상량, 전투/스킬 수치, 저장 key, persist version은 변경하지 않았다.
+
+### 수정 파일
+| 파일 | 내용 |
+| --- | --- |
+| `src/components/shadows/ShadowRevealModal.tsx` | 기존 그림자 reveal 흐름을 유지하면서 NEW/DUPLICATE 결과 chip, QUICK/HIGH/APEX signal chip, innateGrade/rarity별 badge frame/glow, S 태생/NAMED/legendary 강조를 추가. 모바일 overflow 완화를 위해 modal body는 max-height + overflow-y-auto 유지. |
+| `src/components/EquipmentRevealModal.tsx` | 장비권 사용 결과 전용 reveal modal 추가. 장비 이름, 슬롯, rarity, stars, 주요 effect/skill 요약, 현재 착용 슬롯과의 간단 비교 문구를 표시. 4~5성, epic/legendary, artifact 계열은 더 강한 glow/frame 적용. |
+| `src/components/ShopPanel.tsx` | 장비형 상점 상품 구매 전후의 새 equippable item만 감지해 `EquipmentRevealModal`에 전달. 구매 가격/보상/확률/처리 로직은 기존 `purchaseShopProduct` 그대로 사용. |
+| `CLAUDE.md` | 12-28A 완료 이력 추가. |
+
+### 그림자 소환 결과 reveal
+- 일반/고급 그림자 소환권, 조각 소환, fragment summon은 기존 `ShadowRevealModal` payload 흐름을 그대로 재사용한다.
+- 신규 획득은 `NEW SHADOW`, 중복 획득은 `DUPLICATE` chip으로 상단과 badge 영역에서 더 명확히 구분한다.
+- C/B/A/S innateGrade와 common~legendary rarity에 각각 다른 border/background/glow badge를 적용했다.
+- S 태생, named/achievement/gate named, legendary 결과는 `APEX REVEAL`로 더 강한 amber/purple aura와 넓은 reveal frame을 사용한다.
+- A 태생, epic 결과는 `HIGH SIGNAL`로 중간 강도의 purple/cyan glow를 사용한다.
+- 낮은 결과는 `QUICK RESULT` 중심으로 기존 모달 안에서 짧게 확인되도록 유지했다.
+- hiddenUntilObtained 대상은 기존처럼 실제 `OwnedShadow`가 생긴 뒤 전달되는 이름/portrait만 표시한다. 획득 전 정체, 조건, hidden/secret 정보 노출 로직은 추가하지 않았다.
+
+### 장비권 결과 reveal
+- 무기/방어구/장신구/유물/희귀 장비권/선택형 장비권 묶음 구매 결과로 생성된 새 장비만 모아 `EquipmentRevealModal`로 표시한다.
+- featured 장비는 rarity + stars 기준으로 가장 높은 결과를 우선 노출하고, 묶음 상품은 나머지 장비를 보조 카드로 함께 표시한다.
+- 장비 카드는 슬롯, rarity, stars, 주요 stat/drop/rarity/xp effect, combat skill 요약을 최대 3줄로 보여준다.
+- 현재 착용 슬롯과 비교해 빈 슬롯/상위 가능성/동급 비교 필요/현재 장비 유지 가능성을 간단 문구로 표시한다. 전투력 수치 계산이나 장비 생성 수치는 변경하지 않았다.
+- 4~5성, epic/legendary, artifact 장비는 high value frame/glow와 `HIGH VALUE` badge를 표시한다.
+- Skip/Close 버튼을 모두 제공하고, max-height + overflow-y-auto로 390px 모바일에서도 모달이 화면 밖으로 과하게 밀리지 않도록 했다.
+
+### 보호/제약 유지
+- localStorage key 변경 없음: `levelup-save` 유지.
+- persist version 변경 없음: v14 유지.
+- 기존 저장 데이터 초기화/삭제 없음.
+- Gold 가격/수급량 변경 없음.
+- 상품 가격/확률/보상/구매 로직 변경 없음.
+- 장비/그림자 실제 확률 변경 없음.
+- 전투/스킬 수치 변경 없음.
+- secret/hidden 조건/정체 노출 없음.
+- hiddenUntilObtained 대상의 획득 전 이름/초상/해금 조건 노출 없음.
+- B/A/S급 상위 게이트 구현 없음.
+
+### 검증
+- `npm run build` 성공.
+- 로컬 앱 `http://localhost:3002` 로드 및 현재 viewport 수평 overflow 없음 확인.
+- 실제 소환권/장비권 결과 reveal의 체감 확인은 사용자 직접 확인 예정.
+
+---
+
+## 12-27F 그림자 소환 전체 104풀 적용 + 태생 S 확률 10% 적용 완료
+
+12-27D의 상점 확률 표시 구조와 실제 그림자 소환 로직을 다시 동기화했다. 일반/고급 그림자 소환권은 더 이상 초반 gate_extract/rarity cap 풀에 묶이지 않고, 현재 등록된 `SHADOW_DEFINITIONS` 전체 104개를 기준으로 후보를 구성한다. 가격, Gold 수급량, 저장 key, persist version, 기존 저장 데이터는 변경하지 않았다.
+
+### 수정 파일
+| 파일 | 내용 |
+| --- | --- |
+| `src/lib/shop.ts` | `SHADOW_INNATE_GRADE_WEIGHTS_BY_SOURCE`의 일반 소환권 S 확률을 10%로 완화. 고급 소환권은 A/S 체감 보정. 소환권별 rarity weight와 특수 네임드 weight multiplier 추가. |
+| `src/lib/shadows.ts` | 전체 104개 정의 풀 기반 `getStandardShadowSummonPool`, `getShadowSummonRarityWeights`, `pickStandardShadowSummonDefinition` helper 추가. |
+| `src/lib/store.ts` | `summonShadowFromTicket`의 normal/rare/role 계열이 공용 weighted helper를 사용하도록 변경. 기존 owned 우선 회피와 중복/획득 reveal 흐름 유지. |
+| `src/lib/shopProbabilities.ts` | 상점 확률 accordion이 실제 소환 helper의 rarity weight와 `rollShadowInnateGrade` 테이블을 읽도록 연결. hiddenUntilObtained 대상은 수량/봉인 가능성만 표시. |
+| `CLAUDE.md` | 12-27F 완료 이력 추가. |
+
+### 전체 104개 pool 적용
+- `getStandardShadowSummonPool()` 기준 `SHADOW_DEFINITIONS.length === 104`, standard pool도 104개로 확인했다.
+- 일반 그림자 소환권과 고급 그림자 소환권은 전체 104개 후보를 기준으로 rarity/special weight를 적용한다.
+- role 소환권도 전체 104개 후보를 유지하되, 지정 role에는 가중치 보너스/비지정 role에는 낮은 가중치를 적용해 기존 role 성격을 유지한다.
+- named/gate named/achievement named도 전체 후보 안에 포함된다.
+- gate named와 achievement named에는 낮은 multiplier를 적용해 메인퀘스트/전용 보상의 가치를 보존한다.
+
+### 태생 등급 확률
+- 일반 소환권 `normal_ticket`: C 35%, B 35%, A 20%, S 10%.
+- 고급 소환권 `rare_ticket`: C 18%, B 30%, A 34%, S 18%.
+- 역할 소환권 `role_ticket`: C 30%, B 34%, A 24%, S 12%.
+- 실제 roll은 계속 `rollShadowInnateGrade(SHADOW_INNATE_GRADE_WEIGHTS_BY_SOURCE[source])`만 사용한다.
+- 상점 확률 UI도 같은 `SHADOW_INNATE_GRADE_WEIGHTS_BY_SOURCE`를 읽는다.
+
+### 확률 UI 동기화/보호
+- rarity 확률은 `getShadowSummonRarityWeights(ticketType)` 결과를 표시한다.
+- 실제 소환은 `pickStandardShadowSummonDefinition(ticketType)`을 사용하므로 UI와 실제 로직이 같은 후보/weight helper를 공유한다.
+- 상점 UI는 전체 후보 수, 공개 네임드 수, 봉인된 네임드 수만 표시한다.
+- hiddenUntilObtained 대상의 실제 이름, 초상, 해금 조건, 개별 목록은 확률표/상점 UI에 표시하지 않는다.
+
+### 저장/게임플레이 제약
+- localStorage key 변경 없음: `levelup-save` 유지.
+- persist version 변경 없음: v14 유지.
+- 기존 저장 데이터 초기화/삭제 없음.
+- 기존 보유 그림자/장비/진행도 삭제 없음.
+- Gold 가격/수급량 변경 없음.
+- 상점 상품 가격 변경 없음.
+- secret/hidden 조건/정체 노출 없음.
+- hiddenUntilObtained gate named 실제 이름/초상/해금 조건 노출 없음.
+- B/A/S급 상위 게이트 구현 없음.
+
+### 검증
+- `npx tsx` 확인: `SHADOW_DEFINITIONS.length === 104`, `getStandardShadowSummonPool().length === 104`.
+- `npx tsx` 확인: 일반 소환권 태생 S 10%, 고급 소환권 태생 S 18% 표시.
+- `npx tsx` 확인: Shop probability section이 전체 후보 104개와 같은 helper 기반 확률을 표시.
+- `npm run build` 성공. 기존 Vite chunk size warning만 유지.
+---
+
+## 12-28B 소환권/장비권 사용 전 시네마틱 reveal sequence 추가 완료
+
+12-28A의 결과 카드/badge/glow 구조는 유지하고, 실제 결과 공개 전에 짧은 READY -> OPENING -> SIGNAL sequence를 추가했다. 결과 계산은 기존 store/구매/소환 로직 그대로 먼저 수행되지만, UI에서는 sequence가 끝나거나 Skip을 누르기 전까지 이름/portrait/장비 결과 카드를 보여주지 않는다.
+
+### 수정 파일
+| 파일 | 내용 |
+| --- | --- |
+| `src/components/TicketRevealSequence.tsx` | 소환권/장비권 공통 사전 reveal sequence 컴포넌트 추가. READY/OPENING/SIGNAL stage, quick/high/apex intensity, Skip, reduced motion 즉시 완료 처리. |
+| `src/components/shadows/ShadowRevealModal.tsx` | 기존 ShadowRevealModal 결과 카드를 보존하고, 결과 공개 전 `TicketRevealSequence`를 먼저 표시. Skip/ESC는 즉시 결과 공개, 결과 공개 후 Close/Fast Close 가능. |
+| `src/components/EquipmentRevealModal.tsx` | 기존 EquipmentRevealModal 결과 카드를 보존하고, 장비 금고/룬 개방/별 signal sequence 이후 장비 카드 공개. Skip/ESC 처리 추가. |
+| `CLAUDE.md` | 12-28B 완료 이력 추가. |
+
+### 그림자 소환 sequence
+- 대상: 일반/고급 그림자 소환권, 조각 소환, fragment summon 등 `ShadowRevealModal`을 타는 결과.
+- READY: 티켓/조각 신호가 반응하는 generic 문구와 ticket/rift icon 표시.
+- OPENING: 낮은 결과는 빠른 shadow trace, A/epic 이상은 shadow mist core, S/named/legendary는 deeper gate open 톤.
+- SIGNAL: 결과 공개 전에는 이름/portrait 없이 innateGrade/rarity 색감과 signal만 표시.
+- REVEAL/SUMMARY: sequence 완료 후 12-28A의 기존 ShadowPortrait, NEW/DUPLICATE, innateGrade, rarity, role, S/NAMED badge를 공개.
+
+### 장비권 sequence
+- 대상: 무기/방어구/장신구/유물/희귀/선택형 장비권 결과를 표시하는 `EquipmentRevealModal`.
+- READY: 사용한 상품명 기준으로 장비 금고 lock-on 표시.
+- OPENING: 일반 장비는 cache open, high value는 rune climb, 5성/legendary는 golden armory seal break 톤.
+- SIGNAL: 장비 이름/아이콘 공개 전 stars와 rarity signal만 먼저 표시.
+- REVEAL/SUMMARY: sequence 완료 후 12-28A의 장비 카드, 주요 effect/skill, HIGH VALUE, 비교 문구를 공개.
+
+### 연출 강도/Skip
+- quick: 낮은 결과용으로 약 1초 내외의 짧은 sequence.
+- high: A/epic 그림자, 4성 이상/epic/artifact 장비 등 중간 이상 결과.
+- apex: S 태생, named/gate/achievement named, legendary 그림자, 5성/legendary 장비.
+- sequence 중 Skip 버튼은 결과 공개로 동작한다.
+- sequence 중 ESC도 결과 공개로 동작한다.
+- 결과 공개 후 Fast Close/Close 또는 ESC로 닫을 수 있다.
+
+### hidden/저장/게임플레이 제약
+- hiddenUntilObtained 대상은 sequence 중 이름/portrait/조건을 표시하지 않는다.
+- 결과 공개 후에는 기존 OwnedShadow 기반 공개 흐름을 유지한다.
+- localStorage key 변경 없음: `levelup-save` 유지.
+- persist version 변경 없음: v14 유지.
+- 기존 저장 데이터 초기화/삭제 없음.
+- Gold 가격/수급량 변경 없음.
+- 상품 가격/확률/보상/구매 로직 변경 없음.
+- 장비/그림자 실제 확률 변경 없음.
+- 전투/스킬 수치 변경 없음.
+- hidden/secret 조건/정체 노출 없음.
+
+### 검증
+- `npm run build` 성공. 기존 Vite chunk size warning만 유지.
+- 로컬 앱 `http://localhost:3002` 로드 확인, 현재 viewport 수평 overflow 없음 확인.
+- 실제 소환권/장비권 사용 sequence 체감 확인은 사용자 직접 확인 예정.
+
+---
+
+## 12-28C — 소환/장비 reveal 연출 속도·차별화 개선
+
+### 목표
+소환권(shadow) 및 장비권(equipment) reveal sequence의 속도, 단계별 연출, 등급별 비주얼/텍스트 차별화 개선.
+
+### 변경 파일
+- `src/components/TicketRevealSequence.tsx`
+- `src/components/shadows/ShadowRevealModal.tsx`
+- `src/components/EquipmentRevealModal.tsx`
+
+### 변경 내용
+
+#### TicketRevealSequence.tsx
+- **RevealIntensity 타입 확장**: `'quick' | 'high' | 'apex'` → `'quick' | 'rare' | 'epic' | 'apex'` (4단계)
+- **단계별 타이밍 연장**:
+  - quick: ready 400ms / opening 480ms / signal 400ms → 총 ~1.3s
+  - rare:  ready 660ms / opening 820ms / signal 660ms → 총 ~2.1s
+  - epic:  ready 980ms / opening 1200ms / signal 980ms → 총 ~3.2s
+  - apex:  ready 1400ms / opening 1750ms / signal 1350ms → 총 ~4.5s
+- **toneClass 4단계 확장**:
+  - shadow.rare: teal 계열 (20,184,166)
+  - shadow.epic: purple 강화 (기존 high와 동일 범위, glow 강화)
+  - shadow.apex: amber + purple dual flare
+  - equipment.rare: emerald 계열 (16,185,129)
+  - equipment.epic: purple + amber dual flare
+  - equipment.apex: amber + cyan dual flare
+- **kind별 아이콘 차별화**:
+  - shadow opening (epic/apex): `Eye` / shadow opening (quick/rare): `CircleDotDashed`
+  - shadow signal (epic/apex): `Zap` / shadow signal (quick/rare): `Sparkles`
+  - equipment opening (epic/apex): `Flame` / equipment opening (quick/rare): `CircleDotDashed`
+  - equipment signal (epic/apex): `Star` / equipment signal (quick/rare): `Gem`
+- **shadow 전용 균열 장식**: epic/apex의 opening/signal 단계에서 원형 내부에 수평 균열선 2개 렌더링 (apex: amber, epic: purple)
+- **epic/apex signal 단계 inner ring pulse**: `animate-pulse` 클래스 적용
+
+#### ShadowRevealModal.tsx
+- **sequenceIntensity 4단계 분기**:
+  - apex: named || legendary || innateGrade === 'S'
+  - epic: rarity === 'epic' || innateGrade === 'A'
+  - rare: rarity === 'rare'
+  - quick: 그 외
+- **signalLabel 업데이트**: `HIGH SIGNAL` → `EPIC SIGNAL` / 신규 `RARE SIGNAL`
+- **신호 배지 색상 4단계**: apex(amber) / epic(purple) / rare(teal) / quick(cyan)
+- **한국어 연출 텍스트 (단계별)**:
+  - ready: quick `균열이 응답한다.` / rare `균열이 공명한다.` / epic `깊은 균열이 반응한다.` / apex `어둠의 문이 열린다.`
+  - opening: quick `그림자의 형상이 흔들린다.` / rare `그림자 안개가 응집된다.` / epic `실루엣이 잠깐 흔들린다.` / apex `태생의 격이 드러난다.`
+  - signalDetail: apex `최상위 태생 감지. 정체는 공개 직전까지 봉인된다.` / epic `상위 등급 신호 감지. 정체가 서서히 드러난다.` / quick+rare `신호가 해소될 때까지 정체는 숨겨진다.`
+
+#### EquipmentRevealModal.tsx
+- **sequenceIntensity 4단계 분기**:
+  - apex: legendary || 5★ 이상
+  - epic: `hasEpicOrFour` (epic rarity || 4★ 이상)
+  - rare: `hasRareOrThree` (rare rarity || 3★ 이상)
+  - quick: 그 외
+- **sequenceSignalClass**: apex(amber) / epic(purple) / rare(emerald) / quick(sky)
+- **한국어 연출 텍스트 (단계별)**:
+  - readyText: quick `장비 금고가 열린다.` / rare `장비 문양이 점등된다.` / epic `룬 봉인이 해제된다.` / apex `황금 금고의 인장이 파열된다.`
+  - openingText: quick `장비 형상이 드러난다.` / rare `별의 흔적이 점등된다.` / epic `제련된 형상이 떠오른다.` / apex `전설의 장비가 형상을 드러낸다.`
+
+### hidden/저장/게임플레이 제약
+- hiddenUntilObtained 정보 노출 없음 (sequence 중 이름/portrait 미표시 유지).
+- localStorage key `levelup-save` 변경 없음.
+- persist version 변경 없음.
+- 보상 확률/게임플레이 수치/전투 공식 변경 없음.
+- 기존 result card, badge, glow 효과 유지.
+- Skip 버튼 항상 노출 및 즉시 결과 공개 동작 유지.
+
+### 검증
+- `npm run build` exit code 0, TypeScript 오류 없음. 기존 chunk size warning만 유지.
+
+---
+
+## 12-28D — 던전/메인 퀘스트 Gold 보상 추가 + 메인 퀘스트 보상 구조 개편
+
+### 목표
+던전 step/클리어와 메인 퀘스트 완료에 Gold 보상을 추가하고, 메인 퀘스트 완료 시 성취 네임드 그림자 소환권(category_achievement_named) 직접 지급 구조를 일반/고급 소환권 + 소환 조각 중심으로 전환한다.
+
+### 변경 파일
+- `src/lib/store.ts` (단일 파일 변경)
+
+### 변경 내용
+
+#### Gold 수급처 추가
+
+**메인 퀘스트 완료 Gold (`getQuestGoldReward` 확장)**
+| difficulty | Gold |
+|---|---:|
+| easy | 120 |
+| normal | 160 |
+| hard | 220 |
+| elite | 320 |
+| apex | 480 |
+| boss | 650 |
+
+**던전 step 진행 Gold (신규 `getDungeonStepGoldReward`)**
+| difficulty | Gold/step |
+|---|---:|
+| easy | 5 |
+| normal | 7 |
+| hard | 10 |
+| elite | 14 |
+| apex | 20 |
+| boss | 26 |
+
+**던전 최종 클리어 Gold (신규 `getDungeonClearGoldReward`)**
+| difficulty | Gold | monthly ×1.25 |
+|---|---:|---:|
+| easy | 60 | 75 |
+| normal | 80 | 100 |
+| hard | 115 | 144 |
+| elite | 165 | 206 |
+| apex | 240 | 300 |
+| boss | 320 | 400 |
+
+Gold 추가 표시: `progressDungeon` partial/clear 경로 모두 `lines`에 `Gold +N` 추가, `baseState.gold` 업데이트 적용.
+
+#### 메인 퀘스트 완료 보상 구조 개편
+
+**`isAchievementShadowUnlockReady` 수정**
+- 기존: `quest?.type === 'main' || quest?.type === 'dungeon'` 조건 처리
+- 변경: `quest?.type === 'dungeon'` 만 처리 → 메인 퀘스트 연결 achievement 그림자는 이 경로로 더 이상 자동 발행되지 않음
+- 기존 `shadowAchievementTicketClaims` 기록은 유지 → 이미 발행된 티켓 재발행 없음
+
+**신규 `buildMainQuestCompletionBonus` 함수**
+| difficulty | 보상 |
+|---|---|
+| boss / apex | 고급 소환권 1장 + 고급 조각 2 + 소환 조각 3 |
+| elite | 고급 소환권 1장 + 소환 조각 3 |
+| hard / normal / easy | 일반 소환권 1장 + 소환 조각 2 |
+
+티켓 source: `'achievement'`, 라벨: `{quest.title} 달성 — 고급 소환권/소환권`
+SystemMessage kind: `'shadow'`, title: `'메인 퀘스트 달성 보상'`
+
+**신규 `applyMainQuestCompletionBonus` 스토어 액션**
+- `shadowSummonTickets`, `shadowSummonShards`, `messages` 업데이트
+- 인터페이스 `GameActions`에 `applyMainQuestCompletionBonus: (quest: Quest) => void` 추가
+
+**`completeQuest` setTimeout 콜백 수정**
+- 기존: `q.type === 'main'` 조건에서 `get().grantAchievementNamedShadows()` 호출
+- 변경: `get().applyMainQuestCompletionBonus(q)` 호출로 대체
+- 던전 클리어 경로(`progressDungeon`)의 `grantAchievementNamedShadows()` 호출은 유지 → 던전 연결 achievement 그림자 티켓 지급 정상 동작
+
+#### 기존 데이터 보존
+- `shadowAchievementTicketClaims` 기록 유지 → 이미 발행된 성취 소환권 재발행 없음
+- 기존 `ownedShadows` 목록 (메인 퀘스트로 획득한 그림자 포함) 삭제/회수 없음
+- `levelup-save` localStorage 키 변경 없음
+- persist version v14 유지
+- 소환 확률/상점 가격/전투 수치 변경 없음
+- hidden/secret 조건/정체 노출 없음
+
+### Gold 밸런스 참고
+- 던전 step Gold는 일일 퀘스트(18~75)보다 훨씬 작으므로 반복 획득에도 폭증하지 않음
+- 던전 클리어 Gold는 daily 7~10일분 수준 → 장기 목표 체감
+- 메인 퀘스트 Gold는 상점 고급 소환권(900 Gold) 대비 1~3회 구매 가능 수준 → 의미 있는 체감 보장
+- 이미 클리어한 메인 퀘스트에 소급 보상 지급하지 않음 (필요 시 후속 작업 제안)
+
+### 검증
+- `npm run build` exit code 0, TypeScript 오류 없음. 기존 chunk size warning만 유지.
+- 런타임 동작(던전 진행/클리어/메인 완료 시 Gold 지급, 소환권/조각 지급) 은 사용자 직접 확인 예정.
+
+---
+
+## 12-28E — 그림자 소환권 / 장비 뽑기권 가챠식 연출 고도화
+
+### 목표
+결과 카드 앞 중간 연출을 모바일 RPG 가챠 수준으로 재설계.
+"티켓 반응 → 전조 신호 → 균열/금고 개방 → 등급 암시 → 결과 공개"의 단계형 긴장감 구현.
+그림자(shadow) 와 장비(equipment) 연출 테마를 명확히 분리.
+
+### 변경 파일
+- `src/components/TicketRevealSequence.tsx` — 핵심 연출 컴포넌트 전면 재설계
+- `src/components/shadows/ShadowRevealModal.tsx` — `pulseText` prop 추가
+- `src/components/EquipmentRevealModal.tsx` — `pulseText` + `starCount` prop 추가
+
+### 핵심 변경: 4단계 연출 (epic/apex)
+
+**이전**: 모든 intensity에 3단계 `ready → opening → signal`
+**이후**:
+- quick / rare: 3단계 `ready → opening → signal` (기존 유지, 총시간 ~1.6s / ~2.4s)
+- epic / apex: **4단계** `ready → pulse → opening → signal` (총시간 ~3.3s / ~4.4s)
+
+새 `pulse` stage: 결과 암시 전 전조 신호 단계.
+stage label: `READY → SIGNAL → OPENING → REVEAL`
+
+### 그림자(shadow) 연출 테마
+
+| stage | 아이콘 | 특수 효과 |
+|---|---|---|
+| ready | `Ticket` | — |
+| pulse (epic/apex만) | `Scan` (보라/금색) | inner dashed ring 회전, 측면 rift 스트립 등장 |
+| opening | `Eye` (high) / `CircleDotDashed` | inner pulse ring 점등, 원형 균열선 3개 (색: apex=amber, epic=purple) |
+| signal | `Zap` (high) / `Sparkles` | 균열선 유지, 등급 색상 텍스트 |
+
+**측면 rift 스트립** (epic/apex, ready 이후): 좌우 엣지에서 안쪽으로 향하는 그라디언트 1px 선 4개.
+apex → amber, epic → purple 색상.
+
+**원형 균열선** (epic/apex, ready 이후): 원 내부 수평 3개 균열선.
+
+### 장비(equipment) 연출 테마
+
+| stage | 아이콘 | 특수 효과 |
+|---|---|---|
+| ready | `PackageOpen` | — |
+| pulse (epic/apex만) | `Cog` 회전 (보라/금색) | **외곽 dashed 링 회전** (pulse stage만), 코너 스파크 글리프 등장 |
+| opening | `Flame` (high) / `CircleDotDashed` | inner pulse ring 점등, **별 점등 행** (dim) |
+| signal | `Star` (high) / `Gem` | **별 점등 행** (full amber), 코너 글리프 유지 |
+
+**외곽 회전 링**: epic/apex에서 pulse stage에 `animate-spin`, 다른 stage에는 opacity-40 고정.
+**별 점등 행**: `opening` dim → `signal` full amber. `starCount` prop 으로 1~5개 `★` 렌더.
+**코너 forge-spark 글리프**: `✦` 기호 4개, epic/apex, ready 이후 등장.
+
+### tier별 연출 차등
+
+| tier | stage 수 | shadow 전조 | equipment 전조 | 총 시간 |
+|---|---|---|---|---|
+| quick | 3 | 없음 | 없음 | ~1.6s |
+| rare | 3 | 없음 | 없음 | ~2.4s |
+| epic | 4 | Scan + 균열 + 측면rift | Cog회전 + 외곽링 + 코너스파크 | ~3.3s |
+| apex | 4 | Scan(금색) + 균열(금색) + 측면rift(금색) | Cog(금색) + 외곽링(금색) + 코너스파크(금색) | ~4.4s |
+
+### 새 prop
+
+```typescript
+// TicketRevealSequence
+pulseText?: string   // pulse stage 문구 (없으면 kind별 기본값)
+starCount?: number   // equipment 별 점등 개수
+
+// 모달별 전달
+// ShadowRevealModal
+pulseText: apex → '군단의 기록이 반응한다.' | epic → '깊은 기척이 감지된다.'
+
+// EquipmentRevealModal
+pulseText: apex → '금고 인장이 불타오른다.' | epic → '룬이 고열로 달구워진다.'
+starCount: featuredStars (1~5)
+```
+
+### hidden 보호
+- 결과 공개 전 이름/초상 미노출 구조 유지 (ShadowRevealModal의 `!showResult` → `TicketRevealSequence` 표시 분기 유지)
+- `hiddenUntilObtained` 조건/정체 노출 없음
+
+### Skip 처리
+- Skip 버튼: 항상 표시, 클릭 시 `doneRef.current = true; completeRef.current()` 즉시 호출
+- `reducedMotion` 감지 시 sequence 완전 스킵 (즉시 `onComplete`)
+- 결과 공개 후 버튼 레이블 → 'Fast Close' (기존 동작 유지)
+
+### localStorage / persist / gameplay
+- localStorage key `levelup-save` 변경 없음
+- persist version 변경 없음
+- 저장 데이터 변경 없음
+- 확률/수치/상점 가격/전투 수치 변경 없음
+
+### 검증
+- `npm run build` exit code 0, TypeScript 오류 없음.
+- 런타임 체감은 사용자 직접 확인 예정.
+---
+
+## 12-28F 그림자/장비 전투 체감 강화 설계 완료
+
+### 작업 성격
+- 코드 구현 없이 설계 문서만 작성.
+- 전투 공식, 보상, 저장 구조, 확률, 가격, Gold 수급, localStorage key, persist version 변경 없음.
+- hidden/secret 조건, hiddenUntilObtained 정체/초상/해금 조건 노출 없음.
+
+### 설계 문서
+- `docs/shadow-equipment-combat-feel-plan.md`
+
+### 핵심 설계 방향
+- 현재 구조 진단:
+  - 그림자 전투 기여는 `getShadowEffects`, `getEquippedShadowStatBonuses`, `resolveShadowSupportActions`, `getHunterCombatPowerBreakdown`, `getShadowExpeditionPower`에 분산되어 있음.
+  - 장비 기여는 `getEquipmentStars`, `EQUIPMENT_STAR_MULTIPLIER`, `getEnhancedItemEffects`, `calculatePlayerCombatStats`, combat power breakdown에 반영됨.
+  - 그림자는 실제 전투 보조 행동에는 반영되지만 전투력 표시와 로그/연출이 그 가치를 충분히 번역하지 못하는 점을 주요 문제로 정리.
+
+### 그림자 전용 상세 스탯 방향
+- `shadowAttack`, `shadowDefense`, `shadowDurability`, `shadowSpeed`, `shadowCrit`, `shadowFinisher`, `shadowControl`, `shadowSuppression`, `shadowSupport`, `shadowSurvival`, `shadowBossing`, `shadowExpedition`, `shadowSynergy` 설계.
+- role별 기본 프로파일:
+  - assault: 공격/치명/처형
+  - guard: 방어/지속/생존
+  - hunter: 속도/추격/처형/원정
+  - scout: 속도/제어/원정/시너지
+  - support: 지원/생존/시너지
+  - analyst: 제어/억제/보스전/지원
+
+### 전투력 계산식 초안
+- Shadow Combat Power =
+  - role base stats
+  - rarity multiplier
+  - innateGrade multiplier
+  - level scaling
+  - enhancement scaling
+  - evolution multiplier
+  - named modifier
+  - role-specific contribution
+  - situational preview bonus
+- 1차 구현은 새 저장 필드 없이 `ShadowDefinition` + `OwnedShadow` 기반 derived 계산을 권장.
+- 과도한 인플레이션 방지를 위해 표시용 shadow combat power와 실제 전투 반영치를 분리하고 cap/diminishing return 사용 제안.
+
+### 장비 체감 강화 방향
+- equipmentStars는 기존 multiplier를 유지하면서 획득/착용/비교 UI에서 더 명확히 설명.
+- weapon / armor / accessory / relic 슬롯별 체감 역할 분리.
+- 현재 장비 대비 stars, rarity, 주요 stat/effect delta 중심의 비교 UI 제안.
+- 4~5성, epic/legendary/relic 장비는 획득/착용 로그와 glow/badge 강화 제안.
+
+### 구현 단계 제안
+- 12-28G: shadow stats data model + combat power 표시.
+- 12-28H: shadow stats를 gate/tower 전투에 1차 반영.
+- 12-28I: shadow stats를 expedition에 반영.
+- 12-28J: 장비 stars/rarity 전투력/착용 비교 강화.
+- 12-28K: 전투 로그/연출/고유 반응 강화.
+
+### 검증
+- 문서 작업이므로 `npm run build` 생략.
+- markdown 구조 확인 완료.
+- 코드 파일 수정 없음.
+---
+
+## 12-28G Shadow Stats Data Model + Shadow Combat Power 표시 1차 완료
+
+### 작업 성격
+- 2.5D 전투 시스템에서도 재사용 가능한 그림자 전용 파생 스탯/전투력 언어 기반 작업.
+- 실제 gate/tower 전투 공식, shadow support action 결과, 원정 성공률/보상, 전투 로그/VFX 대형 연출 변경 없음.
+- localStorage key `levelup-save` 변경 없음.
+- persist version 변경 없음.
+- 기존 owned shadow 저장 구조 강제 변경 없음.
+
+### 추가 helper / type
+- `src/lib/shadowStats.ts` 추가.
+- `src/lib/types.ts`
+  - `ShadowStatKey` union 추가.
+  - `ShadowDefinition.shadowStats?: Partial<Record<ShadowStatKey, number>>` optional override 필드 추가.
+  - 저장 필드가 아닌 definition optional field이므로 기존 save migration 없음.
+
+### 13개 그림자 전용 스탯
+- `shadowAttack`
+- `shadowDefense`
+- `shadowDurability`
+- `shadowSpeed`
+- `shadowCrit`
+- `shadowFinisher`
+- `shadowControl`
+- `shadowSuppression`
+- `shadowSupport`
+- `shadowSurvival`
+- `shadowBossing`
+- `shadowExpedition`
+- `shadowSynergy`
+
+### 계산 방식
+- `OwnedShadow` + `ShadowDefinition` 기반 derived 계산.
+- definition별 `shadowStats` override가 없으면 role profile fallback 사용.
+- role profile:
+  - assault: attack / crit / finisher
+  - guard: defense / durability / survival
+  - hunter: speed / finisher / expedition
+  - scout: speed / control / expedition / synergy
+  - support: support / survival / synergy
+  - analyst: control / suppression / bossing / support
+- rarity, innateGrade, level, enhancement, evolutionStage, named status, definition basePower를 표시용 multiplier로 반영.
+
+### Shadow Combat Power
+- `getShadowCombatProfile`
+  - `totalPower`
+  - `assistPower`
+  - `guardPower`
+  - `controlPower`
+  - `bossPower`
+  - `expeditionPower`
+  - `topStats`
+  - `roleIdentity`
+- `getShadowArmyCombatPower`
+  - 출전 그림자 군단의 표시용 SCP aggregate 제공.
+- 이 값은 헌터 전투력에 1:1 가산하지 않으며, 현재 단계에서는 표시/분석 전용.
+
+### UI 표시
+- `src/components/shadows/ShadowCard.tsx`
+  - 카드에는 `SCP` + role tag + 상위 2~3개 stat badge만 표시.
+  - 13개 전체 스탯은 카드에 노출하지 않음.
+- `src/components/ShadowPanel.tsx`
+  - 선택 상세 패널에 Shadow Combat Power, Top Strengths, Role Identity, Assist/Guard/Control/Boss/Expedition breakdown 표시.
+  - 13개 전체 스탯은 `Detailed shadow stats` 접이식 영역에서 Offense / Defense / Tactics / Support-Expedition 카테고리별 bar list로 표시.
+  - Command Gallery와 상단 POWER는 표시용 SCP 기반으로 정리.
+- `src/components/HunterStatus.tsx`
+  - 기존 Hunter combat power 숫자는 유지.
+  - 별도 `SHADOW ANALYSIS POWER` 영역으로 출전 그림자의 SCP, top stats, assist/guard/control/boss/expedition breakdown 표시.
+
+### hidden / secret 보호
+- 상세 스탯은 owned shadow 기반 화면에서만 계산/표시.
+- Codex의 미보유 hiddenUntilObtained 대상은 기존 sealed/locked 표시 유지, 실제 이름/초상/조건/상세 스탯 노출 없음.
+
+### 2.5D 대비
+- `shadowStats.ts`의 derived stats와 breakdown은 향후 2.5D battle board에서 aura 강도, role별 배치, action priority, assist/guard/control/support 연출 강도, bossing/synergy 표시로 재사용 가능.
+- 이번 단계에서는 2.5D UI 또는 전투 애니메이션 구현 없음.
+
+### 검증
+- `npm run build` exit code 0.
+- Vite 기존 chunk size warning만 표시.
+---
+
+## 12-28H Shadow Stats Gate/Tower 전투 1차 반영 완료
+
+### 작업 성격
+- 12-28G의 13개 shadow stat을 Gate/Tower 전투의 shadow support action에 보수적으로 연결.
+- 향후 2.5D 전투 시스템에서도 재사용 가능한 전투 계산 aggregate 기반 작업.
+- 2D 전투 UI, portrait flash, 공격 애니메이션, VFX, 전투 패널 대형 변경 없음.
+- localStorage key `levelup-save` 변경 없음.
+- persist version 변경 없음.
+- 저장 데이터 구조 변경 없음.
+- 원정 성공률/보상, 장비 공식, 몬스터/게이트/탑 난이도 변경 없음.
+
+### 추가 combat aggregate
+- `src/lib/shadowStats.ts`
+  - `ShadowCombatAggregate` 추가.
+  - `ShadowCombatModifiers` 추가.
+  - `getShadowCombatAggregate` 추가.
+  - `getShadowArmyCombatAggregate` 추가.
+  - `getShadowCombatModifiers` 추가.
+
+### aggregate 목록
+- `assistAttack`
+- `guardSupport`
+- `controlSupport`
+- `supportUtility`
+- `survivalGuard`
+- `bossPressure`
+- `speedTempo`
+- `finisherPower`
+
+### Gate/Tower 전투 반영 위치
+- `src/lib/game.ts`
+  - `resolveShadowSupportActions` 내부에서 장착/소유된 equipped shadow만 대상으로 aggregate 계산.
+  - 기존 shadow support action 종류는 유지.
+  - 기존 효과를 대체하지 않고 작은 bonus/multiplier로만 가산.
+
+### 반영 방식
+- `assistAttack`, `speedTempo`
+  - shadow support 피해 보정과 발동률 보정에 소폭 반영.
+- `finisherPower`
+  - 적 HP 30% 이하 execute 구간 피해 보정에 소폭 반영.
+- `guardSupport`, `survivalGuard`
+  - guard damage reduction, guard counter, low HP 보호에 소폭 반영.
+- `controlSupport`
+  - enemy defense down 강도와 proc chance에 소폭 반영.
+- `supportUtility`
+  - skill damage support, wave/support 계열 chance에 소폭 반영.
+- `bossPressure`
+  - tower/boss-like target에서 damage/control 보정에만 조건부 소폭 반영.
+- `shadowExpedition`
+  - 이번 Gate/Tower 반영에서는 직접 사용하지 않음. 12-28I 원정 단계로 남김.
+
+### cap / diminishing return
+- `boundedBonus(value, scale, cap)` 형태의 diminishing return 사용.
+- 피해 보정은 개별 항목 cap을 둔 뒤 기존 총합 cap도 보수적으로 확장.
+- 발동률 cap은 0.55 -> 0.58로 소폭만 확장.
+- guard/control/survival/boss 보정도 3~8%권 이하의 작은 cap으로 제한.
+- damage_reduction은 기존 효과보다 낮은 값으로 덮어쓰지 않도록 `applyPlayerDamageReductionMax` 사용.
+
+### 2.5D 대비
+- aggregate는 향후 2.5D에서 다음 용도로 재사용 가능:
+  - `assistAttack`: 공격 이펙트 강도
+  - `guardSupport`: 방어 barrier 강도
+  - `controlSupport`: 제어/약화 이펙트
+  - `supportUtility`: 버프/쿨다운 이펙트
+  - `survivalGuard`: 위기 보호 연출
+  - `bossPressure`: 보스전 aura/억제 연출
+  - `speedTempo`: action priority/빠른 움직임
+  - `finisherPower`: 처형 연출 강도
+
+### hidden / secret 보호
+- 전투 계산은 owned/equipped shadow 기반.
+- 미보유 hiddenUntilObtained / locked named의 이름, 초상, 조건, stats 노출 없음.
+
+### 검증
+- `npm run build` exit code 0.
+- `npx tsx scripts/sim-shadow-battle-balance.ts` exit code 0.
+- Vite 기존 chunk size warning만 표시.
+
+---
+
+## 12-28I Shadow Combat System v2 설계 완료
+
+### 작업 성격
+- 코드 구현 없이 설계 문서만 작성.
+- 전투 공식, 저장 구조, 보상, 가격, 확률, UI/VFX 변경 없음.
+- 기존 12-28H Gate/Tower shadow support action 보정은 되돌리지 않고 과도기 레이어로 유지.
+- localStorage key `levelup-save` 변경 없음.
+- persist version 변경 없음.
+- 기존 owned shadow/equipment/progress 데이터 변경 없음.
+
+### 설계 문서
+- `docs/shadow-combat-system-v2-plan.md` 추가.
+
+### Shadow Combat System v2 방향
+- 그림자를 헌터 보조 효과가 아니라 독립 전투 유닛으로 취급하는 방향으로 재설계.
+- 각 Shadow Unit은 13개 shadow stat, Shadow Combat Power, role, rarity, innateGrade, level, enhancement, evolution stage, active skill, passive, conditional trigger, combat behavior profile, expedition behavior profile, 2.5D action profile 후보를 가진다.
+- 12-28G의 shadow stats/SCP는 v2의 공용 전투력 언어로 유지.
+- 12-28H의 얇은 `resolveShadowSupportActions` 반영은 향후 v2 runtime이 안정화되면 `ShadowActionEvent` 기반으로 흡수/대체하는 방향.
+
+### 스탯 / 스킬 / 패시브 구조
+- 13개 shadow stat이 단순 표시가 아니라 attack, guard, control, support, finisher, bossing, expedition, synergy action score를 결정하는 기반으로 설계.
+- active skill, passive, conditional trigger 슬롯 구조 제안.
+- rarity는 skill/passive 품질과 고유성, innateGrade는 발동 안정성/효과량/성장률을 담당하도록 역할 분리.
+- common S급, legendary C급, legendary S급의 의미 차이를 별도로 정리.
+
+### 2.5D 대비
+- Shadow Unit profile을 나중에 2.5D battle board의 위치 배치, action priority, skill animation hook, passive trigger visual hook, rarity/innateGrade aura, named quote/action cue에 연결할 수 있게 설계.
+- 이번 단계에서 2.5D UI, 전투 보드, VFX는 구현하지 않음.
+
+### 이행 전략
+- 12-28J: shadow skill/passive data model 설계/정의 1차.
+- 12-28K: 일부 그림자에 skill/passive prototype 부여.
+- 12-28L: Gate/Tower 전투에 shadow action runtime 1차 연결.
+- 12-28M: 원정에 shadow unit profile 반영.
+- 12-29A: 2.5D battle board 설계.
+- 12-29B 이후: shadow action profile을 2.5D 연출과 연결.
+
+### hidden / secret 보호
+- hiddenUntilObtained / locked named 대상은 획득 전 실제 이름, 초상, 조건, 고유 skill/passive, quote를 노출하지 않는 원칙 유지.
+- 문서에서도 미보유 hidden 대상의 정체나 조건을 쓰지 않음.
+
+### 검증
+- 문서 작업이므로 `npm run build` 생략.
+- `git diff --check -- CLAUDE.md docs\shadow-combat-system-v2-plan.md` exit code 0.
+- Git의 기존 LF/CRLF 경고만 표시.
+- 코드 파일 수정 없음.
+
+---
+
+## 12-28J Shadow Skill / Passive Data Model 1차 완료
+
+### 작업 성격
+- Shadow Combat System v2로 가기 위한 skill/passive/trigger/profile 데이터 모델 1차 작업.
+- 전투 runtime 본격 연결 없음.
+- 기존 12-28H `resolveShadowSupportActions` bridge layer 제거/대체 없음.
+- 2D 전투 UI/VFX/로그 연출 대형 변경 없음.
+- localStorage key `levelup-save` 변경 없음.
+- persist version 변경 없음.
+- 기존 owned shadow/equipment/progress 데이터 변경 없음.
+
+### 추가 data model / helper
+- `src/lib/shadowSkills.ts` 추가.
+- 주요 타입:
+  - `ShadowSkillDefinition`
+  - `ShadowPassiveDefinition`
+  - `ShadowTriggerCondition`
+  - `ShadowCombatBehaviorProfile`
+  - `ShadowExpeditionBehaviorProfile`
+  - `ShadowActionProfile`
+  - `ShadowGradeTuningProfile`
+  - `ShadowActionEvent`
+  - `ShadowCombatUnitProfile`
+- 주요 helper:
+  - `getShadowSkillCandidates`
+  - `getShadowPassiveCandidates`
+  - `getShadowCombatUnitProfile`
+  - `getShadowCombatUnitProfiles`
+  - `formatShadowSkillSummary`
+  - `formatShadowPassiveSummary`
+  - `formatShadowTriggerSummary`
+
+### role-based generic skill/passive pool
+- 모든 104개 그림자에 고유 스킬을 즉시 작성하지 않고 role별 generic pool로 시작.
+- assault:
+  - Rift Cleave / Execution Mark / Burst Drive
+  - Follow Through / Finisher Instinct
+- guard:
+  - Shadow Barrier / Counter Stance / Last Line
+  - Protective Posture / Low HP Priority
+- hunter:
+  - Wounded Chase / Chain Hit / Prey Lock
+  - Kill Momentum / Relentless Chase
+- scout:
+  - Opening Mark / Evasion Down / Intent Read
+  - First Read / Formation Signal
+- support:
+  - Mending Pulse / Cooldown Thread / Legion Buff
+  - Long Fight Efficiency / Legion Link
+- analyst:
+  - Weakness Expose / Boss Suppression / Defense Debuff
+  - Boss Priority / Pattern Lock
+- obtained named shadow용 generic unique 후보:
+  - Command Imprint
+  - Memory Core
+
+### rarity / innateGrade / evolution 규칙
+- common은 basic 중심, S/evolution이면 refined 후보까지 허용.
+- uncommon/rare는 refined 후보까지 허용.
+- epic은 elite 후보까지 허용.
+- legendary는 legendary cap, obtained named는 unique cap 사용.
+- innateGrade는 `procStability`, `effectScaling`, `cooldownStability`, `growthScaling` 후보값으로 분리.
+- evolutionStage는 active/passive slot 확장 후보와 2.5D action profile 강화 후보로 반영.
+- 이번 단계의 값들은 표시/후보/프로필용이며 실제 전투 runtime에는 본격 연결하지 않음.
+
+### ShadowCombatUnitProfile
+- `OwnedShadow + ShadowDefinition + getShadowCombatProfile` 기반 derived profile.
+- 포함 정보:
+  - 13개 shadow stat
+  - Shadow Combat Power breakdown
+  - role / rarity / innateGrade / level / enhancement / evolutionStage
+  - activeSkills / passives
+  - combat behavior profile
+  - expedition behavior profile
+  - 2.5D용 action profile
+  - grade tuning
+  - summary badges
+- 저장 필드가 아니라 파생 계산이므로 기존 save migration 없음.
+
+### ShadowPanel / ShadowCard 표시
+- `src/components/shadows/ShadowCard.tsx`
+  - 기존 SCP + role/top stat badge 유지.
+  - 카드에는 active skill short badge 1개만 추가.
+  - skill/passive 긴 설명은 카드에 노출하지 않음.
+- `src/components/ShadowPanel.tsx`
+  - 선택 상세 패널에 `SHADOW UNIT PROFILE` 섹션 추가.
+  - active candidate / passive candidate 요약 표시.
+  - trigger와 unit behavior/action profile은 접이식 compact 영역에 표시.
+  - 13개 전체 stat 접이식 구조는 기존대로 유지.
+
+### 2.5D 대비
+- `ShadowActionProfile`에 `boardLane`, `auraIntensitySource`, `actionCue`, `effectColor`, `impactTiming`, `animationHooks` 후보 필드 추가.
+- 이번 단계에서 2.5D battle board, animation, VFX는 구현하지 않음.
+
+### hidden / secret 보호
+- skill/passive profile은 owned shadow 기반 `ShadowPanel` / `ShadowCard`에서만 표시.
+- Codex의 미보유 hiddenUntilObtained / locked named에는 실제 이름, 초상, 조건, 고유 skill/passive, quote를 새로 노출하지 않음.
+- named용 unique 후보도 obtained shadow의 derived profile에서만 표시.
+
+### 검증
+- `npm run build` exit code 0.
+- Vite 기존 chunk size warning만 표시.
+- `git diff --check -- CLAUDE.md src\lib\types.ts src\lib\shadowSkills.ts src\components\ShadowPanel.tsx src\components\shadows\ShadowCard.tsx` exit code 0.
+- Git의 기존 LF/CRLF 경고만 표시.
+
+---
+
+## 12-28K 일부 그림자 skill/passive prototype 부여 완료
+
+### 작업 성격
+- Shadow Combat System v2 방향 검증을 위한 대표 그림자 prototype 부여 작업.
+- 모든 104개 그림자에 고유 스킬을 작성하지 않음.
+- Gate/Tower 전투 runtime 본격 연결 없음.
+- 기존 12-28H `resolveShadowSupportActions` bridge layer 제거/대체 없음.
+- 전투 공식, 보상, 가격, 확률, 저장 구조 변경 없음.
+- 2.5D battle board, 전투 UI/VFX/로그 대형 작업 없음.
+- localStorage key `levelup-save` 변경 없음.
+- persist version 변경 없음.
+
+### skill/passive id reference 구조
+- `src/lib/types.ts`
+  - `ShadowDefinition.shadowUniqueSkillIds?: string[]` 추가.
+  - `ShadowDefinition.shadowUniquePassiveIds?: string[]` 추가.
+  - 기존 `shadowSkillIds`, `shadowPassiveIds`, `shadowUniqueActionCue` optional field 유지.
+- Definition에는 긴 skill/passive 설명을 넣지 않고 id reference만 연결.
+- 실제 skill/passive 본문은 `src/lib/shadowSkills.ts` registry에서 관리.
+
+### prototype 부여 범위
+- 총 12개 대표 그림자에 prototype/unique id 연결.
+- 일반/희귀/영웅 role 샘플:
+  - `shadow-sentry` guard common
+  - `black-claw` assault rare
+  - `rift-librarian` analyst rare
+  - `sloth-hunter` hunter rare
+  - `silent-archer` scout rare
+  - `iron-bastion` guard epic
+  - `rift-champion` assault epic
+  - `midnight-oracle` support epic
+- named / legendary 샘플:
+  - `karden-forgetting-scribe` hidden gate named analyst
+  - `kasim-analyst` achievement named analyst
+  - `charka-finance-patron` achievement named support
+  - `verk-steel-knight` achievement named assault
+
+### 추가 prototype skill/passive
+- `src/lib/shadowSkills.ts`
+  - `PROTOTYPE_SKILLS` 추가.
+  - `PROTOTYPE_PASSIVES` 추가.
+  - `ShadowAbilitySource = generic | prototype | unique` 추가.
+  - `getShadowAbilitySourceLabel` 추가.
+- role별 방향:
+  - assault: rupture / arena finisher / steel command.
+  - guard: first watch / iron wall / anchor.
+  - hunter: wounded prey route / plunder tracking.
+  - scout: silence shot / opening flank control.
+  - support: midnight reset / patron aegis / formation stability.
+  - analyst: weakness index / flaw ledger / forbidden archive lock.
+
+### ShadowCombatUnitProfile 반영
+- `getDefinitionSkills`, `getDefinitionPassives`가 `shadowUnique*Ids`와 `shadow*Ids`를 모두 읽음.
+- definition prototype/unique ability가 generic fallback보다 우선 정렬되도록 `getAbilityPriority` / `byAbilityPriorityDesc` 추가.
+- rarity/innateGrade/evolution 기반 quality cap은 유지.
+- common도 definition passive가 명시된 경우 1개 passive 후보를 표시할 수 있게 slot fallback 보정.
+- id가 없거나 quality cap에 막히면 12-28J role-based generic pool로 fallback.
+
+### ShadowPanel 표시
+- `src/components/ShadowPanel.tsx`
+  - active/passive candidate 우측 badge를 quality 대신 `GENERIC` / `PROTOTYPE` / `UNIQUE` source label로 표시.
+  - trigger/action profile 접이식 구조와 13개 stat 접이식 구조 유지.
+- `src/components/shadows/ShadowCard.tsx`
+  - 카드 과밀 방지를 위해 기존 SCP + role/top stat badge 구조 유지.
+  - top skill short badge 1개 수준만 유지.
+
+### hidden / secret 보호
+- skill/passive profile은 owned shadow 기반 카드/상세 패널에서만 표시.
+- Codex 미보유 hiddenUntilObtained / locked named는 기존 sealed 표시 유지.
+- hidden gate named인 `karden-forgetting-scribe`에도 unique id reference는 붙였지만, 미보유 Codex 카드에서는 이름/효과/고유 skill/passive/quote를 새로 표시하지 않음.
+
+### 2.5D 대비
+- 각 prototype/unique skill에 `animationCue`, `effectColor`, `impactTiming`, `actionCue` 유지.
+- `ShadowActionProfile`의 board lane/aura/action hook 구조와 연결 가능한 데이터만 준비.
+- 2.5D 구현 없음.
+
+### 검증
+- `npm run build` exit code 0.
+- `npx tsx -e` smoke check로 prototype 연결 definition 12개 확인.
+- 대표 12개 모두 첫 active/passive가 prototype 또는 unique로 우선 선택되는 것 확인.
+- Vite 기존 chunk size warning만 표시.
+- `git diff --check -- CLAUDE.md src\lib\types.ts src\lib\shadowSkills.ts src\lib\shadows.ts src\components\ShadowPanel.tsx src\components\shadows\ShadowCard.tsx` exit code 0.
+- Git의 기존 LF/CRLF 경고만 표시.
+
+---
+
+## 12-28L Shadow Action Runtime 1차 연결 완료
+
+### 작업 성격
+- Shadow Combat System v2의 첫 runtime bridge 작업.
+- 12-28K에서 prototype/unique skill/passive id가 연결된 대표 그림자만 제한적으로 Gate/Tower 전투에 연결.
+- 모든 104개 그림자나 모든 generic skill/passive를 전투에 연결하지 않음.
+- 기존 12-28H `resolveShadowSupportActions` shadow stats 보정은 제거하지 않고 유지.
+- 이번 runtime은 기존 support-action 위에 작은 v2 action event layer를 병행하는 구조.
+- 2.5D battle board, 전투 UI/VFX, portrait flash, 공격 애니메이션, 대형 로그 연출 구현 없음.
+- 전투 수치 대폭 변경 없음.
+- localStorage key `levelup-save` 변경 없음.
+- persist version 변경 없음.
+
+### 추가한 runtime helper
+- `src/lib/shadowCombatRuntime.ts` 추가.
+- 주요 구조:
+  - `ShadowCombatRuntimeActor`
+  - `ShadowCombatRuntimeState`
+  - `ShadowRuntimeEvent`
+  - `ResolveShadowActionRuntimeParams`
+  - `ResolveShadowActionRuntimeResult`
+  - `resolveShadowActionRuntime`
+- equipped owned shadow만 `getShadowCombatUnitProfile`로 변환해 runtime 후보를 계산.
+- 저장형 runtime state는 추가하지 않고 전투 함수 내부 derived state로 처리.
+- hidden/locked 미보유 대상은 runtime 후보에 들어오지 않음.
+
+### ShadowActionEvent 확장
+- `src/lib/shadowSkills.ts`
+  - `ShadowActionEvent`에 2.5D 재사용 후보 필드 추가:
+    - `abilityName`
+    - `sourceAbility`
+    - `targetType`
+    - `actionCue`
+    - `impactTiming`
+- 기존 data/profile 표시 구조와 호환.
+- 실제 2.5D UI나 animation hook 실행은 하지 않음.
+
+### 연결 범위
+- runtime은 `source === prototype | unique`인 active/passive만 후보로 사용.
+- 12-28K 대표 그림자 prototype/unique ability를 우선 대상으로 함.
+- generic fallback skill/passive는 이번 1차 runtime에 연결하지 않음.
+- 연결 효과 계열:
+  - assault/hunter damage, wounded target finisher 계열
+  - guard/survival damage reduction, emergency guard 계열
+  - scout/analyst control, defense down, boss suppression 계열
+  - support cooldown/support utility, small buff 계열
+  - stat shift 계열의 작은 tempo 보조
+
+### Gate/Tower 반영 위치
+- `src/lib/game.ts`
+  - `resolveShadowSupportActions` 내부에서 기존 12-28H support-action 계산 후 `resolveShadowActionRuntime`을 호출.
+  - monster가 살아 있고 equipped shadow가 있을 때만 v2 runtime event 후보를 계산.
+  - 반환된 event는 기존 active effect / damage / reduction 적용 함수에 작게 합산.
+  - `shadow-action-runtime` log를 추가하되 `isShadowCombatLog`에 포함해 플레이어 턴 소비 로그로 취급되지 않게 함.
+- Infinite Tower도 동일한 `resolveShadowSupportActions` 경로를 쓰므로 별도 UI 변경 없이 적용.
+
+### cap / 제한
+- 라운드당 runtime shadow action event 최대 1개.
+- 발동률 hard cap:
+  - active 12%
+  - unique active 14%
+  - passive 8%
+  - unique passive 10%
+- 효과 cap:
+  - damage event skillPower 최대 0.11
+  - guard reduction 최대 6.5%
+  - survival guard reduction 최대 5.5%
+  - control/boss defense down 최대 4.5%~5%
+  - support attack buff 최대 4%
+  - stat shift speed buff 최대 3.5%
+- 같은 라운드에서 과도한 중복 효과가 쌓이지 않도록 runtime event 수를 1개로 제한.
+
+### 로그 / UI
+- 새 전투 UI는 추가하지 않음.
+- runtime 발동 시 짧은 system line만 추가:
+  - `그림자 프로토타입 발동: ...`
+  - `고유 그림자 스킬 발동: ...`
+- portrait flash, slash animation, camera shake, 2.5D board 구현 없음.
+
+### hidden / secret 보호
+- runtime 계산은 equipped owned shadow만 사용.
+- hiddenUntilObtained 미보유 대상의 실제 이름, 초상, 조건, unique skill/passive, quote 노출 없음.
+- locked named의 고유 능력명은 owned/equipped profile이 runtime에 들어온 뒤에만 사용.
+- 상점/확률표/도감에 hidden 정보를 새로 노출하지 않음.
+
+### 2.5D 대비
+- `ShadowRuntimeEvent`는 `effectKind`, `sourceShadowId`, `targetType`, `animationCue`, `actionCue`, `impactTiming`, `logCue`를 유지/전달할 수 있는 구조.
+- 향후 2.5D battle board에서 공격 이펙트, 방어 barrier, 제어/보스 억제, action priority, named cue로 재사용 가능.
+- 이번 단계에서는 계산 기반과 event language만 마련.
+
+### 검증
+- `npm run build` exit code 0.
+- Vite 기존 chunk size warning만 표시.
+- `npx tsx scripts/sim-shadow-battle-balance.ts` exit code 0.
+- sim은 기존 대형 밸런스 테이블을 출력했고 runtime crash 없음.
+- localStorage/persist/save migration 변경 없음.
+
+---
+
+## 12-28M Shadow Unit Profile 원정 반영 1차 완료
+
+### 작업 성격
+- Shadow Combat System v2의 Shadow Unit Profile을 그림자 원정 계산에 1차 연결.
+- 원정에서 그림자를 단순 power 숫자가 아니라 role / stat / passive / expedition behavior를 가진 유닛처럼 쓰기 위한 기반 작업.
+- 원정 battlefield VFX, 대형 UI 애니메이션, 2.5D 전투 구현 없음.
+- 원정 보상 테이블과 보상량 직접 증가는 변경하지 않음.
+- Gate/Tower 전투 공식, 12-28H `resolveShadowSupportActions`, 12-28L runtime layer 변경/제거 없음.
+- localStorage key `levelup-save` 변경 없음.
+- persist version 변경 없음.
+
+### 추가한 원정 aggregate
+- `src/lib/shadowExpeditions.ts`
+  - `ShadowExpeditionUnitAggregate` 추가.
+  - owned/selected party shadow를 `getShadowCombatUnitProfile`로 변환한 뒤 매번 derived 계산.
+- aggregate 목록:
+  - `expeditionPower`
+  - `scoutUtility`
+  - `commandTempo`
+  - `riskControl`
+  - `supportStability`
+  - `searchSense`
+  - `bossHuntPressure`
+  - `synergyCoordination`
+- 2.5D 대비 재사용:
+  - party strength, 명령 반응성, 위험 경고/방어 안정화, 군단 협동, 강적 추적 압박 같은 연출 hook으로 재사용 가능.
+  - 이번 단계에서는 표시/VFX로 연결하지 않음.
+
+### Shadow Expedition 계산 반영 위치
+- `getShadowExpeditionPower`
+  - 기존 basePower / rarity / enhancement / level / role match / named 계산 유지.
+  - Shadow Unit aggregate의 `expeditionPower`, `searchSense`, `synergyCoordination`을 최대 약 +3% 수준의 작은 multiplier로 추가.
+- `resolveShadowExpeditionCommand`
+  - selected party profile과 aggregate를 계산.
+  - command별 stat score로 progress multiplier, risk mitigation, role match progress를 소폭 반영.
+  - command log 뒤에 짧은 “군단 조율” 로그만 추가.
+- `resolveExpeditionMidEventChoice`
+  - store에서 selected party를 전달.
+  - choice preferred role과 party stat/aggregate가 맞으면 진행/위험을 작은 폭으로 보정.
+- outcome 판정
+  - 실제 저장 progress/risk는 그대로 기록.
+  - 판정 시에만 `expeditionPower`/`riskControl` 기반의 아주 작은 boundary adjustment를 적용.
+
+### command별 stat 연결
+- `attack`: `shadowAttack`, `shadowFinisher`, `shadowBossing`
+- `defend`: `shadowDefense`, `shadowDurability`, `shadowSurvival`
+- `scout`: `shadowSpeed`, `shadowControl`, `shadowExpedition`
+- `analyze`: `shadowControl`, `shadowSuppression`, `shadowSupport`
+- `search`: `shadowExpedition`, `shadowSynergy`, `shadowSupport`
+- command button hint 문구만 작게 보강했고, 레이아웃/VFX/애니메이션 변경 없음.
+
+### prototype / passive 반영 범위
+- `ShadowCombatUnitProfile.passives`만 원정 affinity에 제한적으로 반영.
+- scout/search/support/analyst/hunter/guard 성격 passive가 해당 command의 progress/risk/role match에 아주 작은 보조값 제공.
+- `source === prototype | unique`는 owned/selected party profile에 들어온 경우에만 작은 source affinity로 반영.
+- 전투 active skill을 원정에 억지로 연결하지 않음.
+- passive 이름/고유 능력명은 원정 로그에 노출하지 않음.
+
+### cap / diminishing return
+- `boundedBonus(value, scale, cap)` 형태의 diminishing return 사용.
+- party power profile multiplier cap 약 +3%.
+- command progress multiplier hard cap +4%.
+- command risk mitigation cap:
+  - defend/scout 최대 3 risk point.
+  - 그 외 command 최대 4 risk point.
+- role match 추가 progress cap 최대 +1 point.
+- outcome boundary adjustment cap:
+  - progress +1.
+  - risk -1.
+- mid-event 보정 cap:
+  - progress 최대 +4.
+  - risk 최대 -2~-4.
+- 보상량 직접 증가 없음.
+
+### hidden / secret 보호
+- 원정 계산은 selected owned shadow party만 사용.
+- hiddenUntilObtained 미보유 대상, locked named 미보유 대상의 실제 이름/초상/고유 skill/passive/quote 노출 없음.
+- 원정 로그에는 passive/unique ability 이름을 새로 표시하지 않음.
+
+### 검증
+- `npm run build` exit code 0.
+- Vite 기존 chunk size warning만 표시.
+- `npx tsx scripts/sim-shadow-expedition.ts` exit code 0.
+- sim 결과:
+  - low party는 기존과 거의 동일하게 실패/부분성공 중심.
+  - trained/named party는 안정성 및 일부 command 성과가 소폭 상승.
+  - 일부 강한 조합도 무조건 great_success가 되지 않도록 cap 재조정 완료.
+- localStorage/persist/save migration 변경 없음.
+
+---
+
+## 12-28N 장비 stars/rarity 전투력/착용 비교 강화 완료
+
+### 작업 성격
+- 장비 stars, rarity, slot, effects를 전투력 해석과 착용 판단에서 더 잘 읽히도록 표시/비교 기반을 추가.
+- 장비 획득 확률, stars 확률, 상점 가격, Gold 수급량, 전투 공식은 변경하지 않음.
+- 2D 전투 UI/VFX/애니메이션 대형 작업 및 2.5D 전투 구현 없음.
+- localStorage key `levelup-save` 변경 없음.
+- persist version 변경 없음.
+
+### 장비 power/helper
+- `src/lib/equipmentPower.ts` 추가.
+- 주요 helper:
+  - `getEquipmentPowerBreakdown(item)`
+  - `compareEquipmentForSlot(item, previous?)`
+- `getEquipmentPowerBreakdown` 출력:
+  - `totalEquipmentValue`
+  - `offenseValue`
+  - `defenseValue`
+  - `utilityValue`
+  - `survivalValue`
+  - `shadowSynergyValue`
+  - `skillValue`
+  - `slotRole`
+  - `slotRoleLabel`
+  - `starTierLabel`
+  - `rarityPotentialLabel`
+  - `topTags`
+  - `actionCue`
+- 이 값은 표시/비교용 해석 지표이며 기존 헌터 전투력 공식에 직접 합산하지 않음.
+- `getEnhancedItemEffects`와 기존 skill combat value를 읽어 stars/enhancement가 적용된 장비 해석을 제공.
+
+### slot별 역할 정의
+- `weapon`
+  - 공격/스킬 피해 중심.
+  - `offenseValue`, `skillValue` 가중.
+  - 2.5D 후보 cue: `weapon_strike`.
+- `armor`
+  - 방어/생존 안정 중심.
+  - `defenseValue`, `survivalValue` 가중.
+  - 2.5D 후보 cue: `armor_barrier`.
+- `accessory`
+  - 속도/유틸 보조 중심.
+  - `utilityValue`, 일부 `shadowSynergyValue` 가중.
+  - 2.5D 후보 cue: `accessory_tempo`.
+- `artifact`
+  - 특수/그림자 연계 중심.
+  - `shadowSynergyValue`, `skillValue`, `utilityValue` 가중.
+  - 2.5D 후보 cue: `relic_aura`.
+
+### stars / rarity 해석
+- 1~2성: 기본 장비.
+- 3성: 실사용 가능.
+- 4성: 고가치 장비.
+- 5성: 핵심 장비 후보.
+- epic/legendary는 특수/전설 잠재력 태그로 강조.
+- artifact는 `RELIC`, legendary는 `LEGENDARY`, 4~5성은 `HIGH STAR` 태그 후보를 제공.
+- 별/희귀도 확률과 효과 배율은 변경하지 않음.
+
+### 장비 비교 helper
+- `compareEquipmentForSlot(item, previous?)`
+  - 같은 slot의 현재 장착 장비와 비교.
+  - verdict:
+    - `better`
+    - `sidegrade`
+    - `situational`
+    - `weaker`
+  - delta:
+    - total/offense/defense/utility/survival/shadowSynergy/skill.
+  - 문구:
+    - 공격 가치가 높음.
+    - 생존력이 더 안정적.
+    - 전투 스킬 운용 가치가 높음.
+    - artifact/조건부/그림자 연계는 상황형으로 안내.
+- 기대 피해량 같은 정밀 계산은 하지 않고 안전한 해석 문구 중심으로 제한.
+
+### EquipmentRevealModal 표시 개선
+- `src/components/EquipmentRevealModal.tsx`
+  - reveal 결과 카드에 slot role, equipment value, star tier, topTags 표시.
+  - 현재 착용 장비와의 comparison label/delta/recommendation/key reason 표시.
+  - 4~5성 / epic / legendary / artifact는 기존 high value 톤을 유지하면서 더 명확한 태그를 표시.
+  - reveal sequence/VFX 구조는 대형 변경하지 않음.
+
+### Inventory 표시 개선
+- `src/components/Inventory.tsx`
+  - 장착 슬롯 카드에 slot role, VALUE, topTags 표시.
+  - 보유 장비 카드에 slot role, equipment value, topTags 1~2개 표시.
+  - 장착 가능한 미장착 장비는 현재 slot 장비와의 comparison label/delta/recommendation을 compact box로 표시.
+  - 카드 과밀 방지를 위해 긴 breakdown은 넣지 않고, 세부 reason은 title tooltip 성격으로 제공.
+
+### HunterStatus / breakdown
+- `src/components/HunterStatus.tsx`
+  - 전투력 카드 내부에 `EQUIP VALUE`와 top equipment tags만 compact chip으로 표시.
+  - 별도 큰 카드나 레이아웃 확장 없음.
+  - 기존 combat power 계산값은 변경하지 않음.
+
+### 2.5D 대비
+- `EquipmentPowerBreakdown.actionCue`로 다음 연결 후보를 준비:
+  - weapon value → 공격 이펙트 강도.
+  - armor value → barrier/피격 안정성.
+  - accessory value → speed/support cue.
+  - artifact value → 특수 aura/보스전 cue.
+  - stars/rarity/topTags → glow/frame intensity 후보.
+- 이번 단계에서는 2.5D UI/VFX를 구현하지 않음.
+
+### 104개 그림자 확장과의 관계
+- `shadowSynergyValue`는 특정 그림자 id나 12개 prototype에 의존하지 않음.
+- 장비 효과, slot, stat, rarity, stars 기반의 일반화된 해석값만 사용.
+- 향후 104개 그림자 전체 skill/passive/profile 확장 시 role/stat 기반 시너지로 연결 가능.
+- hidden/secret 조건/정체 노출 없음.
+
+### 검증
+- `npm run build` exit code 0.
+- Vite 기존 chunk size warning만 표시.
+- 전투/경제/확률 sim은 실행하지 않음. 장비 공식/확률/경제 수치를 변경하지 않았기 때문.
+- localStorage/persist/save migration 변경 없음.
+
+## 12-28O - 104개 그림자 전체 skill/passive 확장 계획 작성 완료
+
+### 문서
+- `docs/shadow-104-skill-passive-expansion-plan.md` 추가.
+- 현재 `SHADOW_DEFINITIONS` 기준 104개 전체를 ID/role/rarity/named/hidden/sample12/assignment/phase 기준으로 분류.
+- 이번 단계는 문서/계획 작업이며 코드 로직, 전투 공식, 저장 구조, UI, 수치 변경 없음.
+
+### 104개 전체 확장 원칙
+- 모든 그림자는 최소 role-based active/passive 후보를 가진다.
+- 모든 그림자가 완전 고유 스킬을 가질 필요는 없지만 role/rarity/innateGrade/계열 차이는 가져야 한다.
+- named / legendary / achievement / gate named는 더 고유한 skill/passive/profile 후보를 가진다.
+- hiddenUntilObtained / gate named / sealed named는 획득 전 고유 skill/passive/quote/조건/초상 노출 금지.
+
+### phase별 계획
+- Phase 1: common/uncommon 일반 그림자 generic role template 확장.
+- Phase 2: rare/epic 일반 그림자 role + rarity 변형 및 prototype-specific 확장.
+- Phase 3: legendary 일반 그림자 고급 template 확장.
+- Phase 4: named/gate/achievement unique skill/passive 확장 및 hidden masking.
+- Phase 5: 2.5D action cue / animation hook taxonomy 정리.
+
+### 배정 타입
+- `GENERIC_ROLE_ONLY`: role generic pool만 사용.
+- `ROLE_TEMPLATE_PLUS`: role + rarity/source 기반 변형.
+- `PROTOTYPE_SPECIFIC`: 특정 그림자 개성을 반영한 prototype.
+- `UNIQUE_NAMED`: named 고유 skill/passive 필요.
+- `SEALED_UNIQUE_HIDDEN`: 획득 전 정보 보호가 필요한 sealed unique.
+
+### 12개 prototype 검토
+- `shadow-sentry`, `black-claw`, `rift-librarian`, `sloth-hunter`, `silent-archer`, `iron-bastion`, `rift-champion`, `midnight-oracle`는 non-named prototype sample로 유지.
+- `kasim-analyst`, `charka-finance-patron`, `verk-steel-knight`는 achievement named unique sample로 유지.
+- `karden-forgetting-scribe`는 gate hidden sealed unique sample로 유지하되 locked UI에서는 고유 정보 비노출 원칙 유지.
+
+### skill/passive 기준
+- role별 active/passive 방향 정리:
+  - assault: burst/crit/execute.
+  - guard: protect/block/counter.
+  - hunter: chase/chain/prey/search sense.
+  - scout: initiative/scan/evasion/control.
+  - support: heal/buff/cooldown/stability.
+  - analyst: weakness/boss suppression/control.
+- rarity별 품질 기준 정리:
+  - common은 단순/안정.
+  - uncommon은 소폭 특화.
+  - rare는 조건부 1개.
+  - epic은 강한 role identity.
+  - legendary는 고유 조건부 후보.
+  - named는 unique skill/passive/action cue 후보.
+- innateGrade는 skill 종류보다 안정성/성장성/발동률/cooldown 안정성에 반영.
+- evolution은 계수 강화, trigger 완화, secondary role tag, named/legendary 고유 효과 강화 후보로 정리.
+
+### hidden 보호 원칙
+- hiddenUntilObtained / gate_named / sealed named는 획득 전 고유 skill/passive/quote/조건/초상 비노출.
+- 문서에는 개발용 assignment type만 기록하고 사용자-facing UI에는 노출하지 않음.
+- locked card에서는 `sealed unique` 수준의 일반 표현만 허용.
+- 원정/전투/Codex/2.5D cue는 owned/selected/obtained 상태의 실제 데이터만 고유 정보로 해석해야 함.
+
+### 2.5D 대비
+- role별 action cue 후보 정리:
+  - assault: `dash_slash`, `finisher_cut`.
+  - guard: `barrier_guard`, `intercept`.
+  - hunter: `chase_dash`, `chain_strike`.
+  - scout: `scan_mark`, `evade_shift`.
+  - support: `healing_pulse`, `cooldown_rune`.
+  - analyst: `weakness_grid`, `suppression_field`.
+  - named: `unique_aura`, `quote_cut_in`.
+- 이번 단계에서는 2.5D 전투/UI/VFX 구현 없음.
+
+### 다음 구현 제안
+- 12-28P: common/uncommon/rare 일반 그림자 skill/passive 확장 1차.
+- 12-28Q: epic/legendary 일반 그림자 확장.
+- 12-28R: named/gate/achievement unique 확장.
+- 12-28S: ShadowActionRuntime 확장 skill/passive 해석 개선.
+- 12-29A: 2.5D 전투 시스템 설계.
+
+### 검증
+- `git diff --check` exit code 0.
+- 기존 LF/CRLF warning만 표시.
+- 문서 작업이므로 `npm run build`는 생략.
+- localStorage key `levelup-save`, persist version, save migration 변경 없음.
+
+## 12-28P - common/uncommon/rare 일반 그림자 skill/passive 확장 1차 완료
+
+### 작업 범위
+- `docs/shadow-104-skill-passive-expansion-plan.md` 분류표 기준으로 common/uncommon/rare 일반 그림자만 대상으로 처리.
+- 제외 유지:
+  - hiddenUntilObtained.
+  - gate named.
+  - achievement named.
+  - legendary.
+  - named unique.
+  - SEALED_UNIQUE_HIDDEN / UNIQUE_NAMED.
+- 기존 12개 prototype/unique 샘플은 유지하고 덮어쓰지 않음.
+
+### 확장한 그림자 수
+- 대상 일반 그림자 49개에 `shadowSkillIds` / `shadowPassiveIds` reference 연결.
+- GENERIC_ROLE_ONLY: common/uncommon 일반 그림자에 role generic active/passive 연결.
+- ROLE_TEMPLATE_PLUS: rare 일반 그림자 14개에 template source active/passive 연결.
+- 누락 검증:
+  - 대상 49개 모두 active/passive 후보 resolve 확인.
+  - hidden/gate/achievement/legendary 제외 대상에 새 generic/template 연결 없음 확인.
+
+### 추가한 generic skill/passive pool
+- assault
+  - skill: `assault-quick-slash`
+  - passive: `assault-low-hp-pressure`
+- guard
+  - skill: `guard-intercept-step`
+  - passive: `guard-durability-stance`
+- hunter
+  - skill: `hunter-prey-mark-basic`
+  - passive: `hunter-search-sense`
+- scout
+  - skill: `scout-quick-scan`
+  - passive: `scout-route-reading`
+- support
+  - skill: `support-stabilizing-aura`
+  - passive: `support-rhythm`
+- analyst
+  - skill: `analyst-defense-index`
+  - passive: `analyst-analysis-tempo`
+
+### 추가한 ROLE_TEMPLATE_PLUS variant
+- `ShadowAbilitySource`에 `template` source 추가.
+- `TEMPLATE_SKILLS` / `TEMPLATE_PASSIVES` 추가.
+- rare 일반 그림자 14개에 이름/계열 기반 template 연결:
+  - `rift-tracker`
+  - `oath-carrier`
+  - `black-shieldman`
+  - `minute-caller`
+  - `black-annotator`
+  - `sloth-raider`
+  - `forgetting-scribe`
+  - `fatigue-shieldman`
+  - `rift-instructor`
+  - `greed-collector`
+  - `rift-wayfinder`
+  - `greed-ledger`
+  - `corridor-banner`
+  - `mirror-hunter`
+- template은 display/profile/2.5D cue용으로 연결했으며, 12-28L runtime의 prototype/unique 제한 실행 범위는 변경하지 않음.
+
+### ShadowCombatUnitProfile 반영
+- definition-specific skill/passive id가 generic fallback보다 우선되도록 candidate 정렬 보강.
+- unique > prototype > template > generic 우선순위 유지.
+- rarity/innateGrade/evolution 기반 quality cap 유지.
+- common도 명시 passive id가 있으면 상세에서 passive 후보를 볼 수 있음.
+
+### ShadowPanel 표시 영향
+- ShadowCard의 SCP + role/top stat/top skill badge 구조 유지.
+- Shadow 상세의 ACTIVE/PASSIVE 후보 영역 재사용.
+- `getShadowAbilitySourceLabel`에 `TEMPLATE` 라벨 추가.
+- UI/VFX/레이아웃 대형 변경 없음.
+
+### hidden / named 보호
+- hiddenUntilObtained / gate named / achievement named / legendary unique definition 수정 없음.
+- locked named의 unique skill/passive/quote/조건 노출 경로 추가 없음.
+- Codex 미보유 상태 노출 구조 변경 없음.
+
+### 2.5D 대비
+- 추가 generic/template skill/passive에 `actionCue`, `animationCue`, `effectColor`, `impactTiming`, passive `triggerCue` 후보 포함.
+- cue 예시:
+  - `dash_slash`
+  - `barrier_guard`
+  - `prey_mark`
+  - `scan_mark`
+  - `stability_aura`
+  - `weakness_grid`
+- 이번 단계에서는 2.5D 전투 보드/VFX/애니메이션 구현 없음.
+
+### 검증
+- `npm run build` exit code 0.
+- Vite 기존 chunk size warning만 표시.
+- 대상 검증 스크립트:
+  - targets 49.
+  - missing 0.
+  - unresolved 0.
+  - template 14.
+  - touchedExcluded 0.
+- `git diff --check -- src\lib\shadowSkills.ts src\lib\shadows.ts` exit code 0.
+- localStorage key `levelup-save`, persist version, save migration 변경 없음.
+- 전투 공식/보상/경제/확률 수치 변경 없음.
+
+## 12-28Q - epic / legendary 일반 그림자 skill/passive 확장 완료
+
+### 작업 범위
+- `docs/shadow-104-skill-passive-expansion-plan.md` 기준 epic 일반 그림자만 대상으로 처리.
+- 현재 `SHADOW_DEFINITIONS` 기준 non-hidden / non-named legendary 일반 그림자는 0개라서 추가 대상 없음.
+- 제외 유지:
+  - hiddenUntilObtained.
+  - gate named.
+  - achievement named.
+  - SEALED_UNIQUE_HIDDEN.
+  - UNIQUE_NAMED.
+  - locked named / named unique.
+
+### 확장한 그림자 수
+- epic 일반 그림자 10개에 advanced template 또는 prototype 보강 연결.
+- 신규 ROLE_TEMPLATE_PLUS 연결 7개:
+  - `sloth-knight`
+  - `archive-duelist`
+  - `forgetting-watcher`
+  - `rift-tactician`
+  - `fatigue-wall`
+  - `rift-gladiator`
+  - `greed-devourer`
+- 기존 PROTOTYPE_SPECIFIC 보강 3개:
+  - `iron-bastion`
+  - `rift-champion`
+  - `midnight-oracle`
+
+### 추가한 advanced template skill/passive pool
+- guard:
+  - `template-sloth-knight-delayed-counter`
+  - `template-sloth-knight-slow-bastion`
+  - `template-fatigue-wall-damage-floor`
+  - `template-fatigue-wall-emergency-floor`
+  - `template-iron-bastion-anchor-chain`
+  - `template-iron-bastion-anchored-readiness`
+- analyst:
+  - `template-archive-duelist-weakpoint-lunge`
+  - `template-archive-duelist-duel-index`
+  - `template-forgetting-watcher-memory-break`
+  - `template-forgetting-watcher-pattern-erasure`
+- support:
+  - `template-rift-tactician-command-cycle`
+  - `template-rift-tactician-command-rhythm`
+  - `template-midnight-oracle-cycle-field`
+  - `template-midnight-oracle-cycle-stability`
+- assault:
+  - `template-rift-gladiator-arena-burst`
+  - `template-rift-gladiator-burst-tempo`
+  - `template-rift-champion-finisher-rush`
+  - `template-rift-champion-champion-rhythm`
+- hunter:
+  - `template-greed-devourer-devour-chain`
+  - `template-greed-devourer-aftertaste`
+
+### 기존 prototype과의 관계
+- `iron-bastion`, `rift-champion`, `midnight-oracle`는 기존 prototype skill/passive를 첫 번째 id로 유지.
+- 새 template은 두 번째 id로만 추가해 evolution stage에서 보조 후보로 열리게 함.
+- 기본 표시와 대표 source는 계속 PROTOTYPE으로 유지.
+- 12-28K prototype/unique 및 12-28L runtime 로직 제거/변경 없음.
+
+### ShadowCombatUnitProfile / ShadowPanel 영향
+- 12-28P에서 보강한 definition-specific 우선 정렬을 그대로 사용.
+- TEMPLATE / PROTOTYPE source label 유지.
+- ShadowCard의 SCP + role/top stat/top skill badge 구조 변경 없음.
+- Shadow 상세의 ACTIVE/PASSIVE 후보 영역 재사용.
+- UI/VFX/레이아웃 대형 변경 없음.
+
+### hidden / named 보호
+- hiddenUntilObtained / gate named / achievement named / named unique definition 수정 없음.
+- SEALED_UNIQUE_HIDDEN 고유 skill/passive/quote 노출 없음.
+- Codex 미보유 상태 노출 구조 변경 없음.
+
+### 2.5D 대비
+- 추가 advanced template에 `actionCue`, `animationCue`, `effectColor`, `impactTiming`, passive `triggerCue` 후보 포함.
+- cue 예시:
+  - `counter_flash`
+  - `weakness_grid`
+  - `suppression_field`
+  - `cooldown_rune`
+  - `barrier_guard`
+  - `burst_impact`
+  - `chain_strike`
+  - `finisher_cut`
+- 이번 단계에서는 2.5D 전투 보드/VFX/애니메이션 구현 없음.
+
+### 검증
+- `npm run build` exit code 0.
+- Vite 기존 chunk size warning만 표시.
+- 대상 검증 스크립트:
+  - targets 10.
+  - legendaryGeneral 0.
+  - missing 0.
+  - unresolved 0.
+  - touchedExcluded 0.
+  - prototype 3개 기본 대표 source PROTOTYPE 유지 확인.
+- localStorage key `levelup-save`, persist version, save migration 변경 없음.
+- 전투 공식/보상/경제/확률 수치 변경 없음.
+## 12-28R: named / gate / achievement unique skill/passive 확장
+
+### 확장 범위
+- `UNIQUE_NAMED` / `SEALED_UNIQUE_HIDDEN` Phase 4 범위 반영.
+- 현재 `SHADOW_DEFINITIONS` 기준 named 총 40개에 unique skill/passive reference 연결.
+  - gate / hidden named: 16개.
+  - achievement named: 24개.
+- 기존 12-28K unique sample 유지:
+  - `karden-forgetting-scribe`
+  - `kasim-analyst`
+  - `charka-finance-patron`
+  - `verk-steel-knight`
+- 기존 sample 4개는 기존 unique id를 첫 번째로 유지하고, 보강 unique 후보를 두 번째 id로 추가.
+
+### unique skill/passive 추가 방식
+- `src/lib/shadowSkills.ts`에 named unique helper/default 추가.
+  - role별 unique active 기본값: assault / guard / hunter / scout / support / analyst.
+  - role별 unique passive 기본값: trigger_boost / survival / synergy / bossing 중심.
+- `UNIQUE_NAMED_SKILLS`, `UNIQUE_NAMED_PASSIVES` 배열 추가.
+- registry 연결:
+  - `ALL_SHADOW_SKILLS`에 `UNIQUE_NAMED_SKILLS` 포함.
+  - `ALL_SHADOW_PASSIVES`에 `UNIQUE_NAMED_PASSIVES` 포함.
+- 각 unique 후보는 `source: 'unique'`, `qualityTier: 'unique'` 유지.
+- runtime 본격 해석 확장은 12-28S로 남김. 현재 12-28L runtime은 해석 가능한 `effectKind`, `statScaling`, `trigger`, `actionCue`, `animationCue`만 제한적으로 활용.
+
+### ShadowDefinition 연결
+- `src/lib/shadows.ts` named definition에 기존 필드명만 사용.
+  - `shadowUniqueSkillIds`
+  - `shadowUniquePassiveIds`
+  - `shadowUniqueActionCue`
+- 새 저장 필드, persist version, localStorage key 변경 없음.
+- 이름/설명/획득 조건/보상/확률/경제 수치 변경 없음.
+
+### hidden / locked 보호
+- hiddenUntilObtained / gate named / sealed named는 내부 unique id를 갖지만, 미보유 locked UI에서는 unique skill/passive/quote/trigger/action cue를 표시하지 않음.
+- `ShadowPanel` Codex locked card는 definition profile을 계산하지 않고 기존 sealed wording만 유지.
+- owned named shadow에서만 `getShadowCombatUnitProfile`을 통해 unique active/passive가 표시됨.
+- achievement named도 미보유 Codex 카드에 새 unique 상세를 표시하지 않음.
+
+### ShadowPanel 표시 영향
+- ShadowCard 구조 변경 없음.
+- SCP + role/top stat/top skill badge 흐름 유지.
+- owned named 상세에서만 UNIQUE source label과 active/passive 후보 표시.
+- UI/VFX/레이아웃/애니메이션 대형 변경 없음.
+
+### 2.5D 대비 cue 구조
+- unique 후보에 기존 metadata 필드로 cue 후보 포함.
+  - `actionCue`
+  - `animationCue`
+  - `effectColor`
+  - `impactTiming`
+  - passive `triggerCue`
+- cue 예시:
+  - `weakness_grid`
+  - `suppression_field`
+  - `signature_field`
+  - `barrier_guard`
+  - `finisher_cut`
+  - `scan_mark`
+  - `cooldown_rune`
+  - `prey_mark`
+- 이번 단계에서 2.5D board/VFX/animation 구현 없음.
+
+### 검증
+- named profile 검증 스크립트:
+  - totalNamed 40.
+  - gateHidden 16.
+  - achievement 24.
+  - missingRefs 0.
+  - profileFailures 0.
+- locked UI 코드 경로 확인:
+  - `ShadowPanel` owned card/detail에서만 `getShadowCombatUnitProfile` 호출.
+  - Codex locked card에서 `shadowUnique*` 렌더 없음.
+- `npm run build` exit code 0.
+- Vite 기존 chunk size warning만 표시.
+- localStorage key `levelup-save`, persist version, save migration 변경 없음.
+- 전투 공식/보상/상점/경제/확률 수치 변경 없음.
+## 12-28S: ShadowActionRuntime 해석 범위 확장
+
+### 해석 범위 확장
+- `src/lib/shadowCombatRuntime.ts` 중심으로 12-28P~R에서 늘어난 active/passive 후보 해석 범위 확장.
+- 기존 12-28L의 prototype/unique 중심 후보 필터를 넓혀 `generic`, `template`, `prototype`, `unique` source를 모두 해석 가능하게 처리.
+- source별 hard cap을 분리해 generic/template 확장으로 전투 수치가 급격히 오르지 않도록 제한.
+  - active cap: generic 0.07 / template 0.09 / prototype 0.12 / unique 0.14.
+  - passive cap: generic 0.045 / template 0.06 / prototype 0.08 / unique 0.10.
+- 라운드당 ShadowActionEvent는 기존처럼 `maxActionsPerRound: 1` 호출을 유지.
+
+### effectKind / statScaling 처리
+- active:
+  - `damage` / `hybrid`: 공격, finisher, target low HP 계열을 capped damage event로 해석.
+  - `guard`: 방어/내구 기반 damage reduction event로 해석.
+  - `control`: defense/control debuff event로 해석.
+  - `support`: hunter 공격 흐름 보조 event로 해석.
+  - `bossing`: boss-like target에서만 약한 boss/control event로 해석.
+- passive:
+  - `survival`: low HP/guard 성격의 damage reduction event.
+  - `bossing`: boss-like target에서만 debuff/support event.
+  - `trigger_boost`: `runtimeCategory`에 따라 control/bossing이면 debuff, tempo/support/attack이면 작은 buff로 degrade.
+  - `cooldown` / `synergy`: support buff event.
+  - `stat_shift`: speed/tempo 보정 event.
+- `shadowExpedition` stat은 Gate/Tower runtime에서 직접 강하게 쓰지 않고 combat stat score에서 0.25로 감쇠.
+- `shadowSynergy`, `shadowSupport`, `shadowSpeed`도 전투 runtime에서는 약한 감쇠를 적용해 기존 12-28H 보정과 중복 과상승을 제한.
+
+### trigger 처리
+- 해석 유지/보강:
+  - `battle_start`
+  - `wave_start`
+  - `round_start`
+  - `after_hunter_action`
+  - `before_enemy_action`
+  - `finisher_window`
+  - `target_low_hp`
+  - `hp_threshold`
+  - `boss_present`
+  - `after_crit`은 현재 전투 상태에서 치명 여부를 직접 알 수 없어 `playerUsedSkill` proxy로 제한.
+  - `after_kill`은 monster HP 0 이하일 때만 true지만 현재 runtime 호출 구조상 후속 확장 후보.
+- 알 수 없는 trigger는 안전하게 no-op 처리.
+
+### unique / named 처리
+- runtime은 기존과 같이 equipped/owned shadow 배열만 입력으로 받는다.
+- hidden/gate/sealed named의 unique detail은 미보유 locked UI에서 접근하지 않음.
+- unique ability는 `sourceAbility: 'unique'`, `logCue: 'apex'`로 metadata를 남기지만, active/passive hard cap과 라운드당 1회 cap을 유지.
+- named가 모든 라운드에 확정 발동하지 않도록 chance cap과 trigger filter를 유지.
+
+### ShadowActionEvent metadata 정리
+- `ShadowActionEvent`에 2.5D 재사용용 metadata 추가.
+  - `effectColor`
+  - `boardLane`
+  - `runtimeCategory`
+- 기존 metadata 유지:
+  - `sourceShadowId`
+  - `skillId` / `passiveId`
+  - `abilityName`
+  - `sourceAbility`
+  - `effectKind`
+  - `targetType`
+  - `valuePreview`
+  - `logCue`
+  - `actionCue`
+  - `animationCue`
+  - `impactTiming`
+- 이번 단계에서 2.5D board/VFX/animation 구현 없음.
+
+### 12-28H / 12-28L과의 관계
+- 12-28H bridge layer 제거 없음.
+- 12-28L runtime layer를 확장하되, 기존 support action 보정과 중복 과상승을 막기 위해 source cap, stat 감쇠, boss gating을 적용.
+- 향후 2.5D / v2 runtime이 안정화되면 12-28H 얇은 support 보정은 ShadowActionEvent 계산으로 흡수 가능하다는 방향 유지.
+
+### 로그 / UI
+- 전투 로그 source label을 source별로 분리.
+  - unique: 고유 그림자 스킬.
+  - prototype: 그림자 프로토타입.
+  - template: 그림자 전술.
+  - generic: 그림자 스킬.
+- 새 UI/VFX/애니메이션/2.5D 보드 추가 없음.
+- ShadowPanel locked Codex 표시 변경 없음.
+
+### hidden 보호
+- runtime 입력은 owned/equipped shadow만 사용.
+- hiddenUntilObtained / locked gate named / sealed named의 unique skill/passive/quote/trigger/action cue는 미보유 UI에 노출하지 않음.
+- Codex 미보유 상태 노출 구조 변경 없음.
+
+### 검증
+- runtime source probe:
+  - generic / template / unique 후보가 모두 event metadata로 해석됨.
+  - production 호출은 여전히 `maxActionsPerRound: 1`.
+- `npm run build` exit code 0.
+- `npx tsx scripts/sim-shadow-battle-balance.ts` exit code 0.
+- sim note 필터 `too|hard|high` 결과 없음.
+- Vite 기존 chunk size warning만 표시.
+- localStorage key `levelup-save`, persist version, save migration 변경 없음.
+- 전투 공식 대폭 변경, 보상, 상점, 경제, 확률 수치 변경 없음.
+## 12-28T: Shadow v2 실사용 마감 점검 / 소형 정리
+
+### 점검 범위
+- Shadow Combat System v2 데이터, 표시, runtime, expedition, equipment 해석 레이어를 마감 점검.
+- 신규 대형 기능, 신규 전투 UI/VFX, 2.5D 구현, 전투 공식 대폭 변경 없음.
+- 다음 단계는 `12-29A` 2.5D 전투 시스템 설계.
+
+### reference / smoke check
+- `scripts/smoke-shadow-v2-references.ts` 추가.
+- `SHADOW_DEFINITIONS` 104개 전체 기준으로 skill/passive reference, profile 생성, source label, action metadata를 점검.
+- `src/lib/shadowSkills.ts`에 smoke check용 id registry export 추가.
+  - `SHADOW_SKILL_DEFINITION_IDS`
+  - `SHADOW_PASSIVE_DEFINITION_IDS`
+- smoke 결과:
+  - Shadow definitions: 104
+  - Skill ids registered: 101
+  - Passive ids registered: 95
+  - Missing refs: 0
+  - Profile issues: 0
+  - Duplicate definition ids: 0
+  - Hidden definitions: 16
+  - Gate named definitions: 16
+  - Achievement named definitions: 24
+  - Unique-assigned definitions: 40
+
+### ShadowPanel / ShadowCard 점검
+- ShadowCard는 기존 SCP + role/top stat/top skill badge 중심 구조 유지.
+- active/passive 상세는 owned detail 영역에만 표시되고 카드에는 길게 넣지 않음.
+- 13개 stat은 기존 접이식 상세 유지.
+- source label은 `GENERIC` / `TEMPLATE` / `PROTOTYPE` / `UNIQUE`로 smoke check 통과.
+- hidden Codex card의 조건 문구를 소형 정리:
+  - hiddenUntilObtained 미보유 대상은 `봉인 해제 후 공개`만 표시.
+  - sourceGateId 같은 내부 조건 힌트를 locked card에 직접 표시하지 않음.
+
+### hidden / sealed 보호 점검
+- hiddenUntilObtained / gate named / SEALED_UNIQUE_HIDDEN locked Codex card는 실제 이름, 설명, 효과, unique skill/passive, quote, trigger, action cue를 표시하지 않음.
+- owned detail에서만 `getShadowCombatUnitProfile` 기반 active/passive 후보 표시.
+- runtime과 expedition은 owned/equipped 또는 selected party shadow만 입력으로 사용.
+
+### ShadowActionRuntime 점검
+- 12-28H bridge layer 제거 없음.
+- 12-28L runtime layer는 유지되고, 12-28S 확장 cap 유지.
+- Gate/Tower 호출부는 equipped shadow만 전달.
+- production 호출은 `maxActionsPerRound: 1` 유지.
+- unknown trigger/effect는 crash 없이 no-op/degrade되는 구조 유지.
+- runtime log는 event 1개 cap 안에서 짧은 system line으로만 유지.
+
+### Expedition / Equipment 충돌 점검
+- Shadow expedition은 selected party/owned shadow 기준 계산.
+- reward table 직접 변경 없음.
+- passive/unique ability name을 expedition log에 직접 노출하지 않음.
+- command별 stat 연결과 cap/diminishing return 구조 유지.
+- equipmentPower는 specific shadow id가 아니라 slot/effect/stat/role-friendly value 기반.
+- `shadowSynergyValue`는 104개 전체 확장과 충돌하지 않는 stat/effect 기반 해석 레이어로 유지.
+
+### 2.5D 대비 metadata 점검
+- skill/passive/profile/runtime metadata가 다음 hook을 유지:
+  - `actionCue`
+  - `animationCue`
+  - `effectColor`
+  - `boardLane`
+  - `impactTiming`
+  - `logCue`
+  - `runtimeCategory`
+- 이번 단계에서는 2.5D board/VFX/animation 구현 없음.
+
+### 검증
+- `npx tsx scripts/smoke-shadow-v2-references.ts` exit code 0.
+- `npm run build` exit code 0.
+- Vite 기존 chunk size warning만 표시.
+- localStorage key `levelup-save`, persist version, save schema/save migration 변경 없음.
+- gameplay 수치, 보상, 상점, 경제, 확률 변경 없음.
