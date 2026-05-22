@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 520" preserveAspectRatio="xMidYMid meet">
+  <defs>
+    <filter id="fogWarp" x="-20%" y="-45%" width="140%" height="190%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.013 0.047" numOctaves="5" seed="88"/>
+      <feDisplacementMap in="SourceGraphic" scale="54"/>
+      <feGaussianBlur stdDeviation="18"/>
+    </filter>
+    <linearGradient id="fogFade" x1="0" x2="0" y1="1" y2="0">
+      <stop offset="0" stop-color="#010103" stop-opacity="0.96"/>
+      <stop offset="0.38" stop-color="#06111b" stop-opacity="0.66"/>
+      <stop offset="0.78" stop-color="#15223a" stop-opacity="0.22"/>
+      <stop offset="1" stop-color="#000000" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+  <g filter="url(#fogWarp)">
+    <path d="M-40 430 C128 286 236 374 384 260 C522 154 628 282 738 196 C894 76 1002 316 1240 180 L1240 560 L-40 560 Z" fill="url(#fogFade)" opacity="0.92"/>
+    <path d="M80 472 C220 360 370 426 500 336 C650 232 808 376 950 284 C1060 212 1130 292 1228 250 L1228 560 L80 560 Z" fill="#03050a" opacity="0.58"/>
+  </g>
+</svg>

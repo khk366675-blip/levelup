@@ -10618,3 +10618,2377 @@ starCount: featuredStars (1~5)
 - Vite 기존 chunk size warning만 표시.
 - localStorage key `levelup-save`, persist version, save schema/save migration 변경 없음.
 - gameplay 수치, 보상, 상점, 경제, 확률 변경 없음.
+## 12-29A: Direct Shadow Party Battle System design
+
+### Document
+- Added `docs/direct-shadow-party-battle-system-plan.md`.
+- This is a design-only step for the next combat model.
+- No code runtime, UI, 2.5D board, save schema, combat formula, reward, economy, shop, or probability changes.
+
+### Direction
+- Final combat target is `Hunter + Shadow Party vs Monster Party`.
+- Early combat: Hunter + 1 shadow vs 1-2 monsters.
+- Mid combat: Hunter + 2 shadows vs 2 monsters.
+- Late/boss combat: Hunter + 3 shadows vs 2-3 monsters or boss + 1-2 minions.
+- Shadows become directly commanded combat units instead of only hunter support modifiers.
+
+### Direct control principles
+- User selects hunter actions and each shadow action.
+- Shadow choices start small: basic attack, active skill, guard/defend, wait/charge, target selection.
+- Passives and conditional triggers remain automatic with cooldowns/lockouts.
+- First implementation should limit control burden and unlock more shadow slots gradually.
+
+### Monster party structure
+- Planned monster unit roles:
+  - bruiser
+  - tank
+  - caster
+  - assassin
+  - support
+  - controller
+  - minion
+  - boss
+- Monster units should eventually carry HP, attack, defense, speed, intent, skill list, role, target priority, and boss/minion flags.
+
+### Turn order recommendation
+- Compared team-turn and speed-timeline approaches.
+- Recommended first implementation: team-turn.
+  - Player chooses all allied actions, then enemies act.
+  - Lower implementation risk, clearer mobile UX, easier direct shadow control proof.
+- Speed timeline remains a later advanced option once direct unit runtime is stable.
+
+### Relationship to 12-28 bridge layers
+- 12-28H support action bridge remains.
+- 12-28L/S `ShadowActionRuntime` remains as capped transitional runtime.
+- New many-vs-many runtime should reuse Shadow v2 skill/passive/profile metadata.
+- Once stable, direct unit actions and passive events can absorb existing support-action logic.
+
+### 2.5D relationship
+- 2.5D is explicitly a later visualization layer.
+- Future board should consume action metadata:
+  - `actionCue`
+  - `animationCue`
+  - `effectColor`
+  - `boardLane`
+  - `impactTiming`
+  - passive trigger visual hooks
+  - boss intent markers
+- No 2.5D implementation in this step.
+
+### Verification
+- `git diff --check` only is needed for this document-only step.
+- localStorage key `levelup-save`, persist version, save migration, existing data, hidden protection, combat values, monster/gate values, reward tables, shop/economy/probability values unchanged.
+## 12-29B: Battle Unit / Shared Combat Stat Model design
+
+### Document
+- Added `docs/battle-unit-shared-stat-model-plan.md`.
+- Design-only step; no code/runtime/UI/save/combat/reward/economy/probability changes.
+
+### BattleUnit direction
+- Defines common runtime unit shape for `hunter`, `shadow`, `monster`, `boss`, and `minion`.
+- Shared fields include unit/team/role, HP/current HP, ATK/DEF/SPD, CRIT/SKILL/CONTROL/SUPPORT/SURVIVAL/BOSS/SYNERGY, status effects, cooldowns, actions, passives, board lane, and action cue metadata.
+
+### Shared combat stat model
+- First battle display stats: HP / ATK / DEF / SPD / SKILL.
+- Detail stats: CRIT / CONTROL / SUPPORT / SURVIVAL / BOSS / SYNERGY.
+- Shadow raw 13 stats are not the main battle display language; they map into shared stats and remain available as detail/collapsible data.
+
+### Shadow conversion
+- HP comes from durability/survival/growth.
+- ATK comes from attack/crit/finisher.
+- DEF comes from defense/durability/survival.
+- SPD comes from speed plus role/grade shaping.
+- SKILL/CONTROL/SUPPORT/SURVIVAL/BOSS/SYNERGY map from active scaling and relevant shadow stats.
+- `shadowExpedition` is mostly ignored or only weakly used in direct battle conversion.
+
+### Hunter and monster conversion
+- Hunter stats, equipment, title, skills, and current combat power feed BattleUnit through a conversion layer, not a save model replacement.
+- `equipmentPower` slotRole/topTags can explain ATK/DEF/SPD/SKILL/SUPPORT/SYNERGY contribution without changing equipment odds or economy.
+- Monster roles planned: bruiser, tank, caster, assassin, support, controller, minion, and boss.
+
+### Queue/reaction model
+- Team-turn input remains the recommended first implementation path.
+- Execution sorts queued actions by SPD + action priority + skill priority.
+- Guard/support/passive behavior uses reaction timing with per-round caps.
+
+### Existing systems and 2.5D
+- 12-28H/L/S bridge remains until direct BattleUnit runtime is stable.
+- Reuses ShadowCombatUnitProfile, ShadowActionEvent metadata, equipmentPower, and actionCue metadata.
+- BattleUnit/ActionQueue/StatusEffect should feed the future 2.5D board; no 2.5D implementation in this step.
+
+### Verification
+- `git diff --check` only needed for this document step.
+- localStorage key `levelup-save`, persist version, save migration, combat values, monster/gate values, rewards, shop/economy/probability, and hidden protection unchanged.
+## 12-29C: BattleUnit / BattleStat helper mock implementation
+
+### Added files
+- Added `src/lib/directBattleTypes.ts`.
+- Added `src/lib/directBattleMonsters.ts`.
+- Added `src/lib/battleUnits.ts`.
+- Added `scripts/smoke-direct-battle-units.ts`.
+
+### BattleUnit / BattleStat helper
+- Introduced derived mock/prototype runtime types:
+  - `BattleUnit`
+  - `BattleUnitType`
+  - `BattleTeam`
+  - `BattleStats`
+  - `BattleAdvancedStats`
+  - `BattleActionDefinition`
+  - `BattleStatusEffect`
+  - `BattleUnitBuildResult`
+- `BattleUnit` is not persisted and is not connected to existing Gate/Tower/Infinite Tower combat.
+
+### Shadow to BattleUnit conversion
+- Added `convertShadowProfileToBattleStats`.
+- Added `buildShadowBattleUnit` and `buildShadowBattleUnits`.
+- Reuses `getShadowCombatUnitProfile`.
+- Converts 13 shadow stats into shared battle stats:
+  - HP from durability/survival/growth.
+  - ATK from attack/crit/finisher.
+  - DEF from defense/durability/survival.
+  - SPD from speed plus role/grade shaping.
+  - SKILL from role-relevant stat mix.
+  - CRIT/CONTROL/SUPPORT/SURVIVAL/BOSS/SYNERGY from the relevant shadow stat pairs.
+- Uses clamp/rounding so mock stats do not become NaN, negative, or inflated without bound.
+- Owned shadow input only; locked/unobtained hidden profile exposure is not introduced.
+
+### Hunter to BattleUnit conversion
+- Added `buildHunterBattleUnit`.
+- Uses current hunter stats and existing combat stat helpers as a conversion layer.
+- Equipment context can feed `equipmentPower` values into SUPPORT/SURVIVAL/SKILL/SYNERGY interpretation.
+- Does not replace current combatPower, HunterStatus, or save data.
+
+### Mock monster BattleUnit conversion
+- Added mock-only monster definitions for bruiser, tank, caster, assassin, support, controller, minion, and boss.
+- Added `buildMonsterBattleUnit` and `buildMockMonsterParty`.
+- Mock monsters are not connected to Gate/Tower monster data, rewards, difficulty, or encounter flow.
+
+### Action/status candidates
+- Added action candidate fields for basic, skill, guard, support, wait, reaction, and passive.
+- Added status effect candidate shape only; no status resolution runtime implemented.
+- ActionQueue and direct battle runtime remain for 12-29D.
+
+### Verification
+- `npx tsx scripts/smoke-direct-battle-units.ts` exit code 0:
+  - BattleUnits built: 8
+  - Hunter units: 1
+  - Shadow units: 4
+  - Enemy units: 3
+  - Validation issues: 0
+  - Warnings: 0
+  - Hidden-safe metadata issues: 0
+  - Mock monster actions: 5
+- `npm run build` exit code 0.
+- Existing Vite chunk-size warning only.
+- Existing Gate/Tower/Infinite Tower combat connections unchanged.
+- localStorage key `levelup-save`, persist version, save schema/migration, gameplay values, rewards, shop/economy/probability, and hidden protection unchanged.
+## 12-29D: ActionQueue + team-turn mock battle runtime
+
+### Added files
+- Added `src/lib/directBattleRuntime.ts`.
+- Added `scripts/smoke-direct-battle-runtime.ts`.
+
+### Runtime scope
+- Implemented isolated prototype runtime only.
+- Existing Gate/Tower/Infinite Tower combat remains disconnected.
+- Existing 12-28H/L/S bridge layers remain unchanged.
+- No UI, rewards, save schema, economy, probability, or 2.5D changes.
+
+### ActionQueue
+- Added direct battle state/log/queue types in `src/lib/directBattleTypes.ts`.
+- `QueuedBattleAction` carries:
+  - actor unit id/type/team
+  - action id/type
+  - target ids
+  - base priority
+  - speed priority
+  - skill priority
+  - final priority
+  - timing
+  - source skill/passive ids
+  - effect/action/animation/color metadata
+- Queue sorting is timing bucket first, then final priority, then SPD, then team/tie-breaker.
+
+### Team-turn input + SPD execution
+- Player actions are selected as a team-turn batch through mock selection.
+- Monster actions are generated automatically from role/intent-like rules.
+- Execution uses the ActionQueue sorted by SPD and priority.
+- This keeps the 12-29A recommendation: team-turn input, priority-based execution.
+
+### Supported mock actions/effects
+- Basic damage.
+- Skill damage.
+- Control damage with simple defenseDown/mark.
+- Support heal.
+- Guard/wait.
+- Cooldown ticking.
+- Dead target fallback/fizzle handling.
+- Battle end detection by team survival or max rounds.
+- Damage formula is explicitly mock-only and not connected to current Gate/Tower formulas.
+
+### Guard/reaction minimum
+- Guard applies a short guard status to the actor.
+- Guard can apply protect to a selected ally.
+- Protected target damage is reduced and part of damage is absorbed by the guard unit.
+- Reaction log entries keep actionCue/animationCue/effectColor metadata for later 2.5D use.
+- Counter chains, lethal prevention, named unique reactions, and layered guard remain future work.
+
+### Smoke result
+- `npx tsx scripts/smoke-direct-battle-runtime.ts` exit code 0:
+  - BattleUnits: player 3 / enemy 2
+  - Rounds simulated: 3
+  - Logs: 21
+  - Last ActionQueue size: 4
+  - Winner: player
+  - Finished: true
+  - Reason: winner
+  - Validation issues: 0
+  - Gate/Tower connections: 0
+- `npx tsx scripts/smoke-direct-battle-units.ts` exit code 0 after runtime addition.
+- `npm run build` exit code 0.
+- Existing Vite chunk-size warning only.
+- localStorage key `levelup-save`, persist version, save schema/migration, gameplay values, rewards, shop/economy/probability, and hidden protection unchanged.
+## 12-29E: Monster Party / Mock Encounter definition expansion
+
+### Draft handling
+- Continued the existing untracked 12-29E draft instead of creating duplicate files.
+- Kept the 12-29D ActionQueue/runtime surface intact except for small mock targeting/status support:
+  - `front_lane` / `rear_lane` target fallback.
+  - control mock status now also applies `speedDown`.
+- No existing Gate/Tower/Infinite Tower combat caller was connected.
+
+### Mock monster roles
+- Expanded `src/lib/directBattleMonsters.ts` as mock-only direct battle data.
+- Roles covered:
+  - bruiser: front pressure, basic jab, heavy hit.
+  - tank: high HP/DEF, guard/protect ally.
+  - caster: rear skill damage, cast/charge intent.
+  - assassin: high SPD, lowest-HP pressure, burst.
+  - support: low ATK, heal and shield/guard candidates.
+  - controller: defenseDown/speedDown/mark control pressure.
+  - minion: low stats, boss support/expendable pressure.
+  - boss: high HP/SKILL, boss intent, boss skill/control.
+- Monster definitions now carry mock-only `baseLevel`, `levelBand`, `statBias`, `intentCandidates`, `targetPriority`, boss/minion flags, board lane, action cue, animation cue, and effect color metadata.
+- These values are not connected to live Gate/Tower monster values or difficulty.
+
+### Mock encounters
+- Expanded `src/lib/directBattleEncounters.ts` to seven prototype encounters:
+  - `small_bruiser`
+  - `small_duo`
+  - `caster_pair`
+  - `tank_assassin`
+  - `control_support`
+  - `boss_minion`
+  - `boss_support`
+- Each encounter includes encounter key/id, label, description, difficulty tag, recommended party size, intended lesson, enemy unit definitions, slot intent, target priority, board lane, and max rounds.
+- Enemy count is kept to the intended mock range of 1-3 units.
+
+### Builder behavior
+- `buildMockMonsterParty(encounterKey)` now supports the expanded encounter keys and safe aliases:
+  - `basic` -> `small_duo`
+  - `control` -> `control_support`
+  - `boss` -> `boss_support`
+- Unknown keys fall back to `small_bruiser`.
+- Level override still works through `BuildMonsterBattleUnitOptions.level`; otherwise slot level offsets are applied to each monster base level.
+- BattleUnit conversion keeps boss/minion unit type and mock metadata tags.
+- NaN/undefined stat safety remains covered by `validateBattleUnit`.
+
+### Runtime smoke
+- `scripts/smoke-direct-battle-runtime.ts` now loops through all mock encounters instead of one encounter.
+- It checks:
+  - encounter validation
+  - BattleUnit validation
+  - current HP bounds
+  - ActionQueue creation
+  - non-empty logs
+  - safe winner value
+  - crash count
+
+### Verification
+- `npx tsx scripts/smoke-direct-battle-runtime.ts` exit code 0:
+  - Encounters tested: 7
+  - Total battles: 7
+  - Player units: 4
+  - Total rounds simulated: 18
+  - Total logs: 138
+  - ActionQueue issues: 0
+  - Validation issues: 0
+  - Crashes: 0
+  - Gate/Tower connections: 0
+- `npx tsx scripts/smoke-direct-battle-encounters.ts` exit code 0:
+  - Encounter definitions: 7
+  - Encounter monster units built: 14
+  - Runtime encounter: `mock-tank-assassin`
+  - Runtime player units: 4
+  - Runtime enemy units: 2
+  - Runtime rounds: 2
+  - Runtime logs: 17
+  - Runtime winner: player
+  - Validation issues: 0
+  - Gate/Tower connections: 0
+- `npm run build` exit code 0.
+- Existing Vite chunk-size warning only.
+- localStorage key `levelup-save`, persist version, save schema/migration, gameplay values, rewards, result flow, shop/economy/probability, and hidden protection unchanged.
+- No UI or 2.5D implementation.
+## 12-29F: Gate optional direct battle preview connection
+
+### Connection scope
+- Added a DEV-only `DirectBattlePreviewPanel` inside `src/components/GatePanel.tsx`.
+- The panel is rendered only behind `import.meta.env.DEV`.
+- It appears in the Gate tab:
+  - below the empty gate state when no active gate is open.
+  - below the live gate result area when an active gate is open.
+- This is an experimental mock preview path only, not a Gate battle replacement.
+
+### Existing Gate separation
+- Existing `startGateBattle` / `startManualGateBattle` buttons and flow remain unchanged.
+- Existing Gate reward/result/clear/progress/stamina/penalty handling remains unchanged.
+- The preview does not call store actions, does not write combat logs, does not clear gates, does not grant rewards, and does not spend stamina.
+- Preview result is held in local React component state only.
+- Infinite Tower is not connected.
+
+### Player party
+- Preview player party is built from:
+  - `buildHunterBattleUnit` using current hunter/equipment/active consumable context.
+  - `buildShadowBattleUnits` using equipped owned shadows only, capped to 1-3 shadows.
+- If no owned/equipped shadow is available, the preview button is disabled and a safe message is shown.
+- Hidden/locked named data is not introduced because only owned/equipped shadows are converted.
+
+### Enemy party
+- Preview enemy party uses 12-29E mock encounters through `buildDirectBattleEncounterParty`.
+- Encounter buttons support:
+  - `small_bruiser`
+  - `small_duo`
+  - `caster_pair`
+  - `tank_assassin`
+  - `control_support`
+  - `boss_minion`
+  - `boss_support`
+
+### Preview display
+- Shows selected encounter key/difficulty/lesson.
+- On run, simulates the mock team-turn runtime for 3-6 rounds.
+- Displays:
+  - winner
+  - rounds simulated
+  - validation issue count
+  - player unit names / roles / HP
+  - enemy unit names / roles / HP
+  - recent mock logs
+- Runtime log metadata remains available in the result objects for later 2.5D use:
+  - actorUnitId
+  - targetUnitIds
+  - actionCue
+  - animationCue
+  - effectColor
+  - event/action kind
+
+### Verification
+- `npx tsx scripts/smoke-direct-battle-runtime.ts` exit code 0:
+  - Encounters tested: 7
+  - Total battles: 7
+  - Player units: 4
+  - Total rounds simulated: 18
+  - Total logs: 138
+  - ActionQueue issues: 0
+  - Validation issues: 0
+  - Crashes: 0
+  - Gate/Tower connections: 0
+- `npm run build` exit code 0.
+- Existing Vite chunk-size warning only.
+- localStorage key `levelup-save`, persist version, save schema/migration, gameplay values, Gate rewards/result flow, shop/economy/probability, and hidden protection unchanged.
+- No production Gate replacement, no Infinite Tower connection, and no 2.5D implementation.
+
+## 12-29G: Infinite Tower optional direct battle preview connection
+
+### Scope
+- Added a DEV-only optional direct battle preview path to `InfiniteTowerPanel`.
+- This is an isolated mock preview, not an Infinite Tower combat replacement.
+- Existing Tower challenge / auto battle / manual battle / reward / result / floor clear / floor progression flows were not changed.
+- Existing Gate runtime/reward/progress behavior was not changed.
+- No store action is called by the preview; it uses local component state only.
+
+### Shared preview component
+- Moved the DEV preview UI/runtime runner into `src/components/DirectBattlePreviewPanel.tsx`.
+- Gate preview now uses the shared component with the same mock runtime behavior as 12-29F.
+- Infinite Tower preview uses the same component to avoid a second direct battle runner path.
+
+### Player party
+- Preview player party is built from:
+  - Hunter BattleUnit via `buildHunterBattleUnit`.
+  - Owned/equipped shadow BattleUnits via `buildShadowBattleUnits`.
+  - Up to 3 equipped shadows.
+- If no owned/equipped shadow is available, the preview run button is disabled and no mock battle is started.
+- Hidden/locked named data remains protected because only owned/equipped shadows are converted.
+
+### Enemy encounter selection
+- Preview enemy party uses 12-29E mock encounters through `buildDirectBattleEncounterParty`.
+- Infinite Tower recommendation:
+  - normal floor: `caster_pair`
+  - boss floor: `boss_minion`
+- Encounter buttons still allow selecting:
+  - `small_bruiser`
+  - `small_duo`
+  - `caster_pair`
+  - `tank_assassin`
+  - `control_support`
+  - `boss_minion`
+  - `boss_support`
+- This is not connected to real tower floor monster scaling.
+
+### Preview display
+- Shows current tower floor, floor type, recommended encounter, selected encounter key/difficulty/lesson.
+- On run, simulates the mock team-turn runtime for 3-6 rounds.
+- Displays winner, rounds simulated, validation issue count, player/enemy unit names / roles / HP, and recent mock logs.
+- Runtime log metadata remains available in result objects for later 2.5D use, but no 2.5D UI was implemented.
+
+### Verification
+- `npx tsx scripts/smoke-direct-battle-runtime.ts` exit code 0:
+  - Encounters tested: 7
+  - Total battles: 7
+  - Player units: 4
+  - Total rounds simulated: 18
+  - Total logs: 138
+  - ActionQueue issues: 0
+  - Validation issues: 0
+  - Crashes: 0
+  - Gate/Tower connections: 0
+- `npm run build` exit code 0.
+- Existing Vite chunk-size warning only.
+- localStorage key `levelup-save`, persist version 14, save schema/migration, gameplay values, Tower/Gate rewards/result/progression, shop/economy/probability, and hidden protection unchanged.
+- No Infinite Tower replacement, no Gate combat change, and no 2.5D implementation.
+
+## 12-29F/G: DEV Direct Battle Preview Korean label patch
+
+### Scope
+- Localized user-facing DEV Direct Battle Preview text in Gate and Infinite Tower preview panels.
+- This was a text/label-only patch.
+- Existing Gate combat, Infinite Tower combat, direct battle runtime logic, rewards, clears, progression, store actions, and save behavior were not changed.
+
+### Korean labels
+- Gate preview title/note now uses Korean:
+  - `DEV: 직접 조작 전투 미리보기`
+  - Clearly says the mock preview does not affect Gate clear/reward/progression.
+- Infinite Tower preview title/note now uses Korean:
+  - `DEV: 무한의 탑 직접 조작 전투 미리보기`
+  - Clearly says the mock preview does not affect floor clear/reward/progression.
+- Shared preview panel now localizes:
+  - run button
+  - no equipped shadow message
+  - no result message
+  - encounter/difficulty/lesson display
+  - winner/status display
+  - round/issue/stat labels
+  - player/enemy party headings
+  - recent battle log heading and empty-log message
+  - role labels
+
+### Encounter display names
+- Added `src/lib/directBattleLabels.ts` for small Korean display helpers.
+- Internal encounter keys are unchanged and still used for runtime/building:
+  - `small_bruiser`
+  - `small_duo`
+  - `caster_pair`
+  - `tank_assassin`
+  - `control_support`
+  - `boss_minion`
+  - `boss_support`
+- User-facing short/long labels now display in Korean while keeping the key visible in parentheses on encounter buttons for DEV clarity.
+- Winner display is localized:
+  - `player` -> `아군 승리`
+  - `enemy` -> `적 승리`
+  - `none` / unknown unresolved states -> `결과 없음`
+
+### Verification
+- `npm run build` exit code 0.
+- Existing Vite chunk-size warning only.
+- Runtime/smoke script was not rerun because no direct battle runtime, monster definition, encounter definition, or smoke script logic changed.
+- localStorage key `levelup-save`, persist version 14, save schema/migration, gameplay values, Gate/Tower rewards/result/progression, shop/economy/probability, and hidden protection unchanged.
+
+## 12-29H: Direct control battle UI prototype
+
+### Scope
+- Expanded the shared DEV `DirectBattlePreviewPanel` from an automatic mock preview into a direct-control battle UI prototype.
+- Gate and Infinite Tower DEV preview entry points reuse the same panel.
+- Existing Gate and Infinite Tower production combat, rewards, clears, progression, stamina, result flow, and store actions remain unchanged.
+- The prototype stores battle state only in local React component state.
+- No direct battle result is written to save data or current Gate/Tower progression.
+
+### Battle start
+- The user selects a mock encounter and starts a local direct battle.
+- Player party is built from:
+  - Hunter BattleUnit via `buildHunterBattleUnit`.
+  - Owned/equipped shadow BattleUnits via `buildShadowBattleUnits`.
+  - Equipped shadows are capped to 3.
+- If no owned/equipped shadow is present, the start button is disabled and a Korean guidance message is shown.
+- Enemy party is still built from 12-29E mock encounters through `buildDirectBattleEncounterParty`.
+- Internal encounter keys remain unchanged.
+
+### Direct control flow
+- Hunter and shadows are displayed as equal player-side units.
+- Each living allied unit has the same command structure:
+  - attack
+  - skill
+  - guard
+- Attack/skill commands support tap-based target selection.
+- Dead targets cannot be selected, and stale targets are normalized to safe fallback targets before round execution.
+- Guard defaults to self/basic guard behavior.
+- `executeDirectBattleRound` is used with external player selections, so the UI is now shaped for later Gate/Tower replacement without adding reward/progress coupling.
+
+### Round execution
+- The panel shows:
+  - selected encounter
+  - current round
+  - winner
+  - validation issue count
+  - allied party HP and HP bars
+  - enemy party HP and HP bars
+  - HP / ATK / DEF / SPD / SKILL / level for each unit
+  - selected action and target for each allied unit
+  - recent battle logs
+- `라운드 실행` resolves the currently selected player commands plus enemy mock actions through the existing ActionQueue/runtime.
+- Runtime ordering remains SPD + action priority based through the existing 12-29D queue logic.
+- The existing runtime log metadata remains available for later 2.5D, but no 2.5D UI was implemented.
+
+### Auto options
+- Added `자동 선택` to fill player commands using the existing mock player action selector.
+- Added `자동 1라운드` to auto-select and immediately resolve one round.
+- Auto rules remain intentionally simple and use the existing mock selector:
+  - usable skill first when available
+  - guard behavior for guard-role wounded ally support
+  - runtime fallback target selection for unresolved target ids
+
+### Gate/Tower relationship
+- Gate DEV preview and Infinite Tower DEV preview both reuse this direct-control prototype.
+- This prepares the interaction model for a later real Gate combat replacement step.
+- This step still does not replace Gate/Tower combat and does not connect direct battle outcome to rewards/progression.
+
+### Hidden/save constraints
+- Hidden protection is preserved because only owned/equipped shadows are converted into player BattleUnits.
+- No locked/unowned named shadow data is surfaced by this panel.
+- localStorage key `levelup-save`, persist version 14, save schema, save migration, gameplay values, reward tables, economy/shop/probability values, and Gate/Tower progression remain unchanged.
+
+### Verification
+- `npm run build` exit code 0.
+- Existing Vite chunk-size warning only.
+- `npx tsx scripts/smoke-direct-battle-runtime.ts` exit code 0:
+  - Encounters tested: 7
+  - Total battles: 7
+  - Player units: 4
+  - Total rounds simulated: 18
+  - Total logs: 138
+  - ActionQueue issues: 0
+  - Validation issues: 0
+  - Crashes: 0
+  - Gate/Tower connections: 0
+- Browser UI/combat feel remains for user testing.
+
+## 12-29I: Gate direct-control battle first real connection
+
+### Scope
+- Connected the direct-control battle UI to the active Gate flow as the default Gate battle start path.
+- The primary Gate combat button now opens `직접 조작 게이트 전투`.
+- Existing legacy Gate auto/manual combat code remains available only as DEV fallback buttons.
+- Infinite Tower real battle flow was not changed.
+
+### Gate connection
+- `GatePanel` now starts a local direct Gate battle panel for the active gate.
+- The direct battle panel auto-starts after the user presses the main Gate battle button.
+- Player party is built from:
+  - Hunter BattleUnit.
+  - Equipped owned shadows, capped at 3.
+- Hidden protection is preserved because only owned/equipped shadows are converted.
+- If no equipped shadow is available, the direct battle panel blocks start with the existing guidance instead of exposing locked data.
+
+### Enemy encounter recommendation
+- Gate enemy party still uses 12-29E direct-battle mock encounters.
+- Current first-pass rank mapping:
+  - E rank: `small_bruiser` or `small_duo`
+  - D rank: `caster_pair` or `tank_assassin`
+  - C rank: `tank_assassin` or `control_support`
+  - B/A rank: `boss_minion`
+  - S rank: `boss_support`
+- Gate reward tables, monster definitions, and gate values were not changed.
+
+### Result handling
+- Added `resolveDirectGateBattle(combatLog)` to the store function surface.
+- The action accepts a direct battle `CombatLog`, validates that the active gate is still the same active gate instance, and then reuses `createGateBattleOutcomeUpdate`.
+- Victory maps to the existing Gate victory reward/clear/result flow.
+- Defeat maps to the existing Gate defeat/penalty/result flow.
+- Cancel only closes the local direct battle UI; it grants no reward, applies no clear, and records no progress.
+
+### Duplicate reward prevention
+- `GatePanel` keeps a local handled-result key per active gate instance/battle id/outcome.
+- `resolveDirectGateBattle` also refuses to apply if the active gate is no longer `active` or if the incoming log belongs to a different gate instance.
+- After victory/defeat, `createGateBattleOutcomeUpdate` changes activeGate to `cleared` or `failed`, so subsequent duplicate calls cannot award again.
+
+### Direct control behavior
+- Hunter and shadows keep the same command structure:
+  - attack
+  - skill
+  - guard
+- Target selection, `자동 선택`, `자동 1라운드`, and `라운드 실행` remain available.
+- Direct battle logs are adapted into the existing `CombatLog` shape so the current Gate result/reward panels can keep working.
+
+### Save/system constraints
+- No localStorage key change.
+- Persist remains version 14.
+- No save schema field, migration, or stored direct battle state was added.
+- No shop/economy/probability/reward table number changed.
+- No 2.5D implementation.
+- Tower preview remains unchanged.
+
+### Verification
+- `npm run build` exit code 0.
+- Existing Vite chunk-size warning only.
+- `npx tsx scripts/smoke-direct-battle-runtime.ts` exit code 0:
+  - Encounters tested: 7
+  - Total battles: 7
+  - Player units: 4
+  - Total rounds simulated: 18
+  - Total logs: 138
+  - ActionQueue issues: 0
+  - Validation issues: 0
+  - Crashes: 0
+  - Gate/Tower connections: 0
+- Browser Gate combat feel remains for user testing.
+
+## 12-30B-10: Shadow Extraction reveal pacing soften
+
+### Scope
+- Tuned only `ShadowExtractionReveal` stage timing and extraction-only CSS animation durations.
+- Kept the command -> silence/pressure -> remnant rising -> resistance -> bind -> reveal/fail flow unchanged.
+- Kept saved extraction image asset placement and layer structure unchanged.
+- Did not modify summon ticket reveal, `TicketRevealSequence`, or `ShadowRevealModal`.
+- No extraction probability, summon probability, reward probability, acquisition logic, ownedShadows logic, save schema, localStorage, persist version, Direct Battle balance, or hidden/locked named data exposure changes.
+
+### Timing changes
+- Quick extraction total pre-result pacing: 7100ms -> 8500ms.
+  - command 1050ms -> 1100ms
+  - pressure 850ms -> 950ms
+  - raising 1750ms -> 2150ms
+  - resistance 1750ms -> 2200ms
+  - submission/bind 1700ms -> 2100ms
+- High extraction total pre-result pacing: 8800ms -> 10800ms.
+  - command 1200ms -> 1250ms
+  - pressure 950ms -> 1050ms
+  - raising 2200ms -> 2700ms
+  - resistance 2250ms -> 2950ms
+  - submission/bind 2200ms -> 2850ms
+- Apex/named/S extraction total pre-result pacing: 11650ms -> 14100ms.
+  - command 1300ms -> 1350ms
+  - pressure 1100ms -> 1250ms
+  - raising 3000ms -> 3650ms
+  - resistance 3150ms -> 3950ms
+  - submission/bind 3100ms -> 3900ms
+- Extraction-only CSS loops were slowed to match the longer stages:
+  - column rise 2.4s -> 2.9s
+  - mass rise 2.25s -> 2.75s
+  - smoke surge 3.2s -> 3.85s
+  - rift tear 1.4s -> 1.75s
+  - mass resist 0.72s -> 0.88s
+  - binding close 1.5s -> 1.9s
+- Result/fail entrance animations were extended for more after-reveal linger:
+  - result column 1.5s -> 2.1s
+  - result burst 1.25s -> 1.85s
+  - result apex aura 1.5s -> 2.25s
+  - result aura 1.8s -> 2.55s
+  - final portrait rise 1.08s -> 1.75s
+  - failure ash 1.9s -> 2.65s
+  - failure remnant 1.7s -> 2.35s
+
+### Verification
+- `npm run build` exit code 0.
+- Existing Vite chunk-size warning only.
+- `npx tsc --noEmit` exit code 0.
+- `npx tsx scripts/smoke-direct-battle-runtime.ts` exit code 0:
+  - Encounters tested: 30
+  - Total battles: 30
+  - Total rounds simulated: 87
+  - Total logs: 887
+  - ActionQueue issues: 0
+  - Reveal snapshot issues: 0
+  - Skill safety issues: 0
+  - Monster targeting issues: 0
+  - Hunter defeat issues: 0
+  - Shadow stat issues: 0
+  - Summon color issues: 0
+  - Validation issues: 0
+  - Crashes: 0
+  - Gate/Tower connections: 0
+  - Ally support/guard skill damage regression: passed
+  - Skill safety regression: passed
+  - Monster targeting regression: passed
+  - Hunter death defeat regression: passed
+  - Shadow stat regression: passed
+  - Summon reveal color regression: passed
+  - Setup priority regression: passed
+  - Reveal snapshot regression: passed
+  - Center overlay render path: code path verified
+
+## 12-29L: Direct-control Gate/Tower battle balance pass 1
+
+### Scope
+- Tuned direct-control Gate and Infinite Tower combat around Hunter/monster buffs instead of shadow nerfs.
+- Equipped owned shadows still keep their existing BattleUnit conversion, active skills, passives, and party cap behavior.
+- Auto battle improvement was intentionally excluded from this pass.
+
+### Hunter BattleUnit buffs
+- Raised Hunter HP, ATK, DEF, SPD, and SKILL conversion in `battleUnits.ts`.
+- Equipment now contributes more clearly to Hunter direct battle stats:
+  - weapon/offense value feeds ATK and SKILL
+  - artifact/shadow synergy value feeds SKILL/support/synergy
+  - armor/survival value feeds HP/DEF/survival
+- `집중 베기` is now treated as a meaningful direct-control skill through the stronger Hunter SKILL conversion and a focused skill damage multiplier in the direct runtime.
+
+### Monster BattleUnit and role buffs
+- Raised monster BattleUnit HP/ATK/SKILL base formulas and level scaling.
+- Strengthened role identity through `directBattleMonsters.ts` statBias:
+  - bruiser: more durable front pressure
+  - tank: much higher HP/DEF/survival
+  - assassin: faster, higher ATK/SKILL/crit pressure
+  - caster: higher skill threat
+  - controller: stronger control and enough HP to matter
+  - support: sturdier support/heal presence
+  - boss: high HP/DEF/SKILL/boss pressure without making every boss smoke impossible
+
+### Encounter recommendation tuning
+- Gate direct encounters now bias upward by rank:
+  - E: `small_bruiser` / `small_duo`
+  - D: `caster_pair` / `tank_assassin`
+  - C: `tank_assassin` / `control_support`
+  - B: `boss_minion`
+  - A/S: `boss_support`
+- Gate direct monster level now uses gate recommended level plus a rank bonus.
+- Tower direct encounters now scale by floor:
+  - low floors: `small_duo` / `caster_pair`
+  - mid floors: `tank_assassin`
+  - high floors: `control_support`
+  - late non-boss floors and boss floors: boss encounters
+- Tower direct monster level now scales from floor number, with boss floors receiving a higher base level.
+
+### Damage formula
+- Direct battle damage now uses ATK for basic attacks and SKILL + partial ATK for skills.
+- DEF mitigation changed from flat subtraction to a diminishing reduction curve, so DEF matters without completely erasing damage.
+- Skill damage remains clearly above basic attack damage when SKILL is built, and `basic-focus-slash` gets an extra skill multiplier.
+- Guard/shield behavior was not redesigned; it remains strong but not invulnerable.
+
+### Battle length target
+- First-pass target remains:
+  - normal Gate: 2-5 rounds
+  - hard Gate: 4-7 rounds
+  - Tower normal floor: 3-6 rounds
+  - Tower boss floor: 5-10 rounds
+- Smoke is a quick single-pass check only; user will verify UI feel and balance.
+
+### Smoke result
+- `npx tsx scripts/smoke-direct-battle-runtime.ts` exit code 0:
+  - Encounter small_bruiser: winner player, rounds 1, player HP 2795/2795, enemy HP 0/569
+  - Encounter small_duo: winner player, rounds 2, player HP 2760/2795, enemy HP 0/845
+  - Encounter caster_pair: winner player, rounds 2, player HP 2664/2795, enemy HP 0/1124
+  - Encounter tank_assassin: winner player, rounds 4, player HP 2191/2795, enemy HP 0/1760
+  - Encounter control_support: winner player, rounds 3, player HP 2540/2795, enemy HP 0/1469
+  - Encounter boss_minion: winner player, rounds 9, player HP 592/2795, enemy HP 0/3016
+  - Encounter boss_support: winner enemy, rounds 9, player HP 0/2795, enemy HP 1221/3790
+  - Encounters tested: 7
+  - Total battles: 7
+  - Total rounds simulated: 30
+  - Total logs: 237
+  - ActionQueue issues: 0
+  - Reveal snapshot issues: 0
+  - Validation issues: 0
+  - Crashes: 0
+  - Ally support/guard skill damage regression: passed
+  - Setup priority regression: passed
+  - Reveal snapshot regression: passed
+
+### Verification and constraints
+- `npm run build` exit code 0.
+- Existing Vite chunk-size warning only.
+- Existing Gate/Tower long sims were not run.
+- localStorage key `levelup-save`, persist version 14, save schema, and save migrations unchanged.
+- Gate/Tower reward, clear, progress, economy, shop, and probability numbers unchanged.
+- No hidden/locked named information exposure.
+- No 2.5D work.
+
+## 12-29M: Direct-control monster and encounter expansion
+
+### Scope
+- Expanded direct-control Gate/Tower monster definitions and encounter pools beyond the original 7 mock formations.
+- Kept the 12-29L balance direction: no shadow nerf, no Auto battle improvement, no 2.5D work.
+- Gate/Tower reward, result, clear, and progression flows were not changed.
+
+### Monster definition expansion
+- `directBattleMonsters.ts` now has 36 direct battle monster definitions:
+  - 24 non-boss/non-minion regular or elite monsters.
+  - 6 boss definitions.
+  - 6 minion/summon definitions.
+- Added role-specific enemies:
+  - bruiser: `rift-charger`, `black-claw-brawler`, `rift-gladiator`
+  - tank: `iron-gatekeeper`, `wall-sentinel`, `oath-bulwark`
+  - caster: `rift-hexer`, `abyss-pyromancer`, `storm-oracle`
+  - assassin: `fatigue-stalker`, `night-needle`, `scarlet-executor`
+  - support: `rift-mender-veteran`, `battle-chanter`, `shield-cantor`
+  - controller: `memory-disruptor`, `weakness-registrar`, `suppression-warden`
+  - minion: `rift-shard`, `shield-minion`, `curse-token`, `command-imp`, `abyss-spawn`
+  - boss: `rift-commander`, `oblivion-watcher`, `iron-wall-lord`, `abyss-devourer`, `memory-warden-boss`
+- Monster definitions now support optional Korean description/flavor metadata for future UI use.
+
+### Action and pattern expansion
+- New monster actions stay inside the existing safe runtime effect families:
+  - `basic`
+  - `damage`
+  - `control`
+  - `support`
+  - `guard`
+  - `synergy`
+  - `bossing`
+- Role patterns now read more clearly:
+  - tanks protect low-HP/boss allies.
+  - supports heal, shield, or apply battle-cry style ally buffs.
+  - controllers apply defenseDown/speedDown/mark.
+  - assassins prefer low-HP targets.
+  - casters focus high-threat targets.
+  - bosses use boss slams, control fields, command auras, or phase strikes.
+- Actual summon spawning was not implemented; boss + minion encounter composition represents summon pressure for this pass.
+
+### Encounter pool expansion
+- `directBattleEncounters.ts` now has 30 encounter definitions:
+  - 5 easy additions plus the original easy mock shells.
+  - 6 normal additions.
+  - 6 hard additions.
+  - 6 new boss additions plus the original boss shells.
+- Added examples:
+  - easy: `lone_charger`, `bruiser_shard`, `scout_pair`, `small_caster_guard`, `token_skirmish`
+  - normal: `tank_caster`, `assassin_support`, `controller_bruiser`, `guard_healer`, `caster_minions`, `chanting_line`
+  - hard: `tank_controller_assassin`, `double_caster_guard`, `support_protected_bruiser`, `assassin_mark_combo`, `elite_mixed_party`, `storm_killbox`
+  - boss: `commander_line`, `oblivion_watch`, `iron_wall_court`, `abyss_devourer_pack`, `memory_warden_party`, `boss_double_minion`
+
+### Gate encounter pools
+- Gate direct battle now uses deterministic rank pools instead of one hard-coded encounter per rank:
+  - E: `lone_charger`, `bruiser_shard`, `small_duo`, `scout_pair`
+  - D: `bruiser_shard`, `small_caster_guard`, `token_skirmish`, `tank_caster`, `assassin_support`
+  - C: `tank_caster`, `assassin_support`, `controller_bruiser`, `guard_healer`, `caster_minions`
+  - B: `controller_bruiser`, `guard_healer`, `caster_minions`, `chanting_line`, `tank_controller_assassin`, `double_caster_guard`
+  - A: hard pool variants
+  - S: hard/boss pool variants
+- Selection is deterministic from rank + active gate seed, so it does not require new persisted state.
+
+### Tower encounter pools
+- Tower direct battle now uses deterministic floor-band pools:
+  - floor 1-4: low pool
+  - floor 5-9: mid pool
+  - floor 10+: hard pool
+  - boss floors: boss pool
+  - high boss floors prefer the stronger boss subset.
+- Existing 12-29L floor-based enemy level scaling remains in place.
+
+### Runtime safety
+- `directBattleRuntime.ts` was minimally reinforced:
+  - support/synergy actions can safely buff allies.
+  - support roles can choose heal/shield/battle-cry style skills even when no ally is wounded.
+  - minions can use their control/damage/support skills instead of only basic attacks.
+  - tanks can protect a boss ally when one exists.
+  - `all_enemies` control/damage now applies to all targets with a spread multiplier, avoiding one-round full-party wipes from area control.
+- Unknown/unsupported combinations still fall back to fizzle, damage, support, or control paths without crashing.
+
+### Smoke result
+- `npx tsx scripts/smoke-direct-battle-runtime.ts` exit code 0:
+  - Monster definitions: 36
+  - Boss definitions: 6
+  - Minion definitions: 6
+  - Encounters tested: 30
+  - Boss encounters: 8
+  - Total battles: 30
+  - Total rounds simulated: 141
+  - Total logs: 1347
+  - ActionQueue issues: 0
+  - Reveal snapshot issues: 0
+  - Validation issues: 0
+  - Crashes: 0
+  - Gate/Tower connections: 0
+  - Ally support/guard skill damage regression: passed
+  - Setup priority regression: passed
+  - Reveal snapshot regression: passed
+
+### Verification and constraints
+- `npm run build` exit code 0.
+- Existing Vite chunk-size warning only.
+- Existing Gate/Tower long sims were not run.
+- UI/feel/balance remains for user testing.
+- localStorage key `levelup-save`, persist version 14, save schema, and save migrations unchanged.
+- No reward, economy, shop, probability, Gate/Tower result flow, or progression-number changes.
+- No hidden/locked named information exposure.
+- No shadow nerf, no Auto battle improvement, and no 2.5D work.
+
+## 12-29N: Direct-control skill/status audit and mismatch fixes
+
+### Scope
+- Audited the direct-control battle action/status path across:
+  - `battleUnits.ts`
+  - `directBattleTypes.ts`
+  - `directBattleRuntime.ts`
+  - `directBattleMonsters.ts`
+  - `directBattleEncounters.ts`
+  - `shadowSkills.ts`
+  - `DirectBattlePreviewPanel.tsx`
+- This was a reliability cleanup only.
+- No new large combat system, Auto battle improvement, 2.5D work, reward flow change, save schema change, or economy/probability change was added.
+
+### Skill/effect safety mapping
+- Added shared Korean status labels/descriptions for the direct battle status types:
+  - guard/protect/shield
+  - attackUp/attackDown
+  - defenseUp/defenseDown
+  - speedUp/speedDown
+  - mark/weakness/suppression
+  - cooldownReduction/healOverTime
+- `addStatus` now falls back to those labels, so restored/revealed status payloads no longer need raw status ids as display names.
+- Reinforced ally/enemy target interpretation:
+  - ally-target malformed damage/hybrid/basic effects degrade through safe support/guard behavior and do not damage allies.
+  - enemy-target support/heal/guard/protect effects fizzle instead of healing or buffing enemies.
+  - guard/protect now verifies the requested target is on the actor's team; hostile preferred targets fall back to self-guard.
+  - enemy-target `stat_shift` is treated as a real hostile debuff setup instead of fizzling.
+- `stat_shift` enemy debuffs now create defenseDown/speedDown/mark and optional suppression.
+- Ally-target `stat_shift` is safe support and adds defensive setup instead of damage.
+- `suppression` and `attackDown` now reduce outgoing attack multiplier in damage calculation.
+
+### Setup timing and descriptions
+- Existing setup timing remains:
+  - guard/support/survival/cooldown/synergy/stat_shift/control/ally-target setup actions resolve in `before_action`.
+  - pure damage skills remain `normal_action`.
+- Damage Floor and other ally guard/support actions were rechecked as non-damage setup actions.
+- `DirectBattlePreviewPanel` action description fallback is now target/effect aware:
+  - enemy damage/control/bossing/stat_shift
+  - ally guard/support/synergy/cooldown/stat_shift
+  - self guard/wait
+  - final fallback remains "이 유닛의 대표 스킬을 사용합니다."
+- Reveal status restoration now uses the shared Korean status labels.
+
+### Smoke regression
+- `scripts/smoke-direct-battle-runtime.ts` now checks:
+  - ally-target guard/support skills do not reduce ally HP.
+  - enemy-target damage skills reduce enemy HP.
+  - enemy-target control/stat_shift creates debuff/status snapshots or safe fallback.
+  - guard/control setup resolves before damage.
+  - pure damage skills stay in normal timing.
+  - Damage Floor remains ally-safe.
+  - malformed enemy support/heal does not heal enemies.
+  - malformed guard/protect does not buff hostile targets.
+  - all 30 encounters run without crash.
+
+### Smoke result
+- `npx tsx scripts/smoke-direct-battle-runtime.ts` exit code 0:
+  - Monster definitions: 36
+  - Boss definitions: 6
+  - Minion definitions: 6
+  - Encounters tested: 30
+  - Boss encounters: 8
+  - Total battles: 30
+  - Total rounds simulated: 141
+  - Total logs: 1349
+  - ActionQueue issues: 0
+  - Reveal snapshot issues: 0
+  - Skill safety issues: 0
+  - Validation issues: 0
+  - Crashes: 0
+  - Gate/Tower connections: 0
+  - Ally support/guard skill damage regression: passed
+  - Skill safety regression: passed
+  - Setup priority regression: passed
+  - Reveal snapshot regression: passed
+
+### Verification and constraints
+- `npm run build` exit code 0.
+- Existing Vite chunk-size warning only.
+- Existing Gate/Tower long sims were not run.
+- UI/feel/balance remains for user testing.
+- localStorage key `levelup-save`, persist version 14, save schema, and save migrations unchanged.
+- No reward, economy, shop, probability, Gate/Tower result flow, or progression-number changes.
+- No hidden/locked named information exposure.
+- No shadow nerf, no Auto battle improvement, and no 2.5D work.
+
+## 12-30B-9: Saved extraction asset integration + matte cleanup
+
+### Scope
+- Connected the user-provided extraction image assets to `ShadowExtractionReveal`.
+- Kept summon reveal untouched:
+  - no `TicketRevealSequence` changes.
+  - no `ShadowRevealModal` changes.
+  - no summon reveal stage / speed / structure changes.
+- Kept Gate shadow extraction separate from summon reveal.
+- No extraction probability, summon probability, reward probability, acquisition logic, ownedShadows logic, Direct Battle balance, save schema, persist version, or localStorage changes.
+
+### Connected assets
+- Actual user-provided extraction assets are now used in the cutscene:
+  - `extraction-scene-bg.webp.png`
+  - `extraction-ground-fog-clean.webp`
+  - `extraction-remnant-core-clean.webp`
+  - `extraction-rift-tear-clean.webp`
+  - `extraction-binding-chain-clean.webp`
+  - `extraction-reveal-burst-clean.webp`
+  - `extraction-failure-ash-clean.webp`
+  - `extraction-shadow-column-clean.webp`
+  - `extraction-command-flare-clean.webp`
+  - `extraction-apex-aura-clean.webp`
+- The original `*.webp.png` files remain in `src/assets/extraction/`.
+- Cleaned `*-clean.webp` variants were generated for effect layers with white matte / white background risk.
+- The clean variants keep alpha while reducing size compared with intermediate clean PNG output.
+
+### Stage asset placement
+- Command:
+  - main: scene background.
+  - support: command flare and faint ground fog.
+- Silence / pressure:
+  - main: scene background.
+  - support: command flare pulse and slightly stronger fog.
+- Raising:
+  - main: remnant core and shadow column.
+  - support: ground fog.
+- Resistance:
+  - main: rift tear.
+  - support: remnant core distortion and fog.
+- Submission:
+  - main: binding chain.
+  - support: compressed remnant core and shadow column.
+- Success reveal:
+  - main: reveal burst and `ShadowPortrait`.
+  - support: shadow column and apex aura only for apex / named / S-tier success.
+- Failure:
+  - main: failure ash.
+  - support: dissolving remnant core and ground fog.
+
+### Matte / blending cleanup
+- Initial browser preview showed a large white square matte around the remnant/binding image layer.
+- Generated clean PNG variants by removing near-white backgrounds and darkening semi-transparent fringe pixels.
+- CSS now follows the existing ShadowPortrait / TicketVisual direction:
+  - contained centered art layers.
+  - dark wrapper / full-screen scene context.
+  - opacity staging.
+  - brightness / contrast / saturation tuning.
+  - drop-shadow for integrated glow.
+  - mask-image edge fading.
+  - blend modes chosen per layer instead of a single global mode.
+- This avoids the saved assets appearing like stickers pasted on top of the scene.
+
+### Visual check
+- A temporary Vite preview page rendered `ShadowExtractionReveal` only, then was removed.
+- Playwright checked the preview on `http://127.0.0.1:3002/extraction-preview.html`.
+- First screenshot confirmed the white matte issue.
+- Second screenshot after preprocessing confirmed:
+  - full-screen extraction cutscene render.
+  - scene background visible.
+  - raising/remnant layer visible without a white square.
+  - final result portrait visible.
+  - no page errors.
+- A final preview after switching imports to clean WebP confirmed:
+  - stage visible.
+  - result visible.
+  - portrait visible.
+  - no page errors.
+- The temporary preview HTML and screenshots were removed after verification.
+
+### Safety
+- Hidden / locked named information is not exposed.
+- Named chips appear only for the actual extracted owned shadow.
+- Failure reveal does not expose rolled rarity or hidden result metadata.
+- No reward, economy, shop, summon probability, extraction probability, ownedShadows, Gate/Tower flow, Direct Battle balance, save schema, persist version, or `levelup-save` changes.
+
+### Verification
+- `npx tsc --noEmit` exit code 0 after final clean WebP import.
+- `npm run build` exit code 0.
+- `npx tsx scripts/smoke-direct-battle-runtime.ts` exit code 0.
+- Smoke output included `Summon color issues: 0`, `Validation issues: 0`, `Crashes: 0`, `Gate/Tower connections: 0`, and `Summon reveal color regression: passed`.
+- Existing Vite chunk-size warning only.
+- Long simulations and large QA were not run.
+
+### Next candidates
+- User feel-test on the connected asset cutscene.
+- Further tune fog strength / portrait rise timing / high-tier aura intensity from real play feedback.
+- 12-30C hidden/secret/narrative connective layer review.
+
+## 12-30B-7/8: Shadow Extraction command-raising art cutscene
+
+### Scope
+- Reworked `ShadowExtractionReveal` again around a command-based raising cutscene.
+- Kept summon ticket reveal untouched:
+  - no `TicketRevealSequence` changes.
+  - no `ShadowRevealModal` changes.
+  - no summon stage / pacing / color-policy changes.
+- Kept extraction reveal separate from summon reveal.
+- No extraction probability, summon probability, reward probability, acquisition logic, Direct Battle balance, save schema, persist version, or localStorage changes.
+
+### Art assets
+- Added extraction-only art textures under `src/assets/extraction/`:
+  - `extraction-ground-fog.svg`: heavier bottom fog for ground-up raising.
+  - `extraction-rising-column.svg`: vertical black shadow column for the raising / final reveal motion.
+  - `extraction-reveal-burst.svg`: dark organic reveal burst behind the final portrait.
+- Continued using the B-6 extraction art textures:
+  - scene background
+  - remnant smoke
+  - remnant core
+  - rift tear
+  - binding runes / chain texture
+  - failure ash
+- The stage is intentionally image / texture-led instead of ring / border / straight-line-led.
+
+### Command-based raising structure
+- Stage order is now:
+  - command
+  - silence / pressure
+  - raising
+  - resistance
+  - submission
+  - reveal
+- Command copy avoids specific IP names or exact representative phrases.
+- Current command tone:
+  - "그림자여, 응답하라."
+  - "잔영을 붙잡습니다."
+  - "어둠이 명령을 듣습니다."
+- The new silence / pressure stage creates a short pause after the command before the VFX escalates.
+- Raising now uses a vertical shadow column plus remnant core motion so the shadow feels pulled upward from the ground instead of simply fading in.
+- Resistance uses the rift tear and jittered remnant distortion.
+- Submission uses the binding texture and compressed remnant/column state.
+
+### Final reveal / failure
+- Success final reveal now uses:
+  - rising shadow column
+  - organic dark burst
+  - rift layer
+  - large `ShadowPortrait`
+  - dedicated `shadow-extraction-raising-portrait` animation
+- The portrait rises from below with low opacity / blur / vertical stretch, then stabilizes into the final acquired shadow.
+- Final rarity / innate / named chips still appear only after success reveal.
+- Failure now keeps the ash / remnant dissolution scene and uses Korean failure copy:
+  - "잔영이 흩어졌습니다"
+  - "명령이 닿지 않았습니다. 잔영이 어둠 속으로 흩어졌습니다."
+
+### Safety
+- No hidden / locked named information is exposed.
+- Named information appears only for the actual extracted owned shadow.
+- Failure reveal does not expose rolled rarity or hidden result metadata.
+- No reward, economy, shop, summon probability, extraction probability, ownedShadows, Gate/Tower flow, Direct Battle balance, save schema, persist version, or `levelup-save` changes.
+
+### Verification
+- `npx tsc --noEmit` exit code 0.
+- `npm run build` exit code 0.
+- `npx tsx scripts/smoke-direct-battle-runtime.ts` exit code 0.
+- Smoke output included `Summon color issues: 0`, `Validation issues: 0`, `Crashes: 0`, `Gate/Tower connections: 0`, and `Summon reveal color regression: passed`.
+- Existing Vite chunk-size warning only.
+- Long simulations and large browser QA were not run.
+
+### Next candidates
+- Short user feel-test pass on the command-raising extraction cutscene.
+- Tune extraction timing / VFX strength based on real play feedback.
+- 12-30C hidden/secret/narrative connective layer review.
+
+## 12-30B-6: Shadow Extraction art-layer cutscene rebuild
+
+### Scope
+- Rebuilt Gate shadow extraction presentation around art layers instead of geometric CSS VFX.
+- Did not modify summon ticket reveal, `TicketRevealSequence`, or `ShadowRevealModal`.
+- Kept summon reveal and extraction reveal technically and visually separated.
+- No extraction probability, summon probability, reward probability, acquisition logic, save schema, persist version, or localStorage changes.
+
+### Art-layer structure
+- Added extraction-only static SVG art textures under `src/assets/extraction/`:
+  - `extraction-bg.svg`: dark battlefield / grave-ground scene texture.
+  - `remnant-smoke.svg`: rising black smoke / fog texture.
+  - `shadow-mass.svg`: irregular remnant mass silhouette.
+  - `rift-tear.svg`: jagged torn-space rift texture.
+  - `binding-runes.svg`: dark chain / rune binding texture.
+  - `failure-ash.svg`: ash and scattered remnant failure texture.
+- `ShadowExtractionReveal` now composes the scene as:
+  - scene background layer
+  - fog / smoke layer
+  - remnant mass layer
+  - rift / tear layer
+  - binding layer
+  - result layer
+- Former ring / border-circle / straight-crack / small-particle elements were removed from the main stage.
+- CSS now supports the art textures with motion, blur, masking-like layering, and opacity changes instead of making raw shapes the focal point.
+
+### Stage identity
+- Command:
+  - dark battlefield appears with only a faint remnant near the ground.
+  - no rarity / success / failure color hint.
+- Remnant:
+  - black fog surges upward and the irregular remnant mass rises.
+- Resistance:
+  - jagged rift art becomes the main layer.
+  - remnant mass distorts and shakes.
+- Bind:
+  - binding-rune / chain texture closes around the remnant.
+  - apex pressure uses stronger shake, still without pre-result rarity color.
+- Reveal / fail:
+  - success shows large `ShadowPortrait` over rift/smoke/aura and only then shows rarity / innate / named chips.
+  - failure shows ash / remnant dissolution rather than a simple alert or geometric placeholder.
+
+### Safety
+- Summon reveal remains the 12-30B-5 rollback flow: ticket -> rift -> rarity -> innate.
+- `ShadowExtractionReveal` remains separate and is not routed through `TicketRevealSequence`.
+- Hidden / locked named information is not exposed; named chips appear only for the actual extracted shadow.
+- Failure result no longer shows a rolled rarity signal chip.
+- No reward, economy, shop, summon probability, extraction probability, ownedShadows, Gate/Tower flow, save schema, persist version, or `levelup-save` changes.
+
+### Verification
+- `npx tsc --noEmit` exit code 0 after the rebuild.
+- `npm run build` exit code 0.
+- `npx tsx scripts/smoke-direct-battle-runtime.ts` exit code 0.
+- Smoke output included `Summon color issues: 0`, `Validation issues: 0`, `Crashes: 0`, and `Summon reveal color regression: passed`.
+- Existing Vite chunk-size warning only.
+- Long simulations and large browser QA were not run.
+
+### Next candidates
+- Short user feel-test pass on the art-layer extraction reveal.
+- Tune extraction VFX strength / timing from real play feedback.
+- 12-30C hidden/secret/narrative connective layer review.
+
+## 12-30B-5: Summon reveal rollback + extraction reveal VFX focus
+
+### Scope
+- Rolled shadow summon ticket reveal back to the familiar ticket flow instead of the B-3/B-4 long cinematic sequence.
+- Focused the visual upgrade on Gate battle `ShadowExtractionReveal` only.
+- Kept summon reveal and extraction reveal clearly separated.
+- No summon probability, extraction probability, reward probability, acquisition logic, save schema, persist version, or localStorage changes.
+
+### Summon reveal rollback
+- `TicketRevealSequence` shadow summon flow is back to four compact stages:
+  - ticket / prepare
+  - rift open
+  - rarity reveal
+  - innate signal reveal
+- Removed the B-4 shadow-forming / pressure-style stage from the summon sequence.
+- Removed the unused summon-side silhouette forming renderer and its extraction-like keyframes.
+- Shadow summon pacing is reduced from the B-4 cinematic duration back to a shorter ticket reveal feel:
+  - quick / common-uncommon: about 4.0 seconds.
+  - rare: about 4.8 seconds.
+  - epic: about 5.5 seconds.
+  - apex / legendary-S-named: about 6.5 seconds.
+- `ShadowRevealModal` final result presentation is back to a centered result card / portrait layout rather than a huge extraction-like full-screen stage.
+- Skip behavior remains available.
+
+### Extraction reveal VFX upgrade
+- `ShadowExtractionReveal` remains a portal-based full-screen centered overlay.
+- Extraction now carries the heavy ritual identity:
+  - command
+  - remnant rising
+  - resistance
+  - bind
+  - success reveal / failure scatter
+- Added extraction-only CSS/VFX layers:
+  - heavier dim/vignette and drifting fog.
+  - ember-like particles being pulled through the field.
+  - larger rune circle and pulsing remnant mass.
+  - resistance crack lines.
+  - bind compression ring.
+  - apex/high resistance shake.
+  - stronger final success burst and failure dissolution.
+- Success result still reveals rarity / innate / named information only at the final reveal.
+- Failure result stays a failure reveal only and does not expose hidden result details.
+
+### Separation and safety
+- Summon identity: ticket / rift / signal / rarity / innate.
+- Extraction identity: command / remnant / resistance / bind / response.
+- `ShadowExtractionReveal` was not merged back into `TicketRevealSequence`.
+- The 12-29O summon color regression guard remains intact:
+  - common/uncommon results do not use red/crimson pre-result anticipation.
+  - uncommon + S does not use red/crimson pre-result anticipation.
+  - high-tier anticipation remains gated to rare+ summon outcomes.
+- No hidden/locked named information is shown before actual acquisition reveal.
+- No reward, economy, shop, summon probability, extraction probability, ownedShadows, Gate/Tower flow, save schema, persist version, or `levelup-save` changes.
+
+### Verification
+- `npm run build` exit code 0.
+- `npx tsc --noEmit` exit code 0.
+- `npx tsx scripts/smoke-direct-battle-runtime.ts` exit code 0.
+- Smoke output included `Summon color issues: 0` and `Summon reveal color regression: passed`.
+- Existing Vite chunk-size warning only.
+- Long simulations and large browser QA were not run.
+
+### Next candidates
+- User feel-test pass on the strengthened extraction reveal timing/VFX.
+- 12-30C hidden/secret/narrative connective layer review.
+- Reward feel improvements as a separate task.
+
+## 12-30B-4: Shadow reveal spoiler guard + pacing + stat recovery lift
+
+### Scope
+- Fixed early reveal color spoilers in summon and extraction cinematic paths.
+- Slowed shadow summon and extraction pacing again.
+- Strengthened stage-to-stage visual differences without adding canvas / WebGL / 2.5D.
+- Applied a small BattleUnit conversion recovery lift to shadows and a smaller lift to monsters.
+- Kept summon reveal and extraction reveal separate.
+
+### Reveal spoiler prevention
+- `TicketRevealSequence` no longer uses high-tier red / gold / rarity-tinted anticipation during early shadow stages.
+- Shadow summon pre-result stages now stay neutral dark slate / cyan / violet:
+  - ticket / seal activation
+  - rift opening
+  - shadow forming
+  - pressure / resonance
+- High-tier color is only allowed at the final signal-lock handoff and final result.
+- `ShadowRevealModal` pre-result overlay no longer paints apex / epic / rarity background colors from the actual result.
+- `ShadowExtractionReveal` pre-result overlay and stage body no longer use success / failure / rarity accent colors before reveal.
+- Extraction pre-result copy is now neutral so success / failure is not signaled before the reveal stage.
+
+### Cinematic pacing
+- Shadow summon duration targets:
+  - common / uncommon: about 6.9 seconds.
+  - rare: about 8.2 seconds.
+  - epic: about 9.4 seconds.
+  - legendary / S innateGrade / named apex: about 11.4 seconds.
+- Shadow extraction duration targets:
+  - quick: about 6.6 seconds.
+  - high: about 8.05 seconds.
+  - apex: about 10.6 seconds.
+- Skip and ESC behavior remain available.
+- `prefers-reduced-motion` still shortens the sequence.
+
+### Stage visual changes
+- Summon resonance is now a neutral pressure stage rather than a rarity-colored stage.
+- Summon still uses distinct scenes:
+  - seal / ticket activation
+  - black rift opening
+  - shadow silhouette forming
+  - neutral pressure / heartbeat resonance
+  - final signal lock
+  - final portrait reveal in `ShadowRevealModal`
+- Extraction stage body now has distinct neutral pre-result scenes:
+  - command ground seal
+  - remnant shadows rising
+  - resistance crack lines
+  - bind ring / chain compression
+  - final success / failure reveal
+- Added `shadow-remnant-rise` animation for extraction remnants.
+
+### BattleUnit stat recovery
+- Shadow raw stat definitions, skills, passives, rarity, innate grade, enhancement, and evolution data remain unchanged.
+- Shadow -> BattleUnit conversion now uses a small `SHADOW_BATTLE_LIFT = 1.09`.
+- Role-sensitive micro-lifts keep roles more readable:
+  - guard HP / DEF / survival receive a small extra lift.
+  - assault / hunter ATK receives a small extra lift.
+  - scout / hunter SPD receives a small extra lift.
+  - support / analyst SKILL / support / control / synergy receive a small extra lift.
+- Monster raw definitions and encounter structure remain unchanged.
+- Monster -> BattleUnit conversion now uses a smaller `MONSTER_BATTLE_LIFT = 1.04`; monster SPD uses a small 1.02 lift.
+- Shadow uplift is intentionally larger than monster uplift.
+
+### Representative stat deltas
+- Hunter Lv20 remains unchanged: HP 736 / ATK 179 / DEF 83 / SPD 45 / SKILL 166.
+- common L1 B shadow:
+  - before: HP 125 / ATK 62 / DEF 51 / SPD 83 / SKILL 49
+  - after: HP 136 / ATK 68 / DEF 56 / SPD 91 / SKILL 54
+- uncommon support L1 B:
+  - before: HP 210 / ATK 52 / DEF 115 / SPD 52 / SKILL 74
+  - after: HP 228 / ATK 57 / DEF 125 / SPD 57 / SKILL 82
+- rare assault L1 B:
+  - before: HP 188 / ATK 154 / DEF 91 / SPD 84 / SKILL 83
+  - after: HP 205 / ATK 172 / DEF 99 / SPD 91 / SKILL 91
+- epic guard L1 B:
+  - before: HP 471 / ATK 132 / DEF 263 / SPD 68 / SKILL 107
+  - after: HP 524 / ATK 144 / DEF 292 / SPD 74 / SKILL 117
+- legendary assault L1 B:
+  - before: HP 370 / ATK 322 / DEF 213 / SPD 145 / SKILL 139
+  - after: HP 404 / ATK 357 / DEF 232 / SPD 156 / SKILL 152
+- early monster Lv6:
+  - before: HP 492 / ATK 83 / DEF 31 / SPD 17 / SKILL 58
+  - after: HP 512 / ATK 86 / DEF 33 / SPD 17 / SKILL 60
+- C Gate representative monsters:
+  - Black Claw Brawler Lv15 after: HP 1586 / ATK 271 / DEF 102 / SPD 25 / SKILL 193
+  - Memory Disruptor Lv15 after: HP 1417 / ATK 157 / DEF 85 / SPD 30 / SKILL 245
+- Tower boss sample:
+  - Abyss Devourer Lv20 after: HP 5495 / ATK 636 / DEF 203 / SPD 28 / SKILL 675
+
+### Audit outcome
+- Lv20 audit party total after tuning: HP 1829 / ATK 620 / DEF 655 / SPD 358 / SKILL 510.
+- E Gate sample: player victory in 2 rounds, player HP 1765/1829.
+- D Gate sample: player victory in 3 rounds, player HP 1208/1829.
+- C Gate sample: max rounds, player HP 258/1829 and enemy HP 997/3003.
+- Tower 1F sample: player victory in 2 rounds.
+- Tower 7F sample: player victory in 7 rounds.
+- Tower 15F boss sample: enemy victory in 2 rounds.
+- Hunter remains the direct battle center; shadows feel more useful, while monsters still pressure the party.
+
+### Safety constraints
+- Anticipation color regression remains protected.
+- common / uncommon, including uncommon + S innateGrade, do not show red / crimson before the result.
+- No hidden / locked named information was added or exposed.
+- No summon probability, reward probability, acquisition result, reward, economy, shop, Gate/Tower progress, or save logic changed.
+- localStorage key `levelup-save`, persist version 14, save schema, and migrations are unchanged.
+
+### Verification
+- `npx tsc --noEmit` exit code 0.
+- `npx tsx scripts/audit-direct-battle-balance.ts` exit code 0.
+- `npx tsx scripts/smoke-direct-battle-runtime.ts` exit code 0.
+  - Summon reveal color regression: passed.
+  - Shadow stat regression: passed.
+  - Hunter death defeat regression: passed.
+  - Center overlay render path: code path verified.
+- `npm run build` exit code 0 (existing Vite chunk-size warning only).
+- `git diff --check` passed for the touched files.
+
+### Next candidate work
+- 12-30C hidden / secret / narrative connective layer revisit.
+- Real-play pacing and battle balance follow-up after user feel testing.
+- Reward feel improvements should remain a separate economy / reward task.
+
+## 12-30B-3: Shadow summon / reveal cinematic rework
+
+### Scope
+- Reworked the shadow summon / shard / reward reveal feel after the 12-30B-2 five-stage sequence still felt too small, fast, and card-bound.
+- Kept `TicketRevealSequence`, `ShadowRevealModal`, and `ShadowExtractionReveal` separated.
+- No Direct Battle balance change in this task.
+- No hidden / secret / narrative connective-layer work, no 2.5D work, and no Auto battle work.
+
+### Full-screen centered overlay
+- `TicketRevealSequence` already rendered through `document.body`; it now uses a stronger `fixed inset-0 z-[1200]` cinematic layer, darker backdrop, vignette, inward particle drift, bigger central stage, and more visible Skip control.
+- `ShadowRevealModal` now renders through a React portal into `document.body` instead of staying inside the parent panel tree.
+- `ShadowRevealModal` result state is no longer presented as a small card; it uses a full viewport overlay with a large centered `ShadowPortrait`, rarity ring, centered chips, and bottom confirmation.
+- `ShadowExtractionReveal` also renders through a React portal and uses a full-screen centered extraction stage, while keeping extraction-themed copy / tone separate from summon.
+
+### Summon sequence changes
+- Shadow summon still uses the same safe reveal path, but the stage visuals were strengthened:
+  - ticket / seal activation: larger center seal, rune ring, slow pulse.
+  - rift opening: larger black rift, slow rotating rings, inward tension.
+  - shadow forming: large silhouette mass, blur-to-form transition, jitter, darkening.
+  - resonance tension: no premature result portrait/name/role chips; it now reads as a pressure lock before result.
+  - signal lock: final pre-result shake / black flash / dark burst before handing off to the result screen.
+- Final result is handled by `ShadowRevealModal`, where actual rarity / innate grade / role / named chips are shown only for the actual result.
+
+### Duration changes
+- common / uncommon quick: about 5.6 seconds.
+- rare: about 6.7 seconds.
+- epic: about 7.8 seconds.
+- legendary / S innateGrade / named apex: about 9.3 seconds.
+- Skip and ESC behavior remain available.
+- `prefers-reduced-motion` still shortens the sequence.
+
+### Visual intensity
+- Added heavier shake near final lock, dark flash, apex dark burst, slow rift growth, silhouette jitter, and a `shadow-cinematic-portrait` final entrance animation.
+- Low-tier anticipation stays cyan / slate.
+- High-tier anticipation is only used for rare+ shadow rarity.
+- Apex uses dark burst / residual glow instead of a full-screen white flash.
+
+### Safety constraints
+- Anticipation color regression remains protected:
+  - common / uncommon results do not use red / crimson before result.
+  - uncommon + S innateGrade does not use red anticipation before result.
+  - rare+ can use red / crimson / dark high-tier anticipation.
+  - S innate grade remains allowed at the final result stage.
+- No hidden / locked named information was added or exposed.
+- No summon probability, reward probability, acquisition result, reward, economy, shop, Gate/Tower progress, or save logic changed.
+- localStorage key `levelup-save`, persist version 14, save schema, and migrations are unchanged.
+- Shadow raw stats, skills, and passives are unchanged.
+
+### Verification
+- `npx tsc --noEmit` exit code 0.
+- `npx tsx scripts/smoke-direct-battle-runtime.ts` exit code 0.
+  - Summon reveal color regression: passed.
+  - Center overlay render path: code path verified.
+- `npm run build` exit code 0 (existing Vite chunk-size warning only).
+- `git diff --check` passed for the touched reveal / CSS / doc files.
+- Short browser check: local app loaded at `http://127.0.0.1:3002` with 0 console errors. Actual summon click was not performed to avoid changing save/resources.
+
+### Next candidate work
+- 12-30C hidden / secret / narrative connective layer revisit.
+- Real-play reveal pacing / balance feel follow-up.
+- Reward feel improvements should remain a separate balance/economy task.
+
+## 12-30B-2: Direct Battle balance audit + summon reveal cinematic upgrade
+
+### Scope
+- Re-audited Direct Battle BattleUnit conversion and short runtime outcomes after the recent Hunter / Shadow / Monster stat tuning passes.
+- Added a small repeatable audit script: `scripts/audit-direct-battle-balance.ts`.
+- Improved the summon / shard / reward shadow reveal path through `TicketRevealSequence` + `ShadowRevealModal`.
+- `ShadowExtractionReveal` remains separate and is not routed back through `TicketRevealSequence`.
+- No 2.5D work, no Auto battle improvement, no hidden / secret / narrative connective-layer work.
+
+### Balance audit summary
+- Hunter BattleUnit samples after tuning:
+  - Lv5: HP 374 / ATK 76 / DEF 35 / SPD 25 / SKILL 76
+  - Lv10: HP 506 / ATK 112 / DEF 52 / SPD 32 / SKILL 108
+  - Lv20: HP 736 / ATK 179 / DEF 83 / SPD 45 / SKILL 166
+  - Lv30: HP 982 / ATK 251 / DEF 116 / SPD 58 / SKILL 226
+- Representative L1 B Shadow samples after tuning:
+  - common scout: HP 125 / ATK 62 / DEF 51 / SPD 83 / SKILL 49
+  - uncommon support: HP 210 / ATK 52 / DEF 115 / SPD 52 / SKILL 74
+  - rare assault: HP 188 / ATK 154 / DEF 91 / SPD 84 / SKILL 83
+  - epic guard: HP 471 / ATK 132 / DEF 263 / SPD 68 / SKILL 107
+  - visible legendary/named assault representative: HP 370 / ATK 322 / DEF 213 / SPD 145 / SKILL 139
+- Monster samples after tuning:
+  - early charger Lv6: HP 492 / ATK 83 / DEF 31 / SPD 17 / SKILL 58
+  - mid caster Lv11: HP 783 / ATK 98 / DEF 44 / SPD 22 / SKILL 211
+  - mid tank Lv11: HP 1443 / ATK 112 / DEF 108 / SPD 15 / SKILL 90
+  - boss Lv16: HP 3620 / ATK 391 / DEF 149 / SPD 26 / SKILL 390
+  - high boss Lv25: HP 7373 / ATK 862 / DEF 273 / SPD 32 / SKILL 915
+
+### Balance changes
+- Hunter conversion slightly raised so Hunter remains the direct battle center:
+  - ATK conversion raised modestly (`combatStats.atk`, STR, AGI coefficients).
+  - SKILL conversion raised modestly (`skillTotalPower`, ATK, INT coefficients).
+- Shadow conversion now compresses only high raw-stat BattleUnit conversion values:
+  - Raw shadow definitions, shadow skills, passives, rarity, innate grade, enhancement, evolution data are unchanged.
+  - Common / uncommon shadows remain support party members.
+  - Rare shadows keep a clear role without overtaking a Lv20 Hunter as the default carry.
+  - Epic guard stays meaningfully tanky but no longer has extreme BattleUnit HP/DEF relative to the Hunter.
+  - Legendary/named remains strong but is less likely to delete combat alone.
+- Monster conversion slightly softened by about one small step:
+  - Level scale, HP, ATK, DEF, and SKILL coefficients reduced narrowly.
+  - Monster threat remains real, especially C Gate, Tower mid/high, and boss floors.
+
+### Audit outcome
+- Lv20 audit party total after tuning: HP 1730 / ATK 579 / DEF 603 / SPD 332 / SKILL 479.
+- E Gate sample: player victory in 2 rounds, player HP 1669/1730. Still a learning fight, not a dummy.
+- D Gate sample: player victory in 3 rounds, player HP 1141/1730. Pressure is visible without blocking early progress.
+- C Gate sample: reached max rounds with player HP 276/1730 and enemy HP 948/2887. This is intentionally pressure-heavy and should reward manual target / guard decisions.
+- Tower 1F sample: player victory in 2 rounds.
+- Tower 7F sample: player victory in 7 rounds.
+- Tower 15F boss sample: enemy victory in 2 rounds against the fixed Lv20 audit party, confirming boss floors are not tuned as harmless HP bags.
+- Hunter death defeat condition is still covered by smoke and remains unchanged.
+- Shadow wipe without Hunter death remains allowed by the existing winner logic.
+
+### Summon reveal cinematic changes
+- `TicketRevealSequence` shadow reveal now uses a five-stage sequence:
+  - ticket activation
+  - rift opening
+  - shadow forming
+  - rarity tension
+  - signal / innate-grade reveal
+- Timing is now aligned to the requested bands:
+  - common / uncommon quick: about 4.0 seconds
+  - rare: about 5.1 seconds
+  - epic: about 5.9 seconds
+  - legendary / S / named apex: about 7.2 seconds
+- The reveal is full-screen, centered, and larger, with a dedicated silhouette-forming stage before final reveal.
+- `ShadowRevealModal` result state is now a large centered cinematic modal:
+  - larger central `ShadowPortrait`
+  - bigger result typography
+  - full-screen dim/radial glow backdrop
+  - stronger apex / epic / rare differentiation
+- Skip / immediate confirmation remains available.
+- `prefers-reduced-motion` still short-circuits the animation path.
+
+### Color and information safety
+- Anticipation red/crimson remains gated to rare+ shadow rarity only.
+- common / uncommon, including uncommon + S innateGrade, do not use red anticipation before the result stage.
+- S innate grade can still be shown at the final result stage.
+- Final result only shows the actually acquired shadow.
+- No hidden/locked named information was added or exposed.
+- `ShadowExtractionReveal` remains visually and technically separate from summon reveal.
+
+### Save / reward / economy constraints
+- localStorage key `levelup-save`: unchanged.
+- Persist version 14: unchanged.
+- No save schema, migration, or stored direct battle state change.
+- No Gate/Tower reward, clear, progress, economy, shop, reward-box, or probability value changes.
+- No summon probability changes.
+
+### Verification
+- `npx tsc --noEmit` exit code 0.
+- `npx tsx scripts/audit-direct-battle-balance.ts` exit code 0.
+- `npx tsx scripts/smoke-direct-battle-runtime.ts` exit code 0.
+- `npm run build` exit code 0 (existing Vite chunk-size warning only).
+- Long-running sims and browser large QA were not run.
+
+### Next candidate work
+- 12-30C hidden / secret / narrative connective layer revisit.
+- Real-play Direct Battle balance follow-up after user feel testing.
+- Reward feel improvements should stay a separate balance/economy task.
+
+## 12-30B-UI: Reward tab + Skill panel info-hierarchy cleanup
+
+### Scope
+- UI-only cleanup for the Reward tab (`ChallengeCardsPanel`, `RewardBoxPanel`) and the Hunter Skill panel (`SkillPanel`, `SkillActionCard`).
+- Goal: lower screen density and let the core action ("카드 3장 선택 → 박스 강화 → 박스 열기" / "사용 가능한 스킬 / 쿨다운 / 상세") be visible at a glance, instead of looking like a debug / admin / spec console.
+- No change to any underlying functionality.
+- No change to reward numbers, card-selection logic, box upgrade math, drop probability, skill effects, cooldowns, mastery curves, or use-count tracking.
+- No change to save schema, persist version, or `levelup-save` localStorage key.
+- No new feature, no large UI redesign, no 2.5D work.
+
+### Modified files
+- `src/components/ChallengeCardsPanel.tsx`
+- `src/components/RewardBoxPanel.tsx`
+- `src/components/SkillPanel.tsx`
+- `src/components/SkillActionCard.tsx`
+- `CLAUDE.md`
+
+### Reward tab — what was removed or merged
+- **Three-column summary at the top** of `ChallengeCardsPanel` ("TODAY CARDS / 선택 보상 합계 / 박스 강화") collapsed to:
+  - A single header with title + one-line next-action hint.
+  - A right-side counter chip (e.g. `0/3 선택` or `2/3 완료`) plus the existing `선택 확정` button.
+  - A single inline reward summary row showing XP / Gold / 정수 / 박스 chips (and the full-clear bonus chip when applicable).
+- **Easy / Normal / Hard legend row** and the verbose intro ("후보 5장 중 3장을 고릅니다...") were removed. The difficulty chip on each card already conveys this.
+- **Per-card chip stack** reduced:
+  - Removed `DIFFICULTY_HINT` (`가볍게 완료 / 표준 루틴 / 집중 보상`) duplicate chip — the difficulty chip already says this.
+  - Removed the separate `목표:` chip — moved to a one-line subtitle under the title.
+  - Removed the bottom-of-card status hint (`보상 지급 완료 / 완료 시 자동 지급 / 오늘 미선택 / 선택 후보`) — the state chip + the visual selection ring already communicate this.
+  - Four reward chips (XP / Gold / 정수 / 박스) collapsed into a single text line with subtle separators.
+  - Status chip is now merged into the top chip row so the eye sees `[난이도] [카테고리] [상태]` once.
+  - Card min-height reduced from `190px` to `148px`, padding tightened.
+- **Three-column summary at the top** of `RewardBoxPanel` ("TODAY LOOP / 오늘 선택 카드 / 오늘 받을 수 있는 것") collapsed to:
+  - A single `오늘의 보상 루프` line with the next-action hint.
+  - A compact 3-stat strip on the right (`카드 X/3`, `강화 +N`, `박스 N`).
+- **Inner 3-column grid** inside the "박스 보상" panel (large amber description + `NEXT TIER` hint) collapsed to:
+  - A short subtitle line: `오늘 박스는 열기 전 카드 완료 수에 따라 등급이 올라갑니다.`
+  - A single right-aligned tier hint (`Enhanced · +2에 Superior` / `Superior · +2에 Epic` / `Epic 적용 중`).
+- **Per-box card** reduced:
+  - Removed the duplicate `DAILY` / `WEEKLY` / `BOSS` short-code chip — the labelled type chip (`오늘의 보급` / `주간 보급` / `보스 보급`) is kept.
+  - Removed the embedded "PREVIEW" sub-panel; preview hints now show as a single one-line summary (3 hints max joined by `·`).
+  - Removed the per-card duplicate description block (it was just repeating the type chip wording).
+
+### Reward tab — new information structure
+- Layout reads, top to bottom: **today's loop summary → today's box panel (with cards) → challenge cards (in their own panel) → recent reveals (when present)**.
+- Each card now reads as **title → 목표 한 줄 → 설명 (최대 2줄) → 보상 한 줄**, with chips reserved for status / difficulty / category.
+- Each box now reads as **이름 → 종류·등급·층 chip 줄 → 보상 미리보기 한 줄 → 열기 버튼**.
+- The `열기` button and the `선택 확정` button retain their existing prominent style — they are the only primary actions on the tab.
+
+### Skill panel — what was removed or merged
+- **Two-column intro row** at the top of the expanded panel removed:
+  - Large `HUNTER SKILLS` block + paragraph description deleted.
+  - Source-count chip row + `COMBAT READY` filler chip deleted.
+- **Header summary** now folds into the toggle button itself: `스킬 N개 · 전투용 N` + one-line tagline `게이트·무한의 탑 수동 전투에서 직접 사용`.
+- **Bottom developer-leaning hint** (`칭호/특수 스킬 슬롯은 구조만 열어두었습니다...`) removed. Slot expansion remains in code; the UI no longer surfaces this internal note.
+- **Right-side detail aside** simplified:
+  - Removed the redundant `SKILL DETAIL` header chip.
+  - Removed the 2-up `사용 횟수 / 다음 숙련` grid (this is already shown in the mastery bar text).
+  - The remaining detail shows: skill name → source/type/provider chip row → effect description → mastery progress bar with `Lv.X/MAX` + uses → optional `recommendedUse` hint.
+  - When no non-basic skill is selected, the aside is a small empty-state note rather than the big `BASIC ACTIONS` block.
+- **Per-skill card** (`SkillActionCard`) chip strip slimmed from seven chips to three:
+  - Kept: source chip, type chip, base cooldown chip, and (when active) `남은 N` cooldown chip.
+  - Removed: standalone `숙련 Lv.N` chip, separate `N회` chip, and `상세` indicator chip — `상세` is now communicated by the card's selected ring only.
+  - Mastery info merged into a single right-aligned secondary line on the card: `숙련 Lv.X · N회`.
+  - Removed the bottom mastery progress bar from the card; full progress + `recommendedUse` lives in the detail aside.
+  - Card `min-h` reduced from `112px` to `96px`.
+
+### Skill panel — new information structure
+- Reads as **헤더 + 한 줄 설명 → 스킬 카드 그리드 + 우측 상세 패널**.
+- Cards show **글리프 + 스킬명 → 사용 가능/쿨다운 배지 → 한 줄 효과 → source/type/cd 칩 → 우측 숙련 요약**.
+- The detail aside is now the canonical place for the mastery progress bar and `recommendedUse` text.
+
+### Style direction kept
+- Dark / system-window / cyan tone retained.
+- No new framer-motion sequences added (existing `motion.button` hover behaviour kept).
+- No new state management.
+- Mobile widths verified by `clsx` flex-wrap retention; horizontal overflow protection paths unchanged.
+
+### Logic / state safety
+- Card generation, card selection, card completion conditions: **unchanged**.
+- Box upgrade math (`upgradePoints` thresholds 2 / 4 / 6 → enhanced / superior / epic): **unchanged**.
+- Box reward probability tables, `openRewardBox` action: **unchanged**.
+- Skill effects, cooldowns, mastery curves, `timesUsed` tracking, runtime mastery progress helpers: **unchanged**.
+- `attemptShadowExtraction`, Gate / Tower flow, Direct Battle entry points: **unchanged**.
+- Store schema, persist version, `levelup-save` key: **unchanged**.
+
+### Verification
+- `npx tsc --noEmit` exit code 0.
+- `npm run build` exit code 0 (existing Vite chunk-size warning only).
+- Smoke test not required for this UI-only patch; runtime logic untouched.
+
+### Next candidate work
+- 12-30C: hidden / 비밀 / 서사 connective layer revisit on top of the cleaner Reward + Skill panels.
+- 실사용 UI 잔버그 수정 (gathered from real-play observations).
+- 보상 체감 개선은 별도 밸런스 작업으로 분리.
+
+## 12-30A: Shadow extraction dedicated reveal redesign
+
+### Scope
+- Dedicated reveal experience for the Gate "그림자 추출" flow.
+- Removes the summon/ticket gacha aesthetic from the extraction path that made the user feel the same summon reveal was firing two or three times.
+- Continues the 12-29P cleanup by also removing the Tower DEV legacy auto/manual battle buttons and the matching Gate DEV legacy auto/manual battle buttons.
+- No probability change, no reward change, no `ownedShadows` decision change, no save/persist change, no hidden/locked named exposure, no Auto battle improvement, no 2.5D work, no large UI redesign.
+
+### Root cause of duplicate-feeling extraction reveal
+- `attemptShadowExtraction` in the store does not push a SystemMessage and decides the result exactly once.
+- However, the GatePanel `ShadowExtractionPanel` was routing the extraction result through `ShadowRevealModal`, which is the shared summon/ticket modal. That modal internally plays `TicketRevealSequence` with four ticket-themed stages (`ticket → rift → rarity → signal`).
+- To the user, those four ticket-themed stages plus the final result card felt like 2~3 chained summon reveals for one extraction.
+
+### New ShadowExtractionReveal component
+- New file: `src/components/shadows/ShadowExtractionReveal.tsx`.
+- Standalone modal that does not import `TicketRevealSequence` or `ShadowRevealModal`.
+- Pre-reveal stages are extraction-themed:
+  - `command`: "일어나라." — Hunter commands the residual shadow.
+  - `resonance`: "잔영이 흔들린다" — extraction sigil resonates.
+  - `resistance`: "저항이 감지된다" / "강한 저항이 인다" — tension before result is fully bound.
+  - `bind`: "속박이 완성된다" on success / "속박이 풀린다" on failure.
+- Final stage shows the result:
+  - success: `ShadowPortrait` of the acquired shadow with rarity / innate grade / role / NAMED badge and an `EXTRACTED` chip. The summary copy adapts to common (`그림자가 응답했다`), high-tier (`그림자가 군단에 합류했다`), and apex / named (`강한 잔영이 응답했다. 군단에 새로운 이름이 새겨졌다.`).
+  - failure: faded silhouette with `EXTRACTION FAILED` chip, optional rolled-rarity signal chip, and "잔영이 균열로 흩어졌다" copy.
+- Intensity (`quick` / `high` / `apex`) is derived only from the acquired shadow's rarity, innate grade, and named status. Failure defaults to `quick` and uses dimmer slate/cyan palette.
+- Skip button immediately advances to the result stage; result close button finalizes. ESC matches the same behavior. `prefers-reduced-motion` skips the pre-reveal entirely and shows the result directly.
+- Component does not modify probability, the rolled shadow, ownedShadows, achievement ticket claims, or any reward state.
+
+### Separation from TicketRevealSequence
+- `ShadowExtractionPanel` no longer renders `ShadowRevealModal`. It renders `ShadowExtractionReveal` instead.
+- `ShadowRevealModal` and `TicketRevealSequence` continue to drive non-extraction reveals: summon tickets (`source: 'summon'` / `'shard'`), reward boxes (`source: 'box'`), and reward grants (`source: 'reward'`).
+- The `'extraction'` value in `ShadowRevealSource` is left untouched in the type union so older saves and any in-flight payload still type-check, but no caller passes that source now.
+- Words like 소환권, 티켓, 포탈, 가챠, 등급 점화 do not appear in any extraction-facing copy. The extraction copy uses 추출, 잔영, 명령, 저항, 응답, 속박, 군단 합류.
+
+### Gate panel connection
+- Inside `ShadowExtractionPanel`:
+  - `handleExtraction()` continues to call `attemptShadowExtraction(log.gateInstanceId)` and read `useGame.getState().lastShadowExtractResult` once.
+  - Result is passed to `<ShadowExtractionReveal result={revealingResult} gateName={gate.name} onClose={...} />`.
+  - The small text summary below the panel still reads from `visibleResult` (when the modal is closed) so the user can see the prior result without re-opening the reveal.
+- Gate result panel (`RecentBattleResult`), Gate reward / clear / penalty / stamina / injury / progression logic, and Direct Battle result adapter were not modified.
+
+### Duplicate-reveal prevention
+- One extraction attempt produces one `ShadowExtractionReveal` modal because:
+  - `attempted` flag from `shadowExtractHistory` blocks the button after a try.
+  - `setRevealingResult` is only fired when `result.gateInstanceId === log.gateInstanceId`.
+  - Closing the modal sets `revealingResult` back to `undefined`; the modal does not reopen because the source result is now visible through `visibleResult` text only.
+- The shared `ShadowRevealModal` / `TicketRevealSequence` no longer overlap with extraction, so a successful summon-reveal queue from a separate action cannot now interleave with the same extraction acquisition.
+
+### Tower / Gate DEV legacy button cleanup
+- Removed `InfiniteTowerPanel` DEV-only "DEV 기존 자동 전투" and "DEV 기존 수동 전투" buttons. The dead `Hand` lucide-react import was also removed; `handleAutoBattle` and `handleManualBattle` are kept as private handlers but no longer reachable from the UI. The legacy store actions (`startTowerBattle`, `startTowerManualBattle`, `performTowerManualBattleAction`, `cancelTowerManualBattle`) and the associated reveal panels are unchanged because they still own reward / floor clear / progression logic per 12-29P rules.
+- Removed `GatePanel` DEV-only "DEV: 기존 자동 전투" and "DEV: 기존 수동 전투" buttons for parallel consistency with Tower. Underlying store actions (`startGateBattle`, `startManualGateBattle`, `performManualBattleAction`, `cancelManualGateBattle`) are unchanged for the same reason. The `ManualBattlePanelV2` component is preserved because it is still mounted when a manual battle session is active from any current or future entry point.
+
+### Visual / UX notes
+- Reveal stages use short CSS transitions (~0.32 s for transform, ~0.48 s for shadow). Combined stage durations: quick ≈ 3.65 s, high ≈ 4.45 s, apex ≈ 5.15 s. Skip jumps to result.
+- Color palette focuses on dark violet + cyan with slate failure tones. Amber is only used on `NAMED` chips and apex success glow, which matches the rarity-only anticipation rule.
+- Mobile widths use `max-w-xl` (quick / high) and `max-w-2xl` (apex); the modal is `overflow-y-auto` and respects `safe area` via existing styles.
+- `prefers-reduced-motion` immediately resolves to the result stage with no per-step animation.
+- No 2.5D, no battlefield overlay, no large UI redesign.
+
+### Verification
+- `npm run build` exit code 0. Existing Vite chunk-size warning only.
+- `npx tsc --noEmit` exit code 0.
+- `npx tsx scripts/smoke-direct-battle-runtime.ts` exit code 0:
+  - Encounters tested: 30
+  - Total rounds simulated: 83
+  - Total logs: 824
+  - ActionQueue / Reveal snapshot / Skill safety / Monster targeting / Hunter defeat / Shadow stat / Summon color / Validation issues: 0
+  - Crashes: 0
+  - Gate/Tower connections: 0
+  - All regression checks passed (ally support/guard, skill safety, monster targeting, hunter death defeat, shadow stat, summon reveal color, setup priority, reveal snapshot, center overlay).
+- No probability change, no reward / clear / progression change.
+- localStorage key `levelup-save`, persist version 14, save schema, and save migrations unchanged.
+- No hidden / locked named information exposure: extraction reveal never displays the definition pool or locked named details; it only displays the acquired shadow when extraction succeeds.
+
+### Next candidate work
+- 12-30B: additional DEV / temporary feature cleanup if more legacy artifacts surface in real play.
+- 12-30C: hidden / secret / narrative connective layer revisit on top of the dedicated Direct Battle + Extraction reveal main paths.
+
+## 12-29P: Legacy / DEV / mock combat bridge cleanup
+
+### Scope
+- Cleanup-only step after 12-29O / 12-29O-2 direct-control battle stabilization.
+- Direct Battle is now the production main path for both Gate and Infinite Tower.
+- This step removes confusing duplicate DEV preview panels and dead legacy code, and adds clear comments around the main paths.
+- No combat formula, no balance number, no reward/clear/progression flow, no Auto battle improvement, no 2.5D work, no large UI redesign, no save/schema/persist change.
+
+### Removed legacy / dev / mock code
+- `GatePanel.tsx`:
+  - Removed duplicate DEV-only `DirectBattlePreviewPanel` in the no-active-gate empty state ("DEV: 직접 조작 전투 미리보기").
+    - This block was a pure mock duplicate that did not connect to Gate clear/reward/progression and only added noise next to the real production direct battle path.
+  - Removed duplicate DEV-only `DirectBattlePreviewPanel` rendered below the active gate's `RecentBattleResult`.
+    - Same reason: it was confusing because the main `직접 조작 게이트 전투` panel already drives the real Direct Battle path.
+  - Removed dead helper component `ManualBattlePanel` (legacy V1).
+    - `ManualBattlePanelV2` is the only manual battle panel actually mounted (still kept as a DEV fallback under `import.meta.env.DEV`).
+    - Replaced the deleted function with a short comment that records why V1 is gone and that V2 + `ManualHpBar` are the kept paths.
+
+### Retained legacy / fallback paths and reasons
+- DEV-only legacy fallback buttons in `GatePanel` ("DEV: 기존 자동 전투", "DEV: 기존 수동 전투"):
+  - Kept. They are wrapped in `import.meta.env.DEV` so they never ship to production.
+  - Still tied to working store actions (`startGateBattle`, `startManualGateBattle`, `performManualBattleAction`, `cancelManualGateBattle`) that own real reward / clear / progression behavior.
+  - Useful for developer comparison and regression checks against the Direct Battle main path.
+- DEV-only legacy fallback buttons in `InfiniteTowerPanel` ("DEV 기존 자동 전투", "DEV 기존 수동 전투"):
+  - Kept for the same reasons. Tied to `startTowerBattle`, `startTowerManualBattle`, `performTowerManualBattleAction`, `cancelTowerManualBattle`.
+- `ManualBattlePanelV2` and `ManualHpBar`:
+  - Kept. `ManualBattlePanelV2` is the manual battle view used by the DEV-only legacy manual gate path. `ManualHpBar` is only used inside V2.
+- All store actions for legacy auto/manual battles:
+  - Kept. They still own reward / clear / penalty / floor progression / boss box / first-clear protection and are connected to the Gate/Tower flow.
+- `DirectBattlePreviewPanel` file name:
+  - Kept. Rename would touch many imports. Instead, added a header comment explaining it is the production main direct-control battle panel for Gate and Tower, and the "Preview" name is historical (12-29F/G).
+
+### DEV exposure cleanup
+- The remaining DEV-only UI elements (`DEV 기존 자동 전투`, `DEV 기존 수동 전투`) are all wrapped in `import.meta.env.DEV`. They are never visible to end users in production builds.
+- No new DEV preview panel is rendered next to the real production Direct Battle path.
+- No internal developer description text leaks into production UI.
+- Player party building still uses only owned / equipped shadows, so hidden / locked named information is not exposed by any DEV path.
+
+### Direct Battle main path clarification
+- Added a file header comment to `DirectBattlePreviewPanel.tsx`:
+  - Marks it as the production direct-control battle panel for Gate (`handleDirectGateBattleComplete` -> `resolveDirectGateBattle`) and Tower (`handleDirectTowerBattleComplete` -> `resolveDirectTowerBattle`).
+  - Notes that cancellation grants no reward.
+  - Notes that victory/defeat is routed through existing reward/progression actions exactly once per battle.
+- Added comments in `GatePanel.tsx` and `InfiniteTowerPanel.tsx` over the direct-battle completion handlers describing the same single-route guarantee and the dedupe key shape (`instanceId/floor + battleId/runId + outcome`).
+
+### Direct Battle hunter death defeat
+- The 12-29O Hunter-death defeat behavior in `directBattleRuntime.ts` is unchanged.
+- Adapter logic in `buildDirectGateCombatLog` and `buildDirectTowerCombatLog` continues to map `enemy` winner to `defeat` and `player` winner to `victory` while preserving the duplicate-result guards in both panels.
+
+### Verification
+- `npm run build` exit code 0. Existing Vite chunk-size warning only.
+- `npx tsx scripts/smoke-direct-battle-runtime.ts` exit code 0:
+  - Encounters tested: 30
+  - Total rounds simulated: 85
+  - Total logs: 824
+  - ActionQueue issues: 0
+  - Reveal snapshot issues: 0
+  - Skill safety issues: 0
+  - Monster targeting issues: 0
+  - Hunter defeat issues: 0
+  - Shadow stat issues: 0
+  - Summon color issues: 0
+  - Validation issues: 0
+  - Crashes: 0
+  - Gate/Tower connections: 0
+  - Ally support/guard skill damage regression: passed
+  - Skill safety regression: passed
+  - Monster targeting regression: passed
+  - Hunter death defeat regression: passed
+  - Shadow stat regression: passed
+  - Summon reveal color regression: passed
+  - Setup priority regression: passed
+  - Reveal snapshot regression: passed
+- localStorage key `levelup-save`, persist version 14, save schema, and save migrations unchanged.
+- No reward, economy, shop, probability, Gate/Tower result flow, or progression-number changes.
+- No shadow skill/passive nerf, no Auto battle improvement, no 2.5D work, no large UI redesign.
+- No hidden/locked named information exposure (Codex masking, summon ticket coloring, locked named card rules all unchanged).
+
+### Next candidate work
+- 12-30A: shadow extraction reveal polish (no probability change).
+- 12-30B: additional DEV / temporary feature cleanup if more DEV-only artifacts surface in real play.
+- 12-30C: hidden / secret / narrative connective layer revisit on top of the cleaner Direct Battle main path.
+
+## 12-29O: Direct-control battle stabilization patch 2
+
+### Scope
+- Fixed targeted live-play issues in the direct-control Gate/Tower battle path:
+  - monster target selection collapsed too often to the Hunter.
+  - Hunter death could still allow a shadow-only victory.
+  - center battle log duration felt too short.
+  - low-level support shadow HP was too high, especially `잿불 치유병`.
+  - shadow summon anticipation color could turn red for uncommon high innate grade results.
+- This was a stabilization patch only.
+- No Auto battle improvement, no 2.5D work, no large UI redesign, no save migration, no reward/result flow change, and no economy/shop/probability changes.
+
+### Monster targeting
+- `directBattleRuntime.ts` now assigns deterministic monster preferred targets for hostile actions.
+- The stable pick uses battle id + round + monster unit id + action id, so it adds variety without persisted randomness.
+- Role/target-priority behavior:
+  - bruiser: high-HP frontline pressure instead of always Hunter.
+  - tank: guard/protect remains preferred; attacks use frontline/high-threat pressure.
+  - caster: low-DEF or support/control-rich targets.
+  - assassin: low-HP/rear/shadow pressure.
+  - controller: high SKILL/SUPPORT/CONTROL shadows or party support units.
+  - minion: stable random pressure.
+  - boss: mixes Hunter, low-HP target, high-threat target, and stable random target.
+- Dead targets still fall back through existing target resolution.
+
+### Hunter death defeat
+- Direct battle winner calculation now checks whether a player Hunter unit exists and is alive.
+- If the Hunter is dead, the battle resolves as enemy victory even if shadows remain alive.
+- Player victory now requires enemy team defeat while the Hunter is alive.
+- Shadow death alone is not a defeat condition, and Hunter + no shadows can still continue.
+- This applies before Gate/Tower result adapters receive the direct battle winner.
+
+### Center log duration
+- `DirectBattlePreviewPanel` center overlay interval increased from 1150ms to 1300ms.
+- Per-step HP/status application delay increased from 420ms to 520ms.
+- `즉시 결과 보기` behavior remains unchanged.
+
+### Shadow HP formula
+- Audited representative direct BattleUnit stats against Hunter/monster baselines.
+- Before this patch, level 1 B-grade `잿불 치유병` produced HP 677 while level 1 Hunter was about HP 252 and level 1 monsters were about HP 197-212.
+- Adjusted only shadow HP conversion, not shadow skills/passives:
+  - reduced durability/survival HP coefficients.
+  - added role HP shaping so guard shadows keep higher HP while support/analyst shadows are not accidental tanks.
+  - kept rarity/innate grade/level/enhancement growth in place.
+- Smoke audit after patch:
+  - `잿불 치유병` level 1 B: HP 359, ATK 106, DEF 198, SPD 68, SKILL 109.
+- Other shadow stats were audited but not broadly nerfed in this step.
+
+### Summon reveal anticipation color
+- `TicketRevealSequence` now separates anticipation color from signal grade intensity for shadow summons.
+- Shadow anticipation red is now rarity-based only:
+  - common/uncommon: low anticipation, cyan/gray family.
+  - rare/epic/legendary/named: high anticipation, red/crimson family.
+- High innate grade no longer makes uncommon pre-rarity anticipation red.
+- Result/signal stages can still show the real innate grade color after the reveal reaches that stage.
+
+### Smoke regression
+- `scripts/smoke-direct-battle-runtime.ts` now additionally checks:
+  - monster role targeting does not collapse to Hunter-only.
+  - dead Hunter + living shadows + dead enemies resolves as enemy victory.
+  - level 1 B `잿불 치유병` HP stays under the smoke ceiling.
+  - common/uncommon shadow anticipation is low.
+  - uncommon + S innate grade anticipation is still low.
+  - rare/epic/legendary anticipation is high/red.
+
+### Smoke result
+- `npx tsx scripts/smoke-direct-battle-runtime.ts` exit code 0:
+  - Shadow stat audit: ember-mender lv1 B HP 359, ATK 106, DEF 198, SPD 68, SKILL 109
+  - Monster definitions: 36
+  - Boss definitions: 6
+  - Minion definitions: 6
+  - Encounters tested: 30
+  - Boss encounters: 8
+  - Total battles: 30
+  - Total rounds simulated: 91
+  - Total logs: 893
+  - ActionQueue issues: 0
+  - Reveal snapshot issues: 0
+  - Skill safety issues: 0
+  - Monster targeting issues: 0
+  - Hunter defeat issues: 0
+  - Shadow stat issues: 0
+  - Summon color issues: 0
+  - Validation issues: 0
+  - Crashes: 0
+  - Gate/Tower connections: 0
+  - Ally support/guard skill damage regression: passed
+  - Skill safety regression: passed
+  - Monster targeting regression: passed
+  - Hunter death defeat regression: passed
+  - Shadow stat regression: passed
+  - Summon reveal color regression: passed
+  - Setup priority regression: passed
+  - Reveal snapshot regression: passed
+
+### Verification and constraints
+- `npm run build` exit code 0.
+- Existing Vite chunk-size warning only.
+- Existing Gate/Tower long sims were not run.
+- UI/balance/summon reveal feel remains for user testing.
+- localStorage key `levelup-save`, persist version 14, save schema, and save migrations unchanged.
+- No reward, economy, shop, probability, Gate/Tower result flow, or progression-number changes.
+- No hidden/locked named information exposure.
+- No shadow skill/passive nerf, no Auto battle improvement, and no 2.5D work.
+
+## 12-29J: Infinite Tower direct-control battle first real connection
+
+### Scope
+- Connected Infinite Tower's normal user battle start flow to the shared direct-control battle UI.
+- Gate direct-control battle flow was not changed.
+- Existing Tower auto/manual battle code remains available only as DEV fallback buttons.
+- No 2.5D implementation, save migration, persist version change, localStorage key change, economy/shop/probability/reward number change, or hidden named data exposure.
+
+### Tower direct battle entry
+- `InfiniteTowerPanel` now opens `DirectBattlePreviewPanel` as `무한의 탑 직접 조작 전투`.
+- The panel reuses the Gate-stabilized direct-control UI:
+  - attack / skill / guard commands
+  - target selection
+  - round execution
+  - auto selection
+  - auto 1-round
+  - sequential center log reveal
+  - log -> HP/status result synchronization
+  - Damage Floor ally-safety behavior
+- User-facing direct battle copy no longer describes this path as a preview.
+
+### Player party and encounter recommendation
+- Player party is still built by the shared direct battle panel from:
+  - current Hunter
+  - equipped owned shadows, capped to 3
+  - current items/equipment/active consumable context
+- Hidden/locked named protection is preserved because only owned/equipped shadows are passed into the direct battle panel.
+- Tower floor recommendation is first-pass only:
+  - normal floor 1-3: `small_duo`
+  - normal floor 4-10: `caster_pair`
+  - normal floor 11-20: `tank_assassin`
+  - normal floor 21+: `control_support`
+  - boss floor under 15: `boss_minion`
+  - boss floor 15+: `boss_support`
+- Existing Tower monster/reward/scaling tables were not changed.
+
+### Result connection
+- Added `resolveDirectTowerBattle(combatLog, floor)` in the store.
+- `InfiniteTowerPanel` adapts direct battle completion into the existing `CombatLog`/`TowerBattleSession` shape.
+- The adapter creates a `revealing` Tower battle result with existing `calculateTowerReward`.
+- It immediately calls the existing `resolveTowerBattle()` path, so victory/defeat use the current Tower reward/result/floor-clear/challenge-progress logic.
+- Cancel closes only the local direct battle panel:
+  - no reward
+  - no floor clear
+  - no progress update
+
+### Duplicate safety
+- `InfiniteTowerPanel` keeps a per-run direct result key: floor + direct run id + outcome.
+- Store-level `resolveDirectTowerBattle` refuses a combat log battle id that already exists in `combatLogs`.
+- The direct run id is generated when the Tower direct battle opens, so repeated attempts on the same floor can still resolve, while duplicate callbacks for the same run cannot double-award.
+- Existing Tower boss box first-clear and floor reward claimed maps remain the underlying reward duplication guards.
+
+### Existing Tower fallback
+- Old Tower automatic and manual battle buttons are now DEV fallback controls under the new direct battle start.
+- The old auto/manual result code was not deleted in this pass.
+
+### Verification
+- `npm run build` exit code 0.
+- Existing Vite chunk-size warning only.
+- `npx tsx scripts/smoke-direct-battle-runtime.ts` exit code 0:
+  - Encounters tested: 7
+  - Total battles: 7
+  - Player units: 4
+  - Total rounds simulated: 18
+  - Total logs: 157
+  - ActionQueue issues: 0
+  - Reveal snapshot issues: 0
+  - Validation issues: 0
+  - Crashes: 0
+  - Ally support/guard skill damage regression: passed
+  - Setup priority regression: passed
+  - Reveal snapshot regression: passed
+- Existing Gate/Tower long sims were not run.
+- Browser UI/combat feel remains for user testing.
+
+## 12-29I-5: Direct battle reveal log-result synchronization and center log placement
+
+### Diagnosis
+- `executeDirectBattleRound` calculates the full next round state immediately, while the UI stages a display copy of the previous state.
+- Before this step, runtime logs had only `value` and target ids, so `DirectBattlePreviewPanel` inferred HP deltas during reveal instead of reading action-level before/after state.
+- The center log queue fired `onLogChange` and HP application at the same moment, so the user could not reliably see "log first, then result".
+- The direct center overlay was mounted in a fixed viewport layer and forced to screen center, which could cover the visible ally/enemy HP rows.
+
+### Reveal step model
+- Added HP and status snapshots to direct battle log entries:
+  - `hpBeforeByUnitId`
+  - `hpAfterByUnitId`
+  - `statusBeforeByUnitId`
+  - `statusAfterByUnitId`
+  - `actionId`
+  - `timing`
+- `DirectBattlePreviewPanel` now builds internal reveal steps from runtime logs.
+- Each step carries one cinematic message plus the exact HP/status result for that action.
+
+### Log -> result ordering
+- Round execution keeps displayed units at the round-start state after calculation.
+- `onLogChange` now appends/shows the current log first.
+- A short delayed timer applies that step's `hpAfterByUnitId` and status snapshot to displayed units.
+- The next cinematic log advances after the existing overlay interval.
+- At reveal completion, the UI reconciles once to the final runtime state.
+- Victory/defeat completion still fires only after reveal completion or immediate-result skip, once.
+- `즉시 결과 보기` skips all pending step timers and syncs directly to final state.
+- Auto 1-round uses the same reveal-step path.
+
+### Center overlay placement
+- Removed the fixed full-viewport direct battle overlay wrapper.
+- The direct center log now renders in a reserved compact panel-local row before the HP grid.
+- This keeps ally/enemy HP rows visible on narrow mobile widths instead of covering them with a centered screen card.
+- The existing `CinematicLogOverlay` queue pattern from the manual Gate battle path is still reused.
+
+### Setup and Damage Floor safety
+- Guard/protect/shield/buff/support, ally setup, stat shift, control/debuff/mark setup timing remains `before_action`.
+- Control/debuff actions now also emit a status reveal step before their damage step.
+- Damage Floor remains an ally-target guard/survival style action and still does not damage allies.
+- Gate reward/progression/store flow, duplicate reward guard, and cancel behavior were not changed.
+
+### Regression smoke
+- `scripts/smoke-direct-battle-runtime.ts` now checks reveal snapshot payloads:
+  - damage step target `hpBefore > hpAfter`
+  - heal step target `hpBefore < hpAfter`
+  - guard/support setup step does not reduce allied HP
+  - guard setup step includes status before/after snapshots
+- `npx tsx scripts/smoke-direct-battle-runtime.ts` exit code 0:
+  - Encounters tested: 7
+  - Total battles: 7
+  - Player units: 4
+  - Total rounds simulated: 18
+  - Total logs: 157
+  - ActionQueue issues: 0
+  - Reveal snapshot issues: 0
+  - Validation issues: 0
+  - Crashes: 0
+  - Gate/Tower connections: 0
+  - Ally support/guard skill damage regression: passed
+  - Setup priority regression: passed
+  - Reveal snapshot regression: passed
+  - Center overlay render path: code path verified
+
+### Verification
+- `npm run build` exit code 0.
+- Existing Vite chunk-size warning only.
+- Existing Gate/Tower sims were not run.
+- Gate reward/progression/store flow unchanged.
+- localStorage key `levelup-save`, persist version 14, save schema, and save migration unchanged.
+- No hidden/locked named info exposure, no Tower real battle connection, no 2.5D implementation, and no economy/shop/probability/reward number changes.
+
+## 12-29I-1: Gate direct-control battle UX first pass
+
+### Scope
+- Improved the existing Gate direct-control battle panel UX without changing Gate rewards, progression, save data, or direct battle formulas.
+- The work stayed inside the shared direct battle UI surface used by Gate direct combat and DEV previews.
+- Infinite Tower real battle flow was not connected or changed.
+
+### Skill/action UI
+- The three primary command slots remain attack / skill / guard.
+- Skill commands now show the actual action label, a short Korean description, target type, and cooldown/reuse wait text.
+- If a unit has multiple skill actions, the unit card shows a compact skill picker and stores the selected skill `actionId` in the manual action selection.
+- Attack and guard also now show short descriptions:
+  - Attack: ATK-based single-target attack.
+  - Guard: damage reduction / ally protection wording depending on target type.
+
+### Sequential round reveal
+- Round resolution still uses the existing direct battle runtime and ActionQueue.
+- After `executeDirectBattleRound`, the UI stages the result and reveals action logs one by one at a short interval.
+- HP is updated incrementally for damage, heal, and protect/reaction events during the reveal, then reconciled to the final runtime state after the queue finishes.
+- Added a Korean reveal status row and an immediate result button.
+- Action/reaction/result messages are displayed in Korean in the panel and in the direct Gate combat log payload.
+
+### Result safety
+- Victory/defeat completion is emitted only after the reveal finishes or the user skips to the final result.
+- The 12-29I duplicate-result guard in `GatePanel` and `resolveDirectGateBattle` remains unchanged.
+- Cancel still grants no reward and applies no clear/progress.
+- Auto selection and Auto 1-round remain available; Auto 1-round also uses the sequential reveal path.
+
+### Save/system constraints
+- No localStorage key change.
+- Persist remains version 14.
+- No save schema field, migration, or stored direct battle state was added.
+- No gameplay, reward, economy, shop, or probability number changed.
+- No hidden/locked named shadow data exposure was added; player party still comes only from owned/equipped shadows.
+- No 2.5D implementation.
+
+### Verification
+- `npm run build` exit code 0.
+- Existing Vite chunk-size warning only.
+- `npx tsx scripts/smoke-direct-battle-runtime.ts` was not required for this UI-only patch and was not run in this step.
+- Browser Gate combat feel remains for user testing.
+
+## 12-29I-2: Gate direct-control center log and skill info polish
+
+### Scope
+- Improved the Gate direct-control battle UX without changing combat math, Gate reward/result flow, save data, or progression.
+- The shared direct battle panel remains usable by Gate direct battle and DEV previews.
+- Infinite Tower real battle flow was not connected or changed.
+
+### Center battle message overlay
+- Added a compact central battle message overlay inside `DirectBattlePreviewPanel`.
+- The overlay is driven by the existing sequential reveal queue:
+  - each revealed action/log updates the center message
+  - damage/heal/guard/reaction/result events get distinct tones
+  - victory/defeat messages appear from the same final reveal path
+- The overlay is presentation-only and does not call store actions or resolve battle results.
+- `즉시 결과 보기` clears the overlay together with the pending reveal state.
+
+### Skill display improvements
+- Added optional `description` metadata to direct battle action definitions.
+- Hunter direct battle actions now use real combat skill definitions from `getPlayerCombatSkills`.
+- The old hard-coded `Hunter Skill` label was removed from the hunter BattleUnit path.
+- The basic-kit skill `집중 베기` now appears as the hunter skill when available, with its seed description/effect summary.
+- Hunter skill actions can include multiple available combat skills, so the existing multi-skill picker can show real skill names instead of one generic fallback.
+- Shadow skills now prefer the full active skill name over the short all-caps label.
+- Skill descriptions use real Korean action descriptions when present and otherwise fall back to Korean effect-kind summaries.
+
+### Multi-skill UI
+- The multi-skill picker now marks the selected skill with `선택됨`.
+- Skill cards continue to show name, short description, target type, and cooldown/reuse wait.
+- Cooldown skills remain disabled through the existing cooldown state.
+
+### Result safety
+- Victory/defeat completion still fires only after reveal completion or immediate-result skip.
+- The Gate duplicate-result guard from 12-29I remains unchanged.
+- Cancel still grants no reward and applies no clear/progress.
+- Auto selection and Auto 1-round still use the sequential reveal/overlay path.
+
+### Save/system constraints
+- No localStorage key change.
+- Persist remains version 14.
+- No save schema field, migration, or stored direct battle state was added.
+- No gameplay, reward, economy, shop, or probability number changed.
+- No hidden/locked named shadow exposure was added; player party still comes only from owned/equipped shadows.
+- No 2.5D implementation.
+
+### Verification
+- `npm run build` exit code 0.
+- Existing Vite chunk-size warning only.
+- Runtime smoke was not required because combat formulas/runtime behavior were not changed.
+- Browser Gate combat feel remains for user testing.
+
+## 12-29I-3: Gate direct-control center log visibility and ally-target guard fix
+
+### Scope
+- Fixed two direct Gate battle UX/runtime bugs without changing Gate reward/result flow, save data, progression, economy, shop, or probability values.
+- Infinite Tower real battle flow was not connected or changed.
+- No 2.5D implementation.
+
+### Center battle message overlay
+- The 12-29I-2 overlay was rendered inside the long battle panel, so its absolute center could be outside the current viewport and appear invisible during real Gate play.
+- Moved the central battle message overlay to a compact fixed viewport layer with `pointer-events-none` and high z-index.
+- The overlay is still driven only by the existing sequential reveal event:
+  - damage
+  - heal
+  - guard/protect/reaction
+  - victory/defeat/result
+- Immediate result skip clears the overlay together with pending reveal state.
+- The overlay remains presentation-only and does not call store actions.
+
+### Ally-target skill damage fix
+- Fixed `directBattleRuntime` fallback behavior where a skill with `targetType: single_ally` and `effectKind: guard` could fall through to the generic damage branch.
+- Runtime now checks actual target team before applying damage.
+- Ally-target actions are routed to safe support/guard handling instead of hostile damage.
+- Enemy-target support/guard combinations now fizzle safely rather than buffing enemies.
+- Control/damage branches now require valid enemy targets.
+
+### Damage Floor handling
+- `Damage Floor` remains a guard-style skill by definition:
+  - `target: hunter`
+  - `targetType: single_ally`
+  - `effectKind: guard`
+- Runtime now treats that combination as a guard/shield/protect style status effect.
+- It no longer damages the selected allied target.
+- Center overlay/log formatting now describes guard/survival skill status events as defensive reinforcement.
+
+### Safety mapping
+- Ally target:
+  - support -> heal/support
+  - guard/survival/stat_shift/cooldown/synergy -> guard/shield/support status
+  - damage/hybrid/control with an ally target -> safe ally support fallback, no HP damage
+- Enemy target:
+  - damage/hybrid/basic/bossing -> damage
+  - control -> damage plus debuff, only if enemy target is valid
+  - support/guard with hostile target -> safe fizzle
+
+### Regression smoke
+- Added an ally support/guard regression case to `scripts/smoke-direct-battle-runtime.ts`.
+- The smoke constructs a `Damage Floor` style ally-target guard action, targets the Hunter, and verifies:
+  - Hunter HP does not decrease from the ally skill.
+  - No ally-target damage log is emitted.
+  - A guard/status log is emitted.
+  - A normal enemy-target attack can still deal damage.
+
+### Result safety
+- Victory/defeat completion still fires only after reveal completion or immediate-result skip.
+- The Gate duplicate-result guard from 12-29I remains unchanged.
+- Cancel still grants no reward and applies no clear/progress.
+
+### Save/system constraints
+- No localStorage key change.
+- Persist remains version 14.
+- No save schema field, migration, or stored direct battle state was added.
+- No gameplay, reward, economy, shop, or probability number changed.
+- No hidden/locked named shadow exposure was added.
+
+### Verification
+- `npm run build` exit code 0.
+- Existing Vite chunk-size warning only.
+- `npx tsx scripts/smoke-direct-battle-runtime.ts` exit code 0:
+  - Encounters tested: 7
+  - Total battles: 7
+  - Player units: 4
+  - Total rounds simulated: 18
+  - Total logs: 138
+  - ActionQueue issues: 0
+  - Validation issues: 0
+  - Crashes: 0
+  - Gate/Tower connections: 0
+  - Ally support/guard skill damage regression: passed
+- Browser Gate combat feel remains for user testing.
+
+## 12-29I-4: Gate direct-control setup timing and cinematic overlay queue reuse
+
+### Scope
+- Fixed direct Gate battle UX/timing behavior only.
+- Gate reward/result/progression/store flow was not changed.
+- Infinite Tower real battle flow was not connected or changed.
+- No save schema, localStorage, persist version, migration, economy, shop, reward, or probability values were changed.
+- No 2.5D implementation.
+
+### Existing manual battle overlay reference
+- Rechecked the existing manual Gate battle center-log path in `GatePanel`.
+- The proven path is `CinematicLogOverlay` with:
+  - a local cinematic log queue
+  - `visible={logs.length > 0}`
+  - `onLogChange` to advance revealed battle state
+  - `onComplete` to finish the reveal queue
+  - panel-local rendering over a `relative overflow-hidden` battle panel
+- Direct battle no longer relies on a separate ad-hoc center-message state path.
+
+### Center overlay reimplementation
+- `DirectBattlePreviewPanel` now converts each direct battle reveal log into `CinematicLogData`.
+- Round reveal uses the existing `CinematicLogOverlay` queue component that already works in manual Gate battle.
+- `onLogChange` applies the staged log/HP update for each revealed action.
+- `onComplete` finalizes the pending round result and fires victory/defeat completion only once.
+- The overlay is mounted from the direct battle reveal state and wrapped in a fixed `z-[9999]` presentation layer so it is not clipped by the direct battle panel.
+- Immediate result skip still clears the same pending reveal state and does not duplicate completion callbacks.
+
+### Setup timing priority
+- Added explicit direct battle action timing classification:
+  - `before_action`: guard, protect, shield, buff/support, ally-target setup, stat shift, control/debuff/mark.
+  - `normal_action`: basic attacks and hostile damage skills.
+  - reaction/cleanup remain separate existing timing buckets.
+- ActionQueue sorting still uses timing bucket first, then final priority, SPD, team order, and queue id.
+- Setup actions therefore resolve before damage even when the setup actor has lower SPD than the attacker.
+- Pure damage skills remain in `normal_action`, so they are not incorrectly promoted into setup timing.
+
+### Buff/debuff behavior
+- Guard/support/ally setup applies guard/shield/protect status before enemy attacks in the same round.
+- Control/debuff actions now apply defenseDown/speedDown/mark before their damage calculation and before later allied damage actions.
+- This lets defenseDown/mark affect the same-round damage window instead of arriving too late.
+
+### Damage Floor handling
+- `Damage Floor` remains an ally-target guard/survival style action.
+- It is routed through setup timing and safe ally support handling.
+- It does not damage the selected allied target.
+- The guard/support regression from 12-29I-3 remains covered by smoke.
+
+### Regression smoke
+- Added setup priority regression coverage to `scripts/smoke-direct-battle-runtime.ts`:
+  - low-SPD guard setup resolves before high-SPD enemy attack
+  - guard setup reduces incoming damage compared with a no-guard baseline
+  - control/debuff setup resolves before allied basic damage
+  - pure damage skill remains `normal_action`
+- Smoke also prints `Center overlay render path: code path verified` for the direct battle overlay queue path.
+
+### Result safety
+- Victory/defeat completion still fires after reveal completion or immediate-result skip, once per finished battle.
+- The Gate duplicate-result guard from 12-29I remains unchanged.
+- Cancel still grants no reward and applies no clear/progress.
+
+### Verification
+- `npm run build` exit code 0.
+- Existing Vite chunk-size warning only.
+- `npx tsx scripts/smoke-direct-battle-runtime.ts` exit code 0:
+  - Encounters tested: 7
+  - Total battles: 7
+  - Player units: 4
+  - Total rounds simulated: 18
+  - Total logs: 138
+  - ActionQueue issues: 0
+  - Validation issues: 0
+  - Crashes: 0
+  - Gate/Tower connections: 0
+  - Ally support/guard skill damage regression: passed
+  - Setup priority regression: passed
+  - Center overlay render path: code path verified
+- Browser Gate combat feel remains for user testing.
+
+## 12-30C: Hidden/secret connective layer audit and spoiler-safe masking
+
+### Scope
+- Completed a spoiler-safe audit of the existing hidden/secret progress layer against the current Direct Battle, Shadow Extraction, Reward, Summon, Challenge Card, Skill, Gate, Tower, and Shadow Codex flows.
+- Kept the work to connective-layer and masking adjustments only.
+- No save schema, persist version, migration, or `levelup-save` key changes.
+- No reward, economy, shop, probability, Gate/Tower progress, Direct Battle balance, summon/extraction chance, shadow stat, skill, or passive definition changes.
+
+### Direct Battle connective check
+- Confirmed Gate and Tower Direct Battle result handling still routes through the main reward/progress path and existing secret progress application.
+- Added Direct Battle skill-use runtime accounting for resolved Gate/Tower logs so existing skill-use based hidden signals can remain connected to the current main battle path.
+- Existing result guards remain responsible for preventing duplicate result processing.
+
+### Shadow Extraction connective check
+- Confirmed extraction success/failure remains recorded through the store path and is still guarded by the per-gate extraction history.
+- Added a small non-spoiler failure-side signal counter and a one-time atmospheric hint gate.
+- The hint uses existing seen-marker state so it does not repeat on refresh, reopen, or repeated extraction attempts.
+
+### Spoiler-safe UI masking
+- Gate shadow pool and extraction preview now hide unrevealed hidden rarity/name/role details behind neutral wording.
+- Shadow Codex locked cards now mask unrevealed hidden card rarity styling, role/source hints, searchable hidden attributes, and filter-based attribute leakage.
+- The shared shadow portrait hidden fallback now uses neutral visual metadata so future hidden calls do not imply role, rarity, source, grade, or named status.
+- Reward box hidden fragment masking, challenge card generic reward preview, and summon reveal separation were rechecked and left intact.
+- Summon ticket reveal flow was not changed.
+
+### Secret smoke coverage
+- Extended the hidden/secret smoke to cover the new extraction-failure signal counter and one-time marker behavior.
+- The smoke remains short and does not run long simulations.
+
+### Verification
+- `npm run build` exit code 0.
+- `npx tsc --noEmit` exit code 0.
+- `npx tsx scripts/smoke-direct-battle-runtime.ts` exit code 0.
+- `npx tsx scripts/sim-secret-expansion.ts` exit code 0.
+
+### Next candidates
+- Tune real-play hint frequency after observation.
+- Reward feel polish as a separate task.
+- Longer-form story chapter expansion later, outside this connective-layer pass.

@@ -499,23 +499,27 @@ export function ShadowPortrait({
   const role = def?.role ?? shadow?.role ?? 'assault'
   const named = Boolean(def?.isGateNamed || def?.isAchievementNamed || def?.rank === 'named' || shadow?.isNamed)
   const evolved = Boolean((shadow?.evolutionStage ?? 0) > 0 || def?.visualTheme === 'evolved')
-  const visualKey = def?.visualKey ?? `${role}-${rarity}`
+  const displayRarity = hidden ? 'common' : rarity
+  const displayRole = hidden ? 'support' : role
+  const displayNamed = hidden ? false : named
+  const displayEvolved = hidden ? false : evolved
+  const visualKey = hidden ? 'sealed-shadow-signal' : def?.visualKey ?? `${role}-${rarity}`
   const seed = hashString(visualKey)
-  const palette = rarityPalette[rarity]
-  const accent = def?.accentColor ?? palette.frame
-  const profile = resolveProfile(def, role, rarity, named, evolved)
+  const palette = rarityPalette[displayRarity]
+  const accent = hidden ? '#94a3b8' : def?.accentColor ?? palette.frame
+  const profile = resolveProfile(hidden ? undefined : def, displayRole, displayRarity, displayNamed, displayEvolved)
   const silhouette = profile.silhouette
   const runeRotation = (seed % 28) - 14
   const mistShift = (seed % 18) - 9
   const label = hidden ? 'Unknown shadow' : (def?.name ?? shadow?.name ?? 'Shadow')
-  const sourceTone = def?.isAchievementNamed || shadow?.isAchievementNamed ? 'ACHIEVEMENT' : def?.isGateNamed || shadow?.isGateNamed ? 'GATE NAMED' : 'NAMED'
+  const sourceTone = hidden ? 'SIGNAL' : def?.isAchievementNamed || shadow?.isAchievementNamed ? 'ACHIEVEMENT' : def?.isGateNamed || shadow?.isGateNamed ? 'GATE NAMED' : 'NAMED'
   const grade = innateGrade ?? shadow?.innateGrade ?? undefined
   const isGradeS = grade === 'S'
   const isGradeA = grade === 'A'
-  const assetFamily = def?.assetFamily
+  const assetFamily = hidden ? undefined : def?.assetFamily
   const isGateNamed = assetFamily === 'named_gate'
   const isAchievementNamed = assetFamily === 'named_achievement'
-  const assetUrl = getShadowPortraitAsset(def?.portraitKey)
+  const assetUrl = hidden ? undefined : getShadowPortraitAsset(def?.portraitKey)
   const style = {
     '--shadow-accent': accent,
     '--shadow-frame': palette.frame,
@@ -528,22 +532,22 @@ export function ShadowPortrait({
       className={clsx(
         'relative isolate overflow-hidden rounded-md border bg-ink-950/80',
         sizeClass[size],
-        def?.isAchievementNamed || shadow?.isAchievementNamed ? 'border-cyan-200/50' : named ? 'border-amber-300/50' : 'border-white/10',
+        hidden ? 'border-slate-400/30' : def?.isAchievementNamed || shadow?.isAchievementNamed ? 'border-cyan-200/50' : displayNamed ? 'border-amber-300/50' : 'border-white/10',
         active && 'ring-2 ring-cyan-300/35',
         highlighted && 'shadow-glow-purple',
         evolutionReady && 'shadow-glow',
-        isGradeS && !named && 'grade-aura-s',
-        isGradeA && !named && !highlighted && 'grade-aura-a',
-        named && 'named-pulse',
+        isGradeS && !displayNamed && !hidden && 'grade-aura-s',
+        isGradeA && !displayNamed && !hidden && !highlighted && 'grade-aura-a',
+        displayNamed && 'named-pulse',
         isGateNamed && 'portrait-family-named-gate',
         isAchievementNamed && 'portrait-family-named-achievement',
-        evolved && !named && 'portrait-evolved',
+        displayEvolved && !displayNamed && 'portrait-evolved',
         className,
       )}
       style={{
         ...style,
-        borderColor: active || named ? accent : undefined,
-        boxShadow: highlighted || active || named
+        borderColor: active || displayNamed ? accent : undefined,
+        boxShadow: highlighted || active || displayNamed
           ? `0 0 ${Math.round(24 + profile.intensity * 8)}px ${palette.glow}, inset 0 0 30px rgba(2, 6, 23, 0.85)`
           : `inset 0 0 24px rgba(2, 6, 23, 0.9)`,
       }}
@@ -553,7 +557,7 @@ export function ShadowPortrait({
       <div
         className="absolute inset-0 opacity-80"
         style={{
-          background: `radial-gradient(circle at 50% 34%, ${accent}22, transparent ${named ? 44 : 34}%), radial-gradient(circle at 50% 88%, ${accent}16, transparent 42%)`,
+          background: `radial-gradient(circle at 50% 34%, ${accent}22, transparent ${displayNamed ? 44 : 34}%), radial-gradient(circle at 50% 88%, ${accent}16, transparent 42%)`,
         }}
       />
       <div
@@ -595,15 +599,15 @@ export function ShadowPortrait({
           </linearGradient>
         </defs>
         <g opacity={hidden ? 0.28 : 1}>
-          {renderAura(profile, accent, named, evolved)}
-          {renderBackgroundMotif(profile, accent, seed, named, evolved)}
-          <path d="M58 10 L103 35 L103 91 L58 119 L13 91 L13 35 Z" fill="none" stroke={accent} strokeWidth={named ? 2.8 : evolved ? 2 : 1.4} opacity={named ? 0.82 : 0.42 + profile.intensity * 0.06} />
-          {evolved && (
+          {renderAura(profile, accent, displayNamed, displayEvolved)}
+          {renderBackgroundMotif(profile, accent, seed, displayNamed, displayEvolved)}
+          <path d="M58 10 L103 35 L103 91 L58 119 L13 91 L13 35 Z" fill="none" stroke={accent} strokeWidth={displayNamed ? 2.8 : displayEvolved ? 2 : 1.4} opacity={displayNamed ? 0.82 : 0.42 + profile.intensity * 0.06} />
+          {displayEvolved && (
             <path d="M58 26 L82 39 L82 89 L58 103 L34 89 L34 39 Z" fill="none" stroke={accent} strokeWidth="1.4" strokeDasharray="5 3" opacity="0.55" />
           )}
-          <path d="M58 22 L89 40 L89 85 L58 104 L27 85 L27 40 Z" fill="none" stroke={accent} strokeDasharray={profile.rune === 'ornate' ? '2 4 8 4' : '5 7'} strokeWidth={named ? 1.25 : 1} opacity={named || evolved ? 0.38 : 0.25} transform={`rotate(${runeRotation} 58 64)`} />
-          {renderSilhouette(assetFamily, silhouette, role, accent, seed, evolved)}
-          {renderAdvancedProps(profile, role, accent, seed, evolved, named)}
+          <path d="M58 22 L89 40 L89 85 L58 104 L27 85 L27 40 Z" fill="none" stroke={accent} strokeDasharray={profile.rune === 'ornate' ? '2 4 8 4' : '5 7'} strokeWidth={displayNamed ? 1.25 : 1} opacity={displayNamed || displayEvolved ? 0.38 : 0.25} transform={`rotate(${runeRotation} 58 64)`} />
+          {renderSilhouette(assetFamily, silhouette, displayRole, accent, seed, displayEvolved)}
+          {renderAdvancedProps(profile, displayRole, accent, seed, displayEvolved, displayNamed)}
           {isGateNamed && renderNamedGateDecor(accent, seed)}
           {isAchievementNamed && renderAchievementDecor(accent)}
         </g>
@@ -626,9 +630,9 @@ export function ShadowPortrait({
       )}
       <div className="absolute left-2 top-2 flex items-center gap-1">
         <span className={clsx('rounded border px-1.5 py-0.5 text-[8px] system-text', palette.text)} style={{ borderColor: palette.frame, background: 'rgba(2,6,23,0.58)' }}>
-          {roleLabel[role]}
+          {hidden ? 'SIGNAL' : roleLabel[role]}
         </span>
-        {named && (
+        {displayNamed && (
           <span className={clsx(
             'rounded border px-1.5 py-0.5 text-[8px] system-text',
             def?.isAchievementNamed || shadow?.isAchievementNamed
@@ -655,7 +659,7 @@ export function ShadowPortrait({
           {grade}
         </div>
       )}
-      {evolved && (
+      {displayEvolved && (
         <div className="absolute bottom-2 right-2 rounded border border-emerald-300/35 bg-emerald-300/10 px-1.5 py-0.5 text-[8px] system-text text-emerald-100">
           EVO
         </div>

@@ -2,6 +2,7 @@ import clsx from 'clsx'
 import { motion, useReducedMotion } from 'framer-motion'
 import { FastForward, Sparkles, X } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
+import { createPortal } from 'react-dom'
 import {
   SHADOW_INNATE_GRADE_LABEL,
   SHADOW_RARITY_LABEL,
@@ -160,8 +161,18 @@ export function ShadowRevealModal({ reveal, onClose, fast = false }: Props) {
   const completeSequence = () => setSequenceComplete(true)
 
 
-  return (
-    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/65 p-3 backdrop-blur-sm">
+  return createPortal(
+    <div className="fixed inset-0 z-[880] flex items-center justify-center overflow-hidden bg-black/72 p-3 backdrop-blur-sm">
+      <div className={clsx(
+        'pointer-events-none absolute inset-0',
+        !showResult
+          ? 'bg-[radial-gradient(circle_at_50%_50%,rgba(34,211,238,0.10),transparent_42%),radial-gradient(circle_at_50%_54%,rgba(124,58,237,0.12),transparent_62%)]'
+          : apexSignal
+          ? 'bg-[radial-gradient(circle_at_50%_48%,rgba(245,158,11,0.20),transparent_34%),radial-gradient(circle_at_50%_54%,rgba(88,28,135,0.24),transparent_58%)]'
+          : highSignal
+            ? 'bg-[radial-gradient(circle_at_50%_50%,rgba(168,85,247,0.18),transparent_42%),radial-gradient(circle_at_50%_56%,rgba(34,211,238,0.11),transparent_62%)]'
+            : 'bg-[radial-gradient(circle_at_50%_52%,rgba(34,211,238,0.13),transparent_48%)]',
+      )} />
       <motion.div
         initial={reducedMotion ? { opacity: 1 } : { opacity: 0, scale: 0.96, y: 12 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
@@ -169,9 +180,9 @@ export function ShadowRevealModal({ reveal, onClose, fast = false }: Props) {
         className={clsx(
           'shadow-reveal-card corner-bracket relative max-h-[92vh] w-full overflow-y-auto rounded-lg border bg-ink-950/92 p-4 sm:p-5',
           apexSignal ? 'max-w-2xl' : 'max-w-xl',
-          rarityFrame[rarity],
-          highSignal && 'shadow-reveal-high',
-          !success && 'border-slate-400/35 text-slate-100',
+          showResult ? rarityFrame[rarity] : 'text-white',
+          showResult && highSignal && 'shadow-reveal-high',
+          showResult && !success && 'text-slate-100',
         )}
         role="dialog"
         aria-modal="true"
@@ -180,11 +191,13 @@ export function ShadowRevealModal({ reveal, onClose, fast = false }: Props) {
         <div className="br" />
         <div className={clsx(
           'pointer-events-none absolute inset-0',
-          apexSignal
+          !showResult
+            ? 'bg-[radial-gradient(circle_at_50%_12%,rgba(96,232,255,0.10),transparent_32%),radial-gradient(circle_at_50%_64%,rgba(124,58,237,0.12),transparent_46%)]'
+            : apexSignal
             ? 'bg-[radial-gradient(circle_at_50%_4%,rgba(251,191,36,0.24),transparent_34%),radial-gradient(circle_at_50%_60%,rgba(168,85,247,0.18),transparent_44%)]'
             : 'bg-[radial-gradient(circle_at_50%_12%,rgba(96,232,255,0.14),transparent_32%),radial-gradient(circle_at_50%_64%,rgba(168,85,247,0.16),transparent_42%)]',
         )} />
-        <div className={clsx('shadow-reveal-rift pointer-events-none absolute inset-x-8 top-5 h-px', success ? 'bg-cyan-200/55' : 'bg-slate-200/35')} />
+        <div className={clsx('shadow-reveal-rift pointer-events-none absolute inset-x-[12vw] top-5 h-px', success ? 'bg-cyan-200/55' : 'bg-slate-200/35')} />
         <div className="relative z-10">
           <div className="mb-3 flex items-center justify-between gap-3">
             <div className="flex min-w-0 flex-wrap items-center gap-1.5">
@@ -232,6 +245,11 @@ export function ShadowRevealModal({ reveal, onClose, fast = false }: Props) {
           <>
           <div className={clsx('grid gap-4 md:items-center', apexSignal ? 'md:grid-cols-[240px_1fr]' : 'md:grid-cols-[210px_1fr]')}>
             <div className={clsx('shadow-reveal-core relative mx-auto w-full', apexSignal ? 'max-w-[260px]' : 'max-w-[230px]', !safeShadow && 'min-h-52')}>
+              <div className={clsx(
+                'pointer-events-none absolute rounded-full border',
+                apexSignal ? 'inset-0 border-amber-200/20 shadow-[0_0_78px_rgba(245,158,11,0.28)]' : highSignal ? 'inset-3 border-purple-200/16 shadow-[0_0_58px_rgba(168,85,247,0.20)]' : 'inset-5 border-cyan-200/14 shadow-[0_0_42px_rgba(34,211,238,0.16)]',
+              )} />
+              <div className="pointer-events-none absolute inset-x-10 top-1/2 h-px bg-gradient-to-r from-transparent via-white/18 to-transparent" />
               {safeShadow ? (
                 <ShadowPortrait
                   shadow={safeShadow}
@@ -257,7 +275,7 @@ export function ShadowRevealModal({ reveal, onClose, fast = false }: Props) {
               <div className={clsx('system-text text-[10px]', success ? 'text-cyan-200/70' : 'text-slate-200/60')}>
                 {success ? 'RESONANCE CONFIRMED' : 'TRACE LOST'}
               </div>
-              <h3 className="mt-1 text-2xl font-black leading-tight text-white sm:text-3xl">
+              <h3 className={clsx('mt-2 font-black leading-tight text-white', apexSignal ? 'text-4xl sm:text-5xl' : 'text-3xl sm:text-4xl')}>
                 {safeShadow ? safeShadow.name : reveal.ticketLabel ?? (success ? '그림자 신호 감지' : '잔상이 흩어진다')}
               </h3>
               <div className="mt-2 flex flex-wrap justify-center gap-1.5 text-[10px] system-text md:justify-start">
@@ -299,6 +317,7 @@ export function ShadowRevealModal({ reveal, onClose, fast = false }: Props) {
           )}
         </div>
       </motion.div>
-    </div>
+    </div>,
+    document.body,
   )
 }

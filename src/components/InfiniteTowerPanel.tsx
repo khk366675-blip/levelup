@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import clsx from 'clsx'
-import { Swords, Trophy, Zap, Shield, FastForward, Hand, X } from 'lucide-react'
+import { Swords, Trophy, Zap, Shield, FastForward, X } from 'lucide-react'
 import { useGame } from '../lib/store'
 import {
   getTowerFloorType,
@@ -10,13 +10,15 @@ import {
 import type { CinematicLogData, CinematicLogTone } from './CinematicLogOverlay'
 import { CinematicLogOverlay } from './CinematicLogOverlay'
 import { CombatLogPanel } from './CombatLogPanel'
+import { DirectBattlePreviewPanel, type DirectBattlePanelCompletePayload } from './DirectBattlePreviewPanel'
 import { DramaticReveal, type RevealStep } from './DramaticReveal'
 import { gateTurnToLogEntry } from './GatePanel'
 import { MonsterIntentPanel } from './MonsterIntentPanel'
 import { SkillActionCard, skillSourceSortRank, skillTypeSortRank } from './SkillActionCard'
-import type { ManualBattleAction, ManualBattleSession } from '../lib/types'
+import type { BattleTurn, CombatLog, ManualBattleAction, ManualBattleSession } from '../lib/types'
 import { getEquippedShadows } from '../lib/shadows'
 import { getPlayerCombatSkills, BASIC_ATTACK_SKILL } from '../lib/game'
+import { getDirectBattleEncounterShortLabelKo } from '../lib/directBattleLabels'
 import {
   getCombatPowerComparison,
   getHunterCombatPowerBreakdown,
@@ -29,6 +31,7 @@ import {
   getSkillMastery,
   isHunterCombatSkill,
 } from '../lib/skills'
+import { pickDirectTowerEncounterKey } from '../lib/directBattleEncounters'
 
 const sortTowerCombatSkills = (skills: ReturnType<typeof getPlayerCombatSkills>, cooldowns: Record<string, number>) => (
   [...skills].sort((a, b) => {
@@ -182,6 +185,86 @@ function HpBar({ label, hp, maxHp, color }: { label: string; hp: number; maxHp: 
   )
 }
 
+const getDirectTowerEncounterKey = (floor: number, floorType = getTowerFloorType(floor)): string =>
+  pickDirectTowerEncounterKey(floor, floorType)
+
+const getDirectTowerEnemyBaseLevel = (floor: number, floorType = getTowerFloorType(floor)): number => {
+  const normalLevel = 5 + Math.floor(floor * 0.72)
+  const bossLevel = 8 + Math.floor(floor * 0.85)
+  return Math.max(1, floorType === 'boss' ? bossLevel : normalLevel)
+}
+
+const directLogToTowerTurn = (
+  payload: DirectBattlePanelCompletePayload,
+  index: number,
+): BattleTurn => {
+  const log = payload.logs[index]
+  const actor = payload.state.units.find(unit => unit.unitId === log.actorUnitId)
+  const target = payload.state.units.find(unit => unit.unitId === log.targetUnitIds?.[0])
+  const fallbackTarget = target ?? actor ?? payload.state.units[0]
+  const actorIsEnemy = actor?.team === 'enemy'
+  const targetIsEnemy = fallbackTarget?.team === 'enemy'
+  const hpAfter = fallbackTarget ? log.hpAfterByUnitId?.[fallbackTarget.unitId]?.currentHp : undefined
+  const outcome: BattleTurn['outcome'] =
+    log.eventType === 'heal' ? 'heal' :
+    log.eventType === 'status' || log.eventType === 'reaction' ? 'buff' :
+    'hit'
+
+  return {
+    turnNumber: index + 1,
+    waveNumber: Math.max(1, log.round),
+    actorType: actorIsEnemy ? 'monster' : 'player',
+    actorId: actor?.unitId ?? `direct-tower-system-${index + 1}`,
+    actorName: actor?.displayName ?? 'Direct Tower Battle',
+    targetType: targetIsEnemy ? 'monster' : 'player',
+    targetId: fallbackTarget?.unitId ?? `direct-tower-target-${index + 1}`,
+    targetName: fallbackTarget?.displayName ?? 'Direct Tower Battle',
+    skillId: log.actionId ?? log.actionCue,
+    skillName: log.actionCue,
+    outcome,
+    damage: log.eventType === 'damage' || log.eventType === 'reaction' || log.eventType === 'heal' ? log.value : undefined,
+    remainingHp: hpAfter ?? (fallbackTarget ? Math.round(fallbackTarget.stats.currentHp) : undefined),
+    message: log.message,
+  }
+}
+
+const buildDirectTowerCombatLog = (
+  payload: DirectBattlePanelCompletePayload,
+  floor: number,
+  runId: string,
+): CombatLog => {
+  const playerUnits = payload.state.units.filter(unit => unit.team === 'player')
+  const hunterUnit = playerUnits.find(unit => unit.unitType === 'hunter') ?? playerUnits[0]
+  const turns: BattleTurn[] = payload.logs.length > 0
+    ? payload.logs.map((_, index) => directLogToTowerTurn(payload, index))
+    : [{
+        turnNumber: 1,
+        actorType: 'player',
+        actorId: hunterUnit?.unitId ?? 'direct-tower-battle',
+        actorName: hunterUnit?.displayName ?? 'Hunter',
+        targetType: 'monster',
+        targetId: 'direct-tower-result',
+        targetName: `무한의 탑 ${floor}층`,
+        outcome: 'hit',
+        message: payload.outcome === 'victory'
+          ? `무한의 탑 ${floor}층 직접 조작 전투에서 승리했습니다.`
+          : `무한의 탑 ${floor}층 직접 조작 전투에서 패배했습니다.`,
+      }]
+
+  return {
+    battleId: runId,
+    gateInstanceId: `tower-${floor}`,
+    result: payload.outcome === 'victory' ? 'victory' : 'defeat',
+    turns,
+    totalTurns: Math.max(1, payload.rounds),
+    playerHpRemaining: Math.max(0, Math.round(hunterUnit?.stats.currentHp ?? 0)),
+    rewards: [],
+    totalWaves: 1,
+    clearedWaves: payload.outcome === 'victory' ? 1 : 0,
+    source: 'tower',
+  }
+}
+
 function StatPill({ label, value }: { label: string; value: string | number }) {
   return (
     <div className="bg-ink-900/50 border border-white/10 rounded-md px-1 py-1.5 sm:px-2.5 sm:py-2 text-center sm:text-left min-w-0">
@@ -195,6 +278,7 @@ export function InfiniteTowerPanel() {
   const tower = useGame(s => s.infiniteTower)
   const startTowerBattle = useGame(s => s.startTowerBattle)
   const resolveTowerBattle = useGame(s => s.resolveTowerBattle)
+  const resolveDirectTowerBattle = useGame(s => s.resolveDirectTowerBattle)
   const cancelTowerBattle = useGame(s => s.cancelTowerBattle)
   const startTowerManualBattle = useGame(s => s.startTowerManualBattle)
   const performTowerManualBattleAction = useGame(s => s.performTowerManualBattleAction)
@@ -220,8 +304,12 @@ export function InfiniteTowerPanel() {
   const [visualPlayer, setVisualPlayer] = useState(manualSession?.player ?? { name: '', hp: 0, maxHp: 0, atk: 0, def: 0, spd: 0 })
   const [visualMonster, setVisualMonster] = useState(manualSession?.monster ?? { name: '', hp: 0, maxHp: 0, atk: 0, def: 0, spd: 0 })
   const [resultRevealSeenId, setResultRevealSeenId] = useState<string | undefined>()
+  const [isDirectTowerBattleOpen, setIsDirectTowerBattleOpen] = useState(false)
+  const [directTowerBattleFloor, setDirectTowerBattleFloor] = useState<number | undefined>()
   const prevLogCountRef = useRef(0)
   const manualSessionKeyRef = useRef<string | undefined>(manualSession?.startedAt)
+  const directTowerResultIdsRef = useRef(new Set<string>())
+  const directTowerBattleRunIdRef = useRef<string | undefined>()
 
   const towerState = tower ?? { currentFloor: 1, highestClearedFloor: 0, clearedFloors: {}, firstClearRewardsClaimed: {}, bossRewardsClaimed: {}, activeTowerBattle: undefined }
   const currentFloor = towerState.currentFloor
@@ -396,6 +484,41 @@ export function InfiniteTowerPanel() {
     startTowerManualBattle(challengeFloor)
   }
 
+  const handleDirectTowerBattle = () => {
+    setCinematicLogs([])
+    setManualCinematicLogs([])
+    setIsRevealing(false)
+    cancelTowerBattle()
+    if (isTowerManual) cancelTowerManualBattle()
+    directTowerResultIdsRef.current.clear()
+    directTowerBattleRunIdRef.current = `direct-tower-${challengeFloor}-${Date.now()}`
+    setDirectTowerBattleFloor(challengeFloor)
+    setIsDirectTowerBattleOpen(true)
+  }
+
+  // 12-29J: Main Tower direct-battle result hook.
+  // Cancellation grants no reward. Victory/defeat are routed exactly once per
+  // (floor, runId, outcome) through store.resolveDirectTowerBattle, which owns
+  // the existing floor clear / boss box / reward / progression logic.
+  const handleDirectTowerBattleComplete = (payload: DirectBattlePanelCompletePayload) => {
+    const floor = directTowerBattleFloor ?? challengeFloor
+    const runId = directTowerBattleRunIdRef.current ?? `direct-tower-${floor}-${payload.state.battleId}`
+    if (payload.outcome === 'cancelled') {
+      setIsDirectTowerBattleOpen(false)
+      setDirectTowerBattleFloor(undefined)
+      directTowerBattleRunIdRef.current = undefined
+      return
+    }
+
+    const resultKey = `${floor}:${runId}:${payload.outcome}`
+    if (directTowerResultIdsRef.current.has(resultKey)) return
+    directTowerResultIdsRef.current.add(resultKey)
+    resolveDirectTowerBattle(buildDirectTowerCombatLog(payload, floor, runId), floor)
+    setIsDirectTowerBattleOpen(false)
+    setDirectTowerBattleFloor(undefined)
+    directTowerBattleRunIdRef.current = undefined
+  }
+
   const handleSkip = () => {
     setSkipSignal(s => s + 1)
   }
@@ -514,6 +637,9 @@ export function InfiniteTowerPanel() {
   const monsterIntent = isTowerManual && manualSession && manualMonsterDef
     ? getMonsterIntent(manualSession, manualMonsterDef, SKILL_DEFINITIONS)
     : undefined
+  const directBattleFloor = directTowerBattleFloor ?? challengeFloor
+  const directBattleFloorType = getTowerFloorType(directBattleFloor)
+  const directTowerEncounterKey = getDirectTowerEncounterKey(directBattleFloor, directBattleFloorType)
 
   return (
     <div className="panel corner-bracket relative overflow-hidden p-4 sm:p-5 border border-violet-400/30 bg-violet-500/5">
@@ -584,6 +710,9 @@ export function InfiniteTowerPanel() {
               type="button"
               onClick={() => {
                 setSelectedFloor(floor)
+                setIsDirectTowerBattleOpen(false)
+                setDirectTowerBattleFloor(undefined)
+                directTowerBattleRunIdRef.current = undefined
                 if (!isTowerManual) cancelTowerBattle()
               }}
               className={clsx(
@@ -602,7 +731,7 @@ export function InfiniteTowerPanel() {
       </div>
 
       {/* Challenge card (shown when no battle active) */}
-      {!isAutoRevealing && !isTowerManual && (
+      {!isDirectTowerBattleOpen && !isAutoRevealing && !isTowerManual && (
         <div className={clsx('mb-4 rounded-lg border p-4', isBoss ? 'tower-boss-warning border-amber-300/25 bg-amber-400/8' : 'border-violet-300/20 bg-violet-400/8')}>
           <div className="flex items-center justify-between mb-2">
             <div className="flex items-center gap-2">
@@ -636,10 +765,10 @@ export function InfiniteTowerPanel() {
             </div>
           )}
 
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid gap-2">
             <button
               type="button"
-              onClick={handleAutoBattle}
+              onClick={handleDirectTowerBattle}
               className={clsx(
                 'inline-flex items-center justify-center gap-2 rounded border px-3 py-2 text-sm font-bold transition',
                 isBoss
@@ -647,23 +776,40 @@ export function InfiniteTowerPanel() {
                   : 'border-violet-300/35 bg-violet-400/12 text-violet-100 hover:bg-violet-400/18'
               )}
             >
-              <Zap className="w-4 h-4" />
-              자동 전투
+              <Swords className="w-4 h-4" />
+              무한의 탑 직접 조작 전투
             </button>
-            <button
-              type="button"
-              onClick={handleManualBattle}
-              className={clsx(
-                'inline-flex items-center justify-center gap-2 rounded border px-3 py-2 text-sm font-bold transition',
-                isBoss
-                  ? 'border-amber-300/35 bg-amber-400/12 text-amber-100 hover:bg-amber-400/18'
-                  : 'border-cyan-300/35 bg-cyan-400/12 text-cyan-100 hover:bg-cyan-400/18'
-              )}
-            >
-              <Hand className="w-4 h-4" />
-              수동 전투
-            </button>
+            <div className="text-[11px] text-white/45">
+              추천 적 조합: <span className="text-violet-100/80">{getDirectBattleEncounterShortLabelKo(getDirectTowerEncounterKey(challengeFloor, floorType))}</span>
+            </div>
           </div>
+        </div>
+      )}
+
+      {isDirectTowerBattleOpen && (
+        <div className="mb-4">
+          <DirectBattlePreviewPanel
+            title="무한의 탑 직접 조작 전투"
+            note="승리/패배 결과는 기존 무한의 탑 보상과 층 진행 처리로 한 번만 연결됩니다."
+            hunter={hunter}
+            items={items}
+            equipment={equipment}
+            activeConsumableEffects={activeConsumableEffects}
+            equippedShadows={equippedShadows}
+            recommendedEncounterKey={directTowerEncounterKey}
+            enemyBaseLevel={getDirectTowerEnemyBaseLevel(directBattleFloor, directBattleFloorType)}
+            contextStats={[
+              { label: '현재 층', value: `${directBattleFloor}층` },
+              { label: '층 구분', value: directBattleFloorType === 'boss' ? '보스층' : '일반층' },
+              { label: '추천 조합', value: getDirectBattleEncounterShortLabelKo(directTowerEncounterKey) },
+            ]}
+            autoStart
+            allowEncounterSelection={false}
+            startButtonLabel="전투 시작"
+            restartButtonLabel="처음부터 다시"
+            cancelButtonLabel="전투 취소"
+            onBattleComplete={handleDirectTowerBattleComplete}
+          />
         </div>
       )}
 

@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 420 620" preserveAspectRatio="xMidYMid meet">
+  <defs>
+    <filter id="warp" x="-35%" y="-30%" width="170%" height="160%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.024 0.071" numOctaves="5" seed="47"/>
+      <feDisplacementMap in="SourceGraphic" scale="32"/>
+      <feGaussianBlur stdDeviation="5"/>
+    </filter>
+    <radialGradient id="core" cx="48%" cy="44%" r="62%">
+      <stop offset="0" stop-color="#000000" stop-opacity="1"/>
+      <stop offset="0.62" stop-color="#020307" stop-opacity="0.88"/>
+      <stop offset="1" stop-color="#101a2a" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <g filter="url(#warp)">
+    <path d="M207 28 C260 84 232 134 292 176 C360 224 324 296 374 352 C318 376 350 454 294 488 C262 508 264 576 196 590 C158 526 96 554 104 474 C108 426 52 402 82 334 C108 278 62 236 118 184 C162 142 144 84 207 28 Z" fill="url(#core)"/>
+    <path d="M198 74 C242 132 214 190 260 242 C296 282 282 344 314 390 C270 402 274 470 220 486 C178 498 150 450 132 406 C106 342 146 302 130 250 C116 202 168 162 198 74 Z" fill="#010204" opacity="0.92"/>
+  </g>
+</svg>

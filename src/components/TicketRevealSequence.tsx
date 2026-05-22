@@ -19,6 +19,19 @@ type TicketRevealSequenceProps = {
   onComplete: () => void
 }
 
+export const isHighTierShadowAnticipationRarity = (rarity?: string): boolean =>
+  rarity === 'rare' || rarity === 'epic' || rarity === 'legendary' || rarity === 'named'
+
+export const shouldUseHighTierTicketAnticipation = (params: {
+  kind: RevealKind
+  intensity: RevealIntensity
+  shadowRarity?: string
+  equipRarity?: string
+}): boolean => {
+  if (params.kind === 'shadow') return isHighTierShadowAnticipationRarity(params.shadowRarity)
+  return params.intensity !== 'quick'
+}
+
 // ── stage sequences ──────────────────────────────────────────────────────
 const SHADOW_STAGES: Record<RevealIntensity, string[]> = {
   quick: ['ticket', 'rift', 'rarity', 'signal'],
@@ -35,10 +48,10 @@ const EQUIP_STAGES: Record<RevealIntensity, string[]> = {
 
 // ── durations (ms) ───────────────────────────────────────────────────────
 const SHADOW_DUR: Record<RevealIntensity, Record<string, number>> = {
-  quick: { ticket: 800,  rift: 2100,  rarity: 1800, signal: 900  },  // ~5.6 s
-  rare:  { ticket: 950,  rift: 2700,  rarity: 2400, signal: 2250 },  // ~8.3 s
-  epic:  { ticket: 1000, rift: 3600,  rarity: 3000, signal: 3900 },  // ~11.5 s
-  apex:  { ticket: 1100, rift: 4500,  rarity: 3600, signal: 5700 },  // ~14.9 s
+  quick: { ticket: 800,  rift: 1200, rarity: 1100, signal: 900  }, // ~4.0 s
+  rare:  { ticket: 900,  rift: 1450, rarity: 1350, signal: 1100 }, // ~4.8 s
+  epic:  { ticket: 950,  rift: 1700, rarity: 1550, signal: 1300 }, // ~5.5 s
+  apex:  { ticket: 1050, rift: 2050, rarity: 1850, signal: 1550 }, // ~6.5 s
 }
 const EQUIP_DUR: Record<RevealIntensity, Record<string, number>> = {
   quick: { ticket: 700,  forge: 2250, rarity: 1800, stars: 1500, silhouette: 1050 },  // ~7.3 s
@@ -131,7 +144,7 @@ const SLOT_ICON = { weapon: Sword, armor: Shield, accessory: Gem, artifact: Scro
 const SLOT_LABEL: Record<string, string> = { weapon: '무기 형상', armor: '방어구 형상', accessory: '장신구 형상', artifact: '유물 형상' }
 
 const STAGE_LABEL: Record<string, string> = {
-  ticket: 'PREPARE', rift: 'RIFT OPEN', rarity: 'RARITY', signal: 'SIGNAL',
+  ticket: 'PREPARE', rift: 'RIFT OPEN', rarity: 'RARITY', signal: 'INNATE',
   forge: 'FORGE', stars: 'STARS', silhouette: 'SILHOUETTE',
 }
 
@@ -152,7 +165,7 @@ export function TicketRevealSequence({
 
   const stage = stageOrder[stageIdx] ?? 'ticket'
   const isAnticipationStage = stage === 'ticket' || stage === 'rift' || stage === 'forge'
-  const highAnticipation = intensity !== 'quick'
+  const highAnticipation = shouldUseHighTierTicketAnticipation({ kind, intensity, shadowRarity, equipRarity })
   const shadowAnticipation = highAnticipation ? HIGH_TIER_ANTICIPATION : LOW_TIER_ANTICIPATION
   const anticipationAccent = highAnticipation ? HIGH_TIER_ACCENT : LOW_TIER_ACCENT
   const sc    = SC[intensity]
@@ -172,24 +185,30 @@ export function TicketRevealSequence({
 
   useEffect(() => {
     if (doneRef.current) return
-    if (reducedMotion) { doneRef.current = true; completeRef.current(); return }
+    if (reducedMotion) {
+      const t = window.setTimeout(() => {
+        doneRef.current = true
+        completeRef.current()
+      }, kind === 'shadow' ? 650 : 450)
+      return () => window.clearTimeout(t)
+    }
     const dur = durMap[stage] ?? 500
     if (dur === 0) { setStageIdx(i => i + 1); return }
     const t = window.setTimeout(() => {
       const next = stageIdx + 1
       if (next < stageOrder.length) {
         if (next === stageOrder.length - 1) {
-          const flashDur = intensity === 'apex' ? 420 : intensity === 'epic' ? 280 : 180
+          const flashDur = intensity === 'apex' ? 560 : intensity === 'epic' ? 420 : 260
           setBlackFlash(true)
           window.setTimeout(() => setBlackFlash(false), flashDur)
-          if (intensity === 'apex' || intensity === 'epic') {
+          if (kind === 'shadow' || intensity === 'apex' || intensity === 'epic') {
             setIsShaking(true)
-            window.setTimeout(() => setIsShaking(false), 500)
+            window.setTimeout(() => setIsShaking(false), intensity === 'apex' ? 720 : 560)
           }
         }
         if (intensity === 'apex' && next === stageOrder.length - 1) {
           setApexFlash(true)
-          window.setTimeout(() => setApexFlash(false), 700)
+          window.setTimeout(() => setApexFlash(false), 900)
         }
         setStageIdx(next)
       } else {
@@ -198,7 +217,7 @@ export function TicketRevealSequence({
       }
     }, dur)
     return () => window.clearTimeout(t)
-  }, [stage, stageIdx, stageOrder.length, durMap, intensity, reducedMotion])
+  }, [stage, stageIdx, stageOrder.length, durMap, intensity, reducedMotion, kind])
 
   // sequential star lighting
   useEffect(() => {
@@ -218,17 +237,12 @@ export function TicketRevealSequence({
   const renderShadowRarity = () => {
     const rs = RARITY_STYLE[shadowRarity ?? 'common'] ?? RARITY_STYLE.common
     const beams = shadowRarity === 'legendary' || shadowRarity === 'epic' || shadowRarity === 'rare'
-    const isLegendary = shadowRarity === 'legendary'
     return (
       <div className="flex flex-col items-center gap-6">
         <div className={clsx('relative flex h-64 w-64 flex-col items-center justify-center gap-2 rounded-full border-2 animate-pulse', rs.border, rs.glow)}>
           {/* outer ping ring */}
           <div className="absolute -inset-4 rounded-full border border-white/12 animate-ping" style={{ animationDuration: '2s' }} />
-          {/* radial inner glow */}
           <div className="pointer-events-none absolute inset-0 rounded-full bg-[radial-gradient(circle,rgba(255,255,255,0.07),transparent_65%)]" />
-          {/* legendary extra ambient */}
-          {isLegendary && <div className="pointer-events-none absolute inset-0 rounded-full bg-[radial-gradient(circle,rgba(251,191,36,0.13),transparent_55%)]" />}
-          {/* radial beams */}
           {beams && (
             <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
               {[0,45,90,135,180,225,270,315].map(deg => (
@@ -239,7 +253,7 @@ export function TicketRevealSequence({
           <span className="relative z-10 system-text text-[10px] tracking-[0.22em] text-white/38">RARITY</span>
           <span className={clsx('relative z-10 font-black leading-none tracking-widest select-none', rs.color, rs.size)}>{rs.label}</span>
         </div>
-        <p className={clsx('text-3xl font-black tracking-wide', rs.color)}>등급 확인됨</p>
+        <p className={clsx('text-3xl font-black tracking-wide', rs.color)}>등급 확인</p>
         <p className="text-sm text-white/45">태생이 드러나기 직전…</p>
       </div>
     )
@@ -475,45 +489,44 @@ export function TicketRevealSequence({
       <style>{`
         @keyframes trs-shake {
           0%,100%{transform:translate(0,0)}
-          12%{transform:translate(-11px,6px)}
-          25%{transform:translate(11px,-6px)}
-          37%{transform:translate(-8px,4px)}
-          50%{transform:translate(8px,-3px)}
-          62%{transform:translate(-5px,2px)}
-          75%{transform:translate(4px,-1px)}
-          87%{transform:translate(-2px,1px)}
+          10%{transform:translate(-8px,5px) scale(1.01)}
+          22%{transform:translate(9px,-5px) scale(1.012)}
+          36%{transform:translate(-6px,3px)}
+          50%{transform:translate(6px,-2px) scale(1.006)}
+          68%{transform:translate(-3px,2px)}
+          82%{transform:translate(2px,-1px)}
         }
       `}</style>
 
-      <div className="fixed inset-0 z-[900] flex items-center justify-center overflow-hidden">
+      <div className="fixed inset-0 z-[1200] flex items-center justify-center overflow-hidden">
         {/* dark backdrop with blur */}
-        <div className="absolute inset-0 bg-black/92 backdrop-blur-sm" />
-
+        <div className="absolute inset-0 bg-black/95 backdrop-blur-md" />
+        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_76%_58%_at_50%_50%,rgba(15,23,42,0.12),transparent_46%),radial-gradient(ellipse_120%_90%_at_50%_50%,transparent_42%,rgba(0,0,0,0.78)_100%)]" />
         {/* apex ambient radial */}
         {isAnticipationStage && highAnticipation && (
-          <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_80%_60%_at_50%_50%,rgba(127,29,29,0.12),transparent)]" />
+          <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_80%_60%_at_50%_50%,rgba(127,29,29,0.20),transparent_58%)]" />
         )}
 
         {intensity === 'apex' && !isAnticipationStage && (
           <div className={clsx(
             'pointer-events-none absolute inset-0',
             kind === 'shadow'
-              ? 'bg-[radial-gradient(ellipse_80%_60%_at_50%_50%,rgba(251,191,36,0.07),transparent)]'
-              : 'bg-[radial-gradient(ellipse_80%_60%_at_50%_50%,rgba(251,191,36,0.07),transparent)]',
+              ? 'bg-[radial-gradient(ellipse_70%_52%_at_50%_50%,rgba(251,191,36,0.14),transparent_56%)]'
+              : 'bg-[radial-gradient(ellipse_70%_52%_at_50%_50%,rgba(251,191,36,0.10),transparent_56%)]',
           )} />
         )}
 
         {/* black flash */}
-        {blackFlash && <div className="absolute inset-0 z-10 bg-black" />}
+        {blackFlash && <div className="absolute inset-0 z-10 bg-black/92" />}
 
-        {/* apex white burst */}
-        {apexFlash && <div className="pointer-events-none absolute inset-0 z-10 bg-white/20 transition-opacity duration-500" />}
+        {/* apex dark burst */}
+        {apexFlash && <div className="pointer-events-none absolute inset-0 z-10 bg-[radial-gradient(circle_at_50%_50%,rgba(251,191,36,0.18),rgba(88,28,135,0.20)_24%,rgba(0,0,0,0.78)_58%,transparent_72%)] transition-opacity duration-700" />}
 
         {/* skip button — fixed top right */}
         <button
           type="button"
           onClick={skip}
-          className="absolute right-4 top-4 z-20 inline-flex items-center gap-1.5 rounded-full border border-white/14 bg-white/6 px-3 py-1.5 text-xs system-text text-white/55 backdrop-blur-sm transition hover:bg-white/12 hover:text-white/90"
+          className="absolute right-4 top-4 z-30 inline-flex min-h-10 items-center gap-2 rounded-full border border-white/22 bg-white/12 px-4 py-2 text-xs system-text text-white/78 shadow-[0_0_28px_rgba(255,255,255,0.08)] backdrop-blur-md transition hover:bg-white/18 hover:text-white"
         >
           <FastForward className="h-3.5 w-3.5" />
           Skip
@@ -528,7 +541,7 @@ export function TicketRevealSequence({
         {/* shaking content wrapper */}
         <div
           className="relative z-10 flex w-full flex-col items-center justify-center px-6"
-          style={isShaking ? { animation: 'trs-shake 0.45s ease-in-out' } : {}}
+          style={isShaking ? { animation: `trs-shake ${intensity === 'apex' ? 0.72 : 0.56}s ease-in-out` } : {}}
         >
           {renderStage()}
 

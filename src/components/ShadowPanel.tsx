@@ -181,10 +181,6 @@ const definitionSearchText = (definition: (typeof SHADOW_DEFINITIONS)[number], o
   if (hidden) {
     return [
       '??? unknown locked sealed 봉인 균열 미보유',
-      SHADOW_RARITY_LABEL[definition.rarity],
-      SHADOW_RANK_LABEL[definition.rank],
-      SHADOW_ROLE_LABEL[definition.role],
-      definitionSourceKey(definition),
     ].join(' ').toLowerCase()
   }
   return [
@@ -681,13 +677,16 @@ function CodexCard({ definition, owned, ownedCount, maxEnhancement, isEquipped }
   const lockedSourceType: 'named_gate' | 'named_achievement' | null = isLockedNamed
     ? (definition.isAchievementNamed ? 'named_achievement' : 'named_gate')
     : null
-  const sealCardClass = lockedSourceType === 'named_gate'
+  const sealCardClass = hidden
+    ? ''
+    : lockedSourceType === 'named_gate'
     ? 'locked-named-card-gate'
     : lockedSourceType === 'named_achievement'
       ? 'locked-named-card-achievement'
       : ''
+  const cardRarityStyle = hidden ? 'text-slate-200 border-slate-500/35 bg-slate-500/10' : rarityStyle[definition.rarity]
   return (
-    <div className={`panel corner-bracket p-4 ${rarityStyle[definition.rarity]} ${owned ? '' : 'opacity-80'} ${sealCardClass}`}>
+    <div className={`panel corner-bracket p-4 ${cardRarityStyle} ${owned ? '' : 'opacity-80'} ${sealCardClass}`}>
       <div className="br" />
       {lockedSourceType ? (
         <LockedShadowPortrait
@@ -695,25 +694,34 @@ function CodexCard({ definition, owned, ownedCount, maxEnhancement, isEquipped }
           rarity={definition.rarity}
           sourceType={lockedSourceType}
           size="lg"
+          maskDetails={hidden}
         />
       ) : (
         <ShadowPortrait definition={definition} size="lg" hidden={hidden} highlighted={definition.rank === 'named'} />
       )}
       <div className="flex items-start justify-between gap-3">
         <div>
-          <div className="text-[10px] system-text opacity-70">[{SHADOW_RARITY_LABEL[definition.rarity]}]</div>
-          <h3 className="font-bold text-white/90 mt-0.5">{hidden ? '???' : definition.name}</h3>
+          <div className="text-[10px] system-text opacity-70">{hidden ? '[???]' : `[${SHADOW_RARITY_LABEL[definition.rarity]}]`}</div>
+          <h3 className="font-bold text-white/90 mt-0.5">{hidden ? '미확인 신호' : definition.name}</h3>
           {isLockedNamed && (
-            <div className={`text-[10px] system-text mt-0.5 tracking-wider ${lockedSourceType === 'named_gate' ? 'text-amber-100/75' : 'text-cyan-100/75'}`}>
+            <div className={`text-[10px] system-text mt-0.5 tracking-wider ${hidden ? 'text-white/50' : lockedSourceType === 'named_gate' ? 'text-amber-100/75' : 'text-cyan-100/75'}`}>
+              {hidden && '봉인된 기록'}
+              <span className={hidden ? 'hidden' : ''}>
               {lockedSourceType === 'named_gate' ? '봉인된 네임드 그림자' : '미획득 성취 그림자'}
+              </span>
             </div>
           )}
-          <div className="text-[11px] text-white/55 mt-1">
+          {hidden && (
+            <div className="text-[11px] text-white/55 mt-1">
+              계급/역할: 봉인 해제 후 공개
+            </div>
+          )}
+          <div className={`text-[11px] text-white/55 mt-1 ${hidden ? 'hidden' : ''}`}>
             계급: {SHADOW_RANK_LABEL[definition.rank]} · 역할: {SHADOW_ROLE_LABEL[definition.role]}
           </div>
         </div>
         <div className="flex flex-col items-end gap-1">
-          {owned ? <Eclipse className="w-4 h-4 text-cyan-200" /> : <Lock className={`w-4 h-4 ${isLockedNamed ? (lockedSourceType === 'named_gate' ? 'text-amber-300/75' : 'text-cyan-200/75') : 'text-white/35'}`} />}
+          {owned ? <Eclipse className="w-4 h-4 text-cyan-200" /> : <Lock className={`w-4 h-4 ${hidden ? 'text-white/35' : isLockedNamed ? (lockedSourceType === 'named_gate' ? 'text-amber-300/75' : 'text-cyan-200/75') : 'text-white/35'}`} />}
           {owned && (
             <div className="text-[10px] text-white/40 text-right">
               보유 {ownedCount}{maxEnhancement > 0 ? ` · 최고 +${maxEnhancement}` : ''}{isEquipped ? ' · 출전' : ''}
@@ -721,10 +729,20 @@ function CodexCard({ definition, owned, ownedCount, maxEnhancement, isEquipped }
           )}
         </div>
       </div>
-      <div className="mt-3 text-[11px] text-white/55 leading-relaxed">
+      {hidden && (
+        <div className="mt-3 text-[11px] text-white/55 leading-relaxed">
+          균열 너머에서 존재감만 감지된다.
+        </div>
+      )}
+      <div className={`mt-3 text-[11px] text-white/55 leading-relaxed ${hidden ? 'hidden' : ''}`}>
         {hidden ? '균열 너머에서 존재감만 감지된다.' : definition.description}
       </div>
-      <div className="mt-2 text-[11px] text-cyan-100/70 leading-relaxed">
+      {hidden && (
+        <div className="mt-2 text-[11px] text-cyan-100/70 leading-relaxed">
+          효과: 봉인 해제 후 공개
+        </div>
+      )}
+      <div className={`mt-2 text-[11px] text-cyan-100/70 leading-relaxed ${hidden ? 'hidden' : ''}`}>
         {hidden ? '효과: 봉인 해제 후 공개' : effects.join(' · ')}
       </div>
       <div className="mt-2 text-[10px] text-white/40 system-text">
@@ -882,8 +900,10 @@ export function ShadowPanel() {
   const codexDefs = SHADOW_DEFINITIONS.filter(def => {
     const instances = ownedShadows.filter(shadow => shadow.definitionId === def.id)
     const owned = instances.length > 0
+    const hidden = !owned && def.hiddenUntilObtained
     if (ownershipFilter === 'owned' && !owned) return false
     if (ownershipFilter === 'unowned' && owned) return false
+    if (hidden && (sourceFilter !== 'all' || roleFilter !== 'all' || rarityFilter !== 'all' || gradeFilter !== 'all')) return false
     if (sourceFilter !== 'all' && definitionSourceKey(def) !== sourceFilter) return false
     if (roleFilter !== 'all' && def.role !== roleFilter) return false
     if (rarityFilter !== 'all' && def.rarity !== rarityFilter) return false

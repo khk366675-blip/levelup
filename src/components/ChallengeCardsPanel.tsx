@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import clsx from 'clsx'
 import { motion } from 'framer-motion'
-import { CheckCircle2, Circle, Flame, PackagePlus, ShieldCheck, Sparkles, Target } from 'lucide-react'
+import { CheckCircle2, Circle, ShieldCheck } from 'lucide-react'
 import { useGame } from '../lib/store'
 import type { ChallengeCard, ChallengeCardDifficulty } from '../lib/types'
 import { DramaticReveal, type RevealStep } from './DramaticReveal'
@@ -16,12 +16,6 @@ const DIFFICULTY_CLASS: Record<ChallengeCardDifficulty, string> = {
   easy: 'border-emerald-300/25 bg-emerald-400/8 text-emerald-100',
   normal: 'border-cyan-300/25 bg-cyan-400/8 text-cyan-100',
   hard: 'border-amber-300/35 bg-amber-400/10 text-amber-100',
-}
-
-const DIFFICULTY_HINT: Record<ChallengeCardDifficulty, string> = {
-  easy: '가볍게 완료',
-  normal: '표준 루틴',
-  hard: '집중 보상',
 }
 
 const CATEGORY_LABEL: Record<ChallengeCard['category'], string> = {
@@ -170,41 +164,13 @@ export function ChallengeCardsPanel() {
         onComplete={() => setCardReveal(undefined)}
         onSkip={() => setCardReveal(undefined)}
       />
-      <div className="mb-3 grid gap-2 md:grid-cols-[1.15fr_0.85fr_0.85fr]">
-        <div className="rounded-md border border-violet-300/18 bg-violet-400/8 px-3 py-2">
-          <div className="mb-1 flex items-center gap-1.5 system-text text-[10px] text-violet-100/65">
-            <Target className="h-3.5 w-3.5" />
-            TODAY CARDS
-          </div>
-          <div className="text-sm font-semibold leading-snug text-white/82">{nextActionText}</div>
-        </div>
-        <div className="rounded-md border border-cyan-300/18 bg-cyan-400/8 px-3 py-2">
-          <div className="system-text text-[9px] text-white/40">선택 보상 합계</div>
-          <div className="mt-1 flex flex-wrap gap-1.5 text-[10px] system-text">
-            <span className="rounded border border-cyan-300/20 bg-cyan-400/10 px-1.5 py-0.5 text-cyan-100">XP +{draftReward.hunterXp}</span>
-            <span className="rounded border border-amber-300/20 bg-amber-400/10 px-1.5 py-0.5 text-amber-100">Gold +{draftReward.gold}</span>
-            {fullClearBonusReady && (
-              <span className="rounded border border-amber-300/30 bg-amber-400/12 px-1.5 py-0.5 text-amber-100">완전 달성 +25 XP / Gold +85 / 정수 +2 / 조각 +1</span>
-            )}
-            <span className="rounded border border-emerald-300/20 bg-emerald-400/10 px-1.5 py-0.5 text-emerald-100">정수 +{draftReward.shadowEssence}</span>
-          </div>
-        </div>
-        <div className="rounded-md border border-amber-300/18 bg-amber-400/8 px-3 py-2">
-          <div className="system-text text-[9px] text-white/40">박스 강화</div>
-          <div className="mt-1 flex items-center gap-2">
-            <PackagePlus className="h-4 w-4 text-amber-100/75" />
-            <span className="text-base font-black text-amber-100">+{draftReward.boxUpgradePoints}</span>
-          </div>
-        </div>
-      </div>
-
-      <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <div className="system-text text-[11px] text-violet-300/75">DAILY CHALLENGE CARDS</div>
+      <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
           <h3 className="text-lg font-bold text-violet-50">오늘의 도전 카드</h3>
+          <p className="mt-0.5 text-xs leading-snug text-white/55">{nextActionText}</p>
         </div>
         <div className="flex items-center gap-2">
-          <div className="rounded-md border border-violet-300/12 bg-violet-400/5 px-2.5 py-1 text-[10px] system-text text-white/55">
+          <div className="rounded-md border border-violet-300/22 bg-violet-400/10 px-2.5 py-1 text-xs font-bold text-violet-100">
             {hasSelected ? `${completedCount}/3 완료` : `${draftIds.length}/3 선택`}
           </div>
           {!hasSelected && (
@@ -220,15 +186,15 @@ export function ChallengeCardsPanel() {
         </div>
       </div>
 
-      <div className="mb-3 grid gap-2 text-xs md:grid-cols-[1fr_auto]">
-        <div className="rounded-md border border-violet-300/12 bg-violet-400/5 px-3 py-2 leading-relaxed text-white/55">
-          후보 5장 중 3장을 고릅니다. 실패 패널티는 없고, 완료한 카드는 보상과 오늘 박스 강화를 제공합니다.
-        </div>
-        <div className="flex flex-wrap gap-1.5 rounded-md border border-violet-300/12 bg-ink-900/35 px-3 py-2 system-text text-[10px] text-white/50">
-          <span className="rounded border border-emerald-300/20 bg-emerald-400/10 px-1.5 py-0.5 text-emerald-100">Easy: 짧게</span>
-          <span className="rounded border border-cyan-300/20 bg-cyan-400/10 px-1.5 py-0.5 text-cyan-100">Normal: 표준</span>
-          <span className="rounded border border-amber-300/20 bg-amber-400/10 px-1.5 py-0.5 text-amber-100">Hard: 크게</span>
-        </div>
+      <div className="mb-3 flex flex-wrap items-center gap-1.5 text-[10px] system-text text-white/60">
+        <span>선택 합계</span>
+        <span className="rounded border border-cyan-300/20 bg-cyan-400/10 px-1.5 py-0.5 text-cyan-100">XP +{draftReward.hunterXp}</span>
+        <span className="rounded border border-amber-300/20 bg-amber-400/10 px-1.5 py-0.5 text-amber-100">Gold +{draftReward.gold}</span>
+        <span className="rounded border border-emerald-300/20 bg-emerald-400/10 px-1.5 py-0.5 text-emerald-100">정수 +{draftReward.shadowEssence}</span>
+        <span className="rounded border border-amber-300/22 bg-amber-400/8 px-1.5 py-0.5 text-amber-100">박스 +{draftReward.boxUpgradePoints}</span>
+        {fullClearBonusReady && (
+          <span className="rounded border border-amber-300/30 bg-amber-400/12 px-1.5 py-0.5 text-amber-100">3장 완전 달성 보너스 적용</span>
+        )}
       </div>
 
       {cards.length === 0 ? (
@@ -247,7 +213,7 @@ export function ChallengeCardsPanel() {
                 whileHover={{ y: hasSelected ? 0 : -2 }}
                 onClick={() => toggleDraft(card.id)}
                 className={clsx(
-                  'min-h-[190px] rounded-lg border p-4 text-left transition',
+                  'min-h-[148px] rounded-lg border p-3.5 text-left transition',
                   selected && !hasSelected && 'challenge-card-selected',
                   completed && 'challenge-card-complete',
                   DIFFICULTY_CLASS[card.difficulty],
@@ -256,20 +222,21 @@ export function ChallengeCardsPanel() {
                   !hasSelected && !selected && draftIds.length >= 3 && 'opacity-55'
                 )}
               >
-                <div className="mb-3 flex items-start justify-between gap-3">
+                <div className="mb-2 flex items-start justify-between gap-3">
                   <div className="min-w-0">
-                    <div className="mb-1 flex flex-wrap items-center gap-1.5">
-                      <span className="rounded border border-violet-300/14 bg-black/15 px-1.5 py-0.5 text-[10px] system-text">
+                    <div className="mb-1 flex flex-wrap items-center gap-1.5 text-[10px] system-text">
+                      <span className="rounded border border-violet-300/18 bg-black/20 px-1.5 py-0.5">
                         {DIFFICULTY_LABEL[card.difficulty]}
                       </span>
-                      <span className="rounded border border-violet-300/14 bg-black/15 px-1.5 py-0.5 text-[10px] system-text text-white/60">
-                        {DIFFICULTY_HINT[card.difficulty]}
-                      </span>
-                      <span className="rounded border border-violet-300/14 bg-black/15 px-1.5 py-0.5 text-[10px] system-text">
+                      <span className="rounded border border-violet-300/14 bg-black/15 px-1.5 py-0.5">
                         {CATEGORY_LABEL[card.category]}
                       </span>
+                      <span className={clsx('rounded border px-1.5 py-0.5', cardStateClass(card, selected))}>
+                        {cardStateText(card)}
+                      </span>
                     </div>
-                    <div className="text-sm font-bold text-white">{card.title}</div>
+                    <div className="text-sm font-bold leading-snug text-white">{card.title}</div>
+                    <div className="mt-0.5 text-[11px] text-white/55">목표: {conditionShortText(card)}</div>
                   </div>
                   {completed ? (
                     <CheckCircle2 className="h-5 w-5 shrink-0 text-emerald-200" />
@@ -280,34 +247,16 @@ export function ChallengeCardsPanel() {
                   )}
                 </div>
 
-                <div className="text-xs leading-relaxed text-white/65">{card.description}</div>
+                <div className="text-xs leading-relaxed text-white/60 line-clamp-2">{card.description}</div>
 
-                <div className="mt-3 flex flex-wrap gap-1.5 text-[10px] system-text">
-                  <span className={clsx('rounded border px-1.5 py-0.5', cardStateClass(card, selected))}>
-                    {cardStateText(card)}
-                  </span>
-                  <span className="rounded border border-violet-300/12 bg-black/15 px-1.5 py-0.5 text-white/50">
-                    목표: {conditionShortText(card)}
-                  </span>
-                </div>
-
-                <div className="mt-3 flex flex-wrap gap-1.5 text-[10px] system-text">
-                  <span className="inline-flex items-center gap-1 rounded border border-cyan-300/20 bg-cyan-400/10 px-1.5 py-0.5 text-cyan-100">
-                    <Sparkles className="h-3 w-3" /> XP +{card.reward.hunterXp}
-                  </span>
-                  <span className="rounded border border-amber-300/20 bg-amber-400/10 px-1.5 py-0.5 text-amber-100">
-                    Gold +{card.reward.gold ?? 0}
-                  </span>
-                  <span className="inline-flex items-center gap-1 rounded border border-emerald-300/20 bg-emerald-400/10 px-1.5 py-0.5 text-emerald-100">
-                    <Flame className="h-3 w-3" /> 정수 +{card.reward.shadowEssence}
-                  </span>
-                  <span className="rounded border border-amber-300/20 bg-amber-400/10 px-1.5 py-0.5 text-amber-100">
-                    박스 +{card.reward.boxUpgradePoints}
-                  </span>
-                </div>
-
-                <div className="mt-3 text-[10px] system-text text-white/45">
-                  {completed ? '보상 지급 완료' : selected ? '완료 시 자동 지급' : hasSelected ? '오늘 미선택' : '선택 후보'}
+                <div className="mt-3 text-[11px] text-white/72">
+                  <span className="text-cyan-100">XP +{card.reward.hunterXp}</span>
+                  <span className="mx-1 text-white/30">·</span>
+                  <span className="text-amber-100">Gold +{card.reward.gold ?? 0}</span>
+                  <span className="mx-1 text-white/30">·</span>
+                  <span className="text-emerald-100">정수 +{card.reward.shadowEssence}</span>
+                  <span className="mx-1 text-white/30">·</span>
+                  <span className="text-amber-100">박스 +{card.reward.boxUpgradePoints}</span>
                 </div>
               </motion.button>
             )

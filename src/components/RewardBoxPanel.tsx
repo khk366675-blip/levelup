@@ -1,7 +1,7 @@
 import clsx from 'clsx'
 import { useState } from 'react'
 import { motion } from 'framer-motion'
-import { Box, CalendarCheck, Crown, Gem, Gift, PackageCheck, Sparkles, Ticket, TowerControl } from 'lucide-react'
+import { Box, CalendarCheck, Crown, Gem, Gift, Sparkles, Ticket, TowerControl } from 'lucide-react'
 import { useGame } from '../lib/store'
 import type { BoxReward, BoxTier, RewardBox } from '../lib/types'
 import { formatStatReward, todayKey } from '../lib/game'
@@ -251,26 +251,28 @@ export function RewardBoxPanel() {
           setRevealGrowth({})
         }}
       />
-      <div className="panel corner-bracket border-cyan-300/12 bg-ink-950/60 p-3">
+      <div className="panel corner-bracket border-cyan-300/15 bg-ink-950/60 p-3">
         <div className="br" />
-        <div className="grid gap-2 md:grid-cols-[1.2fr_1fr_1fr]">
-          <div className="rounded-md border border-cyan-300/20 bg-cyan-400/8 px-3 py-2">
-            <div className="mb-1 flex items-center gap-1.5 system-text text-[10px] text-cyan-100/65">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="min-w-0">
+            <div className="mb-0.5 flex items-center gap-1.5 system-text text-[10px] text-cyan-100/65">
               <CalendarCheck className="h-3.5 w-3.5" />
-              TODAY LOOP
+              오늘의 보상 루프
             </div>
-            <div className="text-sm font-semibold leading-snug text-white/82">{nextLoopText}</div>
+            <div className="text-sm font-semibold leading-snug text-white/85">{nextLoopText}</div>
           </div>
-          <div className="rounded-md border border-violet-300/18 bg-violet-400/8 px-3 py-2">
-            <div className="system-text text-[9px] text-white/40">오늘 선택 카드</div>
-            <div className="mt-1 text-base font-black text-violet-100">{selectedCardCount || selectedSet.size}/3</div>
-            <div className="text-[10px] text-white/45">완료 {completedCardCount} · 박스 강화 +{upgradePoints}</div>
-          </div>
-          <div className="rounded-md border border-amber-300/18 bg-amber-400/8 px-3 py-2">
-            <div className="system-text text-[9px] text-white/40">오늘 받을 수 있는 것</div>
-            <div className="mt-1 text-base font-black text-amber-100">{available.length}</div>
-            <div className="text-[10px] text-white/45">
-              {todayDailyAvailable ? '일일 보급 대기' : available.length > 0 ? '보급 대기' : '열기 완료'}
+          <div className="flex shrink-0 gap-2 text-center">
+            <div className="rounded-md border border-violet-300/22 bg-violet-400/8 px-2.5 py-1.5">
+              <div className="text-[9px] system-text text-white/45">카드</div>
+              <div className="text-sm font-black text-violet-100">{selectedCardCount || selectedSet.size}/3</div>
+            </div>
+            <div className="rounded-md border border-amber-300/22 bg-amber-400/8 px-2.5 py-1.5">
+              <div className="text-[9px] system-text text-white/45">강화</div>
+              <div className="text-sm font-black text-amber-100">+{upgradePoints}</div>
+            </div>
+            <div className="rounded-md border border-cyan-300/22 bg-cyan-400/8 px-2.5 py-1.5">
+              <div className="text-[9px] system-text text-white/45">박스</div>
+              <div className="text-sm font-black text-cyan-100">{available.length}</div>
             </div>
           </div>
         </div>
@@ -278,25 +280,15 @@ export function RewardBoxPanel() {
 
       <div className="panel corner-bracket p-4 border-cyan-400/25 bg-cyan-500/5">
         <div className="br" />
-        <div className="mb-3 flex items-center justify-between gap-3">
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
           <div>
-            <div className="system-text text-[11px] text-cyan-300/75">REWARD BOXES</div>
             <h3 className="text-lg font-bold text-cyan-50">박스 보상</h3>
-          </div>
-          <div className="rounded-md border border-cyan-300/12 bg-cyan-400/5 px-2.5 py-1 text-[10px] system-text text-white/55">
-            열기 가능 {available.length}
-          </div>
-        </div>
-
-        <div className="mb-3 grid gap-2 text-xs sm:grid-cols-3">
-          <div className="rounded-md border border-amber-300/20 bg-amber-400/8 px-3 py-2 leading-relaxed text-amber-100/75 sm:col-span-2">
-            오늘의 박스는 열기 전 완료한 도전 카드 수에 따라 강화됩니다. 이미 연 박스에는 추가 강화가 적용되지 않습니다.
-          </div>
-          <div className="rounded-md border border-cyan-300/12 bg-cyan-400/5 px-3 py-2 text-white/55">
-            <span className="system-text text-white/35">NEXT TIER</span>
-            <div className="mt-1 font-semibold text-white/80">
-              {upgradePoints >= 6 ? '3장 완전 달성으로 Epic 적용 중' : upgradePoints >= 4 ? 'Superior 적용 중 · +6에 Epic' : upgradePoints >= 2 ? 'Enhanced 적용 중 · +4에 Superior' : `+${Math.max(0, 2 - upgradePoints)} 강화점에 Enhanced`}
+            <div className="mt-0.5 text-[11px] text-white/55">
+              오늘 박스는 열기 전 카드 완료 수에 따라 등급이 올라갑니다.
             </div>
+          </div>
+          <div className="text-[11px] system-text text-white/55">
+            {upgradePoints >= 6 ? 'Epic 적용 중' : upgradePoints >= 4 ? 'Superior · +2에 Epic' : upgradePoints >= 2 ? 'Enhanced · +2에 Superior' : `+${Math.max(0, 2 - upgradePoints)}에 Enhanced`}
           </div>
         </div>
 
@@ -324,37 +316,27 @@ export function RewardBoxPanel() {
                   <div className="absolute -right-8 -top-8 h-24 w-24 rounded-full bg-white/8 blur-2xl" />
                   <div className="relative flex items-start justify-between gap-3">
                     <div className="min-w-0">
-                      <div className={clsx('mb-2 inline-flex items-center gap-1 rounded border px-2 py-0.5 text-[9px] system-text', BOX_TYPE_META[box.type].chip)}>
-                        <PackageCheck className="h-3 w-3" />
-                        {BOX_TYPE_META[box.type].label}
-                      </div>
-                      <div className="mb-1 flex items-center gap-2">
+                      <div className="mb-1.5 flex items-center gap-2">
                         <Icon className="h-5 w-5 shrink-0" />
                         <span className="truncate text-sm font-bold">{box.label}</span>
                       </div>
                       <div className="flex flex-wrap gap-1.5 text-[10px] system-text">
-                        <span className="rounded border border-cyan-300/14 bg-black/15 px-1.5 py-0.5">{BOX_TYPE_META[box.type].short}</span>
-                        <span className="rounded border border-cyan-300/14 bg-black/15 px-1.5 py-0.5">{TIER_LABEL[tier]}</span>
+                        <span className={clsx('rounded border px-1.5 py-0.5', BOX_TYPE_META[box.type].chip)}>
+                          {BOX_TYPE_META[box.type].label}
+                        </span>
+                        <span className="rounded border border-cyan-300/18 bg-black/20 px-1.5 py-0.5">{TIER_LABEL[tier]}</span>
                         {box.floor ? <span className="rounded border border-cyan-300/14 bg-black/15 px-1.5 py-0.5">{box.floor}층</span> : null}
                       </div>
                     </div>
                     <Box className="h-8 w-8 shrink-0 opacity-70" />
                   </div>
-                  <div className="relative mt-3 rounded-md border border-cyan-300/12 bg-black/15 px-3 py-2">
-                    <div className="mb-1 text-[10px] system-text text-white/42">PREVIEW</div>
-                    <div className="flex flex-wrap gap-1.5">
-                      {previewRewardHints(box, tier).map(line => (
-                        <span key={line} className="rounded border border-cyan-300/12 bg-cyan-400/5 px-1.5 py-0.5 text-[10px] text-white/65">
-                          {line}
-                        </span>
-                      ))}
-                    </div>
-                    <div className="mt-1 text-[10px] leading-snug text-white/38">{BOX_TYPE_META[box.type].description}</div>
+                  <div className="relative mt-3 text-[11px] leading-relaxed text-white/65">
+                    {previewRewardHints(box, tier).slice(0, 3).join(' · ')}
                   </div>
                   <button
                     type="button"
                     onClick={() => handleOpenBox(box.id)}
-                    className="mt-4 flex min-h-11 w-full items-center justify-center gap-2 rounded-md border border-cyan-300/22 bg-cyan-400/10 text-sm font-bold text-cyan-50 hover:bg-cyan-400/15 transition"
+                    className="mt-3 flex min-h-11 w-full items-center justify-center gap-2 rounded-md border border-cyan-300/22 bg-cyan-400/10 text-sm font-bold text-cyan-50 hover:bg-cyan-400/15 transition"
                   >
                     <Sparkles className="h-4 w-4" />
                     열기

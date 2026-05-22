@@ -1,5 +1,5 @@
 import clsx from 'clsx'
-import { Info, Lock, Sparkles, TimerReset, Zap } from 'lucide-react'
+import { Lock, TimerReset, Zap } from 'lucide-react'
 import type { SkillDefinition, SkillRuntimeState } from '../lib/types'
 import {
   getSkillCooldownTurns,
@@ -95,7 +95,7 @@ export function SkillActionCard({
       title={description}
       className={clsx(
         'group w-full rounded-md border px-3 py-3 text-left transition',
-        compact ? 'min-h-[76px]' : 'min-h-[112px]',
+        compact ? 'min-h-[76px]' : 'min-h-[96px]',
         selected && 'ring-1 ring-cyan-300/35 shadow-[0_0_18px_rgba(34,211,238,0.08)]',
         isReady
           ? tacticalHint
@@ -134,7 +134,7 @@ export function SkillActionCard({
         </span>
       )}
 
-      <span className="mt-2 flex flex-wrap gap-1.5 text-[10px] system-text">
+      <span className="mt-2 flex flex-wrap items-center gap-1.5 text-[10px] system-text">
         <span className={clsx('rounded border px-1.5 py-0.5', source.className)}>{source.key}</span>
         <span className={clsx('rounded border px-1.5 py-0.5', type.className)}>{type.key}</span>
         <span className="inline-flex items-center gap-1 rounded border border-cyan-300/12 bg-black/15 px-1.5 py-0.5 text-white/55">
@@ -146,34 +146,10 @@ export function SkillActionCard({
             남은 {cooldownRemaining}
           </span>
         )}
-        <span className="inline-flex items-center gap-1 rounded border border-cyan-300/12 bg-black/15 px-1.5 py-0.5 text-white/50">
-          <Sparkles className="h-3 w-3" />
-          숙련 Lv.{mastery.level}
+        <span className="ml-auto text-white/38">
+          숙련 Lv.{mastery.level} · {mastery.currentUses}회
         </span>
-        <span className="rounded border border-cyan-300/12 bg-black/15 px-1.5 py-0.5 text-white/45">
-          {mastery.currentUses}회
-        </span>
-        {informational && (
-          <span className="inline-flex items-center gap-1 rounded border border-cyan-300/12 bg-cyan-400/5 px-1.5 py-0.5 text-white/42">
-            <Info className="h-3 w-3" />
-            상세
-          </span>
-        )}
       </span>
-      {!compact && (
-        <span className="mt-2 block">
-          <span className="flex items-center justify-between text-[10px] system-text text-white/38">
-            <span>MASTERY</span>
-            <span>{mastery.isMaxLevel ? 'MAX' : `${mastery.currentUses}/${mastery.nextLevelUses}`}</span>
-          </span>
-          <span className="mt-1 block h-1.5 overflow-hidden rounded-full bg-white/8">
-            <span
-              className="block h-full rounded-full bg-gradient-to-r from-cyan-300 via-emerald-300 to-amber-200 transition-all"
-              style={{ width: `${mastery.percent}%` }}
-            />
-          </span>
-        </span>
-      )}
     </button>
   )
 }

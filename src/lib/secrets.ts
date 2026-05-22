@@ -491,6 +491,7 @@ export const recordSecretEvent = (
     if (event.action === 'extract') {
       bump(counters, 'gate_extractions_attempted')
       if (event.success) bump(counters, 'gate_extractions_success')
+      else bump(counters, 'gate_extractions_failed')
       if (event.named) bump(counters, 'gate_named_shadows_obtained')
     }
     if (event.action === 'summon' || event.action === 'fragment_summon') bump(counters, 'shadow_summons')
@@ -516,6 +517,20 @@ export const recordSecretEvent = (
   maybeTriggerRetrospective(progress, event, snapshotSignals, messages)
   maybeUpdateResonance(progress, event, counters, messages)
   syncSecretSignals(progress, counters)
+
+  if (
+    event.context === 'shadow' &&
+    event.action === 'extract' &&
+    !event.success &&
+    count(progress, 'gate_extractions_failed') >= 2 &&
+    markSecretSeen(progress, 'shadow.extract.failed.echo')
+  ) {
+    messages.push({
+      kind: 'secret',
+      title: SECRET_MESSAGES.hint.title,
+      lines: ['시스템 로그에 해석되지 않은 잔향이 남았습니다.'],
+    })
+  }
 
   const hintId = hintFor(progress, event.context)
   if (hintId) {

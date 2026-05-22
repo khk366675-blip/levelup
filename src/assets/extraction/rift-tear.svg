@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 520 760" preserveAspectRatio="xMidYMid meet">
+  <defs>
+    <filter id="tearGlow" x="-60%" y="-45%" width="220%" height="190%">
+      <feGaussianBlur stdDeviation="10" result="blur"/>
+      <feColorMatrix in="blur" type="matrix" values="0 0 0 0 0.15 0 0 0 0 0.42 0 0 0 0 0.55 0 0 0 0.8 0"/>
+      <feMerge>
+        <feMergeNode/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    <linearGradient id="edge" x1="0" x2="1">
+      <stop offset="0" stop-color="#70e3ff" stop-opacity="0"/>
+      <stop offset="0.48" stop-color="#a5f3fc" stop-opacity="0.28"/>
+      <stop offset="1" stop-color="#8b5cf6" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+  <g filter="url(#tearGlow)">
+    <path d="M274 12 C238 92 304 132 236 214 C204 254 256 292 208 356 C164 414 226 456 174 536 C222 514 214 664 256 748 C280 646 334 618 310 526 C292 458 356 426 318 356 C286 298 340 248 306 188 C282 144 332 74 274 12 Z" fill="#000003"/>
+    <path d="M260 42 C244 124 292 158 244 228 C216 270 254 308 226 368 C196 430 242 474 210 536 C244 502 244 646 262 714" fill="none" stroke="url(#edge)" stroke-width="7" stroke-linecap="round" opacity="0.88"/>
+    <path d="M286 84 C310 128 274 188 308 238 C338 282 296 330 330 384 C356 426 318 480 336 536" fill="none" stroke="#111827" stroke-width="14" stroke-linecap="round" opacity="0.72"/>
+  </g>
+</svg>

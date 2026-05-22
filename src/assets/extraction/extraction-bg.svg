@@ -1,0 +1,42 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 900" preserveAspectRatio="xMidYMid slice">
+  <defs>
+    <filter id="grain" x="-10%" y="-10%" width="120%" height="120%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.86" numOctaves="4" seed="19"/>
+      <feColorMatrix type="saturate" values="0"/>
+      <feComponentTransfer>
+        <feFuncA type="table" tableValues="0 0.22"/>
+      </feComponentTransfer>
+    </filter>
+    <linearGradient id="sky" x1="0" x2="0" y1="0" y2="1">
+      <stop offset="0" stop-color="#05070d"/>
+      <stop offset="0.42" stop-color="#101024"/>
+      <stop offset="0.74" stop-color="#090912"/>
+      <stop offset="1" stop-color="#010103"/>
+    </linearGradient>
+    <radialGradient id="coldGlow" cx="50%" cy="46%" r="46%">
+      <stop offset="0" stop-color="#274d63" stop-opacity="0.55"/>
+      <stop offset="0.42" stop-color="#18153c" stop-opacity="0.28"/>
+      <stop offset="1" stop-color="#020205" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="blur">
+      <feGaussianBlur stdDeviation="18"/>
+    </filter>
+  </defs>
+  <rect width="1600" height="900" fill="url(#sky)"/>
+  <rect width="1600" height="900" fill="url(#coldGlow)"/>
+  <rect width="1600" height="900" filter="url(#grain)" opacity="0.62"/>
+  <g opacity="0.42" filter="url(#blur)">
+    <path d="M-80 690 C190 610 318 738 545 648 C720 578 880 580 1040 644 C1232 720 1395 612 1680 694 L1680 960 L-80 960 Z" fill="#0c0b13"/>
+    <path d="M-50 758 C270 704 390 798 610 732 C814 670 1060 694 1210 750 C1382 814 1515 742 1680 772 L1680 960 L-50 960 Z" fill="#020204"/>
+  </g>
+  <g opacity="0.28">
+    <path d="M180 744 l22 -120 l21 120 Z" fill="#07070d"/>
+    <path d="M287 760 l12 -86 l30 86 Z" fill="#07070d"/>
+    <path d="M1265 750 l34 -132 l16 132 Z" fill="#07070d"/>
+    <path d="M1364 772 l14 -92 l35 92 Z" fill="#07070d"/>
+    <path d="M1014 744 c-28 -72 34 -98 48 -18 c7 38 12 60 22 92 c-22 -8 -46 -9 -70 -74 Z" fill="#07070d"/>
+  </g>
+  <g opacity="0.18">
+    <path d="M0 812 C220 778 398 850 584 794 C804 728 982 826 1196 782 C1376 744 1494 780 1600 750 L1600 900 L0 900 Z" fill="#11111d"/>
+  </g>
+</svg>

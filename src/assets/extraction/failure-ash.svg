@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 520" preserveAspectRatio="xMidYMid meet">
+  <defs>
+    <filter id="ashBlur">
+      <feGaussianBlur stdDeviation="2.4"/>
+    </filter>
+  </defs>
+  <g filter="url(#ashBlur)" opacity="0.76">
+    <path d="M384 214 C330 258 280 230 224 274 C300 284 324 336 382 310 C438 346 474 286 540 276 C482 234 430 260 384 214 Z" fill="#05070c"/>
+    <path d="M154 290 C214 270 244 310 292 300 C238 344 188 350 154 290 Z" fill="#111827" opacity="0.58"/>
+    <path d="M606 282 C554 264 526 306 482 294 C526 348 582 344 606 282 Z" fill="#111827" opacity="0.52"/>
+  </g>
+  <g fill="#cbd5e1" opacity="0.42">
+    <circle cx="178" cy="204" r="2.8"/>
+    <circle cx="224" cy="342" r="2.4"/>
+    <circle cx="306" cy="178" r="2.2"/>
+    <circle cx="380" cy="374" r="3.2"/>
+    <circle cx="486" cy="186" r="2.6"/>
+    <circle cx="540" cy="352" r="2.2"/>
+    <circle cx="612" cy="230" r="2.9"/>
+  </g>
+</svg>

@@ -143,6 +143,17 @@ const shadowResultAgain = recordSecretEvent(shadowResult.progress, { context: 's
 const markedTwice = shadowResultAgain.ownedShadows?.find(shadow => shadow.instanceId === evolvedShadow.instanceId)?.secretTraits?.length ?? markedOnce
 assert(markedTwice === markedOnce, 'secret trait was granted more than once')
 
+let extractionFailProgress = createInitialSecretProgress()
+const extractionFailFirst = recordSecretEvent(extractionFailProgress, { context: 'shadow', action: 'extract', success: false }, {})
+extractionFailProgress = extractionFailFirst.progress
+const extractionFailSecond = recordSecretEvent(extractionFailProgress, { context: 'shadow', action: 'extract', success: false }, {})
+extractionFailProgress = extractionFailSecond.progress
+const extractionFailThird = recordSecretEvent(extractionFailProgress, { context: 'shadow', action: 'extract', success: false }, {})
+assert((extractionFailProgress.counters?.gate_extractions_failed ?? 0) === 2, 'extraction failure signal was not counted')
+assert((extractionFailThird.progress.counters?.gate_extractions_failed ?? 0) === 3, 'extraction failure signal stopped counting')
+assert(extractionFailProgress.seen?.includes('shadow.extract.failed.echo'), 'extraction failure marker was not recorded')
+assert((extractionFailThird.progress.seen?.filter(id => id === 'shadow.extract.failed.echo').length ?? 0) === 1, 'extraction failure marker repeated')
+
 console.log('Secret expansion smoke simulation')
 console.log(`counters=${Object.keys(progress.counters ?? {}).length}`)
 console.log(`visibleFragments=${getSecretVisibleFragments(progress).length}`)

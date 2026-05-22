@@ -25,6 +25,7 @@ type Props = {
   sourceType: LockedSourceType
   size?: LockedPortraitSize
   className?: string
+  maskDetails?: boolean
 }
 
 const sizeClass: Record<LockedPortraitSize, string> = {
@@ -144,12 +145,13 @@ export function LockedShadowPortrait({
   sourceType,
   size = 'md',
   className,
+  maskDetails = false,
 }: Props) {
   const isGate = sourceType === 'named_gate'
   // Gate: gold + violet/teal. Achievement: cyan + gold halo.
   const primaryAccent = isGate ? '#f59e0b' : '#22d3ee'
   const secondaryAccent = isGate ? '#a78bfa' : '#f59e0b'
-  const roleAccent = rarityAccent[rarity]
+  const roleAccent = maskDetails ? '#94a3b8' : rarityAccent[rarity]
 
   const style = {
     '--locked-primary': primaryAccent,
@@ -181,8 +183,8 @@ export function LockedShadowPortrait({
           </radialGradient>
         </defs>
         <rect x="0" y="0" width="116" height="128" fill="url(#lockedHaze)" />
-        {/* role silhouette hint (very faint) */}
-        <RoleHint role={role} accent={roleAccent} />
+        {/* Generic sealed silhouette. Specific hints stay hidden until obtained. */}
+        <RoleHint role={maskDetails ? 'support' : role} accent={roleAccent} />
         {/* seal motif */}
         {isGate ? <GateSeal accent={primaryAccent} /> : <AchievementSeal accent={primaryAccent} />}
         {/* secondary accent ring (teal/violet 또는 gold) */}
@@ -204,12 +206,14 @@ export function LockedShadowPortrait({
 
       {/* 5. 좌상단 role badge + source 배지 */}
       <div className="absolute left-2 top-2 flex items-center gap-1">
-        <span
-          className="rounded border px-1.5 py-0.5 text-[8px] system-text text-white/70"
-          style={{ borderColor: `${roleAccent}80`, background: 'rgba(2,6,23,0.55)' }}
-        >
-          {roleBadge[role]}
-        </span>
+        {!maskDetails && (
+          <span
+            className="rounded border px-1.5 py-0.5 text-[8px] system-text text-white/70"
+            style={{ borderColor: `${roleAccent}80`, background: 'rgba(2,6,23,0.55)' }}
+          >
+            {roleBadge[role]}
+          </span>
+        )}
         <span
           className={clsx(
             'rounded border px-1.5 py-0.5 text-[8px] system-text',
@@ -218,7 +222,7 @@ export function LockedShadowPortrait({
               : 'border-cyan-200/45 bg-cyan-200/15 text-cyan-100',
           )}
         >
-          {isGate ? 'GATE NAMED' : 'ACHIEVEMENT'}
+          {maskDetails ? 'SIGNAL' : isGate ? 'GATE NAMED' : 'ACHIEVEMENT'}
         </span>
       </div>
 

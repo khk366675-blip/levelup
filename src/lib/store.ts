@@ -293,6 +293,7 @@ interface GameState {
   addCombatLog: (log: CombatLog) => void
   clearCombatLogs: () => void
   startGateBattle: () => void
+  resolveDirectGateBattle: (combatLog: CombatLog) => void
   startManualGateBattle: (gateId?: string) => void
   performManualBattleAction: (action: ManualBattleAction) => void
   cancelManualGateBattle: () => void
@@ -320,6 +321,7 @@ interface GameState {
   // infinite tower
   startTowerBattle: (floor: number) => void
   resolveTowerBattle: () => void
+  resolveDirectTowerBattle: (combatLog: CombatLog, floor: number) => void
   cancelTowerBattle: () => void
   startTowerManualBattle: (floor: number) => void
   performTowerManualBattleAction: (action: ManualBattleAction) => void
@@ -436,6 +438,31 @@ const createInitialGateStatus = (): GateStatus => ({
 const initialQuests = [...DEFAULT_DAILIES, ...DEFAULT_MAIN_QUESTS, ...DEFAULT_DUNGEONS]
 
 const uid = () => Math.random().toString(36).slice(2, 10)
+
+const directSkillIdFromTurn = (turn: BattleTurn): string | undefined => {
+  if (turn.actorType !== 'player' || !turn.skillId) return undefined
+  const directSkillMatch = turn.skillId.match(/:skill:([^:]+)$/)
+  const candidate = directSkillMatch?.[1] ?? turn.skillId
+  const skill = SKILL_DEFINITIONS.find(item => item.id === candidate)
+  if (!skill || !isHunterCombatSkill(skill)) return undefined
+  if (candidate === BASIC_ATTACK_SKILL.id || candidate === 'basic-guard-stance' || candidate === 'manual-defend') return undefined
+  return candidate
+}
+
+const applyDirectBattleSkillRuntimeUses = (
+  skillStates: Record<string, SkillRuntimeState> | undefined,
+  turns: BattleTurn[],
+): Record<string, SkillRuntimeState> | undefined => {
+  let next = skillStates
+  let changed = false
+  for (const turn of turns) {
+    const skillId = directSkillIdFromTurn(turn)
+    if (!skillId) continue
+    next = recordSkillRuntimeUse(next, skillId)
+    changed = true
+  }
+  return changed ? next : skillStates
+}
 
 const applySecretProgressEvent = (
   s: GameState,
@@ -1431,6 +1458,9 @@ const createGateBattleOutcomeUpdate = (
     penaltyApplied,
     source: 'gate',
   }
+  const nextSkillStates = finalLog.battleId.startsWith('direct-gate-')
+    ? applyDirectBattleSkillRuntimeUses(s.skillStates, finalLog.turns)
+    : s.skillStates
 
   const finalMessages = shadowLevelUps.length > 0
     ? [...s.messages, {
@@ -1455,6 +1485,7 @@ const createGateBattleOutcomeUpdate = (
       combatLogs: [finalLog, ...s.combatLogs].slice(0, 20),
       messages: finalMessages,
       manualBattleSession: undefined,
+      skillStates: nextSkillStates,
     }
 
   return {
@@ -3704,6 +3735,41 @@ export const useGame = create<GameState>()(
         }
       },
 
+      resolveDirectGateBattle: (combatLog) => {
+        const s = get()
+        const activeGate = s.activeGate
+        if (!activeGate || activeGate.status !== 'active') return
+        if (combatLog.gateInstanceId !== activeGate.instanceId) return
+
+        const gate = GATE_DEFINITIONS.find(g => g.id === activeGate.gateId)
+        if (!gate) return
+
+        const gateStatus = clearExpiredGateInjury(s.gateStatus)
+        const outcome = createGateBattleOutcomeUpdate(
+          s,
+          activeGate,
+          gate,
+          gateStatus,
+          {
+            ...combatLog,
+            result: combatLog.result === 'victory' ? 'victory' : 'defeat',
+            source: 'gate',
+          }
+        )
+
+        set(outcome.state)
+        set(current => applyChallengeProgress(current, {
+          gateAttempt: true,
+          gateVictory: combatLog.result === 'victory',
+        }))
+        if (outcome.shouldCheckUnlocks) {
+          setTimeout(() => {
+            get().checkTitleUnlocks()
+            get().checkJobAwakening()
+          }, 0)
+        }
+      },
+
       startManualGateBattle: (gateId) => {
         const s = get()
         const activeGate = s.activeGate
@@ -4508,6 +4574,9 @@ export const useGame = create<GameState>()(
         let nextGold = s.gold ?? 0
         let nextShadowEssence = s.shadowEssence ?? 0
         let nextOwnedShadows = s.ownedShadows ?? []
+        const nextSkillStates = combatLog.battleId.startsWith('direct-tower-')
+          ? applyDirectBattleSkillRuntimeUses(s.skillStates, combatLog.turns)
+          : s.skillStates
         const newMessages: SystemMessage[] = []
 
         if (result === 'victory') {
@@ -5235,6 +5304,9 @@ export const useGame = create<GameState>()(
         const result = activeBattle.result
         if (!result) return
         const floor = activeBattle.floor
+        const nextSkillStates = activeBattle.id.startsWith('direct-tower-')
+          ? applyDirectBattleSkillRuntimeUses(s.skillStates, activeBattle.logs)
+          : s.skillStates
         const isFirstClear = result.firstClear
         const rewards = result.rewards
 
@@ -5358,6 +5430,7 @@ export const useGame = create<GameState>()(
               },
             },
             messages: [...s.messages, ...newMessages],
+            skillStates: nextSkillStates,
           }))
           setTimeout(() => {
             set(current => applyChallengeProgress(current, { towerAttempt: true, towerClear: true }))
@@ -5395,11 +5468,54 @@ export const useGame = create<GameState>()(
               },
             },
             messages: [...s.messages, ...newMessages],
+            skillStates: nextSkillStates,
           }))
           setTimeout(() => {
             set(current => applyChallengeProgress(current, { towerAttempt: true }))
           }, 0)
         }
+      },
+
+      resolveDirectTowerBattle: (combatLog, floor) => {
+        const s = get()
+        const tower = s.infiniteTower ?? createInitialTowerState()
+        const safeFloor = Math.max(1, Math.floor(Number.isFinite(floor) ? floor : tower.currentFloor))
+        if (s.combatLogs.some(log => log.battleId === combatLog.battleId)) return
+        if (tower.activeTowerBattle?.id === combatLog.battleId && tower.activeTowerBattle.status !== 'revealing') return
+
+        const floorType = getTowerFloorType(safeFloor)
+        const monsters = getTowerMonstersForFloor(safeFloor)
+        const outcome: TowerBattleResult['outcome'] = combatLog.result === 'victory' ? 'victory' : 'defeat'
+        const isFirstClear = !tower.firstClearRewardsClaimed[safeFloor]
+        const rewards = calculateTowerReward(safeFloor, outcome, isFirstClear)
+        const towerResult: TowerBattleResult = {
+          outcome,
+          floor: safeFloor,
+          firstClear: isFirstClear,
+          rewards,
+        }
+
+        set({
+          infiniteTower: {
+            ...tower,
+            lastAttemptedFloor: safeFloor,
+            activeTowerBattle: {
+              id: combatLog.battleId,
+              floor: safeFloor,
+              floorType,
+              monsterIds: monsters.map(monster => monster.id),
+              recommendedPower: getTowerRecommendedPower(safeFloor),
+              status: 'revealing',
+              logs: combatLog.turns,
+              result: towerResult,
+              showResult: false,
+            },
+          },
+          combatLogs: [{ ...combatLog, result: outcome, source: 'tower' as const }, ...s.combatLogs].slice(0, 20),
+          manualBattleSession: undefined,
+        })
+
+        get().resolveTowerBattle()
       },
 
       cancelTowerBattle: () => set((s) => {

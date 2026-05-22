@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 520" preserveAspectRatio="xMidYMid meet">
+  <defs>
+    <filter id="smoke" x="-25%" y="-35%" width="150%" height="170%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.019 0.052" numOctaves="5" seed="31"/>
+      <feDisplacementMap in="SourceGraphic" scale="48"/>
+      <feGaussianBlur stdDeviation="14"/>
+    </filter>
+    <radialGradient id="mist" cx="50%" cy="70%" r="58%">
+      <stop offset="0" stop-color="#04050a" stop-opacity="0.94"/>
+      <stop offset="0.42" stop-color="#07121c" stop-opacity="0.58"/>
+      <stop offset="0.78" stop-color="#16213a" stop-opacity="0.18"/>
+      <stop offset="1" stop-color="#000000" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <g filter="url(#smoke)" opacity="0.9">
+    <path d="M55 438 C126 320 224 384 272 260 C326 122 456 190 506 102 C568 212 692 130 710 276 C724 390 836 336 866 444 C708 502 228 504 55 438 Z" fill="url(#mist)"/>
+    <path d="M214 470 C190 326 346 366 356 210 C436 266 480 166 540 250 C588 330 692 288 696 456 C574 508 348 510 214 470 Z" fill="#030407" opacity="0.62"/>
+  </g>
+</svg>

@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 520 820" preserveAspectRatio="xMidYMid meet">
+  <defs>
+    <filter id="columnWarp" x="-45%" y="-35%" width="190%" height="170%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.018 0.062" numOctaves="6" seed="121"/>
+      <feDisplacementMap in="SourceGraphic" scale="42"/>
+      <feGaussianBlur stdDeviation="9"/>
+    </filter>
+    <linearGradient id="columnInk" x1="0" x2="0" y1="1" y2="0">
+      <stop offset="0" stop-color="#000000" stop-opacity="0.98"/>
+      <stop offset="0.36" stop-color="#030812" stop-opacity="0.9"/>
+      <stop offset="0.72" stop-color="#071827" stop-opacity="0.44"/>
+      <stop offset="1" stop-color="#0f2436" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+  <g filter="url(#columnWarp)">
+    <path d="M252 802 C164 690 230 604 168 506 C116 422 192 358 176 274 C160 190 224 136 258 22 C304 142 374 202 342 304 C318 384 402 440 342 532 C286 620 350 704 252 802 Z" fill="url(#columnInk)" opacity="0.92"/>
+    <path d="M266 746 C224 646 278 560 236 474 C202 406 258 350 242 270 C230 208 268 154 288 82 C322 194 306 260 332 346 C358 430 302 500 326 590 C342 660 300 704 266 746 Z" fill="#010205" opacity="0.74"/>
+  </g>
+</svg>

@@ -16,9 +16,10 @@ import { useGame } from '../lib/store'
 import { CinematicLogOverlay, type CinematicLogData, type CinematicLogTone } from './CinematicLogOverlay'
 import { CombatLogPanel, type CombatLogEntry, type CombatLogEntryTone } from './CombatLogPanel'
 import { DramaticReveal, type RevealStep } from './DramaticReveal'
+import { DirectBattlePreviewPanel, type DirectBattlePanelCompletePayload } from './DirectBattlePreviewPanel'
 import { MonsterIntentPanel } from './MonsterIntentPanel'
 import { ShadowPortrait } from './shadows/ShadowPortrait'
-import { ShadowRevealModal, type ShadowRevealPayload } from './shadows/ShadowRevealModal'
+import { ShadowExtractionReveal } from './shadows/ShadowExtractionReveal'
 import { SkillActionCard, skillSourceSortRank, skillTypeSortRank } from './SkillActionCard'
 import { GATE_DEFINITIONS, GATE_PENALTIES, GATE_REWARD_TABLES, MONSTER_DEFINITIONS, SKILL_DEFINITIONS } from '../lib/seed'
 import {
@@ -35,7 +36,7 @@ import {
   getCombatPowerComparison,
   getHunterCombatPowerBreakdown,
 } from '../lib/combatPower'
-import type { ActiveConsumableEffect, CombatLog, Item, MonsterDefinition, ShadowExtractResult, StatKey } from '../lib/types'
+import type { ActiveGate, ActiveConsumableEffect, BattleTurn, CombatLog, GateDefinition, Item, MonsterDefinition, ShadowExtractResult, StatKey } from '../lib/types'
 import type { ManualBattleAction, ManualBattleSession, SkillDefinition } from '../lib/types'
 import {
   SHADOW_RARITY_LABEL,
@@ -51,6 +52,7 @@ import {
   getSkillMastery,
 } from '../lib/skills'
 import { getSecretVisibleFragments } from '../lib/secrets'
+import { pickDirectGateEncounterKey } from '../lib/directBattleEncounters'
 
 const GATE_ENTRY_COST = 20
 
@@ -80,6 +82,90 @@ const riskMeta: Record<GateRisk, { label: string; className: string }> = {
   normal: { label: '적정 위험', className: 'text-cyan-300 border-cyan-400/40 bg-cyan-400/10' },
   high: { label: '위험도 높음', className: 'text-amber-300 border-amber-400/40 bg-amber-400/10' },
   extreme: { label: '매우 위험', className: 'text-rose-300 border-rose-400/40 bg-rose-400/10' },
+}
+
+const getDirectGateEncounterKey = (gate: GateDefinition, seed?: string): string =>
+  pickDirectGateEncounterKey(gate.rank, seed ?? `${gate.id}:${gate.name}:${gate.monsterIds.join('|')}`)
+
+const getDirectGateEnemyBaseLevel = (gate: GateDefinition): number => {
+  const rankBonus: Record<GateDefinition['rank'], number> = {
+    E: 1,
+    D: 2,
+    C: 3,
+    B: 5,
+    A: 7,
+    S: 9,
+  }
+  return Math.max(1, gate.recommendedLevel + (rankBonus[gate.rank] ?? 1))
+}
+
+const directLogToGateTurn = (
+  payload: DirectBattlePanelCompletePayload,
+  index: number,
+): BattleTurn => {
+  const log = payload.logs[index]
+  const actor = payload.state.units.find(unit => unit.unitId === log.actorUnitId)
+  const target = payload.state.units.find(unit => unit.unitId === log.targetUnitIds?.[0])
+  const fallbackTarget = target ?? actor ?? payload.state.units[0]
+  const actorIsEnemy = actor?.team === 'enemy'
+  const targetIsEnemy = fallbackTarget?.team === 'enemy'
+  const outcome: BattleTurn['outcome'] =
+    log.eventType === 'heal' ? 'heal' :
+    log.eventType === 'status' || log.eventType === 'reaction' ? 'buff' :
+    'hit'
+
+  return {
+    turnNumber: index + 1,
+    waveNumber: Math.max(1, log.round),
+    actorType: actorIsEnemy ? 'monster' : 'player',
+    actorId: actor?.unitId ?? `direct-system-${index + 1}`,
+    actorName: actor?.displayName ?? 'Direct Battle',
+    targetType: targetIsEnemy ? 'monster' : 'player',
+    targetId: fallbackTarget?.unitId ?? `direct-target-${index + 1}`,
+    targetName: fallbackTarget?.displayName ?? 'Direct Battle',
+    skillId: log.actionCue,
+    skillName: log.actionCue,
+    outcome,
+    damage: log.eventType === 'damage' ? log.value : undefined,
+    remainingHp: fallbackTarget ? Math.round(fallbackTarget.stats.currentHp) : undefined,
+    message: log.message,
+  }
+}
+
+const buildDirectGateCombatLog = (
+  payload: DirectBattlePanelCompletePayload,
+  activeGate: ActiveGate,
+  gate: GateDefinition,
+): CombatLog => {
+  const playerUnits = payload.state.units.filter(unit => unit.team === 'player')
+  const hunterUnit = playerUnits.find(unit => unit.unitType === 'hunter') ?? playerUnits[0]
+  const turns: BattleTurn[] = payload.logs.length > 0
+    ? payload.logs.map((_, index) => directLogToGateTurn(payload, index))
+    : [{
+        turnNumber: 1,
+        actorType: 'player',
+        actorId: hunterUnit?.unitId ?? 'direct-battle',
+        actorName: hunterUnit?.displayName ?? 'Hunter',
+        targetType: 'monster',
+        targetId: 'direct-battle-result',
+        targetName: gate.name,
+        outcome: 'hit',
+        message: payload.outcome === 'victory' ? '직접 조작 게이트 전투에서 승리했습니다.' : '직접 조작 게이트 전투에서 패배했습니다.',
+      }]
+
+  return {
+    battleId: `direct-gate-${activeGate.instanceId}-${Date.now()}`,
+    gateInstanceId: activeGate.instanceId,
+    result: payload.outcome === 'victory' ? 'victory' : 'defeat',
+    turns,
+    totalTurns: Math.max(1, payload.rounds),
+    playerHpRemaining: Math.max(0, Math.round(hunterUnit?.stats.currentHp ?? 0)),
+    rewards: [],
+    penaltyApplied: undefined,
+    totalWaves: gate.monsterIds.length,
+    clearedWaves: payload.outcome === 'victory' ? gate.monsterIds.length : 0,
+    source: 'gate',
+  }
 }
 
 const sourceLabel: Record<string, string> = {
@@ -500,28 +586,10 @@ function ShadowExtractionPanel({
   const ownedDefinitionIds = new Set(ownedShadows.map(shadow => shadow.definitionId))
   const relatedResult = lastResult?.gateInstanceId === log.gateInstanceId ? lastResult : undefined
   const visibleResult = revealingResult?.gateInstanceId === log.gateInstanceId ? undefined : relatedResult
-  const extractionReveal: ShadowRevealPayload | undefined = revealingResult
-    ? revealingResult.success && revealingResult.shadow
-      ? {
-          shadow: revealingResult.shadow,
-          source: 'extraction',
-          success: true,
-          isNew: true,
-          isNamed: Boolean(revealingResult.shadow.isGateNamed || revealingResult.shadow.isAchievementNamed || revealingResult.shadow.isNamed),
-          title: 'ARISE',
-          message: '그림자가 군단에 합류했다.',
-          detail: `${gate.name}의 균열이 닫히며 새 형상이 군단의 기록에 새겨졌다.`,
-        }
-      : {
-          source: 'extraction',
-          success: false,
-          rarity: revealingResult.rolledRarity,
-          title: 'TRACE LOST',
-          message: '잔상이 흩어지고 균열이 닫혔다.',
-          detail: '그림자의 형상이 응답했지만 붙잡히기 전에 사라졌다.',
-        }
-    : undefined
 
+  // 12-30A: Shadow extraction uses the dedicated ShadowExtractionReveal modal.
+  // It is intentionally separate from ticket/summon reveals so the user does
+  // not see two or three back-to-back "ticket-style" stages for one extraction.
   const handleExtraction = () => {
     if (attempted) return
     attemptShadowExtraction(log.gateInstanceId)
@@ -534,7 +602,11 @@ function ShadowExtractionPanel({
   return (
     <div className="panel corner-bracket p-4 border-purple-400/25 bg-purple-500/5">
       <div className="br" />
-      <ShadowRevealModal reveal={extractionReveal} onClose={() => setRevealingResult(undefined)} />
+      <ShadowExtractionReveal
+        result={revealingResult}
+        gateName={gate.name}
+        onClose={() => setRevealingResult(undefined)}
+      />
       <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-3">
         <div>
           <div className="system-text text-[11px] text-purple-300/80 mb-1">SHADOW EXTRACTION</div>
@@ -562,8 +634,8 @@ function ShadowExtractionPanel({
               const hidden = def.hiddenUntilObtained && !obtained
               return (
                 <div key={def.id} className="text-xs text-white/65 flex justify-between gap-3">
-                  <span>[{SHADOW_RARITY_LABEL[def.rarity]}] {hidden ? '???' : def.name}</span>
-                  <span className="text-white/35">{def.role}</span>
+                  <span>{hidden ? '[???] 미확인 신호' : `[${SHADOW_RARITY_LABEL[def.rarity]}] ${def.name}`}</span>
+                  <span className="text-white/35">{hidden ? '봉인' : def.role}</span>
                 </div>
               )
             })}
@@ -661,7 +733,7 @@ function RecentBattleResult({
       <CinematicLogOverlay
         logs={cinematicLogs}
         visible={shouldReveal && !revealComplete}
-        intervalMs={1250}
+        intervalMs={1400}
         skipSignal={skipSignal}
         onLogChange={(_, index) => setRevealedLogCount(Math.min(index + 1, log.turns.length))}
         onComplete={() => {
@@ -938,136 +1010,8 @@ function HpBar({ label, hp, maxHp, tone }: { label: string; hp: number; maxHp: n
   )
 }
 
-function ManualBattlePanel({
-  session,
-  skills,
-  onAction,
-  onCancel,
-}: {
-  session: ManualBattleSession
-  skills: SkillDefinition[]
-  onAction: (action: ManualBattleAction) => void
-  onCancel: () => void
-}) {
-  const [showFullLog, setShowFullLog] = useState(false)
-  const visibleLogs = showFullLog ? session.logs : session.logs.slice(-8)
-
-  return (
-    <div className="panel corner-bracket p-5 border-cyan-400/30 bg-cyan-500/5">
-      <div className="br" />
-      <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-3 mb-5">
-        <div>
-          <div className="system-text text-[11px] text-cyan-300/80 mb-1">MANUAL TURN BATTLE</div>
-          <h3 className="text-xl font-bold text-cyan-100">{session.gateName}</h3>
-          <div className="text-xs text-white/50 mt-1">
-            Wave {session.waveIndex + 1} / {session.waveIndex + 1 + session.remainingMonsterIds.length} · Turn {session.turn} / {session.maxTurns}
-          </div>
-        </div>
-        <div className="text-xs system-text border border-cyan-400/25 bg-cyan-400/10 text-cyan-200 rounded px-2.5 py-1">
-          {session.result ?? 'in progress'}
-        </div>
-      </div>
-
-      <div className="grid lg:grid-cols-2 gap-4 mb-5">
-        <div className="space-y-4 border border-white/10 rounded-lg p-4 bg-ink-900/35">
-          <HpBar label={session.player.name} hp={session.player.hp} maxHp={session.player.maxHp} tone="cyan" />
-          <div className="grid grid-cols-3 gap-2">
-            <StatPill label="ATK" value={Math.round(session.player.atk)} />
-            <StatPill label="DEF" value={Math.round(session.player.def)} />
-            <StatPill label="SPD" value={Math.round(session.player.spd)} />
-          </div>
-        </div>
-        <div className="space-y-4 border border-rose-400/20 rounded-lg p-4 bg-rose-500/5">
-          <HpBar label={session.monster.name} hp={session.monster.hp} maxHp={session.monster.maxHp} tone="rose" />
-          <div className="grid grid-cols-3 gap-2">
-            <StatPill label="ATK" value={Math.round(session.monster.atk)} />
-            <StatPill label="DEF" value={Math.round(session.monster.def)} />
-            <StatPill label="SPD" value={Math.round(session.monster.spd)} />
-          </div>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-2 md:grid-cols-3 gap-2 mb-5">
-        <button type="button" onClick={() => onAction({ type: 'basic_attack' })} className="btn btn-primary text-sm min-h-11">
-          기본 공격
-        </button>
-        <button type="button" onClick={() => onAction({ type: 'defend' })} className="btn text-sm min-h-11 border-cyan-400/25 bg-cyan-400/10 text-cyan-100">
-          방어
-        </button>
-        {sortCombatSkills(skills, session.cooldowns).map(skill => {
-          const cooldown = session.cooldowns[skill.id] ?? 0
-          const availability = canUseSkill(skill, session)
-          return (
-            <SkillActionCard
-              key={skill.id}
-              skill={skill}
-              cooldownRemaining={cooldown}
-              disabled={!availability.canUse}
-              disabledReason={availability.reason}
-              compact
-              onClick={() => onAction({ type: 'skill', skillId: skill.id })}
-            />
-          )
-        })}
-        <button type="button" onClick={() => onAction({ type: 'auto_finish' })} className="btn text-sm min-h-11 border-amber-400/25 bg-amber-400/10 text-amber-100">
-          자동 마무리
-        </button>
-        <button type="button" onClick={onCancel} className="btn text-sm min-h-11 border-rose-400/25 bg-rose-400/10 text-rose-100">
-          전투 포기/닫기
-        </button>
-      </div>
-
-      <CombatLogPanel
-        title="RECENT BATTLE LOG"
-        subtitle="버튼 입력 직후 최신 행동이 위에 고정됩니다."
-        logs={session.logs.map((turn, index) => gateTurnToLogEntry(turn, index, session))}
-        maxVisible={6}
-        latestFirst
-        highlightLatest
-        compact
-        emptyText="행동을 선택하면 전투가 진행됩니다."
-        className="mb-4"
-      />
-
-      <div className="hidden">
-        <div className="system-text text-[11px] text-cyan-300/70">
-          BATTLE LOG {showFullLog ? `(${session.logs.length})` : '(최근 6줄)'}
-        </div>
-        {session.logs.length > 6 && (
-          <button
-            type="button"
-            onClick={() => setShowFullLog(prev => !prev)}
-            className="inline-flex items-center gap-1.5 text-[10px] system-text text-cyan-200 border border-cyan-400/25 bg-cyan-400/10 rounded px-2 py-1"
-          >
-            <List className="w-3 h-3" />
-            {showFullLog ? '로그 접기' : '전체 로그'}
-          </button>
-        )}
-      </div>
-
-      <div className="hidden">
-        {visibleLogs.length === 0 && (
-          <div className="rounded-lg border border-cyan-400/20 bg-cyan-400/5 px-3 py-3 text-xs text-cyan-100/60 system-text">
-            행동을 선택하면 전투가 진행됩니다.
-          </div>
-        )}
-        {visibleLogs.map((turn, index) => {
-          const outcome = outcomeMeta[turn.outcome]
-          return (
-            <div key={`${turn.turnNumber}-${turn.actorId}-${index}`} className="rounded-lg border border-white/10 bg-ink-900/35 px-3 py-2 text-xs leading-relaxed text-white/65">
-              <div className="flex items-center gap-2 mb-1">
-                <span className="text-cyan-300/50 system-text">#{turn.turnNumber}</span>
-                {turn.waveNumber && <span className="text-[9px] system-text px-1.5 py-0.5 rounded border border-cyan-400/25 bg-cyan-400/10 text-cyan-200">W{turn.waveNumber}</span>}
-                <span className={`text-[9px] system-text px-1.5 py-0.5 rounded border ${outcome.className}`}>{outcome.label}</span>
-              </div>
-              <p>{turn.message}</p>
-            </div>
-          )
-        })}
-      </div>
-    </div>
-  )
-}
+// 12-29P: Legacy `ManualBattlePanel` removed. `ManualBattlePanelV2` is the only
+// in-use manual battle panel (DEV fallback path). It uses `ManualHpBar` below.
 
 function ManualHpBar({ label, hp, maxHp, tone }: { label: string; hp: number; maxHp: number; tone: 'cyan' | 'rose' }) {
   const ratio = maxHp > 0 ? Math.max(0, Math.min(1, hp / maxHp)) : 0
@@ -1613,6 +1557,8 @@ function ManualBattlePanelV2({
 
 export function GatePanel() {
   const [isBattleRevealing, setIsBattleRevealing] = useState(false)
+  const [isDirectGateBattleOpen, setIsDirectGateBattleOpen] = useState(false)
+  const directGateResultIdsRef = useRef(new Set<string>())
   const hunter = useGame(s => s.hunter)
   const items = useGame(s => s.items)
   const equipment = useGame(s => s.equipment)
@@ -1627,6 +1573,7 @@ export function GatePanel() {
   )
   const manualBattleSession = useGame(s => s.manualBattleSession)
   const startGateBattle = useGame(s => s.startGateBattle)
+  const resolveDirectGateBattle = useGame(s => s.resolveDirectGateBattle)
   const startManualGateBattle = useGame(s => s.startManualGateBattle)
   const performManualBattleAction = useGame(s => s.performManualBattleAction)
   const cancelManualGateBattle = useGame(s => s.cancelManualGateBattle)
@@ -1672,6 +1619,12 @@ export function GatePanel() {
   const gate = activeGateOpen
     ? GATE_DEFINITIONS.find(g => g.id === activeGate.gateId)
     : undefined
+
+  useEffect(() => {
+    setIsDirectGateBattleOpen(false)
+    directGateResultIdsRef.current.clear()
+  }, [activeGate?.instanceId])
+
   const manualGateDefinition =
     manualBattleSession && (!manualBattleSession.source || manualBattleSession.source === 'gate')
       ? GATE_DEFINITIONS.find(g => g.id === manualBattleSession.gateId)
@@ -1772,6 +1725,12 @@ export function GatePanel() {
 
   const handleStartGateBattle = () => {
     if (!canStart) return
+    setIsDirectGateBattleOpen(true)
+    setIsBattleRevealing(false)
+  }
+
+  const handleStartLegacyGateBattle = () => {
+    if (!canStart) return
     setIsBattleRevealing(true)
     startGateBattle()
   }
@@ -1780,6 +1739,58 @@ export function GatePanel() {
     if (!canStart || !gate) return
     setIsBattleRevealing(false)
     startManualGateBattle(gate.id)
+  }
+
+  // 12-29I: Main Gate direct-battle result hook.
+  // Cancellation grants no reward. Victory/defeat are routed exactly once per
+  // (instanceId, battleId, outcome) through store.resolveDirectGateBattle, which
+  // owns the existing Gate reward / clear / penalty / progression logic.
+  const handleDirectGateBattleComplete = (payload: DirectBattlePanelCompletePayload) => {
+    if (!activeGate || !gate) return
+    if (payload.outcome === 'cancelled') {
+      setIsDirectGateBattleOpen(false)
+      return
+    }
+
+    const resultKey = `${activeGate.instanceId}:${payload.state.battleId}:${payload.outcome}`
+    if (directGateResultIdsRef.current.has(resultKey)) return
+    directGateResultIdsRef.current.add(resultKey)
+    resolveDirectGateBattle(buildDirectGateCombatLog(payload, activeGate, gate))
+    setIsDirectGateBattleOpen(false)
+    setIsBattleRevealing(true)
+  }
+
+  const directGateEncounterKey = getDirectGateEncounterKey(gate, activeGate.instanceId)
+
+  if (isDirectGateBattleOpen) {
+    return (
+      <div className="space-y-4">
+        <GateStatusPanel />
+        <ArchiveTraceChip count={traceCount} />
+        <DirectBattlePreviewPanel
+          title="직접 조작 게이트 전투"
+          note="실제 게이트 전투 후보입니다. 승리/패배 결과는 기존 게이트 보상/패널티 처리로 한 번만 연결됩니다."
+          hunter={hunter}
+          items={items}
+          equipment={equipment}
+          activeConsumableEffects={activeConsumableEffects}
+          equippedShadows={equippedShadows}
+          recommendedEncounterKey={directGateEncounterKey}
+          enemyBaseLevel={getDirectGateEnemyBaseLevel(gate)}
+          contextStats={[
+            { label: '게이트', value: gate.name },
+            { label: '랭크', value: `${gate.rank}-RANK` },
+            { label: '적 조합', value: directGateEncounterKey },
+          ]}
+          autoStart
+          allowEncounterSelection={false}
+          startButtonLabel="전투 시작"
+          restartButtonLabel="처음부터 다시"
+          cancelButtonLabel="전투 취소"
+          onBattleComplete={handleDirectGateBattleComplete}
+        />
+      </div>
+    )
   }
 
   if (manualBattleSession?.gateInstanceId === activeGate.instanceId) {
@@ -1912,8 +1923,8 @@ export function GatePanel() {
                   const hidden = def.hiddenUntilObtained && !obtained
                   return (
                     <div key={def.id} className="flex justify-between gap-3 text-xs">
-                      <span className="text-white/60">[{SHADOW_RARITY_LABEL[def.rarity]}] {hidden ? '???' : def.name}</span>
-                      <span className="text-purple-200/70">{def.role}</span>
+                      <span className="text-white/60">{hidden ? '[???] 미확인 신호' : `[${SHADOW_RARITY_LABEL[def.rarity]}] ${def.name}`}</span>
+                      <span className="text-purple-200/70">{hidden ? '봉인' : def.role}</span>
                     </div>
                   )
                 })}
@@ -2003,22 +2014,14 @@ export function GatePanel() {
               </div>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            <div className="grid grid-cols-1 gap-2">
               <button
                 type="button"
                 onClick={handleStartGateBattle}
                 disabled={!canStart}
                 className="w-full btn btn-primary text-sm min-h-11 disabled:opacity-60 disabled:cursor-not-allowed"
               >
-                자동 전투 시작
-              </button>
-              <button
-                type="button"
-                onClick={handleStartManualBattle}
-                disabled={!canStart}
-                className="w-full btn text-sm min-h-11 border-cyan-400/25 bg-cyan-400/10 text-cyan-100 disabled:opacity-60 disabled:cursor-not-allowed"
-              >
-                수동 전투 시작
+                직접 조작 게이트 전투 시작
               </button>
             </div>
             {!canStart && (

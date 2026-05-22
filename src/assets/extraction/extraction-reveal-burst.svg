@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 760" preserveAspectRatio="xMidYMid meet">
+  <defs>
+    <filter id="burstWarp" x="-35%" y="-35%" width="170%" height="170%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.026 0.041" numOctaves="4" seed="144"/>
+      <feDisplacementMap in="SourceGraphic" scale="38"/>
+      <feGaussianBlur stdDeviation="7"/>
+    </filter>
+    <radialGradient id="burstGlow" cx="50%" cy="58%" r="54%">
+      <stop offset="0" stop-color="#8eeaff" stop-opacity="0.42"/>
+      <stop offset="0.3" stop-color="#203650" stop-opacity="0.44"/>
+      <stop offset="0.62" stop-color="#090914" stop-opacity="0.58"/>
+      <stop offset="1" stop-color="#000000" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <g filter="url(#burstWarp)">
+    <path d="M448 44 C482 202 600 228 760 250 C620 326 628 464 810 570 C594 542 530 632 452 730 C368 604 280 582 86 618 C226 494 224 352 100 260 C280 250 390 196 448 44 Z" fill="url(#burstGlow)" opacity="0.9"/>
+    <path d="M450 154 C486 284 570 318 666 348 C552 394 558 500 656 584 C532 544 486 606 454 660 C402 574 334 548 226 570 C312 482 312 390 238 324 C344 310 410 252 450 154 Z" fill="#02040a" opacity="0.66"/>
+  </g>
+</svg>
