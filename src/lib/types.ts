@@ -315,6 +315,7 @@ export interface Quest {
   estimatedMinutes?: number
   coachGenerated?: boolean
   coachPlanId?: string
+  coachPlanDate?: string
 
   // Main Quest v2용 속성 추가
   finalGoal?: string

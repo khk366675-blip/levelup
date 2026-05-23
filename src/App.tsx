@@ -17,6 +17,7 @@ import {
   AlertTriangle,
 } from 'lucide-react'
 import { useGame } from './lib/store'
+import { todayKey, getDateKey, addDays } from './lib/game'
 import { TITLE_DEFINITIONS } from './lib/types'
 import { HunterStatus } from './components/HunterStatus'
 import { QuestCard } from './components/QuestCard'
@@ -53,6 +54,7 @@ export default function App() {
   const [tab, setTab] = useState<Tab>('rewards')
   const [addOpen, setAddOpen] = useState(false)
   const [showRoutineLibrary, setShowRoutineLibrary] = useState(false)
+  const [showTomorrowPlanPreview, setShowTomorrowPlanPreview] = useState(false)
   const quests = useGame(s => s.quests)
   const hunter = useGame(s => s.hunter)
   const gold = useGame(s => s.gold ?? 0)
@@ -95,17 +97,32 @@ export default function App() {
     }, 100)
   }, [init, checkTitles, checkJobs, grantAchievementNamedShadows, recordAppOpen, recoverGateStamina, clearGateInjuryIfExpired, clearExpiredConsumableEffects, clearExpiredRandomQuest, clearExpiredGate, ensureDailyRewardSystems, ensureTodayShadowExpedition, rollGateSpawn, rollRandomQuest])
 
+  const today = todayKey()
+  const tomorrow = getDateKey(addDays(new Date(), 1))
+
   const dailies = quests.filter(q => q.type === 'daily')
-  const aiPlanDailies = dailies.filter(q => 
+  
+  // 오늘 AI Daily Plan (coachGenerated 이고 coachPlanDate === today 이거나, coachPlanDate가 없는 레거시)
+  const aiPlanDailiesToday = dailies.filter(q => 
     q.recurring === false && 
-    (q.coachGenerated === true || q.coachReason !== undefined || q.aiPriority !== undefined || q.coachPriority !== undefined)
+    (q.coachGenerated === true || q.coachReason !== undefined || q.aiPriority !== undefined || q.coachPriority !== undefined) &&
+    (q.coachPlanDate === today || !q.coachPlanDate)
   )
+
+  // 내일 AI Daily Plan (coachGenerated 이고 coachPlanDate === tomorrow)
+  const aiPlanDailiesTomorrow = dailies.filter(q => 
+    q.recurring === false && 
+    (q.coachGenerated === true || q.coachReason !== undefined || q.aiPriority !== undefined || q.coachPriority !== undefined) &&
+    q.coachPlanDate === tomorrow
+  )
+
   const userQuests = dailies.filter(q => 
     q.recurring === false && 
     !(q.coachGenerated === true || q.coachReason !== undefined || q.aiPriority !== undefined || q.coachPriority !== undefined)
   )
   const routineDailies = dailies.filter(q => q.recurring === true)
-  const hasAiPlanDailies = aiPlanDailies.length > 0
+  const hasAiPlanDailiesToday = aiPlanDailiesToday.length > 0
+  const hasAiPlanDailiesTomorrow = aiPlanDailiesTomorrow.length > 0
   const mains = quests.filter(q => q.type === 'main')
 
   const handleReset = () => {
@@ -266,22 +283,22 @@ export default function App() {
                 {/* Random Quest Card */}
                 <RandomQuestCard />
 
-                {hasAiPlanDailies ? (
+                {hasAiPlanDailiesToday ? (
                   <div className="space-y-6">
                     {/* AI Daily Plan 섹션 */}
                     <div className="space-y-3">
                       <div className="flex items-center justify-between border-b border-purple-500/20 pb-1.5">
                         <h3 className="text-sm font-bold text-purple-300 flex items-center gap-1.5 font-mono tracking-wider">
-                          🤖 AI COACH DAILY PLAN
+                          🤖 AI COACH DAILY PLAN (오늘)
                         </h3>
                         <span className="text-[10px] px-2 py-0.5 rounded-full border border-purple-400/30 bg-purple-950/40 text-purple-300 font-mono">
-                          {aiPlanDailies.filter(q => (q.aiPriority || q.coachPriority) === 'core').length} Core / {aiPlanDailies.length} Total
+                          {aiPlanDailiesToday.filter(q => (q.aiPriority || q.coachPriority) === 'core').length} Core / {aiPlanDailiesToday.length} Total
                         </span>
                       </div>
                       
                       {/* priority 순 정렬하여 렌더링: core -> support -> maintenance -> recovery -> optional */}
                       <div className="grid md:grid-cols-2 gap-3">
-                        {[...aiPlanDailies].sort((a, b) => {
+                        {[...aiPlanDailiesToday].sort((a, b) => {
                           const priorityOrder = { core: 0, support: 1, maintenance: 2, recovery: 3, optional: 4 };
                           const orderA = (a.aiPriority || a.coachPriority) ? priorityOrder[(a.aiPriority || a.coachPriority)!] : 9;
                           const orderB = (b.aiPriority || b.coachPriority) ? priorityOrder[(b.aiPriority || b.coachPriority)!] : 9;
@@ -309,6 +326,44 @@ export default function App() {
                             </div>
                           ))}
                         </div>
+                      </div>
+                    )}
+
+                    {/* 내일 AI Daily Plan 프리뷰 섹션 (접이식) */}
+                    {hasAiPlanDailiesTomorrow && (
+                      <div className="panel corner-bracket p-4 bg-indigo-950/20 border border-purple-500/20">
+                        <div className="tl" /> <div className="tr" /> <div className="bl" /> <div className="br" />
+                        <div
+                          className="flex justify-between items-center cursor-pointer select-none"
+                          onClick={() => setShowTomorrowPlanPreview(!showTomorrowPlanPreview)}
+                        >
+                          <div className="space-y-0.5">
+                            <h4 className="text-xs font-bold text-purple-300 flex items-center gap-1.5 font-mono tracking-wider animate-pulse">
+                              📅 내일 AI Daily Plan 준비됨 ({aiPlanDailiesTomorrow.length})
+                            </h4>
+                            <p className="text-[10px] text-purple-300/40">
+                              내일 자정이 지나면 오늘의 Daily 퀘스트로 자동으로 활성화됩니다.
+                            </p>
+                          </div>
+                          <span className="text-purple-300/50">
+                            {showTomorrowPlanPreview ? '▲ 접기' : '▼ 펼치기'}
+                          </span>
+                        </div>
+
+                        {showTomorrowPlanPreview && (
+                          <div className="grid md:grid-cols-2 gap-3 mt-4 pt-4 border-t border-purple-400/10">
+                            {[...aiPlanDailiesTomorrow].sort((a, b) => {
+                              const priorityOrder = { core: 0, support: 1, maintenance: 2, recovery: 3, optional: 4 };
+                              const orderA = (a.aiPriority || a.coachPriority) ? priorityOrder[(a.aiPriority || a.coachPriority)!] : 9;
+                              const orderB = (b.aiPriority || b.coachPriority) ? priorityOrder[(b.aiPriority || b.coachPriority)!] : 9;
+                              return orderA - orderB;
+                            }).map(q => (
+                              <div key={q.id} className="group opacity-75 hover:opacity-100 transition-opacity">
+                                <QuestCard quest={q} removable onRemove={() => removeQuest(q.id)} />
+                              </div>
+                            ))}
+                          </div>
+                        )}
                       </div>
                     )}
 
@@ -346,16 +401,57 @@ export default function App() {
                     )}
                   </div>
                 ) : (
-                  <>
-                    <div className="grid md:grid-cols-2 gap-3">
-                      {dailies.map(q => (
-                        <div key={q.id} className="group">
-                          <QuestCard quest={q} removable onRemove={() => removeQuest(q.id)} />
-                        </div>
-                      ))}
+                  <div className="space-y-6">
+                    {/* 일반 렌더링 (오늘 수행할 AI 플랜이 없을 때) */}
+                    <div>
+                      <div className="grid md:grid-cols-2 gap-3">
+                        {dailies.filter(q => q.recurring === false || !hasAiPlanDailiesToday).map(q => (
+                          <div key={q.id} className="group">
+                            <QuestCard quest={q} removable onRemove={() => removeQuest(q.id)} />
+                          </div>
+                        ))}
+                      </div>
+                      {dailies.length === 0 && <EmptyState text="일일 퀘스트가 없습니다. 추가해보세요." />}
                     </div>
-                    {dailies.length === 0 && <EmptyState text="일일 퀘스트가 없습니다. 추가해보세요." />}
-                  </>
+
+                    {/* 내일 AI Daily Plan 프리뷰 섹션 (접이식 - 오늘 수행할 AI 플랜이 없을 때도 노출되도록 보강) */}
+                    {hasAiPlanDailiesTomorrow && (
+                      <div className="panel corner-bracket p-4 bg-indigo-950/20 border border-purple-500/20">
+                        <div className="tl" /> <div className="tr" /> <div className="bl" /> <div className="br" />
+                        <div
+                          className="flex justify-between items-center cursor-pointer select-none"
+                          onClick={() => setShowTomorrowPlanPreview(!showTomorrowPlanPreview)}
+                        >
+                          <div className="space-y-0.5">
+                            <h4 className="text-xs font-bold text-purple-300 flex items-center gap-1.5 font-mono tracking-wider animate-pulse">
+                              📅 내일 AI Daily Plan 준비됨 ({aiPlanDailiesTomorrow.length})
+                            </h4>
+                            <p className="text-[10px] text-purple-300/40">
+                              내일 자정이 지나면 오늘의 Daily 퀘스트로 자동으로 활성화됩니다.
+                            </p>
+                          </div>
+                          <span className="text-purple-300/50">
+                            {showTomorrowPlanPreview ? '▲ 접기' : '▼ 펼치기'}
+                          </span>
+                        </div>
+
+                        {showTomorrowPlanPreview && (
+                          <div className="grid md:grid-cols-2 gap-3 mt-4 pt-4 border-t border-purple-400/10">
+                            {[...aiPlanDailiesTomorrow].sort((a, b) => {
+                              const priorityOrder = { core: 0, support: 1, maintenance: 2, recovery: 3, optional: 4 };
+                              const orderA = (a.aiPriority || a.coachPriority) ? priorityOrder[(a.aiPriority || a.coachPriority)!] : 9;
+                              const orderB = (b.aiPriority || b.coachPriority) ? priorityOrder[(b.aiPriority || b.coachPriority)!] : 9;
+                              return orderA - orderB;
+                            }).map(q => (
+                              <div key={q.id} className="group opacity-75 hover:opacity-100 transition-opacity">
+                                <QuestCard quest={q} removable onRemove={() => removeQuest(q.id)} />
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
                 )}
               </Section>
             )}

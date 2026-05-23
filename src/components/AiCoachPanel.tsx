@@ -34,6 +34,7 @@ import { CATEGORY_META, DIFFICULTY_META, type Category, type Difficulty } from '
 import { AiCoachRecommendation, NormalizedCalendarEvent } from '../lib/aiCoachTypes'
 import { requestCalendarAccess, fetchCalendarEvents } from '../lib/googleCalendarClient'
 import { generateScheduleSummary } from '../lib/scheduleSummary'
+import { getDateKey, addDays } from '../lib/game'
 
 
 const VALID_CATEGORIES: Category[] = ['workout', 'health', 'study', 'career', 'mind', 'finance', 'social', 'challenge', 'habit']
@@ -444,9 +445,10 @@ export function AiCoachPanel() {
       setDailyPlanQuests(sanitizedQuests)
       setDailyPlanData(plan)
 
-      // ── 즉시 자동 적용 ──
+      // ── 즉시 자동 적용 (내일 날짜 기준) ──
       try {
-        replaceAiCoachDailyPlan(sanitizedQuests)
+        const tomorrowKey = getDateKey(addDays(new Date(), 1))
+        replaceAiCoachDailyPlan(sanitizedQuests, tomorrowKey)
       } catch (err) {
         console.error('AI Daily Plan 자동 적용 실패:', err)
         alert('AI Daily Plan의 자동 스토어 적용 중 에러가 발생했습니다.')
@@ -1141,9 +1143,9 @@ export function AiCoachPanel() {
               <div className="panel corner-bracket p-4 bg-emerald-950/30 border border-emerald-500/40 text-emerald-300 flex items-start gap-3">
                 <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0 mt-0.5 animate-pulse" />
                 <div className="space-y-1">
-                  <div className="font-bold text-sm text-emerald-200 font-mono">내일 AI Daily Plan이 자동으로 적용되었습니다!</div>
+                  <div className="font-bold text-sm text-emerald-200 font-mono">내일 AI Daily Plan이 준비되었습니다!</div>
                   <p className="text-xs text-emerald-300/80 leading-relaxed font-sans">
-                    기존의 AI 일일 계획 퀘스트는 정리되었으며, 새 계획이 Daily 화면에 반영되었습니다.
+                    내일이 되면 Daily 화면의 메인 퀘스트로 자동으로 활성화되어 표시됩니다. (현재 내일 Plan 준비됨 영역에서 미리 볼 수 있습니다.)
                   </p>
                 </div>
               </div>

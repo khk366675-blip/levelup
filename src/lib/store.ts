@@ -265,7 +265,7 @@ export interface GameState {
   // quests
   addQuest: (q: Omit<Quest, 'id' | 'createdAt'>) => void
   addAiCoachDailyQuest: (input: { title: string; description?: string; category: Category; difficulty: Difficulty; coachReason?: string; priority?: 'core' | 'support' | 'recovery' | 'maintenance' | 'optional'; estimatedMinutes?: number }) => void
-  replaceAiCoachDailyPlan: (quests: any[]) => void
+  replaceAiCoachDailyPlan: (quests: any[], targetDate: string) => void
   updateAiCoachCoreContext: (text: string) => void
   clearAiCoachCoreContext: () => void
   removeQuest: (id: string) => void
@@ -6184,15 +6184,16 @@ export const useGame = create<GameState>()(
         }
       }),
 
-      replaceAiCoachDailyPlan: (questsInput) => set((s) => {
-        // 1. 현재 quests에서 AI Coach가 생성한 1회성 daily plan 정리
+      replaceAiCoachDailyPlan: (questsInput, targetDate) => set((s) => {
+        // 1. 현재 quests에서 AI Coach가 생성한 1회성 daily plan 중 해당 targetDate와 일치하는 것만 정리
         const remainingQuests = s.quests.filter(q => {
           const isAiOneTimeDaily = q.type === 'daily' && 
                                    !q.recurring && 
                                    (q.coachReason !== undefined || 
                                     q.aiPriority !== undefined || 
                                     q.coachGenerated === true)
-          return !isAiOneTimeDaily
+          const isMatchDate = q.coachPlanDate === targetDate || (!q.coachPlanDate && targetDate === todayKey())
+          return !(isAiOneTimeDaily && isMatchDate)
         })
 
         // 2. 새 퀘스트들을 정규화하여 생성
@@ -6210,7 +6211,6 @@ export const useGame = create<GameState>()(
 
         const newQuests: Quest[] = []
         const newOutcomes: AiCoachQuestOutcome[] = []
-        const tomorrowKey = getDateKey(addDays(new Date(), 1))
         const coachPlanId = `plan-${Date.now()}`
 
         questsInput.forEach(q => {
@@ -6224,7 +6224,7 @@ export const useGame = create<GameState>()(
           const w = 1 / selectedStats.length
           selectedStats.forEach(stat => { rewardStatWeights[stat] = w })
 
-          const questId = `ai-daily-${todayKey()}-${Math.random().toString(36).slice(2, 6)}`
+          const questId = `ai-daily-${targetDate}-${Math.random().toString(36).slice(2, 6)}`
           
           const newQuest: Quest = {
             id: questId,
@@ -6237,13 +6237,14 @@ export const useGame = create<GameState>()(
             type: 'daily',
             recurring: false, // 1회성 플랜
             createdAt: todayISO(),
-            coachReason: q.reason || 'AI 내일 Daily Plan 처방',
+            coachReason: q.reason || 'AI Daily Plan 처방',
             aiPriority: q.priority,
             coachPriority: q.priority,
             aiEstimatedMinutes: q.estimatedMinutes,
             estimatedMinutes: q.estimatedMinutes,
             coachGenerated: true,
-            coachPlanId: coachPlanId
+            coachPlanId: coachPlanId,
+            coachPlanDate: targetDate
           }
           newQuests.push(newQuest)
 
@@ -6255,7 +6256,7 @@ export const useGame = create<GameState>()(
             difficulty: q.difficulty || 'normal',
             source: 'aiCoach',
             coachReason: q.reason,
-            plannedDate: tomorrowKey,
+            plannedDate: targetDate,
             addedAt: new Date().toISOString(),
             status: 'added'
           })
@@ -6278,12 +6279,12 @@ export const useGame = create<GameState>()(
           }
         }
 
-        // 기존 added 상태였던 outcomes를 expired로 교체/정리 (replaced/expired 처리)
+        // 기존 added 상태였던 outcomes 중 같은 날짜인 것들을 expired로 교체/정리 (replaced/expired 처리)
         const nextOutcomes = (updatedMemory.questOutcomes || []).map(out => {
-          if (out.status === 'added') {
+          if (out.status === 'added' && out.plannedDate === targetDate) {
             return {
               ...out,
-              status: 'expired' as const, // replaced 또는 expired로 덮어씀
+              status: 'expired' as const,
               completedAt: undefined
             }
           }
@@ -7141,28 +7142,42 @@ export const useGame = create<GameState>()(
 
         // 12-31F: 1회성 AI 퀘스트 만료(expired) 처리
         let updatedMemory = s.aiCoachMemory
-        if (updatedMemory) {
-          const expiredQuestIds = s.quests
-            .filter(q => q.type === 'daily' && q.recurring === false && !q.lastCompletedAt)
-            .map(q => q.id)
+        const todayStr = today // YYYY-MM-DD
+        
+        // 날짜가 지나버린 (coachPlanDate < today) 1회성 AI 플랜 리스트 추출
+        const expiredQuests = s.quests.filter(q => {
+          const isAiOneTimeDaily = q.type === 'daily' && q.recurring === false
+          if (!isAiOneTimeDaily) return false
           
-          if (expiredQuestIds.length > 0) {
-            const nextOutcomes = (updatedMemory.questOutcomes || []).map(out => {
-              if (expiredQuestIds.includes(out.questId) && out.status === 'added') {
-                return { ...out, status: 'expired' as const }
-              }
-              return out
-            })
-            updatedMemory = {
-              ...updatedMemory,
-              questOutcomes: nextOutcomes,
-              lastUpdatedAt: new Date().toISOString()
+          // coachPlanDate가 오늘이거나 미래인 경우 보존
+          if (q.coachPlanDate && q.coachPlanDate >= todayStr) return false
+          
+          // coachPlanDate가 없거나, 어제 이전인 경우 지움
+          return true
+        })
+        const expiredQuestIds = expiredQuests.map(q => q.id)
+        
+        if (updatedMemory && expiredQuestIds.length > 0) {
+          const nextOutcomes = (updatedMemory.questOutcomes || []).map(out => {
+            if (expiredQuestIds.includes(out.questId) && out.status === 'added') {
+              return { ...out, status: 'expired' as const }
             }
+            return out
+          })
+          updatedMemory = {
+            ...updatedMemory,
+            questOutcomes: nextOutcomes,
+            lastUpdatedAt: new Date().toISOString()
           }
         }
 
         const quests = s.quests
-          .filter(q => !(q.type === 'daily' && q.recurring === false)) // 완료 여부 무관하게 일회성 AI 퀘스트는 자정에 자동 소거
+          .filter(q => {
+            const isAiOneTimeDaily = q.type === 'daily' && q.recurring === false
+            if (!isAiOneTimeDaily) return true
+            // 과거 날짜의 1회성 AI 플랜만 삭제 (오늘/내일 플랜은 보관)
+            return !expiredQuestIds.includes(q.id)
+          })
           .map(q => {
             if (q.resetCycle !== 'monthly') return q
             if (!q.lastResetAt) {
