@@ -378,6 +378,7 @@ export interface GameState {
 
   // metadata sync
   syncDefaultQuestMetadata: () => void
+  ensureMainQuestMilestonesBackfilled: () => void
 
   // ai coach memory
   recordAiCoachSession: (session: Omit<AiCoachSessionRecord, 'id' | 'createdAt'>) => void
@@ -2293,6 +2294,129 @@ const applyChallengeProgress = (s: GameState, event: ChallengeProgressEvent): Pa
     shadowSummonShards: addShadowSummonShards(s.shadowSummonShards, fullCompletionBonus.shadowSummonShards),
     messages: [...s.messages, ...nextMessages],
   })
+}
+
+function isValidMainQuestMilestoneArray(milestones: any): milestones is MainQuestMilestone[] {
+  if (!Array.isArray(milestones)) return false
+  if (milestones.length === 0) return false
+  return milestones.every(m => 
+    m && 
+    typeof m === 'object' && 
+    typeof m.id === 'string' && 
+    typeof m.title === 'string' && 
+    typeof m.status === 'string' && 
+    typeof m.order === 'number'
+  )
+}
+
+function normalizeTitle(title: string): string {
+  if (!title) return ''
+  return title.replace(/[^a-zA-Z0-9가-힣]/g, '').toLowerCase()
+}
+
+function getDefaultMainQuestTemplate(quest: Quest): Quest | null {
+  // 1차 매칭: ID 일치
+  const directMatch = DEFAULT_MAIN_QUESTS.find(def => def.id === quest.id)
+  if (directMatch) return directMatch
+
+  // 2차 매칭: Title normalize 비교 + category 일치
+  const normTarget = normalizeTitle(quest.title)
+  if (!normTarget) return null
+
+  const titleMatch = DEFAULT_MAIN_QUESTS.find(def => {
+    return def.category === quest.category && normalizeTitle(def.title) === normTarget
+  })
+  return titleMatch || null
+}
+
+function shouldBackfillMainQuestMilestones(quest: Quest): boolean {
+  if (quest.type !== 'main') return false
+  if (!quest.milestones) return true
+  if (!isValidMainQuestMilestoneArray(quest.milestones)) return true
+  
+  // finalGoal이 비어있고 seed에 있는 경우 백필 대상
+  const template = getDefaultMainQuestTemplate(quest)
+  if (template && template.finalGoal && !quest.finalGoal) return true
+  
+  return false
+}
+
+function backfillMainQuestFromDefaultTemplate(quest: Quest, template: Quest): Quest {
+  const newFinalGoal = quest.finalGoal || template.finalGoal
+
+  // 템플릿 마일스톤 목록 복사 (깊은 복사)
+  const templateMilestones = (template.milestones as MainQuestMilestone[]) || []
+  let newMilestones: MainQuestMilestone[] = templateMilestones.map(m => ({ ...m }))
+
+  // 기존 milestones에서 유용한 정보 수집
+  const existingMilestones = Array.isArray(quest.milestones) ? quest.milestones : []
+
+  // 매칭하여 기존 진행 상황 복원
+  newMilestones = newMilestones.map(newM => {
+    // 1. ID 매칭
+    let match = existingMilestones.find(oldM => oldM && typeof oldM === 'object' && oldM.id === newM.id)
+    // 2. Title 매칭
+    if (!match) {
+      const normNew = normalizeTitle(newM.title)
+      match = existingMilestones.find(oldM => oldM && typeof oldM === 'object' && oldM.title && normalizeTitle(oldM.title) === normNew)
+    }
+    // 3. Order 매칭 (인덱스 매칭)
+    if (!match) {
+      match = existingMilestones.find(oldM => oldM && typeof oldM === 'object' && oldM.order === newM.order)
+    }
+
+    if (match && typeof match === 'object') {
+      // 사용자 진행 이력 보존
+      const updatedStatus = (match.status === 'completed' || match.status === 'skipped') ? match.status : newM.status
+      return {
+        ...newM,
+        status: updatedStatus as 'locked' | 'active' | 'completed' | 'skipped',
+        completedAt: match.completedAt || undefined,
+        evidenceNote: match.evidenceNote || undefined
+      }
+    }
+
+    return newM
+  })
+
+  // 만약 퀘스트 자체가 이미 completed 상태라면 전체 마일스톤을 completed로 강제 승격
+  if (quest.completed || quest.status === 'completed') {
+    newMilestones = newMilestones.map(m => ({
+      ...m,
+      status: 'completed' as const,
+      completedAt: m.completedAt || quest.completedAt || todayISO()
+    }))
+  } else {
+    // 퀘스트가 미완료인 경우:
+    // 이미 완료(completed/skipped)인 마일스톤은 그대로 두고,
+    // 완료되지 않은 마일스톤 중 첫 번째(order 기준 정렬 시 가장 앞자리)를 active로 설정, 나머지는 locked로 보정
+    const sorted = [...newMilestones].sort((a, b) => a.order - b.order)
+    let foundFirstInactive = false
+    
+    newMilestones = sorted.map(m => {
+      if (m.status === 'completed' || m.status === 'skipped') {
+        return m
+      }
+      if (!foundFirstInactive) {
+        foundFirstInactive = true
+        return { ...m, status: 'active' as const }
+      } else {
+        return { ...m, status: 'locked' as const }
+      }
+    })
+  }
+
+  // progressPercent 계산
+  const completedCount = newMilestones.filter(m => m.status === 'completed').length
+  const totalCount = newMilestones.length
+  const progressPercent = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : (quest.completed ? 100 : 0)
+
+  return {
+    ...quest,
+    finalGoal: newFinalGoal,
+    milestones: newMilestones,
+    progressPercent
+  }
 }
 
 export const useGame = create<GameState>()(
@@ -7211,41 +7335,74 @@ export const useGame = create<GameState>()(
           initialQuests.map(q => [q.id, q])
         )
         const preserved = new Set<string>()
+        let changed = false
         const mergedQuests: Quest[] = s.quests.map(saved => {
           const def = defaultMap.get(saved.id)
           if (!def) return saved // custom quest: leave untouched
           preserved.add(saved.id)
-          // Merge: keep progress fields, update metadata from default seed
-          // 단, Main Quest의 경우 이미 milestones가 유효한 배열로 존재하면 덮어쓰지 않음.
-          let milestones = saved.milestones
-          if (saved.type === 'main') {
-            if (!milestones || (Array.isArray(milestones) && milestones.length === 0)) {
-              milestones = def.milestones
+          
+          let quest = { ...saved }
+          
+          if (shouldBackfillMainQuestMilestones(quest)) {
+            const template = getDefaultMainQuestTemplate(quest)
+            if (template) {
+              quest = backfillMainQuestFromDefaultTemplate(quest, template)
+              changed = true
             }
           }
-          return {
+          
+          const updated = {
             ...def,
-            completed: saved.completed,
-            currentSteps: saved.currentSteps,
-            lastCompletedAt: saved.lastCompletedAt,
-            createdAt: saved.createdAt,
-            lastResetAt: saved.lastResetAt,
-            milestones: milestones,
-            progressPercent: typeof saved.progressPercent === 'number' ? saved.progressPercent : (saved.completed ? 100 : 0),
+            ...quest,
+            completed: quest.completed,
+            currentSteps: quest.currentSteps,
+            lastCompletedAt: quest.lastCompletedAt,
+            createdAt: quest.createdAt,
+            lastResetAt: quest.lastResetAt,
+            milestones: quest.milestones,
+            progressPercent: typeof quest.progressPercent === 'number' ? quest.progressPercent : (quest.completed ? 100 : 0),
           }
+
+          if (JSON.stringify(updated.milestones) !== JSON.stringify(saved.milestones) || 
+              updated.title !== saved.title || 
+              updated.description !== saved.description ||
+              updated.finalGoal !== saved.finalGoal) {
+            changed = true
+          }
+
+          return updated
         })
-        // Add new default quests that weren't in saved quests
+        
         const addedQuests: Quest[] = []
         for (const def of initialQuests) {
           if (!preserved.has(def.id)) {
             addedQuests.push(def)
+            changed = true
           }
         }
-        if (addedQuests.length === 0 && mergedQuests.length === s.quests.length) {
-          // Nothing changed
+        
+        if (!changed && addedQuests.length === 0 && mergedQuests.length === s.quests.length) {
           return {}
         }
+        
         return { quests: [...mergedQuests, ...addedQuests] }
+      }),
+
+      ensureMainQuestMilestonesBackfilled: () => set((s) => {
+        let changed = false
+        const updatedQuests = s.quests.map(quest => {
+          if (shouldBackfillMainQuestMilestones(quest)) {
+            const template = getDefaultMainQuestTemplate(quest)
+            if (template) {
+              changed = true
+              console.log(`[Backfill] Backfilling milestones for main quest: "${quest.title}" (${quest.id})`)
+              return backfillMainQuestFromDefaultTemplate(quest, template)
+            }
+          }
+          return quest
+        })
+        if (!changed) return {}
+        return { quests: updatedQuests }
       }),
 
       hardReset: () => set({

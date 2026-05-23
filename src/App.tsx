@@ -75,6 +75,8 @@ export default function App() {
   const grantAchievementNamedShadows = useGame(s => s.grantAchievementNamedShadows)
   const ensureTodayShadowExpedition = useGame(s => s.ensureTodayShadowExpedition)
   const ensureDailyRewardSystems = useGame(s => s.ensureDailyRewardSystems)
+  const syncDefaultQuestMetadata = useGame(s => s.syncDefaultQuestMetadata)
+  const ensureMainQuestMilestonesBackfilled = useGame(s => s.ensureMainQuestMilestonesBackfilled)
   const initialized = useGame(s => s.initialized)
 
   useEffect(() => {
@@ -89,13 +91,22 @@ export default function App() {
     ensureTodayShadowExpedition()
     rollGateSpawn('daily_open')
     rollRandomQuest()
+
+    // 메인 퀘스트 마일스톤 백필 및 기본 메타데이터 동기화 보장
+    try {
+      syncDefaultQuestMetadata()
+      ensureMainQuestMilestonesBackfilled()
+    } catch (e) {
+      console.error('Failed to backfill or sync quests:', e)
+    }
+
     // Check title and job unlocks on app mount
     setTimeout(() => {
       checkTitles()
       checkJobs()
       grantAchievementNamedShadows()
     }, 100)
-  }, [init, checkTitles, checkJobs, grantAchievementNamedShadows, recordAppOpen, recoverGateStamina, clearGateInjuryIfExpired, clearExpiredConsumableEffects, clearExpiredRandomQuest, clearExpiredGate, ensureDailyRewardSystems, ensureTodayShadowExpedition, rollGateSpawn, rollRandomQuest])
+  }, [init, checkTitles, checkJobs, grantAchievementNamedShadows, recordAppOpen, recoverGateStamina, clearGateInjuryIfExpired, clearExpiredConsumableEffects, clearExpiredRandomQuest, clearExpiredGate, ensureDailyRewardSystems, ensureTodayShadowExpedition, rollGateSpawn, rollRandomQuest, syncDefaultQuestMetadata, ensureMainQuestMilestonesBackfilled])
 
   const today = todayKey()
   const tomorrow = getDateKey(addDays(new Date(), 1))
