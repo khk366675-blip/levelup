@@ -90,7 +90,7 @@ const EMPTY_SHADOW_EXPEDITION_AGGREGATE: ShadowExpeditionUnitAggregate = {
 export const SHADOW_EXPEDITION_TEMPLATES: ExpeditionTemplate[] = [
   {
     type: 'training',
-    title: '그림자 훈련장',
+    title: '그림자 원정',
     description: '헌터는 전장에 나서지 않는다. 오늘은 군단이 스스로 움직일 차례다.',
     requiredPower: 82,
     recommendedRoles: ['assault', 'guard', 'support'],

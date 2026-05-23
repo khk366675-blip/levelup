@@ -258,6 +258,26 @@ export const JOB_LINE_META: Record<JobLine, { label: string; icon: string }> = {
 
 // ───────────────────────────────────────────────────────────────────────
 
+export interface MainQuestMilestoneReward {
+  hunterXp?: number
+  gold?: number
+  statRewards?: Partial<Record<StatKey, number>>
+  boxType?: string
+  ticketType?: string
+}
+
+export interface MainQuestMilestone {
+  id: string
+  title: string
+  description?: string
+  status: 'locked' | 'active' | 'completed' | 'skipped'
+  order: number
+  importance?: 'minor' | 'normal' | 'major'
+  reward?: MainQuestMilestoneReward
+  completedAt?: string
+  evidenceNote?: string
+}
+
 export interface Quest {
   id: string
   title: string
@@ -279,7 +299,7 @@ export interface Quest {
   totalSteps?: number
   currentSteps?: number
   /** dungeon: step-by-step milestone descriptions. If present, UI shows current/next goal. */
-  milestones?: string[]
+  milestones?: string[] | MainQuestMilestone[]
   /** daily only: days that must pass after completion before this can be done again.
    *  undefined or 0 = standard daily (midnight reset). 1 = every other day. 4 = every 5 days. */
   cooldownDays?: number
@@ -287,6 +307,21 @@ export interface Quest {
   resetCycle?: 'monthly'
   /** ISO timestamp of the most recent auto-reset (or initial stamp). */
   lastResetAt?: string
+  /** optional AI Coach metadata */
+  coachReason?: string
+  aiPriority?: 'core' | 'support' | 'recovery' | 'maintenance' | 'optional'
+  coachPriority?: 'core' | 'support' | 'recovery' | 'maintenance' | 'optional'
+  aiEstimatedMinutes?: number
+  estimatedMinutes?: number
+  coachGenerated?: boolean
+  coachPlanId?: string
+
+  // Main Quest v2용 속성 추가
+  finalGoal?: string
+  progressPercent?: number
+  status?: 'active' | 'completed' | 'paused' | 'archived'
+  source?: 'user' | 'aiCoach'
+  completedAt?: string
 }
 
 export type ItemRarity = 'common' | 'uncommon' | 'rare' | 'epic' | 'legendary'
@@ -1394,7 +1429,7 @@ export interface SecretProgressState {
 
 export type BoxType = 'daily' | 'weekly' | 'boss'
 export type BoxTier = 'normal' | 'enhanced' | 'superior' | 'epic'
-export type BoxSource = 'daily_login' | 'weekly_activity' | 'tower_boss' | 'challenge_card'
+export type BoxSource = 'daily_login' | 'weekly_activity' | 'tower_boss' | 'challenge_card' | 'achievement'
 
 export interface BoxReward {
   hunterXp?: number

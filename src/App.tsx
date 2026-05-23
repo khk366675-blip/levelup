@@ -13,6 +13,8 @@ import {
   Swords,
   Plus,
   RotateCcw,
+  Brain,
+  AlertTriangle,
 } from 'lucide-react'
 import { useGame } from './lib/store'
 import { TITLE_DEFINITIONS } from './lib/types'
@@ -30,9 +32,9 @@ import { InfiniteTowerPanel } from './components/InfiniteTowerPanel'
 import { RewardBoxPanel } from './components/RewardBoxPanel'
 import { ChallengeCardsPanel } from './components/ChallengeCardsPanel'
 import { ShopPanel } from './components/ShopPanel'
-import { DevQaPanel } from './components/DevQaPanel'
+import { AiCoachPanel } from './components/AiCoachPanel'
 
-type Tab = 'rewards' | 'shop' | 'daily' | 'main' | 'dungeon' | 'gate' | 'shadows' | 'inventory' | 'titles' | 'tower'
+type Tab = 'rewards' | 'shop' | 'daily' | 'main' | 'gate' | 'shadows' | 'inventory' | 'titles' | 'tower' | 'coach'
 
 const TABS: { key: Tab; label: string; icon: typeof Calendar }[] = [
   { key: 'rewards',   label: '보상',           icon: Gift },
@@ -40,21 +42,23 @@ const TABS: { key: Tab; label: string; icon: typeof Calendar }[] = [
   { key: 'shadows',   label: '군단',         icon: Eclipse },
   { key: 'daily',     label: '일일 퀘스트', icon: Calendar },
   { key: 'main',      label: '메인 퀘스트', icon: Compass },
-  { key: 'dungeon',   label: '던전',        icon: Skull },
   { key: 'gate',      label: '게이트',      icon: Swords },
   { key: 'tower',     label: '무한의 탑',   icon: Swords },
   { key: 'inventory', label: '인벤토리',    icon: Package },
   { key: 'titles',    label: '칭호',        icon: Award },
+  { key: 'coach',     label: 'AI 코치',      icon: Brain },
 ]
 
 export default function App() {
   const [tab, setTab] = useState<Tab>('rewards')
   const [addOpen, setAddOpen] = useState(false)
+  const [showRoutineLibrary, setShowRoutineLibrary] = useState(false)
   const quests = useGame(s => s.quests)
   const hunter = useGame(s => s.hunter)
   const gold = useGame(s => s.gold ?? 0)
   const removeQuest = useGame(s => s.removeQuest)
-  const reset = useGame(s => s.hardReset)
+  const resetGameProgress = useGame(s => s.resetGameProgressOnly)
+  const hardResetAll = useGame(s => s.hardResetAll)
   const init = useGame(s => s.resetDailiesIfNewDay)
   const checkTitles = useGame(s => s.checkTitleUnlocks)
   const checkJobs = useGame(s => s.checkJobAwakening)
@@ -92,11 +96,51 @@ export default function App() {
   }, [init, checkTitles, checkJobs, grantAchievementNamedShadows, recordAppOpen, recoverGateStamina, clearGateInjuryIfExpired, clearExpiredConsumableEffects, clearExpiredRandomQuest, clearExpiredGate, ensureDailyRewardSystems, ensureTodayShadowExpedition, rollGateSpawn, rollRandomQuest])
 
   const dailies = quests.filter(q => q.type === 'daily')
+  const aiPlanDailies = dailies.filter(q => 
+    q.recurring === false && 
+    (q.coachGenerated === true || q.coachReason !== undefined || q.aiPriority !== undefined || q.coachPriority !== undefined)
+  )
+  const userQuests = dailies.filter(q => 
+    q.recurring === false && 
+    !(q.coachGenerated === true || q.coachReason !== undefined || q.aiPriority !== undefined || q.coachPriority !== undefined)
+  )
+  const routineDailies = dailies.filter(q => q.recurring === true)
+  const hasAiPlanDailies = aiPlanDailies.length > 0
   const mains = quests.filter(q => q.type === 'main')
-  const dungeons = quests.filter(q => q.type === 'dungeon')
 
   const handleReset = () => {
-    if (window.confirm('정말 모든 데이터를 초기화할까요? 되돌릴 수 없습니다.')) reset()
+    if (window.confirm(
+      '게임 진행만 초기화합니다.\n\n' +
+      '레벨, 스탯, 장비, 그림자, 골드 및 전투/보상/상점 진행도만 리셋되며,\n' +
+      'AI 코치 Core, Daily Plan, Daily 라이브러리, Main Quest 구조 및 CoachMemory 등의 자기관리 데이터는 안전하게 유지됩니다.\n\n' +
+      '계속 진행하시겠습니까?'
+    )) {
+      resetGameProgress()
+    }
+  }
+
+  const handleResetAll = () => {
+    const isFirstConfirmed = window.confirm(
+      '【주의】 전체 리셋은 앱의 모든 데이터를 완전히 삭제합니다.\n\n' +
+      '게임 진행도뿐 아니라 작성하신 AI 코치 Core Context, AI Coach Memory, AI Daily Plan, Daily Quest, Main Quest 구조, Milestone 등 모든 데이터가 공장 초기화됩니다.\n\n' +
+      '계속 진행하시겠습니까?'
+    )
+    if (!isFirstConfirmed) return
+
+    const isSecondConfirmed = window.confirm(
+      '정말로 모든 데이터를 삭제하시겠습니까?\n' +
+      '이 작업은 절대 되돌릴 수 없으며 앱을 처음 설치한 상태로 돌아갑니다.'
+    )
+    if (!isSecondConfirmed) return
+
+    const userInput = window.prompt(
+      '실행을 위해 아래 입력창에 "전체 리셋" 이라고 정확하게 입력해주십시오.'
+    )
+    if (userInput === '전체 리셋') {
+      hardResetAll()
+    } else {
+      alert('입력값이 일치하지 않아 전체 리셋이 취소되었습니다.')
+    }
   }
 
   // Get equipped title
@@ -137,16 +181,25 @@ export default function App() {
           </div>
           <div className="flex items-center gap-1.5 flex-wrap justify-end">
             <BackupControls />
-            <button onClick={handleReset} className="btn btn-ghost text-xs text-red-300/70 hover:text-red-200" title="초기화">
-              <RotateCcw className="w-3.5 h-3.5" /> 리셋
+            <button 
+              onClick={handleReset} 
+              className="btn btn-ghost text-xs text-red-300/70 hover:text-red-200" 
+              title="게임 진행만 초기화합니다. AI 코치 Core, Daily Plan, Main Quest 구조, CoachMemory는 유지됩니다."
+            >
+              <RotateCcw className="w-3.5 h-3.5" /> 게임 진행 리셋
+            </button>
+            <button 
+              onClick={handleResetAll} 
+              className="btn text-xs text-red-400 font-bold bg-red-950/20 hover:bg-red-950/40 border border-red-500/30 hover:border-red-500/60" 
+              title="모든 데이터를 초기화합니다. AI 코치 Core, Daily Plan, Main Quest, CoachMemory까지 모두 삭제됩니다."
+            >
+              <AlertTriangle className="w-3.5 h-3.5" /> 전체 리셋
             </button>
           </div>
         </div>
       </header>
 
       <main className="max-w-6xl mx-auto px-4 py-6 space-y-6">
-        {import.meta.env.DEV && <DevQaPanel onOpenShadows={() => setTab('shadows')} />}
-
         <HunterStatus />
 
         {/* Tabs */}
@@ -212,24 +265,112 @@ export default function App() {
               >
                 {/* Random Quest Card */}
                 <RandomQuestCard />
-                
-                <div className="grid md:grid-cols-2 gap-3">
-                  {dailies.map(q => (
-                    <div key={q.id} className="group">
-                      <QuestCard quest={q} removable onRemove={() => removeQuest(q.id)} />
+
+                {hasAiPlanDailies ? (
+                  <div className="space-y-6">
+                    {/* AI Daily Plan 섹션 */}
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between border-b border-purple-500/20 pb-1.5">
+                        <h3 className="text-sm font-bold text-purple-300 flex items-center gap-1.5 font-mono tracking-wider">
+                          🤖 AI COACH DAILY PLAN
+                        </h3>
+                        <span className="text-[10px] px-2 py-0.5 rounded-full border border-purple-400/30 bg-purple-950/40 text-purple-300 font-mono">
+                          {aiPlanDailies.filter(q => (q.aiPriority || q.coachPriority) === 'core').length} Core / {aiPlanDailies.length} Total
+                        </span>
+                      </div>
+                      
+                      {/* priority 순 정렬하여 렌더링: core -> support -> maintenance -> recovery -> optional */}
+                      <div className="grid md:grid-cols-2 gap-3">
+                        {[...aiPlanDailies].sort((a, b) => {
+                          const priorityOrder = { core: 0, support: 1, maintenance: 2, recovery: 3, optional: 4 };
+                          const orderA = (a.aiPriority || a.coachPriority) ? priorityOrder[(a.aiPriority || a.coachPriority)!] : 9;
+                          const orderB = (b.aiPriority || b.coachPriority) ? priorityOrder[(b.aiPriority || b.coachPriority)!] : 9;
+                          return orderA - orderB;
+                        }).map(q => (
+                          <div key={q.id} className="group">
+                            <QuestCard quest={q} removable onRemove={() => removeQuest(q.id)} />
+                          </div>
+                        ))}
+                      </div>
                     </div>
-                  ))}
-                </div>
-                {dailies.length === 0 && <EmptyState text="일일 퀘스트가 없습니다. 추가해보세요." />}
+
+                    {/* 사용자 추가 일일 퀘스트 섹션 (AI 플랜과 함께 활성화) */}
+                    {userQuests.length > 0 && (
+                      <div className="space-y-3">
+                        <div className="flex items-center justify-between border-b border-cyan-500/20 pb-1.5">
+                          <h3 className="text-sm font-bold text-cyan-300 flex items-center gap-1.5 font-mono tracking-wider">
+                            👤 사용자 추가 일일 퀘스트 ({userQuests.length})
+                          </h3>
+                        </div>
+                        <div className="grid md:grid-cols-2 gap-3">
+                          {userQuests.map(q => (
+                            <div key={q.id} className="group">
+                              <QuestCard quest={q} removable onRemove={() => removeQuest(q.id)} />
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* 기본 루틴 라이브러리 섹션 (접이식) */}
+                    {routineDailies.length > 0 && (
+                      <div className="panel corner-bracket p-4 bg-slate-950/20 border border-cyan-400/10">
+                        <div className="tl" /> <div className="tr" /> <div className="bl" /> <div className="br" />
+                        <div
+                          className="flex justify-between items-center cursor-pointer select-none"
+                          onClick={() => setShowRoutineLibrary(!showRoutineLibrary)}
+                        >
+                          <div className="space-y-0.5">
+                            <h4 className="text-xs font-bold text-cyan-300 flex items-center gap-1.5 font-mono tracking-wider">
+                              📚 기본 루틴 라이브러리 ({routineDailies.length})
+                            </h4>
+                            <p className="text-[10px] text-cyan-300/40">
+                              AI 코치가 참고하는 기본 루틴입니다. AI Plan이 없을 때는 기본 Daily로 사용할 수 있습니다.
+                            </p>
+                          </div>
+                          <span className="text-cyan-300/50">
+                            {showRoutineLibrary ? '▲ 접기' : '▼ 펼치기'}
+                          </span>
+                        </div>
+
+                        {showRoutineLibrary && (
+                          <div className="grid md:grid-cols-2 gap-3 mt-4 pt-4 border-t border-cyan-400/10">
+                            {routineDailies.map(q => (
+                              <div key={q.id} className="group">
+                                <QuestCard quest={q} removable onRemove={() => removeQuest(q.id)} />
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <>
+                    <div className="grid md:grid-cols-2 gap-3">
+                      {dailies.map(q => (
+                        <div key={q.id} className="group">
+                          <QuestCard quest={q} removable onRemove={() => removeQuest(q.id)} />
+                        </div>
+                      ))}
+                    </div>
+                    {dailies.length === 0 && <EmptyState text="일일 퀘스트가 없습니다. 추가해보세요." />}
+                  </>
+                )}
               </Section>
             )}
 
             {tab === 'main' && (
               <Section
-                title="메인 퀘스트"
-                subtitle="장기 목표 · 한 번 완료하면 영구 보상"
+                title="메인 퀘스트 v2"
+                subtitle="장기 목표 · 최종 목표 도달을 위한 순차 마일스톤과 중간 보상 연동"
                 onAdd={() => setAddOpen(true)}
               >
+                {/* v2 안내 배너 */}
+                <div className="panel corner-bracket p-4 bg-indigo-950/20 border border-cyan-400/10 text-cyan-200 text-xs mb-4">
+                  <div className="tl" /> <div className="tr" /> <div className="bl" /> <div className="br" />
+                  🎯 <strong>장기 목표 & 마일스톤 통합 관리:</strong> 하나의 메인 퀘스트에 여러 마일스톤(Milestone)을 엮어 단계적으로 클리어하십시오. 각 마일스톤 완수 시마다 전리품 상자, 인내 스탯(PER), Gold 등 중간 보상이 앱 규칙에 따라 자동으로 안전하게 지급됩니다.
+                </div>
                 <div className="grid md:grid-cols-2 gap-3">
                   {mains.map(q => (
                     <div key={q.id} className="group">
@@ -238,23 +379,6 @@ export default function App() {
                   ))}
                 </div>
                 {mains.length === 0 && <EmptyState text="아직 추가된 메인 퀘스트가 없습니다." />}
-              </Section>
-            )}
-
-            {tab === 'dungeon' && (
-              <Section
-                title="던전"
-                subtitle="여러 단계로 이루어진 도전 · 클리어 시 거대한 보상"
-                onAdd={() => setAddOpen(true)}
-              >
-                <div className="grid md:grid-cols-2 gap-3">
-                  {dungeons.map(q => (
-                    <div key={q.id} className="group">
-                      <QuestCard quest={q} removable onRemove={() => removeQuest(q.id)} />
-                    </div>
-                  ))}
-                </div>
-                {dungeons.length === 0 && <EmptyState text="입장 가능한 던전이 없습니다." />}
               </Section>
             )}
 
@@ -287,6 +411,15 @@ export default function App() {
                 <TitleCollection />
               </Section>
             )}
+
+            {tab === 'coach' && (
+              <Section
+                title="AI 성장 코치"
+                subtitle="자유 기록 기반 분석 및 내일의 퀘스트 설계 제안"
+              >
+                <AiCoachPanel />
+              </Section>
+            )}
           </motion.div>
         </AnimatePresence>
 
@@ -295,7 +428,7 @@ export default function App() {
         </footer>
       </main>
 
-      <AddQuestModal open={addOpen} onClose={() => setAddOpen(false)} type={tab === 'main' || tab === 'dungeon' ? tab : 'daily'} />
+      <AddQuestModal open={addOpen} onClose={() => setAddOpen(false)} type={tab === 'main' ? 'main' : 'daily'} />
     </div>
   )
 }

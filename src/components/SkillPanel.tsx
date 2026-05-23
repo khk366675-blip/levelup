@@ -20,7 +20,7 @@ export function SkillPanel() {
   const equipment = useGame(s => s.equipment)
   const titles = useGame(s => s.titles)
   const skillStates = useGame(s => s.skillStates ?? {})
-  const [expanded, setExpanded] = useState(true)
+  const [expanded, setExpanded] = useState(false)
   const [selectedSkillId, setSelectedSkillId] = useState<string | undefined>()
 
   const equippedItems = useMemo(() => getEquippedSkillItems(items, equipment), [items, equipment])

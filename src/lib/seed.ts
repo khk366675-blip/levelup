@@ -281,6 +281,13 @@ export const DEFAULT_MAIN_QUESTS: Quest[] = [
     type: 'main',
     createdAt: todayISO(),
     completed: false,
+    finalGoal: '투자 학회 서류+면접 통과 및 최종 합격',
+    milestones: [
+      { id: 'main-club-ms-1', title: '지원서 작성 및 산업 분석 리포트 초안 완성', status: 'active', order: 1, importance: 'normal' },
+      { id: 'main-club-ms-2', title: '현직자 피드백 반영 및 최종 서류 제출', status: 'locked', order: 2, importance: 'major' },
+      { id: 'main-club-ms-3', title: '면접 예상 질문 리스트 정리 및 모의면접 진행', status: 'locked', order: 3, importance: 'normal' },
+      { id: 'main-club-ms-4', title: '투자 학회 최종 면접 응시 및 합격 통보', status: 'locked', order: 4, importance: 'major' }
+    ]
   },
   {
     id: 'main-kbi-cert',
@@ -293,6 +300,14 @@ export const DEFAULT_MAIN_QUESTS: Quest[] = [
     type: 'main',
     createdAt: todayISO(),
     completed: false,
+    finalGoal: 'KBI 금융 AI 리터러시 자격증 취득',
+    milestones: [
+      { id: 'main-kbi-cert-ms-1', title: '시험 정보 및 시험 범위(기본 교재) 파악', status: 'active', order: 1, importance: 'minor' },
+      { id: 'main-kbi-cert-ms-2', title: '핵심 교재 및 동영상 강의 1회독 완료', status: 'locked', order: 2, importance: 'normal' },
+      { id: 'main-kbi-cert-ms-3', title: '기출문제 풀이 1회차 완료 및 취약 부분 분석', status: 'locked', order: 3, importance: 'normal' },
+      { id: 'main-kbi-cert-ms-4', title: '오답 노트 작성 및 최종 요약본 복습 완료', status: 'locked', order: 4, importance: 'minor' },
+      { id: 'main-kbi-cert-ms-5', title: '시험 응시 및 최종 합격 점수 달성', status: 'locked', order: 5, importance: 'major' }
+    ]
   },
   {
     id: 'main-cut',
@@ -305,6 +320,13 @@ export const DEFAULT_MAIN_QUESTS: Quest[] = [
     type: 'main',
     createdAt: todayISO(),
     completed: false,
+    finalGoal: '체중 72kg 및 체지방률 15% 달성',
+    milestones: [
+      { id: 'main-cut-ms-1', title: '공복 체중 75kg대 진입 및 체력 적응', status: 'active', order: 1, importance: 'minor' },
+      { id: 'main-cut-ms-2', title: '공복 체중 74kg대 진입 및 식단 강도 고정', status: 'locked', order: 2, importance: 'normal' },
+      { id: 'main-cut-ms-3', title: '공복 체중 73kg대 진입 및 유산소량 증대', status: 'locked', order: 3, importance: 'normal' },
+      { id: 'main-cut-ms-4', title: '공복 체중 72kg 안착 및 체지방률 15% 근접 도달', status: 'locked', order: 4, importance: 'major' }
+    ]
   },
   {
     id: 'main-gpa',
@@ -317,6 +339,14 @@ export const DEFAULT_MAIN_QUESTS: Quest[] = [
     type: 'main',
     createdAt: todayISO(),
     completed: false,
+    finalGoal: '이번 학기 평점 4.0 이상 달성',
+    milestones: [
+      { id: 'main-gpa-ms-1', title: '전 과목 강의 계획서 파악 및 학습 일정표 수립', status: 'active', order: 1, importance: 'minor' },
+      { id: 'main-gpa-ms-2', title: '중간고사 대비 주요 과목 기출 풀이 및 오답 분석', status: 'locked', order: 2, importance: 'normal' },
+      { id: 'main-gpa-ms-3', title: '중간고사 응시 완료 및 평점 4.0 페이스 유지', status: 'locked', order: 3, importance: 'major' },
+      { id: 'main-gpa-ms-4', title: '기말평가 과제물 제출 및 발표 세션 완료', status: 'locked', order: 4, importance: 'normal' },
+      { id: 'main-gpa-ms-5', title: '기말고사 최종 응시 및 평점 4.0+ 달성', status: 'locked', order: 5, importance: 'major' }
+    ]
   },
   {
     id: 'main-spend-monthly',
@@ -330,6 +360,13 @@ export const DEFAULT_MAIN_QUESTS: Quest[] = [
     createdAt: todayISO(),
     completed: false,
     resetCycle: 'monthly',
+    finalGoal: '이번 달 변동지출 70만원 이하 통제 완료',
+    milestones: [
+      { id: 'main-spend-monthly-ms-1', title: '주간 누적 지출 15만원 이하 통제 확인 (1주차)', status: 'active', order: 1, importance: 'minor' },
+      { id: 'main-spend-monthly-ms-2', title: '주간 누적 지출 30만원 이하 통제 확인 (2주차)', status: 'locked', order: 2, importance: 'normal' },
+      { id: 'main-spend-monthly-ms-3', title: '주간 누적 지출 45만원 이하 통제 확인 (3주차)', status: 'locked', order: 3, importance: 'normal' },
+      { id: 'main-spend-monthly-ms-4', title: '월 변동지출 70만원 이하 최종 가계부 마감 (4주차)', status: 'locked', order: 4, importance: 'major' }
+    ]
   },
   {
     id: 'main-investment-return',
@@ -342,6 +379,14 @@ export const DEFAULT_MAIN_QUESTS: Quest[] = [
     type: 'main',
     createdAt: todayISO(),
     completed: false,
+    finalGoal: '실전 운용 계좌 연 수익률 +10% 달성',
+    milestones: [
+      { id: 'main-investment-return-ms-1', title: '포트폴리오 자산 배분 설정 및 초기 500만원 투입 완료', status: 'active', order: 1, importance: 'minor' },
+      { id: 'main-investment-return-ms-2', title: '기업 실적 발표 분석 및 포트폴리오 1차 리밸런싱 완료', status: 'locked', order: 2, importance: 'normal' },
+      { id: 'main-investment-return-ms-3', title: '누적 수익률 +3% 돌파 및 추가 투자금 투입', status: 'locked', order: 3, importance: 'normal' },
+      { id: 'main-investment-return-ms-4', title: '누적 수익률 +5% 돌파 및 위험 헤지 전략 가동', status: 'locked', order: 4, importance: 'normal' },
+      { id: 'main-investment-return-ms-5', title: '누적 수익률 +10% 도달 및 포트폴리오 운용 성공', status: 'locked', order: 5, importance: 'major' }
+    ]
   },
   {
     id: 'main-networth-1000',
@@ -354,6 +399,14 @@ export const DEFAULT_MAIN_QUESTS: Quest[] = [
     type: 'main',
     createdAt: todayISO(),
     completed: false,
+    finalGoal: '올해 순자산 1000만원 증가 달성',
+    milestones: [
+      { id: 'main-networth-1000-ms-1', title: '순자산 증가 +200만원 달성', status: 'active', order: 1, importance: 'minor' },
+      { id: 'main-networth-1000-ms-2', title: '순자산 증가 +400만원 달성', status: 'locked', order: 2, importance: 'normal' },
+      { id: 'main-networth-1000-ms-3', title: '순자산 증가 +600만원 달성', status: 'locked', order: 3, importance: 'normal' },
+      { id: 'main-networth-1000-ms-4', title: '순자산 증가 +800만원 달성', status: 'locked', order: 4, importance: 'normal' },
+      { id: 'main-networth-1000-ms-5', title: '목표액인 순자산 증가 +1000만원 최종 달성', status: 'locked', order: 5, importance: 'major' }
+    ]
   },
   {
     id: 'main-bench-100',
@@ -366,6 +419,14 @@ export const DEFAULT_MAIN_QUESTS: Quest[] = [
     type: 'main',
     createdAt: todayISO(),
     completed: false,
+    finalGoal: '벤치프레스 100kg 1회 완벽 성공',
+    milestones: [
+      { id: 'main-bench-100-ms-1', title: '벤치프레스 80kg strict form 기록 확인', status: 'active', order: 1, importance: 'minor' },
+      { id: 'main-bench-100-ms-2', title: '벤치프레스 85kg 1RM 증량 성공', status: 'locked', order: 2, importance: 'normal' },
+      { id: 'main-bench-100-ms-3', title: '벤치프레스 90kg 1RM 증량 성공', status: 'locked', order: 3, importance: 'normal' },
+      { id: 'main-bench-100-ms-4', title: '벤치프레스 95kg 1RM 증량 성공', status: 'locked', order: 4, importance: 'normal' },
+      { id: 'main-bench-100-ms-5', title: '벤치프레스 100kg 도전 준비 완료 및 최종 리프팅 성공', status: 'locked', order: 5, importance: 'major' }
+    ]
   },
   {
     id: 'main-run-5k',
@@ -378,6 +439,14 @@ export const DEFAULT_MAIN_QUESTS: Quest[] = [
     type: 'main',
     createdAt: todayISO(),
     completed: false,
+    finalGoal: '5km 러닝 25분 이내 완주 성공',
+    milestones: [
+      { id: 'main-run-5k-ms-1', title: '5km 러닝 28:00 페이스 안정적 재현 확인', status: 'active', order: 1, importance: 'minor' },
+      { id: 'main-run-5k-ms-2', title: '5km 러닝 27:00 돌파 및 심폐 적응', status: 'locked', order: 2, importance: 'normal' },
+      { id: 'main-run-5k-ms-3', title: '5km 러닝 26:00 돌파 및 페이스 컨트롤 훈련', status: 'locked', order: 3, importance: 'normal' },
+      { id: 'main-run-5k-ms-4', title: '5km 러닝 25:30 도달 및 기량 최대치 도출', status: 'locked', order: 4, importance: 'normal' },
+      { id: 'main-run-5k-ms-5', title: '5km 러닝 25:00 이내 최종 진입 성공', status: 'locked', order: 5, importance: 'major' }
+    ]
   },
 ]
 

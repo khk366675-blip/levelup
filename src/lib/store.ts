@@ -31,6 +31,8 @@ import type {
   MonsterDefinition,
   OwnedShadow,
   Quest,
+  MainQuestMilestone,
+  MainQuestMilestoneReward,
   Rank,
   RandomQuestTemplate,
   RewardBox,
@@ -51,6 +53,18 @@ import type {
   InfiniteTowerState,
   TowerBattleResult,
 } from './types'
+
+import {
+  AiCoachMemoryState,
+  AiCoachSessionRecord,
+  AiCoachQuestOutcome,
+  AiCoachMemorySummary,
+  AiCoachCoreContext,
+} from './aiCoachTypes'
+import { computeRollingSummary } from './aiCoachSummary'
+
+
+
 import { TITLE_DEFINITIONS, CATEGORY_META, JOB_DEFINITIONS, EQUIPMENT_SLOT_LABEL } from './types'
 import {
   GATE_DEFINITIONS,
@@ -195,7 +209,7 @@ import {
   type ShopReward,
 } from './shop'
 
-interface GameState {
+export interface GameState {
   hunter: HunterState
   quests: Quest[]
   items: Item[]
@@ -239,6 +253,8 @@ interface GameState {
   shopPurchases?: Record<string, number>
   skillStates?: Record<string, SkillRuntimeState>
   secretProgress?: SecretProgressState
+  aiCoachMemory?: AiCoachMemoryState
+  aiCoachCoreContext?: AiCoachCoreContext
   initialized: boolean
 
   // hunter
@@ -248,10 +264,23 @@ interface GameState {
 
   // quests
   addQuest: (q: Omit<Quest, 'id' | 'createdAt'>) => void
+  addAiCoachDailyQuest: (input: { title: string; description?: string; category: Category; difficulty: Difficulty; coachReason?: string; priority?: 'core' | 'support' | 'recovery' | 'maintenance' | 'optional'; estimatedMinutes?: number }) => void
+  replaceAiCoachDailyPlan: (quests: any[]) => void
+  updateAiCoachCoreContext: (text: string) => void
+  clearAiCoachCoreContext: () => void
   removeQuest: (id: string) => void
   completeQuest: (id: string) => void
   uncompleteDaily: (id: string) => void
   resetDailiesIfNewDay: () => void
+  
+  // Main Quest v2용 액션들
+  addMainQuest: (input: { title: string; description?: string; category: Category; finalGoal: string; milestones?: Omit<MainQuestMilestone, 'id' | 'status'>[]; source?: 'user' | 'aiCoach'; coachReason?: string }) => void
+  updateMainQuest: (id: string, patch: Partial<Quest>) => void
+  addMainQuestMilestone: (mainQuestId: string, milestone: Omit<MainQuestMilestone, 'id' | 'status'>) => void
+  updateMainQuestMilestone: (mainQuestId: string, milestoneId: string, patch: Partial<MainQuestMilestone>) => void
+  completeMainQuestMilestone: (mainQuestId: string, milestoneId: string, evidenceNote?: string) => void
+  skipMainQuestMilestone: (mainQuestId: string, milestoneId: string) => void
+  completeMainQuest: (mainQuestId: string) => void
 
   // dungeons
   progressDungeon: (id: string) => void
@@ -344,9 +373,17 @@ interface GameState {
 
   // dev
   hardReset: () => void
+  hardResetAll: () => void
+  resetGameProgressOnly: () => void
 
   // metadata sync
   syncDefaultQuestMetadata: () => void
+
+  // ai coach memory
+  recordAiCoachSession: (session: Omit<AiCoachSessionRecord, 'id' | 'createdAt'>) => void
+  recordAiCoachPlannedQuests: (quests: Omit<AiCoachQuestOutcome, 'status' | 'addedAt'>[]) => void
+  updateAiCoachQuestOutcomeOnComplete: (questId: string) => void
+  rebuildAiCoachRollingSummary: () => void
 }
 
 const initialHunter: HunterState = {
@@ -6073,6 +6110,517 @@ export const useGame = create<GameState>()(
         quests: [...s.quests, { ...q, id: uid(), createdAt: todayISO() }],
       })),
 
+      addAiCoachDailyQuest: (input) => set((s) => {
+        const CATEGORY_STAT_SUGGESTIONS: Record<Category, [StatKey, StatKey]> = {
+          workout:   ['STR', 'VIT'],
+          health:    ['VIT', 'PER'],
+          study:     ['INT', 'PER'],
+          career:    ['INT', 'SEN'],
+          mind:      ['PER', 'SEN'],
+          finance:   ['INT', 'SEN'],
+          social:    ['AGI', 'SEN'],
+          challenge: ['PER', 'STR'],
+          habit:     ['PER', 'VIT'],
+        }
+        
+        const selectedStats = CATEGORY_STAT_SUGGESTIONS[input.category] || ['PER', 'VIT']
+        const baseGain = input.difficulty === 'boss' ? 4 : input.difficulty === 'apex' ? 4 : input.difficulty === 'elite' ? 3 : input.difficulty === 'hard' ? 2 : 1
+        
+        const statRewards: Partial<Record<StatKey, number>> = {}
+        selectedStats.forEach(stat => { statRewards[stat] = baseGain })
+
+        const rewardStatWeights: Partial<Record<StatKey, number>> = {}
+        const w = 1 / selectedStats.length
+        selectedStats.forEach(stat => { rewardStatWeights[stat] = w })
+
+        const newQuest: Quest = {
+          id: `ai-daily-${todayKey()}-${Math.random().toString(36).slice(2, 6)}`,
+          title: input.title,
+          description: input.description,
+          category: input.category,
+          difficulty: input.difficulty,
+          statRewards,
+          rewardStatWeights,
+          type: 'daily',
+          recurring: false, // 1회성 처방
+          createdAt: todayISO(),
+          coachReason: input.coachReason,
+          aiPriority: input.priority,
+          aiEstimatedMinutes: input.estimatedMinutes,
+        }
+
+        // 12-31F: 퀘스트 추가 성과(outcome) 기록 연동
+        let updatedMemory = s.aiCoachMemory
+        if (updatedMemory) {
+          const outcomeExists = updatedMemory.questOutcomes.some(out => out.questId === newQuest.id)
+          if (!outcomeExists) {
+            const tomorrowKey = getDateKey(addDays(new Date(), 1))
+            const newOutcome: AiCoachQuestOutcome = {
+              questId: newQuest.id,
+              title: newQuest.title,
+              category: newQuest.category,
+              difficulty: newQuest.difficulty,
+              source: 'aiCoach',
+              coachReason: newQuest.coachReason,
+              plannedDate: tomorrowKey,
+              addedAt: new Date().toISOString(),
+              status: 'added'
+            }
+            const nextOutcomes = [...updatedMemory.questOutcomes, newOutcome]
+            while (nextOutcomes.length > 200) {
+              nextOutcomes.shift()
+            }
+            updatedMemory = {
+              ...updatedMemory,
+              questOutcomes: nextOutcomes,
+              lastUpdatedAt: new Date().toISOString()
+            }
+          }
+        }
+
+        return {
+          quests: [...s.quests, newQuest],
+          aiCoachMemory: updatedMemory
+        }
+      }),
+
+      replaceAiCoachDailyPlan: (questsInput) => set((s) => {
+        // 1. 현재 quests에서 AI Coach가 생성한 1회성 daily plan 정리
+        const remainingQuests = s.quests.filter(q => {
+          const isAiOneTimeDaily = q.type === 'daily' && 
+                                   !q.recurring && 
+                                   (q.coachReason !== undefined || 
+                                    q.aiPriority !== undefined || 
+                                    q.coachGenerated === true)
+          return !isAiOneTimeDaily
+        })
+
+        // 2. 새 퀘스트들을 정규화하여 생성
+        const CATEGORY_STAT_SUGGESTIONS: Record<Category, [StatKey, StatKey]> = {
+          workout:   ['STR', 'VIT'],
+          health:    ['VIT', 'PER'],
+          study:     ['INT', 'PER'],
+          career:    ['INT', 'SEN'],
+          mind:      ['PER', 'SEN'],
+          finance:   ['INT', 'SEN'],
+          social:    ['AGI', 'SEN'],
+          challenge: ['PER', 'STR'],
+          habit:     ['PER', 'VIT'],
+        }
+
+        const newQuests: Quest[] = []
+        const newOutcomes: AiCoachQuestOutcome[] = []
+        const tomorrowKey = getDateKey(addDays(new Date(), 1))
+        const coachPlanId = `plan-${Date.now()}`
+
+        questsInput.forEach(q => {
+          const selectedStats = CATEGORY_STAT_SUGGESTIONS[q.category as Category] || ['PER', 'VIT']
+          const baseGain = q.difficulty === 'boss' ? 4 : q.difficulty === 'apex' ? 4 : q.difficulty === 'elite' ? 3 : q.difficulty === 'hard' ? 2 : 1
+          
+          const statRewards: Partial<Record<StatKey, number>> = {}
+          selectedStats.forEach(stat => { statRewards[stat] = baseGain })
+
+          const rewardStatWeights: Partial<Record<StatKey, number>> = {}
+          const w = 1 / selectedStats.length
+          selectedStats.forEach(stat => { rewardStatWeights[stat] = w })
+
+          const questId = `ai-daily-${todayKey()}-${Math.random().toString(36).slice(2, 6)}`
+          
+          const newQuest: Quest = {
+            id: questId,
+            title: q.title,
+            description: q.description,
+            category: q.category,
+            difficulty: q.difficulty || 'normal',
+            statRewards,
+            rewardStatWeights,
+            type: 'daily',
+            recurring: false, // 1회성 플랜
+            createdAt: todayISO(),
+            coachReason: q.reason || 'AI 내일 Daily Plan 처방',
+            aiPriority: q.priority,
+            coachPriority: q.priority,
+            aiEstimatedMinutes: q.estimatedMinutes,
+            estimatedMinutes: q.estimatedMinutes,
+            coachGenerated: true,
+            coachPlanId: coachPlanId
+          }
+          newQuests.push(newQuest)
+
+          // outcomes 추가 기록 생성
+          newOutcomes.push({
+            questId: questId,
+            title: q.title,
+            category: q.category,
+            difficulty: q.difficulty || 'normal',
+            source: 'aiCoach',
+            coachReason: q.reason,
+            plannedDate: tomorrowKey,
+            addedAt: new Date().toISOString(),
+            status: 'added'
+          })
+        })
+
+        // 3. CoachMemory outcomes 상태 갱신
+        let updatedMemory = s.aiCoachMemory || {
+          sessions: [],
+          questOutcomes: [],
+          rollingSummary: {
+            windowDays: 7,
+            repeatedFailures: [],
+            stableHabits: [],
+            improvingAreas: [],
+            overloadedAreas: [],
+            recentWorkoutFocus: [],
+            recentStudyFocus: [],
+            sleepPattern: '패턴 분석 중',
+            coachNotes: ['학습 데이터 부족 (며칠 더 사용하면 코치가 패턴을 학습합니다)']
+          }
+        }
+
+        // 기존 added 상태였던 outcomes를 expired로 교체/정리 (replaced/expired 처리)
+        const nextOutcomes = (updatedMemory.questOutcomes || []).map(out => {
+          if (out.status === 'added') {
+            return {
+              ...out,
+              status: 'expired' as const, // replaced 또는 expired로 덮어씀
+              completedAt: undefined
+            }
+          }
+          return out
+        })
+
+        // 새 Outcomes를 머지하고 200개 캡 적용
+        const mergedOutcomes = [...nextOutcomes, ...newOutcomes]
+        while (mergedOutcomes.length > 200) {
+          mergedOutcomes.shift()
+        }
+
+        updatedMemory = {
+          ...updatedMemory,
+          questOutcomes: mergedOutcomes,
+          lastUpdatedAt: new Date().toISOString()
+        }
+
+        // 상태가 변경되었으므로 비동기적으로 롤링 통계를 재빌드합니다.
+        setTimeout(() => {
+          get().rebuildAiCoachRollingSummary()
+        }, 0)
+
+        return {
+          quests: [...remainingQuests, ...newQuests],
+          aiCoachMemory: updatedMemory
+        }
+      }),
+
+      addMainQuest: (input) => set((s) => {
+        const milestones: MainQuestMilestone[] = (input.milestones || []).map((m, idx) => ({
+          id: `ms-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+          title: m.title,
+          description: m.description,
+          status: idx === 0 ? 'active' : 'locked',
+          order: m.order ?? idx,
+          reward: m.reward,
+        }))
+
+        const newQuest: Quest = {
+          id: `main-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+          title: input.title,
+          description: input.description,
+          category: input.category,
+          difficulty: 'hard',
+          statRewards: {},
+          type: 'main',
+          createdAt: todayISO(),
+          completed: false,
+          status: 'active',
+          finalGoal: input.finalGoal,
+          progressPercent: 0,
+          milestones: milestones,
+          source: input.source ?? 'user',
+          coachReason: input.coachReason
+        }
+
+        return {
+          quests: [...s.quests, newQuest]
+        }
+      }),
+
+      updateMainQuest: (id, patch) => set((s) => ({
+        quests: s.quests.map(q => q.id === id ? { ...q, ...patch } : q)
+      })),
+
+      addMainQuestMilestone: (mainQuestId, milestone) => set((s) => {
+        return {
+          quests: s.quests.map(q => {
+            if (q.id !== mainQuestId || q.type !== 'main') return q
+            const currentMilestones = (q.milestones as MainQuestMilestone[]) || []
+            const newMilestone: MainQuestMilestone = {
+              id: `ms-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+              title: milestone.title,
+              description: milestone.description,
+              status: currentMilestones.length === 0 ? 'active' : 'locked',
+              order: milestone.order ?? currentMilestones.length,
+              importance: milestone.importance,
+              reward: milestone.reward,
+            }
+            const updatedMilestones = [...currentMilestones, newMilestone]
+            const completedCount = updatedMilestones.filter(m => m.status === 'completed').length
+            const progressPercent = Math.round((completedCount / updatedMilestones.length) * 100)
+            return {
+              ...q,
+              milestones: updatedMilestones,
+              progressPercent
+            }
+          })
+        }
+      }),
+
+      updateMainQuestMilestone: (mainQuestId, milestoneId, patch) => set((s) => {
+        return {
+          quests: s.quests.map(q => {
+            if (q.id !== mainQuestId || q.type !== 'main') return q
+            const currentMilestones = (q.milestones as MainQuestMilestone[]) || []
+            const updatedMilestones = currentMilestones.map(m => m.id === milestoneId ? { ...m, ...patch } : m)
+            const completedCount = updatedMilestones.filter(m => m.status === 'completed').length
+            const progressPercent = Math.round((completedCount / updatedMilestones.length) * 100)
+            return {
+              ...q,
+              milestones: updatedMilestones,
+              progressPercent
+            }
+          })
+        }
+      }),
+
+      completeMainQuestMilestone: (mainQuestId, milestoneId, evidenceNote) => {
+        const s = get()
+        const quest = s.quests.find(q => q.id === mainQuestId)
+        if (!quest || quest.type !== 'main') return
+
+        const currentMilestones = (quest.milestones as MainQuestMilestone[]) || []
+        const milestoneIndex = currentMilestones.findIndex(m => m.id === milestoneId)
+        if (milestoneIndex === -1) return
+
+        const milestone = currentMilestones[milestoneIndex]
+        if (milestone.status === 'completed') return // 중복 지급/완료 방지
+
+        // 중요: milestone.reward가 있거나 importance에 따른 내부 규칙 보상 생성
+        const importance = milestone.importance || 'normal'
+        let xpReward = 40
+        let goldReward = 30
+        let statRewards: Partial<Record<StatKey, number>> = {}
+        let boxTypeReward: 'epic' | 'superior' | 'normal' | undefined = undefined
+
+        if (importance === 'minor') {
+          xpReward = 15
+          goldReward = 10
+        } else if (importance === 'normal') {
+          xpReward = 40
+          goldReward = 30
+          statRewards = { PER: 1 }
+        } else if (importance === 'major') {
+          xpReward = 120
+          goldReward = 80
+          boxTypeReward = 'epic'
+        }
+
+        // 보상 처리
+        // 1. XP 및 레벨업 계산
+        const { hunter: newHunter, outcome } = applyXp(s.hunter, xpReward, quest.category)
+        const newStats = { ...newHunter.stats }
+        for (const [k, v] of Object.entries(statRewards)) {
+          newStats[k as StatKey] = roundStatValue(newStats[k as StatKey] + (v ?? 0))
+        }
+
+        // 2. Gold 추가
+        const nextGold = (s.gold ?? 0) + goldReward
+
+        // 3. 상자 지급 (major milestone 시)
+        let nextRewardBoxes = s.rewardBoxes ?? []
+        if (boxTypeReward) {
+          const newBox = createRewardBox(
+            'daily',
+            boxTypeReward,
+            'achievement',
+            `[마일스톤] "${milestone.title}" 완수 전리품`
+          )
+          nextRewardBoxes = [newBox, ...nextRewardBoxes].slice(0, 30)
+        }
+
+        // 4. 시스템 메시지 작성
+        const newMessages = [...s.messages]
+        newMessages.push({
+          id: uid(),
+          kind: 'quest',
+          title: '마일스톤 달성!',
+          lines: [
+            `[${quest.title}]`,
+            `중간 목표 "${milestone.title}" 완료`,
+            `+${xpReward} XP 획득`,
+            `Gold +${goldReward}`,
+            ...Object.entries(statRewards).map(([k, v]) => `· ${k} +${v}`),
+            ...(boxTypeReward ? ['전리품 상자 획득'] : [])
+          ],
+          createdAt: todayISO()
+        })
+
+        if (outcome.leveledUp) {
+          newMessages.push({
+            id: uid(),
+            kind: 'levelup',
+            title: 'LEVEL UP',
+            lines: [
+              `Lv.${s.hunter.level} → Lv.${outcome.newLevel}`,
+              `자동 분배 — ${formatStatGains(outcome.autoStatGains)}`,
+              `자유 배분권 +${outcome.freeStatPointsGained}`,
+            ],
+            createdAt: todayISO(),
+          })
+        }
+
+        if (outcome.rankChanged) {
+          newMessages.push({
+            id: uid(),
+            kind: 'rank',
+            title: '랭크 상승',
+            lines: [
+              `${s.hunter.rank}-Rank → ${outcome.newRank}-Rank`,
+              '시스템이 당신을 다시 평가합니다.',
+            ],
+            createdAt: todayISO(),
+          })
+        }
+
+        // 5. Milestones 상태 변경 및 locked -> active 잠금해제 처리
+        const updatedMilestones = currentMilestones.map((m, idx) => {
+          if (m.id === milestoneId) {
+            return {
+              ...m,
+              status: 'completed' as const,
+              completedAt: todayISO(),
+              evidenceNote: evidenceNote
+            }
+          }
+          // 바로 다음 인덱스 잠금해제
+          if (idx === milestoneIndex + 1 && m.status === 'locked') {
+            return {
+              ...m,
+              status: 'active' as const
+            }
+          }
+          return m
+        })
+
+        const completedCount = updatedMilestones.filter(m => m.status === 'completed').length
+        const totalCount = updatedMilestones.length
+        const progressPercent = Math.round((completedCount / totalCount) * 100)
+
+        // 모든 milestone 완료 시 전체 Main 퀘스트도 완료 처리
+        const allCompleted = totalCount > 0 && completedCount === totalCount
+
+        set({
+          hunter: { ...newHunter, stats: newStats },
+          gold: nextGold,
+          rewardBoxes: nextRewardBoxes,
+          messages: newMessages,
+          quests: s.quests.map(q => {
+            if (q.id !== mainQuestId) return q
+            return {
+              ...q,
+              milestones: updatedMilestones,
+              progressPercent,
+              completed: allCompleted ? true : q.completed,
+              completedAt: allCompleted ? todayISO() : q.completedAt,
+              status: allCompleted ? ('completed' as const) : q.status
+            }
+          })
+        })
+
+        // 칭호 및 각성 체크 트리거
+        setTimeout(() => {
+          get().checkTitleUnlocks()
+          get().checkJobAwakening()
+        }, 0)
+      },
+
+      skipMainQuestMilestone: (mainQuestId, milestoneId) => {
+        const s = get()
+        const quest = s.quests.find(q => q.id === mainQuestId)
+        if (!quest || quest.type !== 'main') return
+
+        const currentMilestones = (quest.milestones as MainQuestMilestone[]) || []
+        const milestoneIndex = currentMilestones.findIndex(m => m.id === milestoneId)
+        if (milestoneIndex === -1) return
+
+        const milestone = currentMilestones[milestoneIndex]
+        if (milestone.status === 'completed' || milestone.status === 'skipped') return
+
+        const updatedMilestones = currentMilestones.map((m, idx) => {
+          if (m.id === milestoneId) {
+            return {
+              ...m,
+              status: 'skipped' as const,
+              completedAt: todayISO()
+            }
+          }
+          if (idx === milestoneIndex + 1 && m.status === 'locked') {
+            return {
+              ...m,
+              status: 'active' as const
+            }
+          }
+          return m
+        })
+
+        const completedCount = updatedMilestones.filter(m => m.status === 'completed').length
+        const skippedCount = updatedMilestones.filter(m => m.status === 'skipped').length
+        const totalCount = updatedMilestones.length
+        const progressPercent = Math.round(((completedCount + skippedCount) / totalCount) * 100)
+        const allDone = totalCount > 0 && (completedCount + skippedCount) === totalCount
+
+        const newMessages = [...s.messages]
+        newMessages.push({
+          id: uid(),
+          kind: 'info',
+          title: '마일스톤 건너뛰기',
+          lines: [
+            `[${quest.title}]`,
+            `중간 단계 "${milestone.title}" 건너뜀 처리`,
+            '보상은 지급되지 않으며 다음 단계가 활성화되었습니다.'
+          ],
+          createdAt: todayISO()
+        })
+
+        set({
+          messages: newMessages,
+          quests: s.quests.map(q => {
+            if (q.id !== mainQuestId) return q
+            return {
+              ...q,
+              milestones: updatedMilestones,
+              progressPercent,
+              completed: allDone ? true : q.completed,
+              completedAt: allDone ? todayISO() : q.completedAt,
+              status: allDone ? ('completed' as const) : q.status
+            }
+          })
+        })
+      },
+
+      completeMainQuest: (mainQuestId) => set((s) => ({
+        quests: s.quests.map(q => {
+          if (q.id !== mainQuestId || q.type !== 'main') return q
+          return {
+            ...q,
+            completed: true,
+            completedAt: todayISO(),
+            status: 'completed' as const,
+            progressPercent: 100
+          }
+        })
+      })),
+
       removeQuest: (id) => set((s) => ({ quests: s.quests.filter(q => q.id !== id) })),
 
       completeQuest: (id) => {
@@ -6358,6 +6906,7 @@ export const useGame = create<GameState>()(
         // Check title unlocks after quest completion
         setTimeout(() => {
           set(current => applyChallengeProgress(current, { questCompleted: q }))
+          get().updateAiCoachQuestOutcomeOnComplete(id)
           get().checkTitleUnlocks()
           get().checkJobAwakening()
           if (q.type === 'daily') {
@@ -6557,6 +7106,11 @@ export const useGame = create<GameState>()(
 
       resetDailiesIfNewDay: () => set((s) => {
         const today = todayKey()
+        if (s.hunter.lastActiveDate === today) {
+          // 이미 오늘 실행되었음 -> 아무것도 하지 않음 (새로고침 시 AI daily가 지워지는 버그 해결)
+          return { initialized: true }
+        }
+
         const yesterdayKey = getDateKey(addDays(new Date(), -1))
         let streak = s.hunter.streak
         let streakProtectionLastUsed = s.hunter.streakProtectionLastUsed
@@ -6584,23 +7138,49 @@ export const useGame = create<GameState>()(
         // Monthly reset: main.completed=false, dungeon.currentSteps=0
         const now = new Date()
         const monthStartIso = monthStart(now).toISOString()
-        const quests = s.quests.map(q => {
-          if (q.resetCycle !== 'monthly') return q
-          if (!q.lastResetAt) {
-            return { ...q, lastResetAt: monthStartIso }
+
+        // 12-31F: 1회성 AI 퀘스트 만료(expired) 처리
+        let updatedMemory = s.aiCoachMemory
+        if (updatedMemory) {
+          const expiredQuestIds = s.quests
+            .filter(q => q.type === 'daily' && q.recurring === false && !q.lastCompletedAt)
+            .map(q => q.id)
+          
+          if (expiredQuestIds.length > 0) {
+            const nextOutcomes = (updatedMemory.questOutcomes || []).map(out => {
+              if (expiredQuestIds.includes(out.questId) && out.status === 'added') {
+                return { ...out, status: 'expired' as const }
+              }
+              return out
+            })
+            updatedMemory = {
+              ...updatedMemory,
+              questOutcomes: nextOutcomes,
+              lastUpdatedAt: new Date().toISOString()
+            }
           }
-          if (isBeforeMonth(q.lastResetAt, now)) {
-            if (q.type === 'main')    return { ...q, completed: false, lastResetAt: monthStartIso }
-            if (q.type === 'dungeon') return { ...q, currentSteps: 0, completed: false, lastResetAt: monthStartIso }
-          }
-          return q
-        })
+        }
+
+        const quests = s.quests
+          .filter(q => !(q.type === 'daily' && q.recurring === false)) // 완료 여부 무관하게 일회성 AI 퀘스트는 자정에 자동 소거
+          .map(q => {
+            if (q.resetCycle !== 'monthly') return q
+            if (!q.lastResetAt) {
+              return { ...q, lastResetAt: monthStartIso }
+            }
+            if (isBeforeMonth(q.lastResetAt, now)) {
+              if (q.type === 'main')    return { ...q, completed: false, lastResetAt: monthStartIso }
+              if (q.type === 'dungeon') return { ...q, currentSteps: 0, completed: false, lastResetAt: monthStartIso }
+            }
+            return q
+          })
 
         return {
-          hunter: { ...s.hunter, streak, streakProtectionLastUsed },
+          hunter: { ...s.hunter, streak, streakProtectionLastUsed, lastActiveDate: today },
           quests,
           messages: [...s.messages, ...protectionMessages],
           achievementStats: stats,
+          aiCoachMemory: updatedMemory,
           initialized: true,
         }
       }),
@@ -6621,6 +7201,13 @@ export const useGame = create<GameState>()(
           if (!def) return saved // custom quest: leave untouched
           preserved.add(saved.id)
           // Merge: keep progress fields, update metadata from default seed
+          // 단, Main Quest의 경우 이미 milestones가 유효한 배열로 존재하면 덮어쓰지 않음.
+          let milestones = saved.milestones
+          if (saved.type === 'main') {
+            if (!milestones || (Array.isArray(milestones) && milestones.length === 0)) {
+              milestones = def.milestones
+            }
+          }
           return {
             ...def,
             completed: saved.completed,
@@ -6628,6 +7215,8 @@ export const useGame = create<GameState>()(
             lastCompletedAt: saved.lastCompletedAt,
             createdAt: saved.createdAt,
             lastResetAt: saved.lastResetAt,
+            milestones: milestones,
+            progressPercent: typeof saved.progressPercent === 'number' ? saved.progressPercent : (saved.completed ? 100 : 0),
           }
         })
         // Add new default quests that weren't in saved quests
@@ -6683,7 +7272,337 @@ export const useGame = create<GameState>()(
         shopPurchases: {},
         skillStates: {},
         secretProgress: undefined,
+        aiCoachCoreContext: undefined,
         initialized: true,
+      }),
+
+      hardResetAll: () => set({
+        hunter: initialHunter,
+        quests: initialQuests,
+        items: [],
+        titles: [],
+        messages: [
+          {
+            id: uid(),
+            kind: 'info',
+            title: '전체 리셋 완료',
+            lines: [
+              '앱의 모든 저장 데이터가 완전히 초기화되었습니다.',
+              '처음 설치한 상태처럼 정상적으로 복구되었습니다.'
+            ],
+            createdAt: todayISO()
+          }
+        ],
+        achievementStats: createInitialAchievementStats(),
+        activeRandomQuest: undefined,
+        randomQuestHistory: {},
+        equipment: {},
+        activeConsumableEffects: [],
+        gateStatus: createInitialGateStatus(),
+        activeGate: undefined,
+        combatLogs: [],
+        manualBattleSession: undefined,
+        ownedShadows: [],
+        equippedShadowIds: [],
+        shadowExtractHistory: [],
+        lastShadowExtractResult: undefined,
+        gold: 0,
+        shadowEssence: 0,
+        shadowSummonTickets: [],
+        shadowSummonShards: {},
+        shadowFragments: {},
+        shadowAchievementTicketClaims: {},
+        shadowExpeditions: [],
+        lastShadowExpeditionDate: undefined,
+        activeShadowExpeditionId: undefined,
+        infiniteTower: createInitialTowerState(),
+        rewardBoxes: [],
+        lastDailyBoxDate: undefined,
+        lastWeeklyBoxWeek: undefined,
+        todayChallengeCards: [],
+        selectedChallengeCardIds: [],
+        lastChallengeCardDate: undefined,
+        challengeCardHistory: {},
+        shopPurchases: {},
+        skillStates: {},
+        secretProgress: undefined,
+        aiCoachCoreContext: undefined,
+        aiCoachMemory: {
+          sessions: [],
+          questOutcomes: [],
+          rollingSummary: {
+            windowDays: 7,
+            repeatedFailures: [],
+            stableHabits: [],
+            improvingAreas: [],
+            overloadedAreas: [],
+            recentWorkoutFocus: [],
+            recentStudyFocus: [],
+            sleepPattern: '패턴 분석 중',
+            coachNotes: ['학습 데이터 부족 (며칠 더 사용하면 코치가 패턴을 학습합니다)']
+          }
+        },
+        initialized: true,
+      }),
+
+      resetGameProgressOnly: () => {
+        const s = get()
+
+        // 1. 보존할 자기관리 데이터 추출
+        const preservedAiCoachCoreContext = s.aiCoachCoreContext
+        const preservedAiCoachMemory = s.aiCoachMemory
+        
+        // 2. quests 복제 및 달성 상태 초기화
+        const resetQuests = s.quests.map((q): Quest => {
+          if (q.type === 'daily') {
+            return {
+              ...q,
+              lastCompletedAt: undefined,
+              completed: false,
+            }
+          } else if (q.type === 'main') {
+            // Main Quest v2 구조 보존 및 완료 상태 초기화
+            const resetMilestones = q.milestones 
+              ? (q.milestones as MainQuestMilestone[]).map((m, idx): MainQuestMilestone => ({
+                  ...m,
+                  // 게임 리셋 시 헌터의 모든 골드, 레벨, 장비가 초기화되므로,
+                  // 게임 밸런스 유지를 위해 마일스톤 재달성 시 보상(XP, Gold, 전리품 상자)을 정상적으로 다시 획득할 수 있도록 허용하는 것이 합당함.
+                  // 따라서 별도의 claim flag를 남겨 보상 획득을 차단하지 않고 milestone status와 함께 클레임 상태도 초기화함.
+                  status: idx === 0 ? 'active' : 'locked', // 첫 마일스톤은 active, 나머지는 locked로 초기화
+                  completedAt: undefined,
+                  evidenceNote: undefined,
+                }))
+              : undefined
+
+            return {
+              ...q,
+              completed: false,
+              status: q.status === 'completed' ? 'active' : q.status, // completed 상태를 active로 리셋
+              completedAt: undefined,
+              progressPercent: 0,
+              milestones: resetMilestones,
+            }
+          }
+          // dungeon 등 legacy는 legacy 보존
+          return q
+        })
+
+        // 3. 게임 관련 데이터 초기화 및 자기관리 데이터 주입하여 set
+        set({
+          hunter: initialHunter,
+          quests: resetQuests,
+          items: [],
+          titles: [],
+          messages: [
+            {
+              id: uid(),
+              kind: 'info',
+              title: '게임 진행 리셋 완료',
+              lines: [
+                '레벨, 스탯, 장비, 그림자, 골드 및 전투 진행도가 초기화되었습니다.',
+                'AI 코치 설정, Core Context, Daily Plan 및 메인 퀘스트 구조는 안전하게 보존되었습니다.'
+              ],
+              createdAt: todayISO()
+            }
+          ],
+          achievementStats: createInitialAchievementStats(),
+          activeRandomQuest: undefined,
+          randomQuestHistory: {},
+          equipment: {},
+          activeConsumableEffects: [],
+          gateStatus: createInitialGateStatus(),
+          activeGate: undefined,
+          combatLogs: [],
+          manualBattleSession: undefined,
+          ownedShadows: [],
+          equippedShadowIds: [],
+          shadowExtractHistory: [],
+          lastShadowExtractResult: undefined,
+          gold: 0,
+          shadowEssence: 0,
+          shadowSummonTickets: [],
+          shadowSummonShards: {},
+          shadowFragments: {},
+          shadowAchievementTicketClaims: {},
+          shadowExpeditions: [],
+          lastShadowExpeditionDate: undefined,
+          activeShadowExpeditionId: undefined,
+          infiniteTower: createInitialTowerState(),
+          rewardBoxes: [],
+          lastDailyBoxDate: undefined,
+          lastWeeklyBoxWeek: undefined,
+          todayChallengeCards: [],
+          selectedChallengeCardIds: [],
+          lastChallengeCardDate: undefined,
+          challengeCardHistory: {},
+          shopPurchases: {},
+          skillStates: {},
+          secretProgress: undefined,
+          
+          // 보존 데이터 다시 주입
+          aiCoachCoreContext: preservedAiCoachCoreContext,
+          aiCoachMemory: preservedAiCoachMemory,
+          initialized: true,
+        })
+      },
+
+      recordAiCoachSession: (session) => set((s) => {
+        const memory = s.aiCoachMemory ?? {
+          sessions: [],
+          questOutcomes: [],
+          rollingSummary: {
+            windowDays: 7,
+            repeatedFailures: [],
+            stableHabits: [],
+            improvingAreas: [],
+            overloadedAreas: [],
+            recentWorkoutFocus: [],
+            recentStudyFocus: [],
+            sleepPattern: '패턴 분석 중',
+            coachNotes: ['학습 데이터 부족 (며칠 더 사용하면 코치가 패턴을 학습합니다)']
+          }
+        }
+
+        const newSession: AiCoachSessionRecord = {
+          ...session,
+          id: `session-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+          createdAt: new Date().toISOString()
+        }
+
+        // 중복 방지: 같은 date의 세션이 이미 있으면 덮어쓰기 (재분석 시)
+        const filteredSessions = memory.sessions.filter(se => se.date !== session.date)
+        const nextSessions = [...filteredSessions, newSession]
+
+        // 최대 60개 유지
+        if (nextSessions.length > 60) {
+          nextSessions.shift()
+        }
+
+        const nextMemory = {
+          ...memory,
+          sessions: nextSessions,
+          lastUpdatedAt: new Date().toISOString()
+        }
+
+        return {
+          aiCoachMemory: nextMemory
+        }
+      }),
+
+      recordAiCoachPlannedQuests: (quests) => set((s) => {
+        const memory = s.aiCoachMemory ?? {
+          sessions: [],
+          questOutcomes: [],
+          rollingSummary: {
+            windowDays: 7,
+            repeatedFailures: [],
+            stableHabits: [],
+            improvingAreas: [],
+            overloadedAreas: [],
+            recentWorkoutFocus: [],
+            recentStudyFocus: [],
+            sleepPattern: '패턴 분석 중',
+            coachNotes: ['학습 데이터 부족 (며칠 더 사용하면 코치가 패턴을 학습합니다)']
+          }
+        }
+
+        const newOutcomes: AiCoachQuestOutcome[] = []
+        quests.forEach(q => {
+          // 중복 방지: 동일한 questId가 없을 때만
+          const exists = memory.questOutcomes.some(out => out.questId === q.questId)
+          if (!exists) {
+            newOutcomes.push({
+              ...q,
+              status: 'added',
+              addedAt: new Date().toISOString()
+            })
+          }
+        })
+
+        if (newOutcomes.length === 0) return {}
+
+        const nextOutcomes = [...memory.questOutcomes, ...newOutcomes]
+        // 최대 200개 유지
+        while (nextOutcomes.length > 200) {
+          nextOutcomes.shift()
+        }
+
+        const nextMemory = {
+          ...memory,
+          questOutcomes: nextOutcomes,
+          lastUpdatedAt: new Date().toISOString()
+        }
+
+        return {
+          aiCoachMemory: nextMemory
+        }
+      }),
+
+      updateAiCoachQuestOutcomeOnComplete: (questId) => set((s) => {
+        const memory = s.aiCoachMemory
+        if (!memory) return {}
+
+        let changed = false
+        const nextOutcomes = memory.questOutcomes.map(out => {
+          if (out.questId === questId && out.status === 'added') {
+            changed = true
+            return {
+              ...out,
+              status: 'completed' as const,
+              completedAt: new Date().toISOString()
+            }
+          }
+          return out
+        })
+
+        if (!changed) return {}
+
+        const nextMemory = {
+          ...memory,
+          questOutcomes: nextOutcomes,
+          lastUpdatedAt: new Date().toISOString()
+        }
+
+        // 상태가 변경되었으므로 비동기적으로 롤링 통계를 재빌드합니다.
+        setTimeout(() => {
+          get().rebuildAiCoachRollingSummary()
+        }, 0)
+
+        return {
+          aiCoachMemory: nextMemory
+        }
+      }),
+
+      rebuildAiCoachRollingSummary: () => set((s) => {
+        const memory = s.aiCoachMemory
+        if (!memory) return {}
+
+        const nextRollingSummary = computeRollingSummary(s)
+
+        return {
+          aiCoachMemory: {
+            ...memory,
+            rollingSummary: nextRollingSummary,
+            lastUpdatedAt: new Date().toISOString()
+          }
+        }
+      }),
+
+      updateAiCoachCoreContext: (text) => set((s) => {
+        const coreContext: AiCoachCoreContext = {
+          text,
+          updatedAt: new Date().toISOString(),
+          version: 1
+        }
+        return {
+          aiCoachCoreContext: coreContext
+        }
+      }),
+
+      clearAiCoachCoreContext: () => set((s) => {
+        return {
+          aiCoachCoreContext: undefined
+        }
       }),
     }),
     {
@@ -6849,7 +7768,126 @@ export const useGame = create<GameState>()(
         delete persistedState.skillMastery
         persistedState.secretProgress = ensureSecretProgress(persistedState.secretProgress, persistedState)
         persistedState.manualBattleSession = undefined
-        return persistedState
+        if (!persistedState.aiCoachCoreContext) {
+          persistedState.aiCoachCoreContext = undefined
+        }
+        if (!persistedState.aiCoachMemory) {
+          persistedState.aiCoachMemory = {
+            sessions: [],
+            questOutcomes: [],
+            rollingSummary: {
+              windowDays: 7,
+              repeatedFailures: [],
+              stableHabits: [],
+              improvingAreas: [],
+              overloadedAreas: [],
+              recentWorkoutFocus: [],
+              recentStudyFocus: [],
+              sleepPattern: '패턴 분석 중',
+              coachNotes: ['학습 데이터 부족 (며칠 더 사용하면 코치가 패턴을 학습합니다)']
+            }
+          }
+        } else {
+          // 존재하더라도 내부 nested 필드들의 존재성 보장 (안정성 극대화)
+          const memory = persistedState.aiCoachMemory
+          if (!Array.isArray(memory.sessions)) memory.sessions = []
+          if (!Array.isArray(memory.questOutcomes)) memory.questOutcomes = []
+          if (!memory.rollingSummary) {
+            memory.rollingSummary = {
+              windowDays: 7,
+              repeatedFailures: [],
+              stableHabits: [],
+              improvingAreas: [],
+              overloadedAreas: [],
+              recentWorkoutFocus: [],
+              recentStudyFocus: [],
+              sleepPattern: '패턴 분석 중',
+              coachNotes: ['학습 데이터 부족 (며칠 더 사용하면 코치가 패턴을 학습합니다)']
+            }
+          } else {
+            const rs = memory.rollingSummary
+            if (!Array.isArray(rs.repeatedFailures)) rs.repeatedFailures = []
+            if (!Array.isArray(rs.stableHabits)) rs.stableHabits = []
+            if (!Array.isArray(rs.improvingAreas)) rs.improvingAreas = []
+            if (!Array.isArray(rs.overloadedAreas)) rs.overloadedAreas = []
+            if (!Array.isArray(rs.recentWorkoutFocus)) rs.recentWorkoutFocus = []
+            if (!Array.isArray(rs.recentStudyFocus)) rs.recentStudyFocus = []
+            if (!rs.sleepPattern) rs.sleepPattern = '패턴 분석 중'
+            if (!Array.isArray(rs.coachNotes)) rs.coachNotes = ['학습 데이터 부족 (며칠 더 사용하면 코치가 패턴을 학습합니다)']
+          }
+        }
+
+        // MainQuest v2 / Milestone 구조 마이그레이션 fallback
+        if (Array.isArray(persistedState.quests)) {
+          persistedState.quests = persistedState.quests.map((q: any) => {
+            if (q.type === 'main') {
+              let milestones = q.milestones
+              
+              // 1. 만약 milestones가 아예 없거나 빈 배열이고, default seed에 정의된 퀘스트라면 시드에서 수동 설계된 milestones를 가져와 주입한다.
+              if (!milestones || (Array.isArray(milestones) && milestones.length === 0)) {
+                const defaultQuest = initialQuests.find((def: any) => def.id === q.id)
+                if (defaultQuest && Array.isArray(defaultQuest.milestones)) {
+                  milestones = defaultQuest.milestones
+                }
+              }
+
+              // 2. 이미 존재하는 milestones 배열의 표준화
+              if (Array.isArray(milestones) && milestones.length > 0) {
+                milestones = milestones.map((m: any, idx: number) => {
+                  if (typeof m === 'string') {
+                    return {
+                      id: `ms-${idx}-${Math.random().toString(36).slice(2, 6)}`,
+                      title: m,
+                      status: idx === 0 ? 'active' : 'locked',
+                      order: idx,
+                      importance: 'normal'
+                    }
+                  }
+                  return {
+                    ...m,
+                    id: m.id || `ms-${idx}-${Math.random().toString(36).slice(2, 6)}`,
+                    title: m.title || '',
+                    status: m.status || (idx === 0 ? 'active' : 'locked'),
+                    order: typeof m.order === 'number' ? m.order : idx,
+                    importance: m.importance || 'normal'
+                  }
+                })
+              } else {
+                milestones = []
+              }
+
+              return {
+                ...q,
+                finalGoal: q.finalGoal || q.title || '',
+                milestones,
+                progressPercent: typeof q.progressPercent === 'number' ? q.progressPercent : 0,
+                status: q.status || 'active',
+                source: q.source || 'user'
+              }
+            }
+            return q
+          })
+        } else {
+          persistedState.quests = []
+        }
+
+        // 기타 핵심 배열 필드들의 존재성 강제 보장
+        if (!Array.isArray(persistedState.items)) persistedState.items = []
+        if (!Array.isArray(persistedState.ownedShadows)) persistedState.ownedShadows = []
+        if (!Array.isArray(persistedState.equippedShadowIds)) persistedState.equippedShadowIds = []
+        if (!Array.isArray(persistedState.combatLogs)) persistedState.combatLogs = []
+        if (!Array.isArray(persistedState.shadowSummonTickets)) persistedState.shadowSummonTickets = []
+        if (!persistedState.shadowSummonShards) persistedState.shadowSummonShards = {}
+        if (!persistedState.shadowFragments) persistedState.shadowFragments = {}
+        if (!persistedState.shadowAchievementTicketClaims) persistedState.shadowAchievementTicketClaims = {}
+        if (!Array.isArray(persistedState.shadowExpeditions)) persistedState.shadowExpeditions = []
+        if (!Array.isArray(persistedState.rewardBoxes)) persistedState.rewardBoxes = []
+        if (!Array.isArray(persistedState.todayChallengeCards)) persistedState.todayChallengeCards = []
+        if (!Array.isArray(persistedState.selectedChallengeCardIds)) persistedState.selectedChallengeCardIds = []
+        if (!persistedState.challengeCardHistory) persistedState.challengeCardHistory = {}
+        if (!persistedState.shopPurchases) persistedState.shopPurchases = {}
+
+        return persistedState;
       },
     }
   )

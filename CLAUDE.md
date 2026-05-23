@@ -10028,65 +10028,48 @@ starCount: featuredStars (1~5)
   - 2.5D 후보 cue: `relic_aura`.
 
 ### stars / rarity 해석
-- 1~2성: 기본 장비.
-- 3성: 실사용 가능.
-- 4성: 고가치 장비.
-- 5성: 핵심 장비 후보.
-- epic/legendary는 특수/전설 잠재력 태그로 강조.
-- artifact는 `RELIC`, legendary는 `LEGENDARY`, 4~5성은 `HIGH STAR` 태그 후보를 제공.
-- 별/희귀도 확률과 효과 배율은 변경하지 않음.
+- 1~2성: 기본 장�## 12-32A: AI Daily Plan 수량 18개 확장 + Dungeon 제거 방향의 Main Quest v2 / Milestone 구조 도입 + 게임 진행 리셋 분리
 
-### 장비 비교 helper
-- `compareEquipmentForSlot(item, previous?)`
-  - 같은 slot의 현재 장착 장비와 비교.
-  - verdict:
-    - `better`
-    - `sidegrade`
-    - `situational`
-    - `weaker`
-  - delta:
-    - total/offense/defense/utility/survival/shadowSynergy/skill.
-  - 문구:
-    - 공격 가치가 높음.
-    - 생존력이 더 안정적.
-    - 전투 스킬 운용 가치가 높음.
-    - artifact/조건부/그림자 연계는 상황형으로 안내.
-- 기대 피해량 같은 정밀 계산은 하지 않고 안전한 해석 문구 중심으로 제한.
+### Scope
+- AI Daily Plan의 생성 권장 수량을 기존 12~16개(기본 15개)에서 14~18개(기본 18개)로 소폭 확장하여 Micro 및 Maintenance 성격의 가벼운 루틴을 골고루 분배 및 스트릭 완수율 제고.
+- Main Quest와 Dungeon의 역할 중복을 해소하기 위해 Dungeon을 신규 성장 구조에서 제외하고, 장기 목표와 중간 성취 지점(Milestone), 그리고 단계별 보상을 하나의 Main Quest v2 체계로 통합.
+- 기존의 Dungeon 및 Main, Daily 데이터는 파괴하지 않고 legacy로 고스란히 보존하며, persist version v14 및 로컬스토리지 키 `levelup-save`를 유지함.
+- **게임 진행 리셋 기능 도입**: 기존의 전체 데이터를 날려버리는 리셋 대신, 레벨/XP/스탯/장비/그림자/골드/전투 및 모험 진행 등 게임 진행 정보만 정밀하게 초기화하고, AI 코치 Core Context/Daily Plan/Main 목표 및 마일스톤 리스트 구조/CoachMemory 등 자기관리 관련 중요 데이터는 안전하게 유지하는 "게임 진행 리셋" 흐름으로 개편.
 
-### EquipmentRevealModal 표시 개선
-- `src/components/EquipmentRevealModal.tsx`
-  - reveal 결과 카드에 slot role, equipment value, star tier, topTags 표시.
-  - 현재 착용 장비와의 comparison label/delta/recommendation/key reason 표시.
-  - 4~5성 / epic / legendary / artifact는 기존 high value 톤을 유지하면서 더 명확한 태그를 표시.
-  - reveal sequence/VFX 구조는 대형 변경하지 않음.
+### 주요 작업 사항
+1. **AI Daily Plan 생성 목표 수량 18개까지 확대 (`src/lib/aiCoachPrompt.ts`, `src/components/AiCoachPanel.tsx`)**:
+   - 프롬프트에 기재된 Daily Plan 목표 수량 기준을 '권장 14~18개 / 표준 약 18개'로 조정.
+   - 컨디션 및 캘린더 부하에 따른 탄력적 축소 지침(10~14개, 8~12개)을 수립하고, 응답이 20개 이상일 경우 상위 18개 내외로 절삭하는 안전장치로 확대 적용.
+   - 프롬프트 구성 권장을 코어 3~4개, 서포트 3~4개, 유지 관리 4~5개, 회복 1~2개, 옵션/마이크로 3~5개로 명시하여 균형 잡힌 하루 일정이 구성되도록 보강.
+2. **Main Quest v2 및 마일스톤 데이터 모델 설계 (`src/lib/types.ts`)**:
+   - `Quest` 인터페이스에 하위 호환성을 유지하도록 optional fields(`finalGoal`, `progressPercent`, `status`, `source`, `completedAt`)를 확장 적용.
+   - 별도 일일퀘스트가 아닌 Main Quest 내부 배열로 관리되는 `MainQuestMilestone` 및 중요도에 따른 `MainQuestMilestoneReward` 타입 선언.
+   - 마일스톤의 milestones 필드가 string배열(dungeon legacy) 혹은 `MainQuestMilestone[]` 객체 배열 유니온 타입을 수용하도록 다형성 설계.
+   - `BoxSource` 유니온 타입에 `'achievement'`를 추가하여 마일스톤 보상 상자의 출처 무결성 보장.
+3. **Zustand 스토어의 v2 액션 추가 (`src/lib/store.ts`)**:
+   - `addMainQuest`, `updateMainQuest`, `addMainQuestMilestone`, `updateMainQuestMilestone`, `completeMainQuestMilestone`, `completeMainQuest`를 무결하게 구현.
+   - 마일스톤 완수 시 상태 갱신(`status: 'completed'`), 완료일 자동 주입, 중복 완료/중복 보상 수령 방지 조치 완비.
+   - 스탯 보너스 및 XP, Gold 등의 수치 산정을 AI의 임의 규칙이 아닌 스토어 내부의 정밀한 중요도(importance: `minor`/`normal`/`major`) 포뮬러를 따르도록 안전하게 제한. `major` 마일스톤 완료 시 Epic 등급의 마일스톤 완수 전리품 상자 자동 인벤토리 수여.
+4. **Main Quest v2 UI 개발 및 Dungeon legacy 처리 (`src/components/QuestCard.tsx`, `src/App.tsx`)**:
+   - `QuestCard.tsx`에서 v2 메인 퀘스트일 때의 인라인 프로그레스바, 마일스톤 진행 카운트 배지, 순서 정렬 마일스톤 리스트 카드 레이아웃 구현.
+   - 개별 마일스톤 카드 레이아웃 내부에 '완료 증거(evidenceNote)' 입력 팝업창 및 완료 클릭 액션 연동.
+   - 기존 던전 데이터 손상 없이 탭 레이블을 `'던전 (Legacy)'`로 개정하고, 추가 버튼 제거 및 레거시 안내 경고 배너 렌더링. 메인 퀘스트 탭에 마일스톤 통합 관리 안내 탑재.
+5. **AI 코치 프롬프트 Main Milestone 중심으로 대전환 (`src/lib/aiCoachPrompt.ts`, `src/lib/aiCoachTypes.ts`)**:
+   - 프롬프트에서 던전 제안(`dungeonSuggestions`)을 차단하고 Main Quest Suggestions 및 Milestone Suggestions, 그리고 사용자의 성취 증거를 탐지하는 Progress Detections 위주로 개편.
+   - 벤치프레스, KBI 등 특정 목표의 마일스톤 목록 하드코딩을 원천 금지하고, 사용자 Core Context/일기 내용/회복력에 입각해 동적으로 맞춤형 마일스톤을 기획하여 제안하도록 AI 지침 고도화.
+   - AI 제안 사항은 사용자가 최종 승인하여 스토어에 바인딩할 수 있도록 Types 및 Prompt 규정 수립.
+6. **게임 진행 리셋 및 자기관리 데이터 보존 로직 추가 (`src/lib/store.ts`, `src/App.tsx`)**:
+   - `resetGameProgressOnly` 액션을 스토어에 추가하여 게임 관련 성장 요소는 초기화하되, `aiCoachCoreContext`, `aiCoachMemory`, `quests`(기본 Daily 루틴 라이브러리 및 AI 생성 Daily/사용자 추가 Daily 목록 자체), `mainQuests`(Main Quest v2 title/finalGoal/milestones 세부 구조)는 그대로 안전하게 보존하도록 트랜잭션 설계.
+   - 단, Daily의 완료 상태(`lastCompletedAt` 해제, `completed: false`) 및 Main Quest / Milestone의 완료 상태(`completed: false`, completedAt 제거, `evidenceNote` 제거, milestones status 초기화)는 리셋.
+   - 리셋 후 헌터의 모든 재화와 장비가 초기화되므로, 게임 밸런스상 마일스톤 재달성 시 보상(Gold/XP/상자)을 다시 받을 수 있도록 허용하는 설계 적용 및 관련 주석을 명확히 명시.
+   - `App.tsx`에서 기존 `hardReset` 호출을 `resetGameProgressOnly`로 대체하고 UI 레이블을 “게임 진행 리셋”으로 개정하여 안내 팝업 문구를 유저 요구조건에 완벽하게 일치시킴.
 
-### Inventory 표시 개선
-- `src/components/Inventory.tsx`
-  - 장착 슬롯 카드에 slot role, VALUE, topTags 표시.
-  - 보유 장비 카드에 slot role, equipment value, topTags 1~2개 표시.
-  - 장착 가능한 미장착 장비는 현재 slot 장비와의 comparison label/delta/recommendation을 compact box로 표시.
-  - 카드 과밀 방지를 위해 긴 breakdown은 넣지 않고, 세부 reason은 title tooltip 성격으로 제공.
-
-### HunterStatus / breakdown
-- `src/components/HunterStatus.tsx`
-  - 전투력 카드 내부에 `EQUIP VALUE`와 top equipment tags만 compact chip으로 표시.
-  - 별도 큰 카드나 레이아웃 확장 없음.
-  - 기존 combat power 계산값은 변경하지 않음.
-
-### 2.5D 대비
-- `EquipmentPowerBreakdown.actionCue`로 다음 연결 후보를 준비:
-  - weapon value → 공격 이펙트 강도.
-  - armor value → barrier/피격 안정성.
-  - accessory value → speed/support cue.
-  - artifact value → 특수 aura/보스전 cue.
-  - stars/rarity/topTags → glow/frame intensity 후보.
-- 이번 단계에서는 2.5D UI/VFX를 구현하지 않음.
-
-### 104개 그림자 확장과의 관계
-- `shadowSynergyValue`는 특정 그림자 id나 12개 prototype에 의존하지 않음.
-- 장비 효과, slot, stat, rarity, stars 기반의 일반화된 해석값만 사용.
-- 향후 104개 그림자 전체 skill/passive/profile 확장 시 role/stat 기반 시너지로 연결 가능.
-- hidden/secret 조건/정체 노출 없음.
+### 검증 결과
+- **TypeScript 정적 검사 (`npx tsc --noEmit`)**:
+  - `QuestCard.tsx` 내 `isDungeon` 블록의 milestones map 컴파일 오류 등 전체 TypeScript 타입 경고 및 오류가 **0건으로 완벽하게 해결 및 성공**.
+- **Production 빌드 (`npm run build`)**:
+  - 모든 정적 검사 무결 통과 후 Vite production css/js 번들 리소스 최적화 및 최종 배포 파일 생성 무오류 빌드 통과 완료.
+�/정체 노출 없음.
 
 ### 검증
 - `npm run build` exit code 0.
@@ -12992,3 +12975,384 @@ starCount: featuredStars (1~5)
 - Tune real-play hint frequency after observation.
 - Reward feel polish as a separate task.
 - Longer-form story chapter expansion later, outside this connective-layer pass.
+
+## 12-31A: AI 성장 코치 설계 문서 + 타입/플로우 설계
+
+### Scope
+- AI 성장 코치 시스템 도입을 위한 기본 방향성 수립 및 설계 문서 작성.
+- 비정형 기록 파싱, 도메인 코치진 및 총괄 코칭, 사용자 검토/승인 흐름의 타입 및 스키마 설계.
+- 실제 Gemini API 호출 및 save schema 변경을 배제한 설계 위주 작업 진행.
+
+### 주요 작업 사항
+1. **설계 문서 작성 (`docs/ai-growth-coach-design.md`)**:
+   - LEVEL UP의 게임 루프와 AI 코칭의 역할 분담 명시.
+   - 하루 기록을 자유롭게 입력하는 비정형 기록 철학 및 불확실성(Uncertainty) 처리 가이드라인 정의.
+   - 신체/학습/금융/루틴/총괄 코치 각각의 진단 및 처방 원칙 수립.
+   - 핵심 과제 수 제한, 동적 성장(점진적 부하 및 실패 세분화), 이유(Reason) 명시 등의 과제 생성 원칙 확립.
+   - 사용자 검토/수정 후 승인 시에만 상태를 반영하는 승인 플로우 정의.
+   - 개인정보 전송에 대한 안내 및 API Key 노출 방지 등 안전 수칙 문서화.
+   - 고정 JSON 스키마 명세 및 예시 응답 구성.
+   - 단계별(12-31A ~ 12-31F) 구현 이정표 정의.
+2. **타입 설계 (`src/lib/aiCoachTypes.ts`)**:
+   - `AiCoachDomain`, `AiCoachConditionLevel`, `AiCoachRawJournalEntry`, `AiCoachParsedRecord` 등의 하루 분석 기록 타입 정의.
+   - 운동, 학습, 금융, 수면, 영양, 루틴, 멘탈 등의 도메인별 상세 기록 인터페이스 정의.
+   - `AiCoachSaveSummary`, `AiCoachMemorySummary`를 통한 현재 게임 진행도 및 장기 학습 정보 캡슐화.
+   - `AiCoachRecommendation`을 통한 추천 퀘스트/변경 내용 추상화.
+   - `AiCoachResponse`를 통한 종합 분석 결과와 코칭 피드백 타입 확정.
+3. **프롬프트 빌더 초안 작성 (`src/lib/aiCoachPrompt.ts`)**:
+   - `buildAiCoachPrompt()` 함수 설계.
+   - 사용자의 자유기록, 세이브 요약, 장기 메모리를 조합하여 Gemini 모델용 프롬프트를 구성하는 문자열 헬퍼 구현.
+   - strict JSON 출력을 강제하고, 모호한 정보는 추정하지 않고 `uncertain` 목록으로 분류하도록 명령어 명시.
+
+### 안전 수칙 및 제한 사항 준수
+- Gemini API의 직접 연동 및 SDK 추가를 다음 단계로 연기.
+- API Key 하드코딩 없음.
+- 기존 Quest 및 저장소(`levelup-save`) 스키마 변경이 없도록 별도 파일 (`aiCoachTypes.ts`, `aiCoachPrompt.ts`)로 엄격 격리.
+- 로컬 저장 데이터 초기화/삭제 없이 온전히 유지.
+
+### 검증
+- `npm run build` 및 `npx tsc --noEmit`을 통한 빌드 적합성 검증 완료.
+
+## 12-31B: AI 성장 코치 탭 + Gemini API 직접 연결 1차 + 프롬프트 복사 fallback
+
+### Scope
+- 'AI 코치' 전용 신규 탭과 대시보드 UI를 추가하여 사용자가 자유롭게 하루를 기록하도록 구현.
+- Zustand 스토어의 전체 진행 상태 중 코칭에 필요한 스탯, 목표, 던전, 루틴 이력만을 최소한으로 요약하여 payload를 생성.
+- Gemini API를 fetch 기반으로 직접 연동하여 실시간 피드백 및 추천 퀘스트 초안을 노출하되, API 오류 발생 시 clipboard 복사 fallback을 제공.
+- AI 추천 결과를 즉시 스토어 상태로 자동 반영하지 않는 순수 추천 단계를 보장.
+
+### 주요 작업 사항
+1. **Gemini API 직접 연동 클라이언트 개발 (`src/lib/aiCoachClient.ts`)**:
+   - `import.meta.env.VITE_GEMINI_API_KEY` 환경변수 키 확인 및 에러 알림.
+   - fetch를 사용한 비동기 REST API 통신 구현. 모델은 `gemini-2.5-flash`로 지정.
+   - AI 응답에서 JSON 코드블록(\`\`\`json ... \`\`\`)을 벗겨내고 첫 `{`와 마지막 `}` 영역만을 안전하게 추출해 파싱하는 오동작 방지 헬퍼 구현.
+   - Zod 없이 수동으로 `parsedToday`, `coachSummary` 등 필수 필드 검증을 거치는 스키마 밸리데이터 구현.
+   - 401(인증 실패), 429(할당량 초과), 네트워크 연결 에러 등 상태 코드를 구분하여 친절한 피드백 제공.
+2. **세이브 및 장기 메모리 요약기 작성 (`src/lib/aiCoachSummary.ts`)**:
+   - 캐릭터 레벨/랭크/스탯/스트릭, 최근 7일 일일 퀘스트 평균 완료율, 현재 미완료 메인 목표/던전 진행도를 캡슐화한 `AiCoachSaveSummary` 추출.
+   - 수면 기상(`earlyWakeBefore7Count`), 숏폼 차단(`noShortsWithin30MinCount`), 명상(`meditationCount`), 시장 점검 등 special 카운터를 기반으로 반복 실패, 정착된 습관, 개선 및 피로 우려 영역을 분석해 `AiCoachMemorySummary` 구성.
+   - **보안**: 비밀 요소(`secretProgress`) 및 해금되지 않은 locked/hidden 정보가 API payload에 포함되지 않도록 원천 제외 처리.
+3. **안전성 및 가이드라인 강화 프롬프트 갱신 (`src/lib/aiCoachPrompt.ts`)**:
+   - 투자/금융(종목 추천 금지, 오직 기록/시장 점검 과제 권장), 의학(의약품 권유 금지, 안전한 스트레칭/생활습관 권장)에 대한 완격한 경계선 정의.
+   - 무리한 운동 강요 금지 및 게임 내 골드/EXP/확률 보상 밸런스를 AI가 직접 제안하지 못하도록 통제 규칙 주입.
+4. **AI 코치 탭 UI 구현 (`src/components/AiCoachPanel.tsx`, `src/App.tsx`)**:
+   - `Brain` 아이콘의 'AI 코치' 탭을 추가하고 framer-motion 화면 전환 효과에 맵핑.
+   - 사용자 자유 입력 textarea 배치 및 개인정보 외부 전송 주의 경고 레이아웃 탑재.
+   - 분석 결과 출력부 개발: 종합 브리핑(컨디션, 전략, 강도), 도메인별 코치단 탭뷰 피드백, 파싱 요약 및 불확실(`uncertain`) 기재 항목 피드백 카드, 제안된 추천 일일 퀘스트/던전/메인목표 초안(Reason 포함) 노출.
+   - API 연결 실패 시, "프롬프트 복사 (Key 에러 대안)" 버튼을 통해 클립보드에 프롬프트를 담아 수동으로 외부 AI를 활용할 수 있도록 지원.
+   - 분석 데이터의 원본 JSON을 토글하여 접고 펼치며 볼 수 있는 JSON raw 뷰어 및 클립보드 복사 유틸 탑재.
+5. **환경변수 설정 및 보안 경고 배포 지침 (`.env.example`)**:
+   - `VITE_GEMINI_API_KEY` 설정 가이드 및 프론트엔드 환경변수 번들링 시 브라우저 노출 경고 문구 추가. 배포 시 백엔드/서버리스 프록시 권장 정책 명시.
+
+### 안전 수칙 및 제한 사항 준수
+- AI 응답 결과를 daily/main/dungeon에 반영하거나 퀘스트 데이터를 강제로 추가하지 않는 분석 뷰어 상태 유지.
+- `levelup-save` 로컬 저장소 스키마 및 persist version(현재 v9) 변경 없음.
+- 기존 게임 모델, 인벤토리, 상점 경제 밸런스 완전 보존.
+
+### 검증
+- `npx tsc --noEmit` 및 `npm run build`를 통한 빌드 적합성 검증 완료.
+## 12-31C: AI 추천 퀘스트 승인/수정/제외 + 실제 Daily 반영
+
+### Scope
+- AI 코치가 추천한 `recommendedActions`를 사용자가 개별적으로 검토(승인/수정/제외)하고 실제 게임 내 일일 퀘스트로 등록할 수 있도록 구현.
+- AI가 제안한 퀘스트의 보상 수치를 임의로 정하지 못하도록 기존의 난이도별 스토어 보상 시스템에 위임하고 1회성 `Quest` 구조를 보장.
+
+### 주요 작업 사항
+1. **스토어 액션 및 Quest 타입 보강 (`src/lib/types.ts`, `src/lib/store.ts`)**:
+   - `Quest` 타입에 optional `coachReason?: string` 필드를 추가하여 AI 코치가 해당 퀘스트를 추천한 소견을 함께 보존.
+   - `store.ts` 내에 `addAiCoachDailyQuest` 스토어 액션을 작성하여, AI 퀘스트 생성 시 난이도 및 카테고리에 맞춰 스토어에서 자체적으로 보상(스탯 획득치 및 가중치)을 결정하도록 처리하고, `recurring: false` (1회성 퀘스트)로 상태 저장.
+   - 날짜가 바뀌어 퀘스트가 리셋될 때 완료되었거나 미완료 상태인 1회성 AI 추천 퀘스트(`recurring: false`)를 자동 소거하도록 `resetDailiesIfNewDay` 리셋 로직 개편.
+2. **검토 대기 및 수정 상태 상태 머신 구현 (`src/components/AiCoachPanel.tsx`)**:
+   - 로컬 `actionStates`를 사용하여 추천 카드별 `draft`(대기) | `approved`(승인) | `rejected`(제외) | `added`(적용됨)의 상태 제어 흐름 구현.
+   - 각 퀘스트 추천 카드 내에 인라인 편집 폼(에디터 토글, 제목/설명/카테고리/난이도 입력 필드)을 탑재하여 사용자가 직접 제목이나 난이도를 커스텀해 승인할 수 있도록 개선.
+   - 개별/일괄 추가 기능 제공 및 이미 적용된 추천 카드는 중복 추가를 방지하는 비활성화 및 상태 전이 연동.
+
+### 검증
+- `npx tsc --noEmit` 및 `npm run build`를 통한 빌드 적합성 검증 완료.
+
+## 12-31D: AI 코치 Daily 전체 플랜 생성 구조로 전환 + Schedule/Capacity-aware 설계 기반 추가
+
+### Scope
+- AI 코치가 단발적으로 퀘스트 3~4개를 단순히 "추가"하던 방식에서 탈피하여, 내일 하루의 전체 Daily Plan을 통째로 설계해주는 구조로 전면 전환.
+- 기존의 고정 Daily 루틴들은 삭제하지 않고 "루틴 라이브러리"로서 참고 대상 및 선택지로 남겨두고, AI가 컨디션/수면/성공 트렌드/일정 및 생활 유지관리 주기를 고려하여 당일/익일용 일회성 전체 퀘스트 플랜 세트를 처방하도록 구현.
+- 구글 캘린더 연동(12-31E 예정)을 위한 타입 및 프롬프트 슬롯을 준비하고, 임시 일정 보조 입력 UI를 추가하여 가용량(Capacity) 인지 처방이 가능하게 처리.
+
+### 주요 작업 사항
+1. **타입 구조 및 스키마 확장 (`src/lib/aiCoachTypes.ts`)**:
+   - 하루 전체 전략과 퀘스트 묶음을 포괄하는 `AiCoachDailyPlan`, 세부 계획된 과제 단위인 `AiCoachPlannedQuest` 추가.
+   - 기존 루틴 라이브러리를 가용 수준에 따라 어떻게 조율했는지 의사결정을 적는 `AiCoachBaseQuestDecision` 추가 (`keep` | `modify` | `skip` | `replace`).
+   - 빨래, 분리수거, 청소, 체중 기록 등 반복 주기가 있는 생활 유지관리 과제들의 일정을 검토하는 `AiCoachMaintenanceDecision` 및 캘린더 연동 대비용 일정 요약 스키마인 `AiCoachScheduleSummary` 정의.
+   - `AiCoachResponse` 에 `dailyPlan?: AiCoachDailyPlan` 필드를 추가하여, 플랜 데이터가 누락되었을 때는 이전 `recommendedActions` 기반 UI로 안전하게 fallback하도록 구현.
+2. **요약기 고도화 및 생활 유지관리 분석 (`src/lib/aiCoachSummary.ts`)**:
+   - `saveSummary` payload 생성 시, `quests`로부터 고정 루틴(`recurring: true`)을 추출하여 `baseDailies`에 캡슐화해 Gemini로 전송.
+   - `maintenanceStatus` 수집기 구현: 빨래(4일), 분리수거(3일), 청소(2일), 체중 기록(2일), 생활비(1일) 등 주요 생활 유지관리성 퀘스트의 최종 완료 날짜(`lastCompletedAt`)를 추적하고, 현재 날짜 기준 경과 일수(`daysSinceCompleted`)와 권장 주기 기준의 긴급도(`low` | `medium` | `high` | `unknown`)를 정량적으로 계산하여 payload에 포함.
+3. **하루 전체 계획 수립을 위한 프롬프트 개편 (`src/lib/aiCoachPrompt.ts`)**:
+   - AI가 총 5~9개 내외의 퀘스트로 구성된 내일 하루 전체 플랜(`dailyPlan`)을 직접 빌드하도록 프롬프트 지침 개정.
+   - 기존 고정 루틴들을 컨디션과 일정 가용 용량에 비추어 조율하게 유도하고, 생활 유지관리 긴급도에 따라 내일 플랜에 적절히 포함시키도록 명령.
+   - 일정(scheduleSummary)이 제공될 경우 바쁜 일정을 뺀 가용 시간 내로 퀘스트들의 총 소요 시간(`estimatedTotalMinutes`)을 조율하도록 처리.
+   - 하위 호환성을 위해 `recommendedActions` 배열 또한 dailyPlan 내의 핵심/보조 퀘스트들을 매핑해 동시에 반환하도록 구성.
+4. **일정 입력 및 Daily Plan 전용 대시보드 UI 구현 (`src/components/AiCoachPanel.tsx`)**:
+   - UI에 "내일 일정 메모" optional textarea를 탑재하여, 캘린더 연동 전에 사용자가 직접 일정을 텍스트로 추가해 AI에 전달할 수 있도록 보완.
+   - API 응답 시 `dailyPlan` 데이터가 있으면 총전략 브리핑(strategyTitle, strategySummary, focusAreas, estimatedTotalMinutes, capacityComment) 카드를 최상단에 노출.
+   - 계획된 퀘스트들을 priority(core, support, recovery, maintenance, optional)별로 그룹화하여 렌더링하고, 개별 승인/수정/제외 인터페이스 제공.
+   - 기존 루틴 라이브러리의 조율 현황(`baseQuestDecisions`) 및 생활 유지관리 처방 현황(`maintenanceDecisions`), 스케줄 가정(`scheduleAssumptions`)을 가독성 있게 시각화.
+   - "내일 Daily 플랜 전체 확정" 일괄 버튼을 추가하여, 제외(rejected)되지 않은 항목들을 non-recurring 일일 퀘스트로 저장소에 일괄 등록 처리.
+   - 중복 방지 강화: 스토어에 이미 등록된 동일 1회성 퀘스트가 있는지 제목과 카테고리 기준으로 이중 검사하여, 일괄 또는 중복 확정 시에도 퀘스트가 겹치지 않게 방어.
+5. **API 클라이언트 안전성 강화 (`src/lib/aiCoachClient.ts`)**:
+   - `validateAiCoachResponse`를 보강하여 응답 데이터 내에 `dailyPlan`이 존재할 경우 `quests` 및 `baseQuestDecisions` 등의 내부 필수 구조가 유효한지 안전하게 검증하는 밸리데이터 추가.
+
+### 안전 수칙 및 제한 사항 준수
+- 기존의 Quest 저장소 스키마 및 persist version(현재 v14)을 완벽히 유지. 스토어 마이그레이션 불필요.
+- 기존 루틴 퀘스트(`recurring: true`)를 스토어에서 자동 삭제하거나 영구 수정하지 않고, 확정 시에만 1회성 `copy`로 생성하여 루틴 라이브러리를 철저히 보존.
+- dungeon 및 main 목표 추천 제안은 UI 표시(제안 전용)만 수행하고 자동/상태 변경을 배제.
+
+## 12-31E: Google Calendar read-only 연동 + AI 코치 scheduleSummary 자동화
+
+### Scope
+- Google Calendar API의 Read-Only 권한만을 클라이언트측 OAuth 2.0 흐름(Google Identity Services 브라우저 라이브러리)으로 획득하여 내일 일정을 가져오고, AI 성장 코치용 `scheduleSummary`를 자동 빌드.
+- 일정 제목 마스킹(개인정보 노출 방지) 체크박스 제공 및 수동 일정 메모 fallback 결합.
+- raw calendar events 및 access token을 영구 저장(localStorage/save)하지 않는 보안성 보장.
+
+### 주요 작업 사항
+1. **Google Identity Services & Calendar REST API 연동 (`src/lib/googleCalendarClient.ts`)**:
+   - `google-gsi-client` 스크립트 브라우저 동적 로딩 및 `https://www.googleapis.com/auth/calendar.readonly` scope로 Token Client 초기화.
+   - `requestCalendarAccess()`를 통해 client secret을 사용하지 않는 순수 프론트엔드 OAuth 팝업 흐름 구현.
+   - Google Calendar REST API fetch를 사용해 primary 캘린더 일정 조회 (`singleEvents=true`, `orderBy=startTime`, `maxResults=50`).
+2. **현지 시간대 기반 API 조회 및 scheduleSummary 계산 유틸 (`src/lib/scheduleSummary.ts`)**:
+   - 브라우저 현지 시간대에 맞춘 내일(Tomorrow 00:00:00)부터 모레(Day After Tomorrow 00:00:00)까지의 경계를 `timeMin`, `timeMax`로 조회.
+   - `generateScheduleSummary` 함수가 이벤트 시간 범위를 계산하여 겹치는 바쁜 시간(busyBlocks)을 병합하고 가용 자유 시간대(freeBlocks) 추출.
+   - 90분 이상의 집중 블록(`deepWork`) 식별, 전체 가용 시간(`estimatedAvailableMinutes`) 및 일일 부하량(`dayLoad`: heavy/medium/light) 산출.
+   - **개인정보 보호**: `maskEventTitles=true`일 때 일정 제목을 "수업", "과외", "업무 일정", "개인 일정" 등으로 단순 마스킹하여 AI에 전달하는 필터링 탑재.
+3. **AI 코치 패널 UI 이식 및 수동 fallback 병합 (`src/components/AiCoachPanel.tsx`)**:
+   - `calendarStatus`, `calendarEvents`, `maskTitles` 등 캘린더 연동용 로컬 상태 변수 추가.
+   - "Google Calendar에서 불러오기" 연동 버튼, 로딩 스피너 및 에러 상태(Origins 미등록 경고 등)에 따른 시각적 UI 분기 처리.
+   - 동적 프리뷰 패널 구현: 캘린더 로드 성공 시 부하량 뱃지, 총 가용 시간, 고정 일정 목록 및 가용 집중 블록 정보를 글래스모피즘 카드로 가독성 있게 렌더링.
+   - 마스킹 ON/OFF 토글 체크박스를 기본값 `true`로 배치하여 사용자 개인정보 보안 조절을 손쉽게 만듦.
+   - 수동 추가 메모 textarea를 fallback 겸 보조 입력으로 연동하여 캘린더 데이터 유무에 관계없이 분석 prompt 조립 및 Gemini 연동 작동 보장.
+4. **Gemini API Prompt 전달 강화 (`src/lib/aiCoachPrompt.ts`, `src/components/AiCoachPanel.tsx`)**:
+   - `handleAnalyze` 및 `handleCopyPrompt` 양쪽 모두 `getActiveScheduleSummary()`의 결과인 `scheduleSummary`를 `buildAiCoachPrompt`에 누락 없이 전달하도록 결합.
+   - Gemini 프롬프트 내에 `busyBlocks`의 시간적 가용성, `deepWork` 집중 블록에 몰입 과제 배치, `short` 블록에 생활 유지관리 과제 매핑 지침 반영.
+5. **환경변수 가이드라인 보완 (`.env.example`)**:
+   - `VITE_GOOGLE_CLIENT_ID` 설명 및 Web Client 설정 법(JavaScript Origins 등록, client secret 프론트엔드 비노출 주의 사항) 주석 추가.
+
+### 안전 수칙 및 제한 사항 준수
+- Google Calendar 쓰기 scope 요청 및 이벤트 생성/수정/삭제 원천 배제.
+- `accessToken` 및 `calendarEvents`는 리액트 컴포넌트의 메모리 내 상태(state)로만 임시 관리하고, `localStorage` 또는 Zustand save(persist)에 영구 저장하지 않음 확인.
+- client secret 사용 없음.
+
+### 검증
+- `npx tsc --noEmit` 타입 체크 오류 없음 확인.
+- `npm run build` 번들 빌드 성공 완료.
+
+
+### 검증
+- `npx tsc --noEmit` 및 `npm run build`를 통한 빌드 적합성 검증 완료.
+
+## 12-31F: AI 코치 장기 기억 CoachMemory 1차 구현 + Calendar-aware plan tuning
+
+### Scope
+- AI 분석 세션 및 추천 퀘스트 아웃컴(added, completed, expired, skipped)을 스토어에 영구 보존.
+- 7일/30일 분석 세션을 기반으로 완료율, 반복 실패 카테고리, 안정 습관, 과부하 징후, 수면 부족과의 실패 연관성을 산출하는 rollingSummary 구현.
+- 장기 기억 기반 지침을 AI 성장 코치 프롬프트에 주입하여 난이도/개수 조절 및 태스크 세분화 권고.
+- UI에 AI 코치 메모리 대시보드를 추가하여 통계 및 학습 진행 상황(3회 미만 시 학습바 노출) 가시화.
+
+### 주요 작업 사항
+1. **장기 기억 데이터 타입 추가 (`src/lib/aiCoachTypes.ts`)**:
+   - `AiCoachSessionRecord`, `AiCoachQuestOutcome`, `AiCoachMemoryState` 타입 정의 추가.
+2. **장기 기억 관리 액션 연동 및 하위 호환성 유지 (`src/lib/store.ts`)**:
+   - `GameState` 에 `aiCoachMemory?: AiCoachMemoryState` 추가.
+   - `recordAiCoachSession`, `recordAiCoachPlannedQuests`, `updateAiCoachQuestOutcomeOnComplete`, `rebuildAiCoachRollingSummary` 액션 추가.
+   - 퀘스트 완료(`completeQuest`), 다음 날짜 리셋(`resetDailiesIfNewDay`), AI 퀘스트 일일 등록(`addAiCoachDailyQuest`) 등 라이프사이클에 연동해 added -> completed/expired 상태 갱신 자동화.
+   - `persist.migrate`에 `aiCoachMemory`가 없는 이전 저장본 수화 시 빈 세션/기본값 복원 로직 추가 (버전 14 유지).
+3. **롤링 요약 연산 로직 구현 (`src/lib/aiCoachSummary.ts`)**:
+   - 최근 7일/30일 완료율, 실패 카테고리, 수면 부족 연관성을 계산하는 `computeRollingSummary` 유틸 작성.
+   - `generateAiCoachMemorySummary` 가 스토어의 rollingSummary 캐싱을 우선 참고하고 없을 시 fallback하도록 리팩토링.
+4. **AI 코치 메모리 프롬프트 및 UI 대시보드 (`src/lib/aiCoachPrompt.ts`, `src/components/AiCoachPanel.tsx`)**:
+   - `buildAiCoachPrompt` 에 장기 기억 요약 내용 전달 및 프롬프트 지침 추가.
+   - `AiCoachPanel.tsx` 상단에 "AI COACH MEMORY" 대시보드 추가. 3일 미만일 때는 "학습 데이터 축적 중..." 진행 상태바를 노출하고, 3일 이상 세션 누적 시 7일/30일 완료율, 안정 습관, 반복 실패, 과부하 메모 등을 compact하게 표시.
+
+## 12-31G: AI Coach Core Context 수동 저장/편집 + 공통 프롬프트 주입
+
+### Scope
+- 사용자가 직접 작성하고 저장하는 장기 방향성, 핵심 과제, AI 코치 운영 원칙 등인 **Core Context** 시스템 구축.
+- Core Context 수동 저장/편집 UI를 추가하고 매일 초기화되지 않으며 AI가 직접 수정하지 못하게 설계.
+- Gemini 직접 분석 및 프롬프트 복사 fallback 양쪽 모두에 Core Context가 최우선 조율 지침으로 주입되도록 보강.
+- 저장 버전 14 및 로컬스토리지 `levelup-save`를 그대로 유지하면서 호환성 보장.
+
+### 주요 작업 사항
+1. **Core Context 타입 추가 (`src/lib/aiCoachTypes.ts`)**:
+   - 수동 장기 방향성 입력을 위한 `AiCoachCoreContext` 타입 정의.
+2. **스토어 상태 저장 및 액션 추가 (`src/lib/store.ts`)**:
+   - `GameState` 에 `aiCoachCoreContext?: AiCoachCoreContext` 상태 추가.
+   - `updateAiCoachCoreContext(text)`, `clearAiCoachCoreContext()` 액션 추가.
+   - `hardReset` 시 초기화 및 `persist.migrate` 시 undefined fallback 처리를 추가해 하위 호환성 및 기존 데이터 보존 보장.
+3. **프롬프트 내 조립 및 지시사항 개정 (`src/lib/aiCoachPrompt.ts`)**:
+   - `buildAiCoachPrompt` 가 `coreContext` 인자를 받아 최우선 순위 지침(User Core Context 블록)으로 주입하도록 순서 재조정.
+   - AI가 Core Context의 장기 방향성과 운영 원칙을 존중하여 일일 플랜과 던전/메인 목표를 제안하되, 오늘 컨디션과 가용시간에 따라 부하를 적절히 조절하도록 지시. Core Context의 임의 수정/재작성 및 verbatim 복사 금지 규정 주입.
+4. **Core Context 편집 UI 탑재 (`src/components/AiCoachPanel.tsx`)**:
+   - 입력폼 위에 collapsible 형태의 “AI 코치 Core” 섹션 배치 (평소에는 기본 접힘 상태, 최초 비어 있을 시 작성 유도 문구 노출).
+   - placeholder를 통해 최우선 방향, 큰 프로젝트, AI 코치 운영 원칙의 예시 템플릿 제공.
+   - 저장 시 updatedAt을 포함해 저장하고, 3초 동안 "Core 저장 완료" 확인 피드백 노출.
+   - 개인정보 보호를 위해 "Core는 저장되어 프롬프트에 전송되므로 민감정보(계좌, 비밀번호)는 입력하지 말 것"을 경고하는 안내 추가.
+   - Gemini 분석 실행 및 프롬프트 복사 시 `aiCoachCoreContext` 를 안전하게 전달하도록 바인딩.
+
+### 안전 수칙 및 제한 사항 준수
+- Google Calendar read-only 및 OAuth 토큰 메모리 관리 원칙 그대로 준수.
+- 사용자의 자유 일기(Raw Journal) 및 캘린더 이벤트 등 민감 데이터가 로컬 스토리지에 serialize되어 누출되지 않도록 기존 제한 정책 유지.
+- AI 응답이 Core Context를 임의로 덮어쓰거나 자동 변형하지 않음 보장.
+
+### 검증
+- `npx tsc --noEmit` 타입 정적 컴파일 이상 없음 확인.
+- `npm run build` 번들 파일 컴파일 빌드 통과 완료.
+
+## 12-31H: AI Daily Plan 자동 적용 모드 전환 + 결과 UI 단순화 + Core 운동루틴 반영 강화
+
+### Scope
+- 기존의 보수적인 승인/확정형 AI 코칭 흐름을 과감히 타파하고, "내일 Plan 전체 생성" 버튼 클릭 한 번으로 Gemini 분석과 Daily 스토어 퀘스트 교체 적용까지 즉시 완료되는 **자동 적용형 흐름**으로 개편.
+- 결과 피드백 화면을 획기적으로 압축하여 적용 완료 메시지, 전략 요약, 퀘스트 구성 카운터, 제목 텍스트 미리보기 위주로 단순화하고 디버그/진단용 데이터는 기본 접힘 형태로 숨김 처리.
+- Core Context의 장기목표/선호루틴과 aiCoachPrompt의 12~16개(기본 15개) Daily 운영 원칙의 역할을 완전 분리.
+- 기존 데이터(recurring daily 등) 파괴를 엄격히 금지하고, 5개 미만의 부적절한 AI 플랜에 대한 자동 적용 차단 및 failure safety 복구 메커니즘을 완비.
+
+### 주요 작업 사항
+1. **Zustand 스토어의 교체 및 outcomes 연동 (`src/lib/store.ts`)**:
+   - `replaceAiCoachDailyPlan(questsInput)` 구현부를 통해 기존에 등록된 1회성 AI 퀘스트만 정밀하게 필터링하여 일괄 교체하고, 기존에 사용자가 지정했던 recurring daily(기본 루틴)는 절대 삭제/변경하지 않고 루틴 라이브러리로 유지하도록 보장.
+   - 교체 시 기존 AI 플랜 중 미완료(added) 상태였던 outcomes 레코드를 `expired`로 안전하게 갱신하고, 새로운 퀘스트 묶음을 `added`로 Outcomes에 일괄 기록 및 롤링 서머리 자동 동기화 보장.
+2. **AiCoachPanel 자동 적용 & 결과 UI 극적 단순화 (`src/components/AiCoachPanel.tsx`)**:
+   - 버튼명을 “내일 Plan 전체 생성”으로 단순화하고, 클릭 한 번으로 API 연동, 퀘스트 파싱/정규화, 스토어 `replaceAiCoachDailyPlan` 자동 호출까지의 원스톱 트랜잭션 수립.
+   - 결과 화면에 "내일 AI Daily Plan이 자동으로 적용되었습니다!" 완료 알림을 직관적으로 노출.
+   - 전략 타이틀, 전략 요약, 예상 강도, 예상 총 시간, 총 퀘스트 수 및 priority별 카운터(Core/Support/Maintenance/Recovery/Optional) 배지 등으로 요약 표시.
+   - 퀘스트 리스트는 개별 카드나 승인/조정 카드 없이 제목과 카테고리만 텍스트 리스트 형태로 간결하게 렌더링하고, 필요시에만 `상세` 토글 버튼을 통해 처방 사유/설명을 확장하도록 제어.
+   - 긴 도메인별 개별 진단, baseQuestDecision 테이블, maintenance Decision 긴 이유, JSON raw 데이터 등을 모두 "AI 분석 상세 보고서 및 원본 JSON 보기" 접이식 패널 안에 완전히 격리하여 기본 접힘 처리.
+   - Compass 아이콘 미임포트 오류 및 React 임포트 누락으로 인한 빌드 장해 사전 제거.
+3. **Daily 화면 AI Plan 중심 이원화 개편 (`src/App.tsx`, `src/components/QuestCard.tsx`)**:
+   - `App.tsx` 에서 daily 퀘스트들을 `aiPlanDailies` (AI 1회성 플랜), `userQuests` (사용자가 직접 추가한 1회성 일일퀘스트), `routineDailies` (기본 recurring daily) 로 정확히 분리.
+   - AI Plan이 활성화되어 있을 시, 메인 영역 최상단에 AI Daily Plan을 배치하고 그 아래에 사용자 추가 퀘스트를 위치시킴.
+   - 기존의 recurring daily들은 "기본 루틴 라이브러리" 접이식 섹션으로 이동시켜 기본 collapsed 상태로 숨기고, 설명 텍스트를 "AI 코치가 참고하는 기본 루틴입니다. AI Plan이 없을 때는 기본 Daily로 사용할 수 있습니다." 로 갱신하여 중복 노출을 차단함.
+   - AI Plan이 미등록된 날에는 기존대로 recurring daily들이 fallback 메인 영역에 그대로 렌더링되게 구성.
+   - `QuestCard.tsx` 에서 `aiPriority || coachPriority`, `aiEstimatedMinutes || estimatedMinutes` 를 안전하게 파싱하여 priority 뱃지와 ⏱️ 소요시간 뱃지를 시각적으로 일관되게 렌더링.
+4. **고정 프롬프트 AI 운영원칙 명시 및 Core 운동루틴 반영 강화 (`src/lib/aiCoachPrompt.ts`)**:
+   - Core Context에 운영 지침(일 15개 퀘스트 수량 등)이 포함되지 않음을 주지시키고, 고정 프롬프트 시스템 지침에 하루 12~16개(기본 목표 15개) Daily Plan 설계 및 Core Context를 장기방향성/개인루틴 정보로만 해석하도록 못박음.
+   - 물 2L, 취침/기상 기록, 단백질 100g, 폰 멀리하기 등 3~15분짜리 Micro/Optional 퀘스트 후보군을 프롬프트에 고정 제공하여 15개 볼륨 충족 및 성공 완수 스트릭 유도.
+   - Core Context 상의 주간 운동 루틴을 분석하여 다음날 운동 계획을 처방하되, 오늘 실제로 마친 운동 부위 기록과 대조해 같은 근육 연속 고강도 훈련을 처방하지 않도록 회복-우선(recovery-first) 동적 조율 지침을 확립.
+   - 컨디션이 저조하거나 일정이 과부하인 경우 가벼운 스트레칭, 유산소 등 구체적 완화 루틴으로 처방하도록 설계.
+5. **자동 적용 실패 안전장치 구현 (`src/components/AiCoachPanel.tsx`)**:
+   - Gemini API 호출 성공 후, `dailyPlan` 데이터가 없거나 quests 배열이 5개 미만인 경우(중복 title 제거 기준 포함) alert 에러를 띄우며 스토어 반영을 전면 중단(return)하여 기존의 퀘스트 세트를 완벽히 보호.
+   - 생성된 퀘스트가 20개 이상일 경우, 상위 16개로 자동 제한하여 비정상적으로 긴 퀘스트 목록으로 인한 시스템 피로를 방지.
+
+### 검증 결과
+- `npx tsc --noEmit` 실행 시 정적 컴파일 경고/오류 0건으로 완벽 통과.
+- `npm run build` 번들 빌드 시 production css/js 리소스 번들링 에러 없이 완료 ( built in 6.00s ).
+
+## 12-32A: AI Daily Plan 수량 18개 확장 + Dungeon 제거 방향의 Main Quest v2 / Milestone 구조 도입
+
+### Scope
+- AI Daily Plan의 생성 권장 수량을 기존 12~16개(기본 15개)에서 14~18개(기본 18개)로 소폭 확장하여 Micro 및 Maintenance 성격의 가벼운 루틴을 골고루 분배 및 스트릭 완수율 제고.
+- Main Quest와 Dungeon의 역할 중복을 해소하기 위해 Dungeon을 신규 성장 구조에서 제외하고, 장기 목표와 중간 성취 지점(Milestone), 그리고 단계별 보상을 하나의 Main Quest v2 체계로 통합.
+- 기존의 Dungeon 및 Main, Daily 데이터는 파괴하지 않고 legacy로 고스란히 보존하며, persist version v14 및 로컬스토리지 키 `levelup-save`를 유지함.
+
+### 주요 작업 사항
+1. **AI Daily Plan 생성 목표 수량 18개까지 확대 (`src/lib/aiCoachPrompt.ts`, `src/components/AiCoachPanel.tsx`)**:
+   - 프롬프트에 기재된 Daily Plan 목표 수량 기준을 '권장 14~18개 / 표준 약 18개'로 조정.
+   - 컨디션 및 캘린더 부하에 따른 탄력적 축소 지침(10~14개, 8~12개)을 수립하고, 응답이 20개 이상일 경우 상위 18개 내외로 절삭하는 안전장치로 확대 적용.
+   - 프롬프트 구성 권장을 코어 3~4개, 서포트 3~4개, 유지 관리 4~5개, 회복 1~2개, 옵션/마이크로 3~5개로 명시하여 균형 잡힌 하루 일정이 구성되도록 보강.
+2. **Main Quest v2 및 마일스톤 데이터 모델 설계 (`src/lib/types.ts`)**:
+   - `Quest` 인터페이스에 하위 호환성을 유지하도록 optional fields(`finalGoal`, `progressPercent`, `status`, `source`, `completedAt`)를 확장 적용.
+   - 별도 일일퀘스트가 아닌 Main Quest 내부 배열로 관리되는 `MainQuestMilestone` 및 중요도에 따른 `MainQuestMilestoneReward` 타입 선언.
+   - 마일스톤의 milestones 필드가 string배열(dungeon legacy) 혹은 `MainQuestMilestone[]` 객체 배열 유니온 타입을 수용하도록 다형성 설계.
+   - `BoxSource` 유니온 타입에 `'achievement'`를 추가하여 마일스톤 보상 상자의 출처 무결성 보장.
+3. **Zustand 스토어의 v2 액션 추가 (`src/lib/store.ts`)**:
+   - `addMainQuest`, `updateMainQuest`, `addMainQuestMilestone`, `updateMainQuestMilestone`, `completeMainQuestMilestone`, `completeMainQuest`를 무결하게 구현.
+   - 마일스톤 완수 시 상태 갱신(`status: 'completed'`), 완료일 자동 주입, 중복 완료/중복 보상 수령 방지 조치 완비.
+   - 스탯 보너스 및 XP, Gold 등의 수치 산정을 AI의 임의 규칙이 아닌 스토어 내부의 정밀한 중요도(importance: `minor`/`normal`/`major`) 포뮬러를 따르도록 안전하게 제한. `major` 마일스톤 완료 시 Epic 등급의 마일스톤 완수 전리품 상자 자동 인벤토리 수여.
+4. **Main Quest v2 UI 개발 및 Dungeon legacy 처리 (`src/components/QuestCard.tsx`, `src/App.tsx`)**:
+   - `QuestCard.tsx`에서 v2 메인 퀘스트일 때의 인라인 프로그레스바, 마일스톤 진행 카운트 배지, 순서 정렬 마일스톤 리스트 카드 레이아웃 구현.
+   - 개별 마일스톤 카드 레이아웃 내부에 '완료 증거(evidenceNote)' 입력 팝업창 및 완료 클릭 액션 연동.
+   - 기존 던전 데이터 손상 없이 탭 레이블을 `'던전 (Legacy)'`로 개정하고, 추가 버튼 제거 및 레거시 안내 경고 배너 렌더링. 메인 퀘스트 탭에 마일스톤 통합 관리 안내 탑재.
+5. **AI 코치 프롬프트 Main Milestone 중심으로 대전환 (`src/lib/aiCoachPrompt.ts`, `src/lib/aiCoachTypes.ts`)**:
+   - 프롬프트에서 던전 제안(`dungeonSuggestions`)을 차단하고 Main Quest Suggestions 및 Milestone Suggestions, 그리고 사용자의 성취 증거를 탐지하는 Progress Detections 위주로 개편.
+   - 벤치프레스, KBI 등 특정 목표의 마일스톤 목록 하드코딩을 원천 금지하고, 사용자 Core Context/일기 내용/회복력에 입각해 동적으로 맞춤형 마일스톤을 기획하여 제안하도록 AI 지침 고도화.
+   - AI 제안 사항은 사용자가 최종 승인하여 스토어에 바인딩할 수 있도록 Types 및 Prompt 규정 수립.
+
+### 검증 결과
+- **TypeScript 정적 검사 (`npx tsc --noEmit`)**:
+  - `QuestCard.tsx` 내 `isDungeon` 블록의 milestones map 컴파일 오류 등 전체 TypeScript 타입 경고 및 오류가 **0건으로 완벽하게 해결 및 성공**.
+- **Production 빌드 (`npm run build`)**:
+  - 모든 정적 검사 무결 통과 후 Vite production css/js 번들 리소스 최적화 및 최종 배포 파일 생성 무오류 빌드 통과 완료.
+
+
+
+
+## 12-32C: AI Main/Milestone Suggestions ?먰겢由??곸슜 UI
+
+### Scope
+- AI 遺꾩꽍 寃곌낵濡?泥섎갑???κ린 紐⑺몴 諛?留덉씪?ㅽ넠 ?쒖븞(mainQuestSuggestions, mainMilestoneSuggestions)???좎?媛 ?몄??섍퀬 踰꾪듉 ??踰덉쑝濡??ㅼ젣 Main Quest / Milestone??諛섏쁺?????덈뒗 ?먰겢由??곸슜 UI 援ы쁽.
+- AI Daily Plan??利됯컖?곸씤 ?먮룞 ?곸슜 ?먮쫫? 洹몃?濡?怨좎닔?섎릺, ?κ린?곸씤 Main Quest 諛?以묎컙 紐⑺몴 Milestone ?쒖븞? ?좎?媛 吏곸젒 clicking(?섎룞 ?뱀씤)?댁빞 諛섏쁺?섎뒗 ?곹샇?묒슜???섎┰.
+- 湲곗〈???덇굅??Dungeon 諛?Main, Daily ?곗씠?곕뒗 ?쇱젅 ?뚭눼?섏? ?딄퀬 legacy濡?怨좎뒪???蹂댁〈?섎ŉ, persist version v14 諛?濡쒖뺄?ㅽ넗由ъ? ??`levelup-save`瑜??꾨꼍???좎???
+
+### 二쇱슂 ?묒뾽 ?ы빆
+1. **AI Main/Milestone Suggestions ?먰겢由??곸슜 UI 媛쒕컻 (`src/components/AiCoachPanel.tsx`)**:
+   - AI 泥섎갑 寃곌낵 ?섎떒???쏛I ?κ린 紐⑺몴 諛?留덉씪?ㅽ넠 ?쒖븞???뱀뀡??而댄뙥?명븳 移대뱶 ?덉씠?꾩썐?쇰줈 ?ㅺ퀎.
+   - `showLongTermSuggestions` ?곹깭 ?좉???吏?먰븯?? ?됱긽?쒖뿉???묓옒(collapsed) ?뺥깭濡??몄텧?섏뿬 UX 媛꾩냼??
+   - ??Main Quest ?쒖븞 移대뱶: ?쒕ぉ, 理쒖쥌 紐⑺몴, ?ㅻ챸, 移댄뀒怨좊━ 諛곗?, 留덉씪?ㅽ넠 proposed 由ъ뒪??諛?異붿쿇 ?댁쑀 ?뚮뜑留? ?쏮ain?쇰줈 異붽???踰꾪듉 ?쒓났.
+   - 湲곗〈 Main??異붽???Milestone ?쒖븞 移대뱶: ?쒕ぉ, ?ㅻ챸, 以묒슂??諛곗? 諛?異붿쿇 ?댁쑀 ?뚮뜑留? ?쏮ilestone 異붽???踰꾪듉 ?쒓났.
+   - 以묐났 異붽? 諛⑹?: ?대? ?좎궗??硫붿씤 ?섏뒪?멸? ?깅줉?섏뼱 ?덇굅???대떦 硫붿씤 ?섏뒪?몄뿉 ?숈씪????댄???留덉씪?ㅽ넠??議댁옱??寃쎌슦 ?ㅽ넗??異붽?瑜??좎젣 李⑤떒?섍퀬 "?깅줉 遺덇?", "?대? ?깅줉???쇰줈 諛곗? ?쒖떆 諛??곸슜 ?꾨즺??移대뱶??利됯컖 鍮꾪솢?깊솕.
+2. **???Main Quest 留ㅼ묶 諛??섎룞 ?좏깮 Dropdown 援ъ텞 (`src/components/AiCoachPanel.tsx`)**:
+   - Milestone ?쒖븞 ?? ?곌껐?????Main Quest瑜?`mainQuestId`媛 ?덉쓣 ???곗꽑 諛붿씤?⑺븯怨??놁쓣 ??`mainQuestTitle` 湲곗? ?좎궗 臾몄옄??留ㅼ묶 ?쒕룄.
+   - 留ㅼ묶??蹂듭닔 媛쒖씠嫄곕굹 紐⑦샇??寃쎌슦, ?좎?媛 留덉슦?ㅻ줈 吏곸젒 ???硫붿씤 ?섏뒪?몃? 留ㅽ븨?????덈룄濡??꾩옱 ?쒖꽦?붾맂 硫붿씤 ?섏뒪??紐⑸줉??Dropdown `<select>` ?듭뀡諛뺤뒪 UI ?꾨퉬.
+3. **Zustand ?ㅽ넗??Actions ?섏젙 諛?留덉씪?ㅽ넠 以묒슂???곕룞 (`src/lib/store.ts`, `src/lib/types.ts`)**:
+   - `addMainQuest` ?쒓렇?덉쿂? 援ы쁽遺瑜??뺤옣?섏뿬 `source`? `coachReason`???몄옄濡??섏슜?섍퀬, ?먰겢由??곸슜 ??`'aiCoach'` ?뚯뒪 諛?泥섎갑 ?ъ쑀媛 ?곴뎄 ??λ릺?꾨줉 蹂닿컯.
+   - `types.ts` ?댁쓽 `MainQuestMilestone` ?명꽣?섏씠?ㅼ뿉 `importance?: 'minor' | 'normal' | 'major'`瑜??뺤떇 ??낆쑝濡??좎뼵?섍퀬, `addMainQuestMilestone` ??以묒슂?꾧? ?④퍡 ?꾨떖?섎룄濡??섏젙.
+   - 蹂댁긽(Gold/XP/?ㅽ꺈/?곸옄) ?섏튂??AI媛 寃곗젙?섏? ?딅룄濡?泥좎???寃⑸━?섎ŉ, ?ㅽ넗???대????뺣???以묒슂???щ??щ? ?곕씪 ?꾨즺 ?쒖젏???뺤긽 ?섏뿬?⑥쓣 二쇱꽍 紐낆떆.
+4. **AI 肄붿튂 ?꾨＼?꾪듃 Main Milestone 以묒떖?쇰줈 ??꾪솚 蹂닿컯 (`src/lib/aiCoachPrompt.ts`)**:
+   - ??Main Quest???뺣쭚 ?덈줈???κ린 紐⑺몴???뚮쭔 泥섎갑?섍퀬, 媛?ν븳 ???꾩옱 吏꾪뻾 以묒씤 Main 紐⑸줉??蹂닿퀬 湲곗〈 Main??異붽???milestone(以묎컙 紐⑺몴)???곗꽑?섏뿬 ?쒖븞?섎룄濡?吏移?蹂닿컯. 以묐났 ?쒖븞 ?먯쿇 諛곗젣.
+
+### 寃利?寃곌낵
+- **TypeScript ?뺤쟻 寃??(`npx tsc --noEmit`)**:
+  - `suggestion.mainQuestTitle` ?됱떆而?罹≪쿂 undefined 異붾줎 ?ㅻ쪟 ???꾩껜 TS 而댄뙆??寃쎄퀬 諛??ㅻ쪟媛 **0嫄댁쑝濡??꾨꼍?섍쾶 ?닿껐 諛??깃났**.
+- **Production 鍮뚮뱶 (`npm run build`)**:
+  - 紐⑤뱺 ?뺤쟻 寃??臾닿껐 ?듦낵 ??Vite production css/js 踰덈뱾 由ъ냼??理쒖쟻??諛?理쒖쥌 諛고룷 ?뚯씪 ?앹꽦 臾댁삤瑜?鍮뚮뱶 ?듦낵 ?꾨즺.
+
+
+## 12-32D: AI Daily Plan persist/렌더링 crash 긴급 안정화 패치
+- AI Plan 자동 적용 후 새로고침 시 정보 유실 버그 수정 (lastActiveDate 갱신 누락으로 중복 리셋 차단)
+- aiCoachMemory 가 undefined인 경우 outcomes 기록 유실 방지 기본 fallback 보장
+- MainQuest v2 / milestones / legacy dungeon 렌더링 crash 방어 및 rehydrate fallback 강화
+- suggestions map 렌더링 시 Array.isArray 및 optional chaining 방어 추가
+- Main/Milestone suggestion 수동 적용 정책 유지 및 안내 배너 보강
+- 기존 데이터 보존 및 levelup-save v14 유지
+
+
+- 게임 진행 리셋 버튼 옆에 '전체 리셋' 버튼 추가
+- 전체 리셋을 위한 hardResetAll 액션을 store.ts에 추가 (모든 자기관리/AI/게임 데이터를 완전 초기화)
+- 3단계 강한 확인 절차 적용: 1차/2차 window.confirm 및 3차 window.prompt ('전체 리셋' 텍스트 검증)
+- 게임 진행 리셋과 전체 리셋 문구 명확히 구분 및 danger UI 디자인 탑재
+- levelup-save key 및 v14 유지 상태로 빌드/컴파일 검증 완료
+
+
+
+## 12-32D 중요 정정: Main Quest v2 Milestone(중간 단계) 강화 및 UI 수동 편집 기능 추가
+- Dungeon은 신규 자기관리 성장 구조에서 Legacy 보존 상태 유지 (신규 생성 비활성화)
+- Main Quest 추가 모달(AddQuestModal.tsx)에서 최종 목표(finalGoal) 및 중간 목표 단계(milestones) 다중 텍스트 입력 지원
+- QuestCard.tsx 내부 중간 단계(Stages) 관리 UI 완비
+  * 활성 단계에 '건너뛰기(Skip)' 버튼 배치 및 store에 skipMainQuestMilestone 액션 추가 (보상 없이 다음 단계로 잠금 해제 전진)   * 단계 제목/설명 '수정(Edit)' 팝업 UI 추가
+  * 리스트 하단에 '새 중간 단계 추가(Add)' 버튼 추가
+- Daily Plan 생성 AI는 Main stage를 임의로 변경하지 않고, 수동 선택 제안 UI 보조 섹션으로 완벽히 분리 적용
+- 기존 데이터 훼손 방지 및 levelup-save v14 완벽 무중단 유지
+
+
+## 12-32E: UI ?몄쓽???뺣━ ?⑥튂 (2026-05-23)
+- **???곷떒??DEV QA ?쒖떆 ?쒓굅**: App.tsx?먯꽌 媛쒕컻???꾩슜 ?곹깭 二쇱엯 ?꾧뎄??DevQaPanel 而댄룷?뚰듃 留덉슫??諛?import瑜??꾨꼍???쒓굅?섏뿬 ?꾨줈?뺤뀡 ?ъ슜???붾㈃?먯꽌 媛쒕컻 ?뚯뒪?몄슜 DEV QA 諛곗?? ?곸뿭???몄텧?섏? ?딅룄濡?泥섎━.
+- **?ㅽ궗 ?⑤꼸 湲곕낯 ?묓옒 ?곹깭 ?좎?**: SkillPanel.tsx?먯꽌 ?⑤꼸??expanded 湲곕낯 ?곹깭瑜?false濡??좎??섏뿬 ??泥?吏꾩엯 ?먮뒗 ?덈줈怨좎묠 ???ㅽ궗 ?뱀뀡??湲곕낯?곸쑝濡??ロ엺(collapsed) ?곹깭濡??뚮뜑留곷릺?꾨줉 ?섏젙 (?ъ슜???대┃ ???쇱묠 吏??諛?湲곗〈 ?ㅽ궗 湲곕뒫 蹂댁〈).
+- **?쒓렇由쇱옄 ?덈젴?β????쒓렇由쇱옄 ?먯젙???뚮뵫 ?쇨????섏젙**: shadowExpeditions.ts???뺤쓽???쒗뵆由???댄????섏젙?섍퀬, ?쒓뎅???쒓린瑜??쒓렇由쇱옄 ?먯젙?앹쑝濡??꾨꼍?섍쾶 ?쇨??섍쾶 ?뺣젹 諛??듭씪.
+- **洹몃┝???먯젙 ?뱀뀡 湲곕낯 ?묓옒 ?곹깭 ?좎?**: 援곕떒李??댁쓽 洹몃┝???먯젙 ?⑤꼸??ShadowExpeditionPanel.tsx??expanded 湲곕낯 useState 媛믪쓣 false濡?蹂寃쏀븯??湲곕낯?곸쑝濡??묓엺 ?곹깭瑜??좎??섎룄濡??몄쓽??媛뺥솕.
+- **?섏쟾(Legacy) ?붾㈃ ?몄텧 ?꾩쟾 ?쒓굅**: App.tsx??TABS 硫붾돱 諛????뚮뜑留?遺꾧린?먯꽌 dungeon ??쓣 ?꾩쟾???쒖쇅?섍퀬, 愿???뚮뜑留??붿냼瑜??쒓굅. ?? ?덇굅???곗씠?곗???臾댁쨷??諛??곸냽??蹂댁〈???꾪빐 store.ts ?댁쓽 湲곗〈 ?섏쟾 愿???곗씠?? ?ㅽ궎留? store, action, type? ??젣?섏? ?딄퀬 洹몃?濡?蹂댁〈 (persist v14 諛?localStorage key levelup-save ?덉젙???좎?).
+
+## 12-32E 異붽? ?뺤젙: 湲곗〈 Main Quest 9醫낆쓽 以묎컙 ?④퀎(Milestone/Stage) ?섎룞 ?ㅺ퀎 諛??먮룞 諛깊븘 (2026-05-23)
+- **湲곗〈 Main Quest 9醫??섎룞 留덉씪?ㅽ넠 ?ㅺ퀎**:
+  * seed.ts??DEFAULT_MAIN_QUESTS ?댁뿉 吏곸젒 inalGoal 怨?milestones瑜??κ린?곸씤 泥댄겕?ъ씤??媛쒕뀗(怨듬? ?뚮룆, 利앸웾 ?④퀎, ?異?援ш컙, 硫댁젒 ?덉감 ???쇰줈 ?ㅺ퀎?섏뿬 ?섎뱶肄붾뵫 二쇱엯.
+  * 留덉씪?ㅽ넠??以묒슂??minor | 
+ormal | major) ?ㅼ젙???듯빐 ?대━?????쒖뒪???대? 蹂댁긽 洹쒖튃???곕씪 寃쏀뿕移? Gold, ?꾨━???곸옄 諛??ㅽ꺈???먮룞?쇰줈 吏湲됰릺?꾨줉 援ъ꽦.
+- **Zustand ?ㅽ넗???먮룞 諛깊븘(Backfill) 硫붿빱?덉쬁 援ъ텞 (src/lib/store.ts)**:
+  * **????곗씠??濡쒕뱶 ??(migrate)**: ?ъ슜???몄씠釉?濡쒕뱶 ?쒖젏??Main Quest??milestones媛 鍮꾩뼱?덇굅??鍮?諛곗뿴??寃쎌슦, ?쒕뱶 ?곗씠?곗뿉 ?ъ쟾???뺤쓽?대몦 ?섎룞 ?ㅺ퀎 留덉씪?ㅽ넠?ㅼ쓣 ?먮룞 二쇱엯?섎뒗 諛깊븘 濡쒖쭅 留덈젴.
+  * **湲곕낯 ?섏뒪??硫뷀??곗씠???숆린????(syncDefaultQuestMetadata)**: ???몄뀡/濡쒕뵫 ???쒕뱶 ?곗씠?곗? ?숆린?뷀븯?? ?대? ?ъ슜?먭? 留덉씪?ㅽ넠 吏꾪뻾 諛??꾨즺 ?곹깭(completed, skipped, evidenceNote, completedAt)瑜?媛吏怨??덈떎硫?**??뼱?곗? ?딄퀬 100% 蹂댁〈**?섏뿬 ?덉쟾??洹밸???
+  * **蹂댁긽 諛??곗씠??臾댁쨷??蹂댁쬆**: ??怨쇱젙?먯꽌 ?대뼚??AI/Gemini API ?몄텧???섏? ?딆쑝硫?濡쒖뺄 ?ㅼ퐫???댁뿉???꾨꼍?섍쾶 ?묐룞. persist v14 ?ㅽ궎留?諛??덇굅???섏쟾 ?곗씠?곗????꾨꼍???곸냽??蹂댁옣.

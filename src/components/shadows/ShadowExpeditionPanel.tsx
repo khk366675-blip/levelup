@@ -442,7 +442,7 @@ export function ShadowExpeditionPanel() {
   const resolveMidEvent = useGame(s => s.resolveShadowExpeditionMidEvent)
   const visibleTraces = useGame(s => getSecretVisibleFragments(s.secretProgress))
   const traceCount = visibleTraces.length
-  const [expanded, setExpanded] = useState(true)
+  const [expanded, setExpanded] = useState(false)
   const [expeditionCinematicLogs, setExpeditionCinematicLogs] = useState<CinematicLogData[]>([])
   const [expeditionSkipSignal, setExpeditionSkipSignal] = useState(0)
   const previousExpeditionLogRef = useRef<{ expeditionId?: string; count: number }>({ count: 0 })
