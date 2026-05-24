@@ -108,6 +108,14 @@ export const calendarDaysSince = (iso: string, now: Date = new Date()): number =
  *  Returns 0 if available now (or never completed). */
 export const getCooldownRemaining = (q: Quest, now: Date = new Date()): number => {
   if (q.type !== 'daily' || !q.lastCompletedAt) return 0
+  
+  // AI Daily Plan은 날짜와 상관없이 한 번 완료되면 새 Plan으로 교체되기 전까지 계속 완료 상태를 유지함.
+  const isAiDaily = q.recurring === false && 
+                    (q.coachGenerated === true || q.coachPlanId !== undefined || q.coachReason !== undefined)
+  if (isAiDaily) {
+    return 1 // 항상 완료 상태(> 0)로 취급
+  }
+  
   const cycleLength = (q.cooldownDays ?? 0) + 1
   const elapsed = calendarDaysSince(q.lastCompletedAt, now)
   return Math.max(0, cycleLength - elapsed)

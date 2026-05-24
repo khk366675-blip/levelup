@@ -445,10 +445,10 @@ export function AiCoachPanel() {
       setDailyPlanQuests(sanitizedQuests)
       setDailyPlanData(plan)
 
-      // ── 즉시 자동 적용 (내일 날짜 기준) ──
+      // ── 즉시 자동 적용 (현재 날짜 기준) ──
       try {
-        const tomorrowKey = getDateKey(addDays(new Date(), 1))
-        replaceAiCoachDailyPlan(sanitizedQuests, tomorrowKey)
+        const todayStr = getDateKey()
+        replaceAiCoachDailyPlan(sanitizedQuests, todayStr)
       } catch (err) {
         console.error('AI Daily Plan 자동 적용 실패:', err)
         alert('AI Daily Plan의 자동 스토어 적용 중 에러가 발생했습니다.')
@@ -601,7 +601,7 @@ export function AiCoachPanel() {
           description: finalDesc?.trim() || undefined,
           category: finalCat,
           difficulty: finalDiff,
-          coachReason: quest.reason || 'AI 내일 Daily Plan 처방',
+          coachReason: quest.reason || 'AI Daily Plan 처방',
           priority: quest.priority,
           estimatedMinutes: quest.estimatedMinutes
         })
@@ -1061,7 +1061,7 @@ export function AiCoachPanel() {
             ) : (
               <>
                 <Sparkles className="w-4 h-4 text-cyan-300" />
-                <span>내일 전체 Plan 생성</span>
+                <span>AI 전체 Plan 생성</span>
               </>
             )}
           </button>
@@ -1143,9 +1143,9 @@ export function AiCoachPanel() {
               <div className="panel corner-bracket p-4 bg-emerald-950/30 border border-emerald-500/40 text-emerald-300 flex items-start gap-3">
                 <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0 mt-0.5 animate-pulse" />
                 <div className="space-y-1">
-                  <div className="font-bold text-sm text-emerald-200 font-mono">내일 AI Daily Plan이 준비되었습니다!</div>
+                  <div className="font-bold text-sm text-emerald-200 font-mono">AI Daily Plan이 현재 일일퀘스트로 적용되었습니다!</div>
                   <p className="text-xs text-emerald-300/80 leading-relaxed font-sans">
-                    내일이 되면 Daily 화면의 메인 퀘스트로 자동으로 활성화되어 표시됩니다. (현재 내일 Plan 준비됨 영역에서 미리 볼 수 있습니다.)
+                    새 Plan을 생성하기 전까지 현재 Plan이 유지됩니다.
                   </p>
                 </div>
               </div>
@@ -1157,7 +1157,7 @@ export function AiCoachPanel() {
                   
                   <div className="flex justify-between items-start gap-4 flex-wrap sm:flex-nowrap">
                     <div className="space-y-1 flex-1">
-                      <span className="text-[10px] text-amber-300 font-bold bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20 tracking-wider">TOMORROW STRATEGY</span>
+                      <span className="text-[10px] text-amber-300 font-bold bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20 tracking-wider">DAILY STRATEGY</span>
                       <h3 className="text-base font-bold text-cyan-200 mt-1.5 flex items-center gap-1.5">
                         <Brain className="w-4.5 h-4.5 text-cyan-400 font-mono" /> {dailyPlanData.strategyTitle}
                       </h3>

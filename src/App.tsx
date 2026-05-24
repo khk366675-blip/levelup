@@ -113,27 +113,17 @@ export default function App() {
 
   const dailies = quests.filter(q => q.type === 'daily')
   
-  // 오늘 AI Daily Plan (coachGenerated 이고 coachPlanDate === today 이거나, coachPlanDate가 없는 레거시)
-  const aiPlanDailiesToday = dailies.filter(q => 
+  // AI Daily Plan (날짜 조건 없이 항상 현재 활성 Plan으로 표시)
+  const aiPlanDailies = dailies.filter(q => 
     q.recurring === false && 
-    (q.coachGenerated === true || q.coachReason !== undefined || q.aiPriority !== undefined || q.coachPriority !== undefined) &&
-    (q.coachPlanDate === today || !q.coachPlanDate)
-  )
-
-  // 내일 AI Daily Plan (coachGenerated 이고 coachPlanDate === tomorrow)
-  const aiPlanDailiesTomorrow = dailies.filter(q => 
-    q.recurring === false && 
-    (q.coachGenerated === true || q.coachReason !== undefined || q.aiPriority !== undefined || q.coachPriority !== undefined) &&
-    q.coachPlanDate === tomorrow
+    (q.coachGenerated === true || q.coachPlanId !== undefined || q.coachReason !== undefined)
   )
 
   const userQuests = dailies.filter(q => 
     q.recurring === false && 
-    !(q.coachGenerated === true || q.coachReason !== undefined || q.aiPriority !== undefined || q.coachPriority !== undefined)
+    !(q.coachGenerated === true || q.coachPlanId !== undefined || q.coachReason !== undefined)
   )
   const routineDailies = dailies.filter(q => q.recurring === true)
-  const hasAiPlanDailiesToday = aiPlanDailiesToday.length > 0
-  const hasAiPlanDailiesTomorrow = aiPlanDailiesTomorrow.length > 0
   const mains = quests.filter(q => q.type === 'main')
 
   const handleReset = () => {
@@ -294,22 +284,22 @@ export default function App() {
                 {/* Random Quest Card */}
                 <RandomQuestCard />
 
-                {hasAiPlanDailiesToday ? (
-                  <div className="space-y-6">
-                    {/* AI Daily Plan 섹션 */}
+                <div className="space-y-6">
+                  {/* AI Daily Plan 섹션 */}
+                  {aiPlanDailies.length > 0 ? (
                     <div className="space-y-3">
                       <div className="flex items-center justify-between border-b border-purple-500/20 pb-1.5">
                         <h3 className="text-sm font-bold text-purple-300 flex items-center gap-1.5 font-mono tracking-wider">
-                          🤖 AI COACH DAILY PLAN (오늘)
+                          🤖 AI COACH DAILY PLAN
                         </h3>
                         <span className="text-[10px] px-2 py-0.5 rounded-full border border-purple-400/30 bg-purple-950/40 text-purple-300 font-mono">
-                          {aiPlanDailiesToday.filter(q => (q.aiPriority || q.coachPriority) === 'core').length} Core / {aiPlanDailiesToday.length} Total
+                          {aiPlanDailies.filter(q => (q.aiPriority || q.coachPriority) === 'core').length} Core / {aiPlanDailies.length} Total
                         </span>
                       </div>
                       
                       {/* priority 순 정렬하여 렌더링: core -> support -> maintenance -> recovery -> optional */}
                       <div className="grid md:grid-cols-2 gap-3">
-                        {[...aiPlanDailiesToday].sort((a, b) => {
+                        {[...aiPlanDailies].sort((a, b) => {
                           const priorityOrder = { core: 0, support: 1, maintenance: 2, recovery: 3, optional: 4 };
                           const orderA = (a.aiPriority || a.coachPriority) ? priorityOrder[(a.aiPriority || a.coachPriority)!] : 9;
                           const orderB = (b.aiPriority || b.coachPriority) ? priorityOrder[(b.aiPriority || b.coachPriority)!] : 9;
@@ -321,149 +311,72 @@ export default function App() {
                         ))}
                       </div>
                     </div>
-
-                    {/* 사용자 추가 일일 퀘스트 섹션 (AI 플랜과 함께 활성화) */}
-                    {userQuests.length > 0 && (
-                      <div className="space-y-3">
-                        <div className="flex items-center justify-between border-b border-cyan-500/20 pb-1.5">
-                          <h3 className="text-sm font-bold text-cyan-300 flex items-center gap-1.5 font-mono tracking-wider">
-                            👤 사용자 추가 일일 퀘스트 ({userQuests.length})
-                          </h3>
-                        </div>
-                        <div className="grid md:grid-cols-2 gap-3">
-                          {userQuests.map(q => (
-                            <div key={q.id} className="group">
-                              <QuestCard quest={q} removable onRemove={() => removeQuest(q.id)} />
-                            </div>
-                          ))}
-                        </div>
+                  ) : (
+                    <div className="panel corner-bracket p-8 text-center bg-purple-950/10 border border-purple-500/25">
+                      <div className="tl" /> <div className="tr" /> <div className="bl" /> <div className="br" />
+                      <div className="text-purple-300/80 font-medium text-sm">
+                        아직 생성된 AI Daily Plan이 없습니다.
                       </div>
-                    )}
-
-                    {/* 내일 AI Daily Plan 프리뷰 섹션 (접이식) */}
-                    {hasAiPlanDailiesTomorrow && (
-                      <div className="panel corner-bracket p-4 bg-indigo-950/20 border border-purple-500/20">
-                        <div className="tl" /> <div className="tr" /> <div className="bl" /> <div className="br" />
-                        <div
-                          className="flex justify-between items-center cursor-pointer select-none"
-                          onClick={() => setShowTomorrowPlanPreview(!showTomorrowPlanPreview)}
-                        >
-                          <div className="space-y-0.5">
-                            <h4 className="text-xs font-bold text-purple-300 flex items-center gap-1.5 font-mono tracking-wider animate-pulse">
-                              📅 내일 AI Daily Plan 준비됨 ({aiPlanDailiesTomorrow.length})
-                            </h4>
-                            <p className="text-[10px] text-purple-300/40">
-                              내일 자정이 지나면 오늘의 Daily 퀘스트로 자동으로 활성화됩니다.
-                            </p>
-                          </div>
-                          <span className="text-purple-300/50">
-                            {showTomorrowPlanPreview ? '▲ 접기' : '▼ 펼치기'}
-                          </span>
-                        </div>
-
-                        {showTomorrowPlanPreview && (
-                          <div className="grid md:grid-cols-2 gap-3 mt-4 pt-4 border-t border-purple-400/10">
-                            {[...aiPlanDailiesTomorrow].sort((a, b) => {
-                              const priorityOrder = { core: 0, support: 1, maintenance: 2, recovery: 3, optional: 4 };
-                              const orderA = (a.aiPriority || a.coachPriority) ? priorityOrder[(a.aiPriority || a.coachPriority)!] : 9;
-                              const orderB = (b.aiPriority || b.coachPriority) ? priorityOrder[(b.aiPriority || b.coachPriority)!] : 9;
-                              return orderA - orderB;
-                            }).map(q => (
-                              <div key={q.id} className="group opacity-75 hover:opacity-100 transition-opacity">
-                                <QuestCard quest={q} removable onRemove={() => removeQuest(q.id)} />
-                              </div>
-                            ))}
-                          </div>
-                        )}
+                      <div className="text-xs text-purple-400/50 mt-1.5 leading-relaxed">
+                        AI 코치 탭에서 전체 Plan을 생성하세요.
                       </div>
-                    )}
+                    </div>
+                  )}
 
-                    {/* 기본 루틴 라이브러리 섹션 (접이식) */}
-                    {routineDailies.length > 0 && (
-                      <div className="panel corner-bracket p-4 bg-slate-950/20 border border-cyan-400/10">
-                        <div className="tl" /> <div className="tr" /> <div className="bl" /> <div className="br" />
-                        <div
-                          className="flex justify-between items-center cursor-pointer select-none"
-                          onClick={() => setShowRoutineLibrary(!showRoutineLibrary)}
-                        >
-                          <div className="space-y-0.5">
-                            <h4 className="text-xs font-bold text-cyan-300 flex items-center gap-1.5 font-mono tracking-wider">
-                              📚 기본 루틴 라이브러리 ({routineDailies.length})
-                            </h4>
-                            <p className="text-[10px] text-cyan-300/40">
-                              AI 코치가 참고하는 기본 루틴입니다. AI Plan이 없을 때는 기본 Daily로 사용할 수 있습니다.
-                            </p>
-                          </div>
-                          <span className="text-cyan-300/50">
-                            {showRoutineLibrary ? '▲ 접기' : '▼ 펼치기'}
-                          </span>
-                        </div>
-
-                        {showRoutineLibrary && (
-                          <div className="grid md:grid-cols-2 gap-3 mt-4 pt-4 border-t border-cyan-400/10">
-                            {routineDailies.map(q => (
-                              <div key={q.id} className="group">
-                                <QuestCard quest={q} removable onRemove={() => removeQuest(q.id)} />
-                              </div>
-                            ))}
-                          </div>
-                        )}
+                  {/* 사용자 추가 일일 퀘스트 섹션 */}
+                  {userQuests.length > 0 && (
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between border-b border-cyan-500/20 pb-1.5">
+                        <h3 className="text-sm font-bold text-cyan-300 flex items-center gap-1.5 font-mono tracking-wider">
+                          👤 사용자 추가 일일 퀘스트 ({userQuests.length})
+                        </h3>
                       </div>
-                    )}
-                  </div>
-                ) : (
-                  <div className="space-y-6">
-                    {/* 일반 렌더링 (오늘 수행할 AI 플랜이 없을 때) */}
-                    <div>
                       <div className="grid md:grid-cols-2 gap-3">
-                        {dailies.filter(q => q.recurring === false || !hasAiPlanDailiesToday).map(q => (
+                        {userQuests.map(q => (
                           <div key={q.id} className="group">
                             <QuestCard quest={q} removable onRemove={() => removeQuest(q.id)} />
                           </div>
                         ))}
                       </div>
-                      {dailies.length === 0 && <EmptyState text="일일 퀘스트가 없습니다. 추가해보세요." />}
                     </div>
+                  )}
+                  {aiPlanDailies.length === 0 && userQuests.length === 0 && (
+                    <EmptyState text="일일 퀘스트가 없습니다. 추가해보세요." />
+                  )}
 
-                    {/* 내일 AI Daily Plan 프리뷰 섹션 (접이식 - 오늘 수행할 AI 플랜이 없을 때도 노출되도록 보강) */}
-                    {hasAiPlanDailiesTomorrow && (
-                      <div className="panel corner-bracket p-4 bg-indigo-950/20 border border-purple-500/20">
-                        <div className="tl" /> <div className="tr" /> <div className="bl" /> <div className="br" />
-                        <div
-                          className="flex justify-between items-center cursor-pointer select-none"
-                          onClick={() => setShowTomorrowPlanPreview(!showTomorrowPlanPreview)}
-                        >
-                          <div className="space-y-0.5">
-                            <h4 className="text-xs font-bold text-purple-300 flex items-center gap-1.5 font-mono tracking-wider animate-pulse">
-                              📅 내일 AI Daily Plan 준비됨 ({aiPlanDailiesTomorrow.length})
-                            </h4>
-                            <p className="text-[10px] text-purple-300/40">
-                              내일 자정이 지나면 오늘의 Daily 퀘스트로 자동으로 활성화됩니다.
-                            </p>
-                          </div>
-                          <span className="text-purple-300/50">
-                            {showTomorrowPlanPreview ? '▲ 접기' : '▼ 펼치기'}
-                          </span>
+                  {/* 기본 루틴 라이브러리 섹션 (접이식) */}
+                  {routineDailies.length > 0 && (
+                    <div className="panel corner-bracket p-4 bg-slate-950/20 border border-cyan-400/10">
+                      <div className="tl" /> <div className="tr" /> <div className="bl" /> <div className="br" />
+                      <div
+                        className="flex justify-between items-center cursor-pointer select-none"
+                        onClick={() => setShowRoutineLibrary(!showRoutineLibrary)}
+                      >
+                        <div className="space-y-0.5">
+                          <h4 className="text-xs font-bold text-cyan-300 flex items-center gap-1.5 font-mono tracking-wider">
+                            📚 기본 루틴 라이브러리 ({routineDailies.length})
+                          </h4>
+                          <p className="text-[10px] text-cyan-300/40">
+                            AI 코치가 참고하는 기본 루틴입니다. (메인 수행 목록에는 표시되지 않습니다.)
+                          </p>
                         </div>
-
-                        {showTomorrowPlanPreview && (
-                          <div className="grid md:grid-cols-2 gap-3 mt-4 pt-4 border-t border-purple-400/10">
-                            {[...aiPlanDailiesTomorrow].sort((a, b) => {
-                              const priorityOrder = { core: 0, support: 1, maintenance: 2, recovery: 3, optional: 4 };
-                              const orderA = (a.aiPriority || a.coachPriority) ? priorityOrder[(a.aiPriority || a.coachPriority)!] : 9;
-                              const orderB = (b.aiPriority || b.coachPriority) ? priorityOrder[(b.aiPriority || b.coachPriority)!] : 9;
-                              return orderA - orderB;
-                            }).map(q => (
-                              <div key={q.id} className="group opacity-75 hover:opacity-100 transition-opacity">
-                                <QuestCard quest={q} removable onRemove={() => removeQuest(q.id)} />
-                              </div>
-                            ))}
-                          </div>
-                        )}
+                        <span className="text-cyan-300/50">
+                          {showRoutineLibrary ? '▲ 접기' : '▼ 펼치기'}
+                        </span>
                       </div>
-                    )}
-                  </div>
-                )}
+
+                      {showRoutineLibrary && (
+                        <div className="grid md:grid-cols-2 gap-3 mt-4 pt-4 border-t border-cyan-400/10">
+                          {routineDailies.map(q => (
+                            <div key={q.id} className="group">
+                              <QuestCard quest={q} removable onRemove={() => removeQuest(q.id)} />
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
               </Section>
             )}
 

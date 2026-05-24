@@ -13374,3 +13374,14 @@ ormalizeTitle) 諛?移댄뀒怨좊━媛 ?쇱튂?섎뒗 湲곕낯 ?쒗뵆由??
   * 誘몄셿猷??섏뒪?몄쓽 寃쎌슦 ?꾨즺?섏? ?딆? 泥??④퀎留?ctive濡??먭퀬 ?섎㉧吏??locked ?곹깭濡??먮룞 ?먮쫫 蹂댁젙 諛??꾨즺??progressPercent) ?ъ궛異?
 - **?곸냽??諛??덉젙??洹쒖튃 泥좎? 以??*:
   * persist 踰꾩쟾 v14 ?좎?, levelup-save ?ㅽ넗由ъ? ???좎?, ?덇굅???섏쟾 諛?AI Plan ?곗씠?곗쓽 ?뚭눼???쇱넀 ?녿뒗 ?꾨꼍??臾댁쨷??留덉씠洹몃젅?댁뀡 ?ㅽ쁽.
+
+
+## 긴급 정책 수정: targetDate 기반 AI Daily Plan 제거 및 현재 활성 AI Daily Plan 즉시 적용 (2026-05-25)
+- **targetDate/tomorrow 활성화 로직 제거**: coachPlanDate 기준으로 표시/삭제/활성화하는 기준을 제거하고 내일 Plan 프리뷰 UI 및 만료 로직 삭제.
+- **replaceAiCoachDailyPlan 개편**: AI 전체 Plan 생성 시 날짜 무관하게 기존 AI 코치 Daily Plan 전체를 제거하고 새 Plan으로 즉시 교체 적용.
+- **CoachMemory outcomes 상태 갱신**: 새 Plan 생성 시 기존 added 상태의 outcomes 전체를 expired 처리 및 `[replacedByNewPlan]` 사유 표기.
+- **Daily 화면 표시 정책 변경**: AI Daily Plan을 메인 섹션에 즉시 노출하며, AI Plan이 없는 경우 AI 생성 유도 문구 표시. 기본 recurring daily는 메인 목록 fallback에서 제외하고 접이식 루틴 라이브러리 섹션에만 보조 표시.
+- **resetDailiesIfNewDay 수정**: 날짜가 변경되어도 coachGenerated AI 퀘스트 및 완료 상태를 삭제/expired하지 않고 유지.
+- **AiCoachPanel UI 문구 개선**: 버튼명을 'AI 전체 Plan 생성'으로 변경하고 성공 메시지 등을 즉시 적용 완료 중립 문구로 수정.
+- **기존 데이터 호환성**: 기존 coachPlanDate/targetDate가 있는 퀘스트도 현재 활성 Plan으로 표시되도록 호환 처리.
+- **persist v14 및 levelup-save key 유지**
