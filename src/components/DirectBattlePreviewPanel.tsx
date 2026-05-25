@@ -391,8 +391,11 @@ const validatePreviewState = (
   ]
 }
 
-const getPanelOutcome = (state: DirectBattleState): DirectBattlePanelOutcome =>
-  state.winner === 'player' ? 'victory' : 'defeat'
+const getPanelOutcome = (state: DirectBattleState): DirectBattlePanelOutcome => {
+  if (state.winner === 'player') return 'victory'
+  if (state.winner === 'enemy') return 'defeat'
+  return 'cancelled'
+}
 
 const findActionForLog = (
   state: DirectBattleState,

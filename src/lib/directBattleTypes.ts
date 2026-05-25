@@ -253,5 +253,5 @@ export interface DirectBattleResult {
   roundsSimulated: number
   logs: DirectBattleLogEntry[]
   isFinished: boolean
-  reason: 'winner' | 'max_rounds' | 'no_units'
+  reason: 'winner' | 'max_rounds' | 'no_units' | 'safety_abort'
 }

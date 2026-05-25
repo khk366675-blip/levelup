@@ -3913,7 +3913,7 @@ export const useGame = create<GameState>()(
           gateStatus,
           {
             ...combatLog,
-            result: combatLog.result === 'victory' ? 'victory' : 'defeat',
+            result: combatLog.result === 'victory' ? 'victory' : (combatLog.result === 'defeat' ? 'defeat' : 'draw'),
             source: 'gate',
           }
         )
@@ -4009,7 +4009,7 @@ export const useGame = create<GameState>()(
             gateInstanceId: activeGate.instanceId,
             waveIndex: 0,
             turn: 1,
-            maxTurns: 30,
+            maxTurns: 200,
             player: toManualCombatant(player),
             monster: toManualCombatant(monster),
             remainingMonsterIds: monsters.slice(1).map(item => item.id),
@@ -5646,7 +5646,7 @@ export const useGame = create<GameState>()(
 
         const floorType = getTowerFloorType(safeFloor)
         const monsters = getTowerMonstersForFloor(safeFloor)
-        const outcome: TowerBattleResult['outcome'] = combatLog.result === 'victory' ? 'victory' : 'defeat'
+        const outcome: TowerBattleResult['outcome'] = combatLog.result === 'victory' ? 'victory' : (combatLog.result === 'defeat' ? 'defeat' : 'draw')
         const isFirstClear = !tower.firstClearRewardsClaimed[safeFloor]
         const rewards = calculateTowerReward(safeFloor, outcome, isFirstClear)
         const towerResult: TowerBattleResult = {
@@ -5730,7 +5730,7 @@ export const useGame = create<GameState>()(
             gateInstanceId: `tower-${floor}`,
             waveIndex: 0,
             turn: 1,
-            maxTurns: 30,
+            maxTurns: 200,
             player: toManualCombatant(player),
             monster: toManualCombatant(monster),
             remainingMonsterIds: [],

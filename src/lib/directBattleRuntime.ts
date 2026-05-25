@@ -13,6 +13,8 @@ import type {
   QueuedBattleAction,
 } from './directBattleTypes'
 
+export const HARD_SAFETY_ROUND_LIMIT = 200
+
 export interface CreateDirectBattleStateOptions {
   battleId?: string
   maxRounds?: number
@@ -855,7 +857,7 @@ const updateBattleResult = (state: DirectBattleState) => {
   else if (!playerAlive && !enemyAlive) winner = 'none'
 
   state.winner = winner
-  state.isFinished = winner !== 'none' || state.round >= state.maxRounds || hunterDefeated || !playerAlive || !enemyAlive
+  state.isFinished = winner !== 'none' || state.round >= HARD_SAFETY_ROUND_LIMIT || hunterDefeated || !playerAlive || !enemyAlive
   state.status = state.isFinished ? 'finished' : state.round > 0 ? 'in_progress' : state.status
 }
 
@@ -938,7 +940,7 @@ export const executeDirectBattleRound = (
   updateBattleResult(state)
   if (state.isFinished) {
     addLog(state, {
-      message: state.winner === 'none' ? 'Battle reached the mock round limit.' : `${state.winner} team won the mock battle.`,
+      message: state.winner === 'none' ? '전투 계산 안전 중단 (stalemate/safety limit reached)' : `${state.winner} team won the mock battle.`,
       eventType: 'result',
       actionCue: 'battle_result',
     })
@@ -964,7 +966,7 @@ export const runMockDirectBattle = (
     }
   }
 
-  while (!state.isFinished && state.round < state.maxRounds) {
+  while (!state.isFinished && state.round < HARD_SAFETY_ROUND_LIMIT) {
     executeDirectBattleRound(state, selector(state))
   }
 
@@ -974,6 +976,6 @@ export const runMockDirectBattle = (
     roundsSimulated: state.round,
     logs: state.logs,
     isFinished: state.isFinished,
-    reason: state.winner !== 'none' ? 'winner' : state.round >= state.maxRounds ? 'max_rounds' : 'no_units',
+    reason: state.winner !== 'none' ? 'winner' : state.round >= HARD_SAFETY_ROUND_LIMIT ? 'safety_abort' : 'no_units',
   }
 }
