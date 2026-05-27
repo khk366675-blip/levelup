@@ -364,10 +364,13 @@ const stat = (stats: Record<StatKey, number>, key: StatKey): number =>
 export const buildHunterBattleUnit = (
   hunter: HunterState,
   options: BuildHunterBattleUnitOptions = {},
-): BattleUnitBuildResult => {
+ ): BattleUnitBuildResult => {
   const equippedItems = options.items && options.equipment ? getEquippedItems(options.items, options.equipment) : []
+  const activeJobId = hunter.activeJobId || hunter.jobId
+  const jobLevel = hunter.jobs?.[activeJobId]?.level ?? 1
   const skills = getPlayerCombatSkills({
-    jobId: hunter.jobId,
+    jobId: activeJobId,
+    jobLevel,
     equippedItems,
     allSkills: SKILL_DEFINITIONS,
     includeBasicKit: true,
@@ -377,7 +380,7 @@ export const buildHunterBattleUnit = (
     stats: hunter.stats,
     equippedItems,
     activeConsumableEffects: options.activeConsumableEffects,
-    jobId: hunter.jobId,
+    jobId: activeJobId,
     skills,
   })
   const equipmentValues = equippedItems.map(item => getEquipmentPowerBreakdown(item))
@@ -472,11 +475,11 @@ export const buildMonsterBattleUnit = (
   options: BuildMonsterBattleUnitOptions = {},
 ): BattleUnitBuildResult => {
   const level = Math.max(1, options.level ?? definition.baseLevel)
-  const scale = 1 + (level - 1) * 0.088
+  const scale = 1 + (level - 1) * 0.088 + Math.max(0, level - 3) * 0.012
   const bossScale = definition.unitType === 'boss' || definition.isBoss ? 1.28 : 1
   const minionScale = definition.unitType === 'minion' || definition.isMinion ? 0.94 : 1
   const threatScale = bossScale * minionScale
-  const maxHp = round((118 + level * 22.5) * definition.statBias.hp * scale * threatScale * MONSTER_BATTLE_LIFT, 1)
+  const maxHp = round((115 + level * 23.5) * definition.statBias.hp * scale * threatScale * MONSTER_BATTLE_LIFT, 1)
   const unitId = `${options.unitIdPrefix ?? 'enemy'}-${definition.id}-${level}`
 
   return {
@@ -491,7 +494,7 @@ export const buildMonsterBattleUnit = (
       stats: {
         maxHp,
         currentHp: safeCurrentHp(options.currentHp, maxHp),
-        atk: round((17 + level * 4.35) * definition.statBias.atk * scale * threatScale * MONSTER_BATTLE_LIFT, 1),
+        atk: round((16 + level * 4.55) * definition.statBias.atk * scale * threatScale * MONSTER_BATTLE_LIFT, 1),
         def: round((10 + level * 2.05) * definition.statBias.def * scale * (definition.isBoss ? 1.12 : 1) * MONSTER_BATTLE_LIFT, 1),
         spd: round((10 + level * 1.05) * definition.statBias.spd * (definition.role === 'assassin' ? 1.08 : 1) * 1.02, 1, 300),
         skillPower: round((15 + level * 3.95) * definition.statBias.skill * scale * threatScale * MONSTER_BATTLE_LIFT, 1),

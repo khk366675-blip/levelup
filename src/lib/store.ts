@@ -26,6 +26,7 @@ import type {
   HunterState,
   Item,
   JobId,
+  OwnedJobState,
   ManualBattleAction,
   ManualBattleSession,
   MonsterDefinition,
@@ -66,6 +67,7 @@ import { computeRollingSummary } from './aiCoachSummary'
 
 
 import { TITLE_DEFINITIONS, CATEGORY_META, JOB_DEFINITIONS, EQUIPMENT_SLOT_LABEL } from './types'
+import { JOB_DEFINITIONS_V2 } from './jobs'
 import {
   GATE_DEFINITIONS,
   GATE_PENALTIES,
@@ -176,6 +178,15 @@ import {
   rollShadowExtraction,
   SHADOW_DECOMPOSE_ESSENCE,
   SHADOW_RARITY_LABEL,
+  getShadowMaxLevel,
+  SHADOW_TRAINING_OPTIONS,
+  getShadowTrainingCostMultiplier,
+  SHADOW_TRAIT_DEFINITIONS,
+  SHADOW_PASSIVE_DEFINITIONS,
+  SHADOW_SKILL_DEFINITIONS,
+  SHADOW_LEGION_NODES,
+  getShadowMaxTraitSlots,
+  rollShadowTraitDefinition,
 } from './shadows'
 import {
   createInitialTowerState,
@@ -208,6 +219,8 @@ import {
   type EquipmentQualitySource,
   type ShopReward,
 } from './shop'
+
+import { registerLegionNodeLevelResolver } from './shadowStats'
 
 export interface GameState {
   hunter: HunterState
@@ -242,6 +255,7 @@ export interface GameState {
   shadowExpeditions: ShadowExpedition[]
   lastShadowExpeditionDate?: string
   activeShadowExpeditionId?: string
+  shadowLegionNodes?: Record<string, number>
   infiniteTower?: InfiniteTowerState
   rewardBoxes?: RewardBox[]
   lastDailyBoxDate?: string
@@ -294,6 +308,8 @@ export interface GameState {
   unlockJob: (jobId: JobId) => void
   equipJob: (jobId: JobId) => void
   checkJobAwakening: () => void
+  advanceToJob: (jobId: JobId) => void
+  changeActiveJob: (jobId: JobId) => void
 
   // random quests
   rollRandomQuestForToday: () => void
@@ -340,6 +356,15 @@ export interface GameState {
   toggleShadowLock: (shadowInstanceId: string) => void
   toggleShadowFavorite: (shadowInstanceId: string) => void
   evolveShadow: (shadowInstanceId: string) => void
+  trainShadowWithEssence: (shadowInstanceId: string, optionId: string) => void
+  buyShadowTicketWithEssence: () => void
+  buyExtractionCatalystWithEssence: () => void
+  reawakenShadowInnateGrade: (shadowInstanceId: string) => void
+  rerollShadowTrait: (shadowInstanceId: string, slotIndex: number) => void
+  unlockShadowSlot: (shadowInstanceId: string, slotType: 'skill' | 'passive') => void
+  equipShadowSlotAbility: (shadowInstanceId: string, slotType: 'skill' | 'passive', slotIndex: number, abilityId: string) => void
+  upgradeLegionNode: (nodeId: string) => void
+  craftHiddenEvolutionMaterial: (itemId: string) => void
   ensureTodayShadowExpedition: () => void
   selectShadowExpeditionParty: (expeditionId: string, shadowIds: string[]) => void
   startShadowExpedition: (expeditionId: string) => void
@@ -402,6 +427,57 @@ const initialHunter: HunterState = {
   categoryProgress: emptyCategoryProgress(),
   ownedTitleIds: [],
   equippedTitleId: undefined,
+  activeJobId: 'novice-hunter',
+  jobs: { 'novice-hunter': { jobId: 'novice-hunter', level: 1, xp: 0 } },
+  availableAdvancements: [],
+  discoveredHiddenJobIds: [],
+}
+
+const gainActiveJobXp = (
+  hunter: HunterState,
+  baseXp: number,
+  category: Category
+): { hunter: HunterState; jobXpGained: number; jobCategoryBonus: number; jobLeveledUp: boolean; jobPrevLevel: number; jobNextLevel: number; activeJobName: string } => {
+  const activeJobId = hunter.activeJobId || 'novice-hunter'
+  const v2JobDef = JOB_DEFINITIONS_V2.find(j => j.id === activeJobId)
+  const jobCategoryBonus = v2JobDef?.growthAffinity?.questCategoryBonus?.[category] ?? 0
+  const jobXpGained = Math.round(baseXp * (1 + jobCategoryBonus))
+  
+  const nextJobs = { ...(hunter.jobs || {}) }
+  const jobState = nextJobs[activeJobId] 
+    ? { ...nextJobs[activeJobId] }
+    : { jobId: activeJobId, level: 1, xp: 0, unlockedAt: new Date().toISOString() }
+  
+  const jobPrevLevel = jobState.level
+  jobState.xp += jobXpGained
+  
+  let jobLeveledUp = false
+  while (true) {
+    const reqXp = jobState.level * 150
+    if (jobState.xp >= reqXp && jobState.level < 50) {
+      jobState.xp -= reqXp
+      jobState.level += 1
+      jobLeveledUp = true
+    } else {
+      break
+    }
+  }
+  
+  nextJobs[activeJobId] = jobState
+  const activeJobName = v2JobDef ? v2JobDef.name : activeJobId.toString()
+  
+  return {
+    hunter: {
+      ...hunter,
+      jobs: nextJobs
+    },
+    jobXpGained,
+    jobCategoryBonus,
+    jobLeveledUp,
+    jobPrevLevel,
+    jobNextLevel: jobState.level,
+    activeJobName
+  }
 }
 
 const createInitialAchievementStats = (): AchievementStats => {
@@ -2845,36 +2921,140 @@ export const useGame = create<GameState>()(
       // ── Job System ─────────────────────────────────────────────────────
 
       unlockJob: (jobId) => set((s) => {
-        // Already unlocked
-        if (s.hunter.unlockedJobIds.includes(jobId)) return {}
+        // v2 compatibility: add to jobs list if not present
+        const h = s.hunter
+        const unlockedJobIds = h.unlockedJobIds || ['unawakened']
+        const jobs: Partial<Record<JobId, OwnedJobState>> = h.jobs || {}
         
-        // Find definition
-        const def = JOB_DEFINITIONS.find(j => j.id === jobId)
-        if (!def) return {}
+        if (unlockedJobIds.includes(jobId) && jobs[jobId]) return {}
 
-        const newUnlockedIds = [...s.hunter.unlockedJobIds, jobId]
-        
-        // Auto-equip logic:
-        // - If currently unawakened: auto-equip
-        // - If tier 2 job and currently equipped the corresponding tier 1 job: auto-equip (evolution)
-        const shouldAutoEquip = s.hunter.jobId === 'unawakened' || 
-          (def.tier === 2 && JOB_DEFINITIONS.find(j => j.id === s.hunter.jobId)?.nextJobId === jobId)
-        
-        const newJobId = shouldAutoEquip ? jobId : s.hunter.jobId
-        const newJobName = shouldAutoEquip ? def.name : s.hunter.job
+        const newUnlockedIds = unlockedJobIds.includes(jobId) 
+          ? unlockedJobIds 
+          : [...unlockedJobIds, jobId]
 
-        // Message varies by tier
-        const messageTitle = def.tier === 2 ? '── SYSTEM ── 2차 각성 발생' : '── SYSTEM ── 각성 발생'
-        const messageLines = def.tier === 2 && shouldAutoEquip
-          ? [`[${s.hunter.job}]이(가) [${def.name}]로 진화했습니다.`]
-          : [`새 직업 [${def.name}]을 획득했습니다.`]
+        const newJobs: Partial<Record<JobId, OwnedJobState>> = { ...jobs }
+        if (!newJobs[jobId]) {
+          newJobs[jobId] = {
+            jobId,
+            level: 1,
+            xp: 0,
+            unlockedAt: todayISO()
+          }
+        }
+
+        const v2Def = JOB_DEFINITIONS_V2.find(j => j.id === jobId)
+        const jobName = v2Def ? v2Def.name : jobId.toString()
 
         return {
           hunter: {
-            ...s.hunter,
+            ...h,
             unlockedJobIds: newUnlockedIds,
-            jobId: newJobId,
-            job: newJobName,
+            jobs: newJobs,
+          },
+          messages: [...s.messages, {
+            id: uid(),
+            kind: 'info',
+            title: '── SYSTEM ── 직업 획득',
+            lines: [`새 직업 [${jobName}]을 획득했습니다.`],
+            createdAt: todayISO(),
+          }],
+        }
+      }),
+
+      equipJob: (jobId) => set((s) => {
+        const h = s.hunter
+        const unlockedJobIds = h.unlockedJobIds || ['unawakened']
+        const jobs: Partial<Record<JobId, OwnedJobState>> = h.jobs || {}
+
+        // Not unlocked
+        if (!unlockedJobIds.includes(jobId) && !jobs[jobId]) return {}
+        
+        const v2Def = JOB_DEFINITIONS_V2.find(j => j.id === jobId)
+        if (!v2Def) return {}
+
+        return {
+          hunter: {
+            ...h,
+            jobId, // legacy sink
+            activeJobId: jobId, // v2 active
+            job: v2Def.name, // display text
+          },
+        }
+      }),
+
+      changeActiveJob: (jobId) => {
+        get().equipJob(jobId)
+      },
+
+      advanceToJob: (jobId) => set((s) => {
+        const h = s.hunter
+        const availableAdvancements = h.availableAdvancements || []
+        const discoveredHiddenJobIds = h.discoveredHiddenJobIds || []
+
+        const isAdvancement = availableAdvancements.includes(jobId)
+        const isHidden = discoveredHiddenJobIds.includes(jobId)
+
+        if (!isAdvancement && !isHidden) return {}
+
+        const v2Def = JOB_DEFINITIONS_V2.find(j => j.id === jobId)
+        if (!v2Def) return {}
+
+        // Enforce strict path validation
+        const activeJobId = h.activeJobId || 'novice-hunter'
+        let isPathValid = false
+        if (v2Def.tier === 'first' && v2Def.hiddenProfile?.isHidden) {
+          // Hidden 1st tier can be accepted from any regular class
+          isPathValid = true
+        } else {
+          const currentJobDef = JOB_DEFINITIONS_V2.find(j => j.id === activeJobId)
+          const hasPrev = v2Def.previousJobIds?.includes(activeJobId)
+          const isNext = currentJobDef?.nextJobIds?.includes(jobId)
+          if (hasPrev && isNext) {
+            isPathValid = true
+          }
+        }
+
+        if (!isPathValid) {
+          return {}
+        }
+
+        const newUnlockedIds = (h.unlockedJobIds || []).includes(jobId)
+          ? h.unlockedJobIds
+          : [...(h.unlockedJobIds || []), jobId]
+
+        const newJobs: Partial<Record<JobId, OwnedJobState>> = { ...(h.jobs || {}) }
+        if (!newJobs[jobId]) {
+          newJobs[jobId] = {
+            jobId,
+            level: 1,
+            xp: 0,
+            unlockedAt: todayISO()
+          }
+        }
+
+        const nextAdvancements = availableAdvancements.filter(id => id !== jobId)
+        const nextHidden = discoveredHiddenJobIds.filter(id => id !== jobId)
+
+        const messageTitle = v2Def.tier === 'hidden' || v2Def.hiddenProfile?.isHidden ? '── SYSTEM ── 히든 각성 성공' : '── SYSTEM ── 직업 전직 완료'
+        const messageLines = v2Def.tier === 'hidden' || v2Def.hiddenProfile?.isHidden
+          ? [`[${h.job}]의 한계를 극복하고 숨겨진 신화 [${v2Def.name}]을(를) 수락했습니다.`]
+          : [`성공적으로 [${v2Def.name}](으)로 전직하였습니다.`]
+
+        // Schedule checkJobAwakening on next tick
+        setTimeout(() => {
+          get().checkJobAwakening()
+        }, 0)
+
+        return {
+          hunter: {
+            ...h,
+            unlockedJobIds: newUnlockedIds,
+            jobs: newJobs,
+            activeJobId: jobId,
+            jobId,
+            job: v2Def.name,
+            availableAdvancements: nextAdvancements,
+            discoveredHiddenJobIds: nextHidden
           },
           messages: [...s.messages, {
             id: uid(),
@@ -2886,131 +3066,153 @@ export const useGame = create<GameState>()(
         }
       }),
 
-      equipJob: (jobId) => set((s) => {
-        // Not unlocked
-        if (!s.hunter.unlockedJobIds.includes(jobId)) return {}
-        
-        // Find definition
-        const def = JOB_DEFINITIONS.find(j => j.id === jobId)
-        if (!def) return {}
-
-        return {
-          hunter: {
-            ...s.hunter,
-            jobId,
-            job: def.name,
-          },
-        }
-      }),
-
       checkJobAwakening: () => {
         const s = get()
         const h = s.hunter
         const stats = s.achievementStats
-        const unlocks: JobId[] = []
+        
+        const unlockedJobIds = h.unlockedJobIds || ['unawakened']
+        const jobs: Partial<Record<JobId, OwnedJobState>> = h.jobs || {}
+        const availableAdvancements = h.availableAdvancements || []
+        const discoveredHiddenJobIds = h.discoveredHiddenJobIds || []
+        const activeJobId = h.activeJobId || 'novice-hunter'
+        
+        let advancementsChanged = false
+        let hiddenChanged = false
+        const nextAdvancements = [...availableAdvancements]
+        const nextHidden = [...discoveredHiddenJobIds]
+        const newMessages: SystemMessage[] = []
 
-        // ── 1st Tier Jobs ──────────────────────────────────────────────────
+        JOB_DEFINITIONS_V2.forEach(job => {
+          if (unlockedJobIds.includes(job.id) || jobs[job.id]) return
+          if (nextAdvancements.includes(job.id) || nextHidden.includes(job.id)) return
 
-        // Golden Eye Diviner: market check 30+ OR finance/career 50+
-        if (!h.unlockedJobIds.includes('golden-eye-diviner')) {
-          const marketCheck = stats.special.marketCheckCount >= 30
-          const financeCareer = (stats.questCompletions.byCategory.finance ?? 0) + 
-                                (stats.questCompletions.byCategory.career ?? 0) >= 50
-          if (marketCheck || financeCareer) {
-            unlocks.push('golden-eye-diviner')
+          const cond = job.unlockCondition
+          if (!cond) return
+
+          // Path Validation Check
+          let isPathValid = false
+          if (job.id === 'novice-hunter') {
+            isPathValid = false
+          } else if (job.tier === 'first' && job.hiddenProfile?.isHidden) {
+            // Hidden 1st tier can be sensed from any active class
+            isPathValid = true
+          } else {
+            const currentJobDef = JOB_DEFINITIONS_V2.find(j => j.id === activeJobId)
+            const hasPrev = job.previousJobIds?.includes(activeJobId)
+            const isNext = currentJobDef?.nextJobIds?.includes(job.id)
+            if (hasPrev && isNext) {
+              isPathValid = true
+            }
           }
-        }
 
-        // Grimoire Decoder: study/career 70+
-        if (!h.unlockedJobIds.includes('grimoire-decoder')) {
-          const studyCareer = (stats.questCompletions.byCategory.study ?? 0) + 
-                              (stats.questCompletions.byCategory.career ?? 0) >= 70
-          if (studyCareer) {
-            unlocks.push('grimoire-decoder')
+          if (!isPathValid) return
+
+          let isMet = true
+
+          // 1. hunterLevel
+          if (cond.hunterLevel !== undefined && h.level < cond.hunterLevel) {
+            isMet = false
           }
-        }
 
-        // Iron Squire: workout/health 70+ OR dungeon clears 5+
-        if (!h.unlockedJobIds.includes('iron-squire')) {
-          const workoutHealth = (stats.questCompletions.byCategory.workout ?? 0) + 
-                                (stats.questCompletions.byCategory.health ?? 0) >= 70
-          const dungeonClears = stats.dungeonClears.total >= 5
-          if (workoutHealth || dungeonClears) {
-            unlocks.push('iron-squire')
+          // 2. previousJobLevel
+          if (cond.previousJobLevel !== undefined && job.previousJobIds) {
+            const hasPrevMastery = job.previousJobIds.some(prevId => {
+              const prevJobState = jobs[prevId]
+              return prevJobState && prevJobState.level >= (cond.previousJobLevel ?? 0)
+            })
+            if (!hasPrevMastery) {
+              isMet = false
+            }
           }
-        }
 
-        // Silent Monk: habit/mind 70+ OR special counters 30+
-        if (!h.unlockedJobIds.includes('silent-monk')) {
-          const habitMind = (stats.questCompletions.byCategory.habit ?? 0) + 
-                            (stats.questCompletions.byCategory.mind ?? 0) >= 70
-          const specialCounters = stats.special.noShortsWithin30MinCount >= 30 || 
-                                  stats.special.meditationCount >= 30
-          if (habitMind || specialCounters) {
-            unlocks.push('silent-monk')
+          // 3. towerFloorCleared
+          if (cond.towerFloorCleared !== undefined) {
+            const highestFloor = s.infiniteTower?.highestClearedFloor ?? 0
+            if (highestFloor < cond.towerFloorCleared) {
+              isMet = false
+            }
           }
-        }
 
-        // Nameless Awakened: 4+ categories with 20+ completions each
-        if (!h.unlockedJobIds.includes('nameless-awakened')) {
-          const categoriesAbove20 = Object.values(stats.questCompletions.byCategory).filter(count => count >= 20).length
-          if (categoriesAbove20 >= 4) {
-            unlocks.push('nameless-awakened')
+          // 4. gateClearCount
+          if (cond.gateClearCount !== undefined) {
+            const gateClears = stats.dungeonClears.total ?? 0
+            if (gateClears < cond.gateClearCount) {
+              isMet = false
+            }
           }
-        }
 
-        // ── 2nd Tier Jobs ──────────────────────────────────────────────────
-
-        // Golden Oracle: golden-eye-diviner owned + (market check 100+ OR finance/career 150+)
-        if (!h.unlockedJobIds.includes('golden-oracle') && h.unlockedJobIds.includes('golden-eye-diviner')) {
-          const marketCheck = stats.special.marketCheckCount >= 100
-          const financeCareer = (stats.questCompletions.byCategory.finance ?? 0) + 
-                                (stats.questCompletions.byCategory.career ?? 0) >= 150
-          if (marketCheck || financeCareer) {
-            unlocks.push('golden-oracle')
+          // 5. bossClearCount
+          if (cond.bossClearCount !== undefined) {
+            const bossClears = stats.dungeonClears.total ?? 0
+            if (bossClears < cond.bossClearCount) {
+              isMet = false
+            }
           }
-        }
 
-        // Abyss Archivist: grimoire-decoder owned + study/career 180+
-        if (!h.unlockedJobIds.includes('abyss-archivist') && h.unlockedJobIds.includes('grimoire-decoder')) {
-          const studyCareer = (stats.questCompletions.byCategory.study ?? 0) + 
-                              (stats.questCompletions.byCategory.career ?? 0) >= 180
-          if (studyCareer) {
-            unlocks.push('abyss-archivist')
+          // 6. shadowCount
+          if (cond.shadowCount !== undefined) {
+            const shadowCount = s.ownedShadows?.length ?? 0
+            if (shadowCount < cond.shadowCount) {
+              isMet = false
+            }
           }
-        }
 
-        // Steelheart Fighter: iron-squire owned + (workout/health 180+ OR dungeon clears 20+)
-        if (!h.unlockedJobIds.includes('steelheart-fighter') && h.unlockedJobIds.includes('iron-squire')) {
-          const workoutHealth = (stats.questCompletions.byCategory.workout ?? 0) + 
-                                (stats.questCompletions.byCategory.health ?? 0) >= 180
-          const dungeonClears = stats.dungeonClears.total >= 20
-          if (workoutHealth || dungeonClears) {
-            unlocks.push('steelheart-fighter')
+          // 7. hiddenSignalKeys
+          if (cond.hiddenSignalKeys && cond.hiddenSignalKeys.length > 0) {
+            cond.hiddenSignalKeys.forEach(key => {
+              const signalMet = (h.hiddenSignalKeys || []).includes(key)
+              let inlineMet = false
+              if (key === 'shadow-extract-success') {
+                const shadowCount = s.ownedShadows?.length ?? 0
+                if (shadowCount > 0) inlineMet = true
+              }
+              if (key === 'debuff-skill-use') {
+                const skillUsed = Object.values(s.skillStates || {}).some(st => (st.timesUsed ?? 0) > 0)
+                if (skillUsed) inlineMet = true
+              }
+
+              if (!signalMet && !inlineMet) {
+                isMet = false
+              }
+            })
           }
-        }
 
-        // Chrono Judge: silent-monk owned + (habit/mind 180+ OR special counters 90+)
-        if (!h.unlockedJobIds.includes('chrono-judge') && h.unlockedJobIds.includes('silent-monk')) {
-          const habitMind = (stats.questCompletions.byCategory.habit ?? 0) + 
-                            (stats.questCompletions.byCategory.mind ?? 0) >= 180
-          const specialCounters = stats.special.noShortsWithin30MinCount >= 90 || 
-                                  stats.special.meditationCount >= 90
-          if (habitMind || specialCounters) {
-            unlocks.push('chrono-judge')
+          if (isMet) {
+            if (job.hiddenProfile?.isHidden) {
+              nextHidden.push(job.id)
+              hiddenChanged = true
+              newMessages.push({
+                id: uid(),
+                kind: 'info',
+                title: '── SYSTEM ── 어둠 속의 기척',
+                lines: [`무언가 강력한 히든 직업의 기척이 느껴집니다. 직업 패널을 확인하십시오.`],
+                createdAt: todayISO(),
+              })
+            } else {
+              nextAdvancements.push(job.id)
+              advancementsChanged = true
+              newMessages.push({
+                id: uid(),
+                kind: 'info',
+                title: '── SYSTEM ── 전직 트리 개방',
+                lines: [`신규 직업 [${job.name}] 전직이 가능해졌습니다.`],
+                createdAt: todayISO(),
+              })
+            }
           }
-        }
+        })
 
-        // Fate Harmonizer: nameless-awakened owned + 5+ categories with 50+ completions each
-        if (!h.unlockedJobIds.includes('fate-harmonizer') && h.unlockedJobIds.includes('nameless-awakened')) {
-          const categoriesAbove50 = Object.values(stats.questCompletions.byCategory).filter(count => count >= 50).length
-          if (categoriesAbove50 >= 5) {
-            unlocks.push('fate-harmonizer')
-          }
+        if (advancementsChanged || hiddenChanged) {
+          set({
+            hunter: {
+              ...h,
+              availableAdvancements: nextAdvancements,
+              discoveredHiddenJobIds: nextHidden
+            },
+            messages: [...s.messages, ...newMessages]
+          })
         }
-
-        // Unlock all jobs
-        unlocks.forEach(id => get().unlockJob(id))
       },
 
       // ── Random Quest System ────────────────────────────────────────
@@ -3105,8 +3307,12 @@ export const useGame = create<GameState>()(
         const consumableStatBonuses = getActiveConsumableStatBonuses(s.activeConsumableEffects)
         const baseXp = getBalancedRandomQuestXp(rq.xp)
         const statMultiplier = getXpMultiplierWithEquipment(s.hunter, rq.category, equippedItems, consumableStatBonuses)
-        const currentJob = JOB_DEFINITIONS.find(j => j.id === s.hunter.jobId)
-        const jobCategoryBonus = currentJob?.effects.xpBonusByCategory?.[rq.category] ?? 0
+        const activeJobId = s.hunter.activeJobId || s.hunter.jobId
+        const currentJobV2 = JOB_DEFINITIONS_V2.find(j => j.id === activeJobId)
+        const currentJobLegacy = JOB_DEFINITIONS.find(j => j.id === activeJobId)
+        const jobCategoryBonus = currentJobV2?.growthAffinity?.questCategoryBonus?.[rq.category]
+          ?? currentJobLegacy?.effects.xpBonusByCategory?.[rq.category]
+          ?? 0
         const equipmentXpBonus = getEquipmentXpBonus(equippedItems, rq.category)
         const consumableXpBonus = getActiveConsumableXpBonus(s.activeConsumableEffects, rq.category)
         const titleXpBonus = getTitleXpMultiplier(s.hunter, rq.category) - 1
@@ -3122,6 +3328,10 @@ export const useGame = create<GameState>()(
         const hunterIn = { ...s.hunter, categoryProgress: bumpedProgress }
         
         const { hunter: newHunter, outcome } = applyXp(hunterIn, xp, rq.category)
+
+        // ── Job System v2: Apply active job XP ──
+        const jobResult = gainActiveJobXp(newHunter, baseXp, rq.category)
+        const finalHunter = { ...jobResult.hunter }
         
         // Item drop (lower chance than regular quests) + equipment bonuses + consumable bonuses
         const drops: Item[] = []
@@ -3146,9 +3356,23 @@ export const useGame = create<GameState>()(
           lines: [
             `[${rq.title}] 완료.`,
             `+${xp} XP 획득${xp !== baseXp ? ` (기본 ${baseXp})` : ''}`,
+            `직업 [${jobResult.activeJobName}] XP +${jobResult.jobXpGained}${jobResult.jobCategoryBonus > 0 ? ` (친화도 보너스 +${Math.round(jobResult.jobCategoryBonus * 100)}%)` : ''}`,
           ],
           createdAt: todayISO(),
         })
+
+        if (jobResult.jobLeveledUp) {
+          newMessages.push({
+            id: uid(),
+            kind: 'info',
+            title: 'JOB LEVEL UP',
+            lines: [
+              `직업 [${jobResult.activeJobName}]의 레벨이 상승했습니다.`,
+              `Lv.${jobResult.jobPrevLevel} → Lv.${jobResult.jobNextLevel}`
+            ],
+            createdAt: todayISO(),
+          })
+        }
         
         if (outcome.leveledUp) {
           newMessages.push({
@@ -3189,7 +3413,7 @@ export const useGame = create<GameState>()(
         
         const dateKey = todayKey()
         set({
-          hunter: newHunter,
+          hunter: finalHunter,
           activeRandomQuest: { ...rq, completed: true },
           randomQuestHistory: {
             ...s.randomQuestHistory,
@@ -3676,8 +3900,11 @@ export const useGame = create<GameState>()(
         for (const [stat, value] of Object.entries(shadowStatBonuses)) {
           combatStatsWithShadows[stat as StatKey] = roundStatValue(combatStatsWithShadows[stat as StatKey] + (value ?? 0))
         }
+        const activeJobId = s.hunter.activeJobId || s.hunter.jobId
+        const jobLevel = s.hunter.jobs?.[activeJobId]?.level ?? 1
         const playerSkills = getPlayerCombatSkills({
-          jobId: s.hunter.jobId,
+          jobId: activeJobId,
+          jobLevel,
           equippedItems,
           allSkills: SKILL_DEFINITIONS,
         })
@@ -3686,7 +3913,7 @@ export const useGame = create<GameState>()(
           stats: combatStatsWithShadows,
           equippedItems,
           activeConsumableEffects: s.activeConsumableEffects,
-          jobId: s.hunter.jobId,
+          jobId: activeJobId,
           skills: playerSkills,
         })
 
@@ -3905,6 +4132,44 @@ export const useGame = create<GameState>()(
         const gate = GATE_DEFINITIONS.find(g => g.id === activeGate.gateId)
         if (!gate) return
 
+        let addedSignals: string[] = []
+        if (combatLog.result === 'victory') {
+          const equippedItems = getEquippedItems(s.items, s.equipment)
+          const equippedShadows = getEquippedShadows(s.ownedShadows, s.equippedShadowIds, s.hunter)
+          const shadowStatBonuses = getEquippedShadowStatBonuses(equippedShadows)
+          const combatStatsWithShadows = { ...s.hunter.stats }
+          for (const [stat, value] of Object.entries(shadowStatBonuses)) {
+            combatStatsWithShadows[stat as StatKey] = roundStatValue(combatStatsWithShadows[stat as StatKey] + (value ?? 0))
+          }
+          const activeJobId = s.hunter.activeJobId || s.hunter.jobId
+          const jobLevel = s.hunter.jobs?.[activeJobId]?.level ?? 1
+          const playerSkills = getPlayerCombatSkills({
+            jobId: activeJobId,
+            jobLevel,
+            equippedItems,
+            allSkills: SKILL_DEFINITIONS,
+          })
+          const playerStats = calculatePlayerCombatStats({
+            level: s.hunter.level,
+            stats: combatStatsWithShadows,
+            equippedItems,
+            activeConsumableEffects: s.activeConsumableEffects,
+            jobId: activeJobId,
+            skills: playerSkills,
+          })
+          const maxHp = playerStats.maxHp
+          const remainingHp = combatLog.playerHpRemaining
+          const hpPercent = maxHp > 0 ? remainingHp / maxHp : 1
+          if (hpPercent <= 0.15) {
+            addedSignals.push('low-hp-victory')
+          }
+          if ((combatLog.totalTurns || 0) >= 20) {
+            addedSignals.push('long-battle-victory')
+          }
+        }
+
+        const updatedSignals = Array.from(new Set([...(s.hunter.hiddenSignalKeys || []), ...addedSignals]))
+
         const gateStatus = clearExpiredGateInjury(s.gateStatus)
         const outcome = createGateBattleOutcomeUpdate(
           s,
@@ -3918,12 +4183,18 @@ export const useGame = create<GameState>()(
           }
         )
 
-        set(outcome.state)
+        set({
+          ...outcome.state,
+          hunter: {
+            ...((outcome.state as any).hunter || s.hunter),
+            hiddenSignalKeys: updatedSignals
+          }
+        })
         set(current => applyChallengeProgress(current, {
           gateAttempt: true,
           gateVictory: combatLog.result === 'victory',
         }))
-        if (outcome.shouldCheckUnlocks) {
+        if (outcome.shouldCheckUnlocks || addedSignals.length > 0) {
           setTimeout(() => {
             get().checkTitleUnlocks()
             get().checkJobAwakening()
@@ -3981,8 +4252,11 @@ export const useGame = create<GameState>()(
         for (const [stat, value] of Object.entries(shadowStatBonuses)) {
           combatStatsWithShadows[stat as StatKey] = roundStatValue(combatStatsWithShadows[stat as StatKey] + (value ?? 0))
         }
+        const activeJobId = s.hunter.activeJobId || s.hunter.jobId
+        const jobLevel = s.hunter.jobs?.[activeJobId]?.level ?? 1
         const playerSkills = getPlayerCombatSkills({
-          jobId: s.hunter.jobId,
+          jobId: activeJobId,
+          jobLevel,
           equippedItems,
           allSkills: SKILL_DEFINITIONS,
           includeBasicKit: true,
@@ -3993,7 +4267,7 @@ export const useGame = create<GameState>()(
           stats: combatStatsWithShadows,
           equippedItems,
           activeConsumableEffects: s.activeConsumableEffects,
-          jobId: s.hunter.jobId,
+          jobId: activeJobId,
           skills: playerSkills,
         })
         const gateSuccessBonus = getActiveGateSuccessBonus(s.activeConsumableEffects)
@@ -4046,8 +4320,11 @@ export const useGame = create<GameState>()(
 
         const equippedItems = getEquippedItems(s.items, s.equipment)
         const equippedShadows = getEquippedShadows(s.ownedShadows, s.equippedShadowIds, s.hunter)
+        const activeJobId = s.hunter.activeJobId || s.hunter.jobId
+        const jobLevel = s.hunter.jobs?.[activeJobId]?.level ?? 1
         const playerSkills = getPlayerCombatSkills({
-          jobId: s.hunter.jobId,
+          jobId: activeJobId,
+          jobLevel,
           equippedItems,
           allSkills: SKILL_DEFINITIONS,
           includeBasicKit: true,
@@ -4357,8 +4634,11 @@ export const useGame = create<GameState>()(
 
         const equippedItems = getEquippedItems(s.items, s.equipment)
         const equippedShadows = getEquippedShadows(s.ownedShadows, s.equippedShadowIds, s.hunter)
+        const activeJobId = s.hunter.activeJobId || s.hunter.jobId
+        const jobLevel = s.hunter.jobs?.[activeJobId]?.level ?? 1
         const playerSkills = getPlayerCombatSkills({
-          jobId: s.hunter.jobId,
+          jobId: activeJobId,
+          jobLevel,
           equippedItems,
           allSkills: SKILL_DEFINITIONS,
         })
@@ -4572,8 +4852,11 @@ export const useGame = create<GameState>()(
 
         const equippedItems = getEquippedItems(s.items, s.equipment)
         const equippedShadows = getEquippedShadows(s.ownedShadows, s.equippedShadowIds, s.hunter)
+        const activeJobId = s.hunter.activeJobId || s.hunter.jobId
+        const jobLevel = s.hunter.jobs?.[activeJobId]?.level ?? 1
         const playerSkills = getPlayerCombatSkills({
-          jobId: s.hunter.jobId,
+          jobId: activeJobId,
+          jobLevel,
           equippedItems,
           allSkills: SKILL_DEFINITIONS,
         })
@@ -4946,6 +5229,9 @@ export const useGame = create<GameState>()(
         const ownedShadows = result.success && result.shadow
           ? [...(s.ownedShadows ?? []), result.shadow]
           : (s.ownedShadows ?? [])
+
+        const updatedSignals = Array.from(new Set([...(s.hunter.hiddenSignalKeys || []), 'shadow-extraction-attempt']))
+
         set(applySecretProgressEvent(s, {
           context: 'shadow',
           action: 'extract',
@@ -4955,7 +5241,15 @@ export const useGame = create<GameState>()(
           ownedShadows,
           lastShadowExtractResult: result,
           shadowExtractHistory: [result, ...(s.shadowExtractHistory ?? [])].slice(0, 50),
+          hunter: {
+            ...s.hunter,
+            hiddenSignalKeys: updatedSignals
+          }
         }))
+
+        setTimeout(() => {
+          get().checkJobAwakening()
+        }, 0)
       },
 
       equipShadow: (shadowId) => set((s) => {
@@ -5221,6 +5515,519 @@ export const useGame = create<GameState>()(
         })
       }),
 
+      trainShadowWithEssence: (shadowInstanceId, optionId) => set((s) => {
+        const ownedShadows = s.ownedShadows ?? []
+        const shadow = ownedShadows.find(sh => sh.instanceId === shadowInstanceId)
+        if (!shadow) return {}
+        const maxLevel = getShadowMaxLevel(shadow)
+        if ((shadow.level ?? 1) >= maxLevel) {
+          return {
+            messages: [...s.messages, {
+              id: uid(),
+              kind: 'shadow' as const,
+              title: '훈련 불가',
+              lines: [`${shadow.name}은(는) 이미 최대 레벨(Lv.${maxLevel})에 도달했습니다.`],
+              createdAt: todayISO(),
+            }],
+          }
+        }
+        const option = SHADOW_TRAINING_OPTIONS.find(opt => opt.id === optionId)
+        if (!option) return {}
+        const cost = Math.ceil(option.essenceCost * getShadowTrainingCostMultiplier(shadow))
+        const currentEssence = s.shadowEssence ?? 0
+        if (currentEssence < cost) {
+          return {
+            messages: [...s.messages, {
+              id: uid(),
+              kind: 'shadow' as const,
+              title: '정수 부족',
+              lines: ['그림자 정수가 부족합니다.'],
+              createdAt: todayISO(),
+            }],
+          }
+        }
+
+        const xpResult = addShadowXp(shadow, option.xpGain)
+        const nextOwned = ownedShadows.map(sh =>
+          sh.instanceId === shadowInstanceId ? xpResult.shadow : sh
+        )
+
+        const levelUpLine = xpResult.leveledUp
+          ? ` (레벨 업! Lv.${shadow.level} -> Lv.${xpResult.newLevel})`
+          : ''
+
+        return {
+          ownedShadows: nextOwned,
+          shadowEssence: currentEssence - cost,
+          messages: [...s.messages, {
+            id: uid(),
+            kind: 'shadow' as const,
+            title: '집중 훈련',
+            lines: [
+              `[${option.name}] ${shadow.name}에게 XP +${option.xpGain} 지급${levelUpLine}.`,
+              `소모된 그림자 정수: ${cost}개 (보유 정수: ${currentEssence - cost}개)`,
+            ],
+            createdAt: todayISO(),
+          }],
+        }
+      }),
+
+      buyShadowTicketWithEssence: () => set((s) => {
+        const cost = 60
+        const currentEssence = s.shadowEssence ?? 0
+        if (currentEssence < cost) {
+          return {
+            messages: [...s.messages, {
+              id: uid(),
+              kind: 'info' as const,
+              title: '구매 불가',
+              lines: ['그림자 정수가 부족합니다.'],
+              createdAt: todayISO(),
+            }],
+          }
+        }
+        const ticket: ShadowSummonTicket = {
+          id: `ticket-${uid()}`,
+          ticketType: 'normal_shadow',
+          label: '일반 그림자 소환권',
+          createdAt: todayISO(),
+          source: 'system',
+        }
+        return {
+          shadowEssence: currentEssence - cost,
+          shadowSummonTickets: [ticket, ...(s.shadowSummonTickets ?? [])],
+          messages: [...s.messages, {
+            id: uid(),
+            kind: 'info' as const,
+            title: '소환권 구매 완료',
+            lines: [
+              `그림자 정수 ${cost}개를 소모해 일반 그림자 소환권을 1장 구매했습니다.`,
+              `(보유 정수: ${currentEssence - cost}개)`,
+            ],
+            createdAt: todayISO(),
+          }],
+        }
+      }),
+
+      buyExtractionCatalystWithEssence: () => set((s) => {
+        const cost = 30
+        const currentEssence = s.shadowEssence ?? 0
+        if (currentEssence < cost) {
+          return {
+            messages: [...s.messages, {
+              id: uid(),
+              kind: 'info' as const,
+              title: '구매 불가',
+              lines: ['그림자 정수가 부족합니다.'],
+              createdAt: todayISO(),
+            }],
+          }
+        }
+        const catalystItem: Item = {
+          id: `catalyst-${uid()}`,
+          name: '그림자 추출 보조 촉매',
+          icon: '🧪',
+          rarity: 'rare',
+          description: '게이트 클리어 후 그림자 추출 시 성공률을 +5% 보정합니다. (다음 추출 시 자동 소모)',
+          acquiredAt: todayISO(),
+          consumable: true,
+        }
+        return {
+          shadowEssence: currentEssence - cost,
+          items: [catalystItem, ...(s.items ?? [])],
+          messages: [...s.messages, {
+            id: uid(),
+            kind: 'info' as const,
+            title: '촉매 구매 완료',
+            lines: [
+              `그림자 정수 ${cost}개를 소모해 그림자 추출 보조 촉매를 1개 구매했습니다.`,
+              `(보유 정수: ${currentEssence - cost}개)`,
+            ],
+            createdAt: todayISO(),
+          }],
+        }
+      }),
+
+      reawakenShadowInnateGrade: (shadowInstanceId) => set((s) => {
+        const ownedShadows = s.ownedShadows ?? []
+        const shadow = ownedShadows.find(sh => sh.instanceId === shadowInstanceId)
+        if (!shadow) return {}
+        if ((shadow.level ?? 1) < 10 || (shadow.enhancementLevel ?? 0) < 3) {
+          return {
+            messages: [...s.messages, {
+              id: uid(),
+              kind: 'shadow' as const,
+              title: '재각성 불가',
+              lines: ['레벨 10 이상 및 강화 +3 이상인 그림자만 재각성 연구가 가능합니다.'],
+              createdAt: todayISO(),
+            }],
+          }
+        }
+        if (shadow.innateGrade === 'S') {
+          return {
+            messages: [...s.messages, {
+              id: uid(),
+              kind: 'shadow' as const,
+              title: '재각성 불가',
+              lines: ['이미 최고 등급(S 태생)에 도달한 그림자입니다.'],
+              createdAt: todayISO(),
+            }],
+          }
+        }
+        const cost = 100
+        const currentEssence = s.shadowEssence ?? 0
+        if (currentEssence < cost) {
+          return {
+            messages: [...s.messages, {
+              id: uid(),
+              kind: 'shadow' as const,
+              title: '정수 부족',
+              lines: ['연구를 수행하기 위한 그림자 정수가 부족합니다.'],
+              createdAt: todayISO(),
+            }],
+          }
+        }
+
+        const currentGrade = shadow.innateGrade ?? 'B'
+        let nextGrade: ShadowInnateGrade = currentGrade
+        let success = false
+        const roll = Math.random()
+
+        if (currentGrade === 'C') {
+          if (roll < 0.50) { // 50% 성공률
+            nextGrade = 'B'
+            success = true
+          }
+        } else if (currentGrade === 'B') {
+          if (roll < 0.30) { // 30% 성공률
+            nextGrade = 'A'
+            success = true
+          }
+        } else if (currentGrade === 'A') {
+          if (roll < 0.10) { // 10% 성공률
+            nextGrade = 'S'
+            success = true
+          }
+        }
+
+        const nextOwned = ownedShadows.map(sh =>
+          sh.instanceId === shadowInstanceId
+            ? { ...sh, innateGrade: nextGrade }
+            : sh
+        )
+
+        return {
+          ownedShadows: nextOwned,
+          shadowEssence: currentEssence - cost,
+          messages: [...s.messages, {
+            id: uid(),
+            kind: 'shadow' as const,
+            title: success ? '태생 재각성 성공!' : '태생 재각성 실패',
+            lines: success
+              ? [
+                  `[재각성 성공] ${shadow.name}의 태생 등급이 ${currentGrade}에서 ${nextGrade}(으)로 상승했습니다!`,
+                  `소모된 그림자 정수: ${cost}개 (보유 정수: ${currentEssence - cost}개)`,
+                ]
+              : [
+                  `[재각성 실패] ${shadow.name}의 태생 등급 재각성에 실패했습니다. 등급이 ${currentGrade}로 보존됩니다.`,
+                  `소모된 그림자 정수: ${cost}개 (보유 정수: ${currentEssence - cost}개)`,
+                ],
+            createdAt: todayISO(),
+          }],
+        }
+      }),
+
+      rerollShadowTrait: (shadowInstanceId, slotIndex) => set((s) => {
+        const ownedShadows = s.ownedShadows ?? []
+        const shadow = ownedShadows.find(sh => sh.instanceId === shadowInstanceId)
+        if (!shadow) return {}
+        
+        const maxSlots = getShadowMaxTraitSlots(shadow)
+        if (slotIndex >= maxSlots) {
+          return {
+            messages: [...s.messages, {
+              id: uid(),
+              kind: 'shadow' as const,
+              title: '특성 개방 불가',
+              lines: [`${shadow.name}은(는) 해당 특성 슬롯을 사용할 수 없는 등급/상태입니다.`],
+              createdAt: todayISO(),
+            }]
+          }
+        }
+
+        const rerolls = shadow.traitRerollCount ?? 0
+        const baseCost = 100 + rerolls * 10
+        const cost = Math.ceil(baseCost * getShadowTrainingCostMultiplier(shadow))
+        const currentEssence = s.shadowEssence ?? 0
+        
+        if (currentEssence < cost) {
+          return {
+            messages: [...s.messages, {
+              id: uid(),
+              kind: 'shadow' as const,
+              title: '정수 부족',
+              lines: ['특성 재굴림을 수행하기 위한 그림자 정수가 부족합니다.'],
+              createdAt: todayISO(),
+            }]
+          }
+        }
+
+        const currentIds = shadow.traitIds ? [...shadow.traitIds] : []
+        const exclude = currentIds.filter(Boolean) as string[]
+        const newTrait = rollShadowTraitDefinition(shadow.role, exclude)
+        
+        currentIds[slotIndex] = newTrait.id
+
+        const nextOwned = ownedShadows.map(sh =>
+          sh.instanceId === shadowInstanceId
+            ? { ...sh, traitIds: currentIds, traitRerollCount: rerolls + 1 }
+            : sh
+        )
+
+        return {
+          ownedShadows: nextOwned,
+          shadowEssence: currentEssence - cost,
+          messages: [...s.messages, {
+            id: uid(),
+            kind: 'shadow' as const,
+            title: '특성 부여 성공',
+            lines: [
+              `[특성 성공] ${shadow.name}의 ${slotIndex + 1}번째 슬롯에 [${newTrait.name}] 특성이 부여되었습니다!`,
+              `효과: ${newTrait.description}`,
+              `소모된 그림자 정수: ${cost}개 (보유 정수: ${currentEssence - cost}개)`,
+            ],
+            createdAt: todayISO(),
+          }]
+        }
+      }),
+
+      unlockShadowSlot: (shadowInstanceId, slotType) => set((s) => {
+        const ownedShadows = s.ownedShadows ?? []
+        const shadow = ownedShadows.find(sh => sh.instanceId === shadowInstanceId)
+        if (!shadow) return {}
+
+        const isNamed = shadow.isAchievementNamed || shadow.isGateNamed || shadow.rank === 'named'
+        const isLevelOk = (shadow.level ?? 1) >= 10
+        const isEnhanceOk = (shadow.enhancementLevel ?? 0) >= 2
+        const isRarityOrEvolutionOk = ['rare', 'epic', 'legendary'].includes(shadow.rarity) || (shadow.evolutionStage ?? 0) > 0
+        
+        const canUnlock = isNamed || (isLevelOk && isEnhanceOk && isRarityOrEvolutionOk)
+        if (!canUnlock) {
+          return {
+            messages: [...s.messages, {
+              id: uid(),
+              kind: 'shadow' as const,
+              title: '슬롯 개방 조건 미달',
+              lines: [`레벨 10 이상, 강화 +2 이상, 희귀(Rare) 등급 이상의 그림자만 슬롯을 개방할 수 있습니다.`],
+              createdAt: todayISO(),
+            }]
+          }
+        }
+
+        const currentSlots = slotType === 'skill' ? (shadow.unlockedSkillSlots ?? 0) : (shadow.unlockedPassiveSlots ?? 0)
+        if (currentSlots >= 2) {
+          return {
+            messages: [...s.messages, {
+              id: uid(),
+              kind: 'shadow' as const,
+              title: '슬롯 최대 도달',
+              lines: [`이미 최대 슬롯 개수(2개)에 도달했습니다.`],
+              createdAt: todayISO(),
+            }]
+          }
+        }
+
+        const baseCost = slotType === 'skill' ? (currentSlots === 0 ? 200 : 350) : (currentSlots === 0 ? 150 : 300)
+        const cost = Math.ceil(baseCost * getShadowTrainingCostMultiplier(shadow))
+        const currentEssence = s.shadowEssence ?? 0
+
+        if (currentEssence < cost) {
+          return {
+            messages: [...s.messages, {
+              id: uid(),
+              kind: 'shadow' as const,
+              title: '정수 부족',
+              lines: ['슬롯 개방을 위한 그림자 정수가 부족합니다.'],
+              createdAt: todayISO(),
+            }]
+          }
+        }
+
+        const nextOwned = ownedShadows.map(sh => {
+          if (sh.instanceId !== shadowInstanceId) return sh
+          if (slotType === 'skill') {
+            return { ...sh, unlockedSkillSlots: currentSlots + 1 }
+          } else {
+            return { ...sh, unlockedPassiveSlots: currentSlots + 1 }
+          }
+        })
+
+        return {
+          ownedShadows: nextOwned,
+          shadowEssence: currentEssence - cost,
+          messages: [...s.messages, {
+            id: uid(),
+            kind: 'shadow' as const,
+            title: slotType === 'skill' ? '스킬 슬롯 개방 완료' : '패시브 슬롯 개방 완료',
+            lines: [
+              `${shadow.name}의 ${slotType === 'skill' ? '액티브 스킬' : '패시브'} 슬롯이 추가로 개방되었습니다!`,
+              `소모된 그림자 정수: ${cost}개 (보유 정수: ${currentEssence - cost}개)`,
+            ],
+            createdAt: todayISO(),
+          }]
+        }
+      }),
+
+      equipShadowSlotAbility: (shadowInstanceId, slotType, slotIndex, abilityId) => set((s) => {
+        const ownedShadows = s.ownedShadows ?? []
+        const shadow = ownedShadows.find(sh => sh.instanceId === shadowInstanceId)
+        if (!shadow) return {}
+
+        const nextOwned = ownedShadows.map(sh => {
+          if (sh.instanceId !== shadowInstanceId) return sh
+          if (slotType === 'skill') {
+            const current = sh.shadowSkillIds ? [...sh.shadowSkillIds] : []
+            current[slotIndex] = abilityId
+            return { ...sh, shadowSkillIds: current }
+          } else {
+            const current = sh.shadowPassiveIds ? [...sh.shadowPassiveIds] : []
+            current[slotIndex] = abilityId
+            return { ...sh, shadowPassiveIds: current }
+          }
+        })
+
+        const abilityName = slotType === 'skill' 
+          ? SHADOW_SKILL_DEFINITIONS.find(sd => sd.id === abilityId)?.name ?? abilityId
+          : SHADOW_PASSIVE_DEFINITIONS.find(pd => pd.id === abilityId)?.name ?? abilityId
+
+        return {
+          ownedShadows: nextOwned,
+          messages: [...s.messages, {
+            id: uid(),
+            kind: 'shadow' as const,
+            title: slotType === 'skill' ? '스킬 장착 완료' : '패시브 장착 완료',
+            lines: [`${shadow.name}의 ${slotIndex + 1}번째 슬롯에 [${abilityName}] 능력이 장착되었습니다.`],
+            createdAt: todayISO(),
+          }]
+        }
+      }),
+
+      upgradeLegionNode: (nodeId) => set((s) => {
+        const nodeDef = SHADOW_LEGION_NODES.find(n => n.id === nodeId)
+        if (!nodeDef) return {}
+
+        const currentNodes = s.shadowLegionNodes ?? {}
+        const currentLevel = currentNodes[nodeId] ?? 0
+        if (currentLevel >= nodeDef.maxLevel) {
+          return {
+            messages: [...s.messages, {
+              id: uid(),
+              kind: 'info' as const,
+              title: '최대 레벨 도달',
+              lines: [`이미 해당 군단 연구가 최대 레벨(Lv.${nodeDef.maxLevel})에 도달했습니다.`],
+              createdAt: todayISO(),
+            }]
+          }
+        }
+
+        const cost = nodeDef.costBase + currentLevel * nodeDef.costGrowth
+        const currentEssence = s.shadowEssence ?? 0
+
+        if (currentEssence < cost) {
+          return {
+            messages: [...s.messages, {
+              id: uid(),
+              kind: 'info' as const,
+              title: '정수 부족',
+              lines: ['군단 연구 강화를 위한 그림자 정수가 부족합니다.'],
+              createdAt: todayISO(),
+            }]
+          }
+        }
+
+        const nextNodes = { ...currentNodes, [nodeId]: currentLevel + 1 }
+
+        return {
+          shadowLegionNodes: nextNodes,
+          shadowEssence: currentEssence - cost,
+          messages: [...s.messages, {
+            id: uid(),
+            kind: 'info' as const,
+            title: '군단 연구 강화 완료',
+            lines: [
+              `[연구 완료] ${nodeDef.name} 연구가 Lv.${currentLevel + 1}으로 강화되었습니다!`,
+              `소모된 그림자 정수: ${cost}개 (보유 정수: ${currentEssence - cost}개)`,
+            ],
+            createdAt: todayISO(),
+          }]
+        }
+      }),
+
+      craftHiddenEvolutionMaterial: (itemId) => set((s) => {
+        let name = ''
+        let desc = ''
+        let cost = 0
+
+        if (itemId === 'shadow_hidden_core') {
+          name = '그림자 히든 코어'
+          desc = '알려지지 않은 어둠의 핵. 군주급 그림자들의 잠재적 히든 진화에 필수적인 매개체입니다.'
+          cost = 300
+        } else if (itemId === 'abyss_evolution_core') {
+          name = '심연의 진화핵'
+          desc = '심연 깊은 곳의 마력이 서린 보석. 그림자 군단의 강력한 한계 돌파에 사용됩니다.'
+          cost = 400
+        } else if (itemId === 'named_shadow_catalyst') {
+          name = '네임드 진화 촉매'
+          desc = '네임드 그림자들의 성장을 유도하는 응축된 정수의 촉매제입니다.'
+          cost = 350
+        } else if (itemId === 'ancient_shadow_relic') {
+          name = '고대 그림자 성물'
+          desc = '아주 오래된 그림자 군주들의 기척이 깃든 유물입니다.'
+          cost = 500
+        } else {
+          return {}
+        }
+
+        const currentEssence = s.shadowEssence ?? 0
+        if (currentEssence < cost) {
+          return {
+            messages: [...s.messages, {
+              id: uid(),
+              kind: 'info' as const,
+              title: '정수 부족',
+              lines: ['재료 합성을 위한 그림자 정수가 부족합니다.'],
+              createdAt: todayISO(),
+            }]
+          }
+        }
+
+        const craftedItem: Item = {
+          id: `item-${uid()}`,
+          name,
+          icon: '💎',
+          rarity: 'legendary',
+          description: desc,
+          acquiredAt: todayISO(),
+          consumable: false,
+        }
+
+        return {
+          shadowEssence: currentEssence - cost,
+          items: [craftedItem, ...(s.items ?? [])],
+          messages: [...s.messages, {
+            id: uid(),
+            kind: 'info' as const,
+            title: '히든 재료 합성 완료',
+            lines: [
+              `[합성 성공] 그림자 정수 ${cost}개를 소모해 [${name}]을(를) 합성했습니다.`,
+              `설명: ${desc}`,
+              `(보유 정수: ${currentEssence - cost}개)`,
+            ],
+            createdAt: todayISO(),
+          }]
+        }
+      }),
+
       ensureTodayShadowExpedition: () => set((s) => syncTodayShadowExpeditionState(s)),
 
       selectShadowExpeditionParty: (expeditionId, shadowIds) => set((s) => {
@@ -5393,8 +6200,11 @@ export const useGame = create<GameState>()(
         for (const [stat, value] of Object.entries(shadowStatBonuses)) {
           combatStatsWithShadows[stat as StatKey] = roundStatValue(combatStatsWithShadows[stat as StatKey] + (value ?? 0))
         }
+        const activeJobId = s.hunter.activeJobId || s.hunter.jobId
+        const jobLevel = s.hunter.jobs?.[activeJobId]?.level ?? 1
         const playerSkills = getPlayerCombatSkills({
-          jobId: s.hunter.jobId,
+          jobId: activeJobId,
+          jobLevel,
           equippedItems,
           allSkills: SKILL_DEFINITIONS,
         })
@@ -5403,7 +6213,7 @@ export const useGame = create<GameState>()(
           stats: combatStatsWithShadows,
           equippedItems,
           activeConsumableEffects: s.activeConsumableEffects,
-          jobId: s.hunter.jobId,
+          jobId: activeJobId,
           skills: playerSkills,
         })
 
@@ -5656,6 +6466,44 @@ export const useGame = create<GameState>()(
           rewards,
         }
 
+        let addedSignals: string[] = []
+        if (combatLog.result === 'victory') {
+          const equippedItems = getEquippedItems(s.items, s.equipment)
+          const equippedShadows = getEquippedShadows(s.ownedShadows, s.equippedShadowIds, s.hunter)
+          const shadowStatBonuses = getEquippedShadowStatBonuses(equippedShadows)
+          const combatStatsWithShadows = { ...s.hunter.stats }
+          for (const [stat, value] of Object.entries(shadowStatBonuses)) {
+            combatStatsWithShadows[stat as StatKey] = roundStatValue(combatStatsWithShadows[stat as StatKey] + (value ?? 0))
+          }
+          const activeJobId = s.hunter.activeJobId || s.hunter.jobId
+          const jobLevel = s.hunter.jobs?.[activeJobId]?.level ?? 1
+          const playerSkills = getPlayerCombatSkills({
+            jobId: activeJobId,
+            jobLevel,
+            equippedItems,
+            allSkills: SKILL_DEFINITIONS,
+          })
+          const playerStats = calculatePlayerCombatStats({
+            level: s.hunter.level,
+            stats: combatStatsWithShadows,
+            equippedItems,
+            activeConsumableEffects: s.activeConsumableEffects,
+            jobId: activeJobId,
+            skills: playerSkills,
+          })
+          const maxHp = playerStats.maxHp
+          const remainingHp = combatLog.playerHpRemaining
+          const hpPercent = maxHp > 0 ? remainingHp / maxHp : 1
+          if (hpPercent <= 0.15) {
+            addedSignals.push('low-hp-victory')
+          }
+          if ((combatLog.totalTurns || 0) >= 20) {
+            addedSignals.push('long-battle-victory')
+          }
+        }
+
+        const updatedSignals = Array.from(new Set([...(s.hunter.hiddenSignalKeys || []), ...addedSignals]))
+
         set({
           infiniteTower: {
             ...tower,
@@ -5674,6 +6522,10 @@ export const useGame = create<GameState>()(
           },
           combatLogs: [{ ...combatLog, result: outcome, source: 'tower' as const }, ...s.combatLogs].slice(0, 20),
           manualBattleSession: undefined,
+          hunter: {
+            ...s.hunter,
+            hiddenSignalKeys: updatedSignals
+          }
         })
 
         get().resolveTowerBattle()
@@ -5704,8 +6556,11 @@ export const useGame = create<GameState>()(
         for (const [stat, value] of Object.entries(shadowStatBonuses)) {
           combatStatsWithShadows[stat as StatKey] = roundStatValue(combatStatsWithShadows[stat as StatKey] + (value ?? 0))
         }
+        const activeJobId = s.hunter.activeJobId || s.hunter.jobId
+        const jobLevel = s.hunter.jobs?.[activeJobId]?.level ?? 1
         const playerSkills = getPlayerCombatSkills({
-          jobId: s.hunter.jobId,
+          jobId: activeJobId,
+          jobLevel,
           equippedItems,
           allSkills: SKILL_DEFINITIONS,
           includeBasicKit: true,
@@ -5715,7 +6570,7 @@ export const useGame = create<GameState>()(
           stats: combatStatsWithShadows,
           equippedItems,
           activeConsumableEffects: s.activeConsumableEffects,
-          jobId: s.hunter.jobId,
+          jobId: activeJobId,
           skills: playerSkills,
         })
 
@@ -5770,8 +6625,11 @@ export const useGame = create<GameState>()(
 
         const equippedItems = getEquippedItems(s.items, s.equipment)
         const equippedShadows = getEquippedShadows(s.ownedShadows, s.equippedShadowIds, s.hunter)
+        const activeJobId = s.hunter.activeJobId || s.hunter.jobId
+        const jobLevel = s.hunter.jobs?.[activeJobId]?.level ?? 1
         const playerSkills = getPlayerCombatSkills({
-          jobId: s.hunter.jobId,
+          jobId: activeJobId,
+          jobLevel,
           equippedItems,
           allSkills: SKILL_DEFINITIONS,
           includeBasicKit: true,
@@ -6895,8 +7753,12 @@ export const useGame = create<GameState>()(
         const statMultiplier = getXpMultiplierWithEquipment(s.hunter, q.category, equippedItems, combinedStatBonuses)
         
         // Job XP bonus
-        const currentJob = JOB_DEFINITIONS.find(j => j.id === s.hunter.jobId)
-        const jobCategoryBonus = currentJob?.effects.xpBonusByCategory?.[q.category] ?? 0
+        const activeJobId = s.hunter.activeJobId || s.hunter.jobId
+        const currentJobV2 = JOB_DEFINITIONS_V2.find(j => j.id === activeJobId)
+        const currentJobLegacy = JOB_DEFINITIONS.find(j => j.id === activeJobId)
+        const jobCategoryBonus = currentJobV2?.growthAffinity?.questCategoryBonus?.[q.category]
+          ?? currentJobLegacy?.effects.xpBonusByCategory?.[q.category]
+          ?? 0
         
         // Equipment XP bonus
         const equipmentXpBonus = getEquipmentXpBonus(equippedItems, q.category)
@@ -6920,9 +7782,13 @@ export const useGame = create<GameState>()(
 
         const { hunter: newHunter, outcome } = applyXp(hunterIn, xp, q.category)
 
+        // ── Job System v2: Apply active job XP ──
+        const jobResult = gainActiveJobXp(newHunter, baseXp, q.category)
+        const finalHunter = { ...jobResult.hunter }
+
         // grow stats from quest's intrinsic statRewards
         const statRewards = getBalancedQuestStatRewards(q)
-        const newStats = { ...newHunter.stats }
+        const newStats = { ...finalHunter.stats }
         for (const [k, v] of Object.entries(statRewards)) {
           newStats[k as StatKey] = roundStatValue(newStats[k as StatKey] + (v ?? 0))
         }
@@ -6930,9 +7796,9 @@ export const useGame = create<GameState>()(
         // streak: increment on first daily completion of the day
         const today = todayKey()
         const yesterdayKey = getDateKey(addDays(new Date(), -1))
-        let streak = newHunter.streak
-        if (newHunter.lastActiveDate !== today) {
-          streak = newHunter.lastActiveDate === yesterdayKey ? streak + 1 : 1
+        let streak = finalHunter.streak
+        if (finalHunter.lastActiveDate !== today) {
+          streak = finalHunter.lastActiveDate === yesterdayKey ? streak + 1 : 1
         }
 
         const updatedQuests = s.quests.map(x => {
@@ -6966,11 +7832,25 @@ export const useGame = create<GameState>()(
           lines: [
             `[${q.title}]`,
             `+${xp} XP 획득${xp !== baseXp ? ` (기본 ${baseXp})` : ''}`,
+            `직업 [${jobResult.activeJobName}] XP +${jobResult.jobXpGained}${jobResult.jobCategoryBonus > 0 ? ` (친화도 보너스 +${Math.round(jobResult.jobCategoryBonus * 100)}%)` : ''}`,
             ...(questGold ? [`Gold +${questGold}`] : []),
             ...Object.entries(statRewards).map(([k, v]) => `· ${k} ${formatStatReward(v ?? 0)}`),
           ],
           createdAt: todayISO(),
         })
+
+        if (jobResult.jobLeveledUp) {
+          newMessages.push({
+            id: uid(),
+            kind: 'info',
+            title: 'JOB LEVEL UP',
+            lines: [
+              `직업 [${jobResult.activeJobName}]의 레벨이 상승했습니다.`,
+              `Lv.${jobResult.jobPrevLevel} → Lv.${jobResult.jobNextLevel}`
+            ],
+            createdAt: todayISO(),
+          })
+        }
 
         if (outcome.leveledUp) {
           newMessages.push({
@@ -7013,7 +7893,7 @@ export const useGame = create<GameState>()(
         const updatedConsumableEffects = consumeNextQuestEffects(s.activeConsumableEffects, q.category)
 
         const baseState: Partial<GameState> = {
-          hunter: { ...newHunter, stats: newStats, streak, lastActiveDate: today },
+          hunter: { ...finalHunter, stats: newStats, streak, lastActiveDate: today },
           gold: (s.gold ?? 0) + questGold,
           quests: updatedQuests,
           items: [...s.items, ...drops],
@@ -7085,15 +7965,37 @@ export const useGame = create<GameState>()(
           const shadowXpBonus = getEquippedShadowCategoryXpBonus(equippedShadows, q.category)
           const stepXp = Math.round(baseStepXp * getPartialRewardMultiplierWithEquipment(s.hunter, equippedItems, combinedStatBonuses) * getTitleXpMultiplier(s.hunter, q.category) * (1 + shadowXpBonus))
           const { hunter: newHunter, outcome } = applyXp(hunterIn, stepXp, q.category)
+          const jobResult = gainActiveJobXp(newHunter, baseStepXp, q.category)
+          const finalHunter = { ...jobResult.hunter }
 
           const stepGold = getDungeonStepGoldReward(q)
           const newMessages: SystemMessage[] = [{
             id: uid(),
             kind: 'quest',
             title: '던전 진행',
-            lines: [`[${q.title}]`, `${cur}/${total} 단계`, `+${stepXp} XP${stepXp !== baseStepXp ? ` (기본 ${baseStepXp})` : ''}`, ...(stepGold ? [`Gold +${stepGold}`] : [])],
+            lines: [
+              `[${q.title}]`, 
+              `${cur}/${total} 단계`, 
+              `+${stepXp} XP${stepXp !== baseStepXp ? ` (기본 ${baseStepXp})` : ''}`, 
+              `직업 [${jobResult.activeJobName}] XP +${jobResult.jobXpGained}${jobResult.jobCategoryBonus > 0 ? ` (친화도 보너스 +${Math.round(jobResult.jobCategoryBonus * 100)}%)` : ''}`,
+              ...(stepGold ? [`Gold +${stepGold}`] : [])
+            ],
             createdAt: todayISO(),
           }]
+
+          if (jobResult.jobLeveledUp) {
+            newMessages.push({
+              id: uid(),
+              kind: 'info',
+              title: 'JOB LEVEL UP',
+              lines: [
+                `직업 [${jobResult.activeJobName}]의 레벨이 상승했습니다.`,
+                `Lv.${jobResult.jobPrevLevel} → Lv.${jobResult.jobNextLevel}`
+              ],
+              createdAt: todayISO(),
+            })
+          }
+
           if (outcome.leveledUp) {
             newMessages.push({
               id: uid(), kind: 'levelup', title: 'LEVEL UP',
@@ -7107,7 +8009,7 @@ export const useGame = create<GameState>()(
           }
 
           const baseState: Partial<GameState> = {
-            hunter: newHunter,
+            hunter: finalHunter,
             gold: (s.gold ?? 0) + stepGold,
             quests: s.quests.map(x => x.id === id ? { ...x, currentSteps: cur } : x),
             messages: [...s.messages, ...newMessages],
@@ -7146,8 +8048,12 @@ export const useGame = create<GameState>()(
         }
         const baseXp = getBalancedQuestXp('dungeon', q.difficulty)
         const statMultiplier = getXpMultiplierWithEquipment(s.hunter, q.category, equippedItems, combinedStatBonuses)
-        const currentJob = JOB_DEFINITIONS.find(j => j.id === s.hunter.jobId)
-        const jobCategoryBonus = currentJob?.effects.xpBonusByCategory?.[q.category] ?? 0
+        const activeJobId = s.hunter.activeJobId || s.hunter.jobId
+        const currentJobV2 = JOB_DEFINITIONS_V2.find(j => j.id === activeJobId)
+        const currentJobLegacy = JOB_DEFINITIONS.find(j => j.id === activeJobId)
+        const jobCategoryBonus = currentJobV2?.growthAffinity?.questCategoryBonus?.[q.category]
+          ?? currentJobLegacy?.effects.xpBonusByCategory?.[q.category]
+          ?? 0
         const equipmentXpBonus = getEquipmentXpBonus(equippedItems, q.category)
         const consumableXpBonus = getActiveConsumableXpBonus(s.activeConsumableEffects, q.category)
         const titleXpBonus = getTitleXpMultiplier(s.hunter, q.category) - 1
@@ -7156,8 +8062,11 @@ export const useGame = create<GameState>()(
         const additiveXpBonus = jobCategoryBonus + equipmentXpBonus + consumableXpBonus + titleXpBonus + shadowXpBonus
         const xp = Math.round(baseXp * statMultiplier * (1 + additiveXpBonus))
         const { hunter: newHunter, outcome } = applyXp(hunterIn, xp, q.category)
+        const jobResult = gainActiveJobXp(newHunter, baseXp, q.category)
+        const finalHunter = { ...jobResult.hunter }
+
         const statRewards = getBalancedQuestStatRewards(q)
-        const newStats = { ...newHunter.stats }
+        const newStats = { ...finalHunter.stats }
         for (const [k, v] of Object.entries(statRewards)) {
           newStats[k as StatKey] = roundStatValue(newStats[k as StatKey] + (v ?? 0))
         }
@@ -7173,6 +8082,7 @@ export const useGame = create<GameState>()(
             lines: [
               `[${q.title}]`,
               `+${xp} XP${xp !== baseXp ? ` (기본 ${baseXp})` : ''}`,
+              `직업 [${jobResult.activeJobName}] XP +${jobResult.jobXpGained}${jobResult.jobCategoryBonus > 0 ? ` (친화도 보너스 +${Math.round(jobResult.jobCategoryBonus * 100)}%)` : ''}`,
               ...(clearGold ? [`Gold +${clearGold}`] : []),
               ...Object.entries(statRewards).map(([k, v]) => `· ${k} ${formatStatReward(v ?? 0)}`),
             ],
@@ -7184,6 +8094,20 @@ export const useGame = create<GameState>()(
             createdAt: todayISO(),
           },
         ]
+
+        if (jobResult.jobLeveledUp) {
+          messages.push({
+            id: uid(),
+            kind: 'info',
+            title: 'JOB LEVEL UP',
+            lines: [
+              `직업 [${jobResult.activeJobName}]의 레벨이 상승했습니다.`,
+              `Lv.${jobResult.jobPrevLevel} → Lv.${jobResult.jobNextLevel}`
+            ],
+            createdAt: todayISO(),
+          })
+        }
+
         if (outcome.leveledUp) {
           messages.push({
             id: uid(), kind: 'levelup', title: 'LEVEL UP',
@@ -7204,7 +8128,7 @@ export const useGame = create<GameState>()(
         }
 
         const baseState: Partial<GameState> = {
-          hunter: { ...newHunter, stats: newStats },
+          hunter: { ...finalHunter, stats: newStats },
           gold: (s.gold ?? 0) + clearGold,
           quests: s.quests.map(x => x.id === id ? { ...x, currentSteps: total, completed: true } : x),
           items: [...s.items, drop],
@@ -7817,6 +8741,77 @@ export const useGame = create<GameState>()(
           if (persistedState.hunter.job === '각성하지 못한 자') {
             persistedState.hunter.job = '미각성자'
           }
+
+          // ── Job System v2 Migration ──────────────────────────────────
+          if (!persistedState.hunter.activeJobId) {
+            const legacyId = persistedState.hunter.jobId || 'unawakened'
+            const legacyToV2Map: Record<string, string> = {
+              'unawakened': 'novice-hunter',
+              'golden-eye-diviner': 'scout',
+              'grimoire-decoder': 'mage',
+              'iron-squire': 'warrior',
+              'silent-monk': 'guardian',
+              'nameless-awakened': 'tactician',
+              'golden-oracle': 'abyss-stalker',
+              'abyss-archivist': 'chronomancer',
+              'steelheart-fighter': 'berserker',
+              'chrono-judge': 'paladin',
+              'fate-harmonizer': 'grand-strategist'
+            }
+            const activeV2Id = (legacyToV2Map[legacyId] || 'novice-hunter') as JobId
+            persistedState.hunter.activeJobId = activeV2Id
+            
+            const unlockedList: JobId[] = (persistedState.hunter.unlockedJobIds || ['unawakened'])
+              .map((id: string) => (legacyToV2Map[id] || id) as JobId)
+              .filter((v: JobId, i: number, a: JobId[]) => a.indexOf(v) === i)
+
+            persistedState.hunter.unlockedJobIds = unlockedList
+            
+            const jobsMap: Record<string, any> = {}
+            unlockedList.forEach((v2Id) => {
+              jobsMap[v2Id] = {
+                jobId: v2Id,
+                level: 1,
+                xp: 0,
+                unlockedAt: new Date().toISOString()
+              }
+            })
+            persistedState.hunter.jobs = jobsMap
+            persistedState.hunter.availableAdvancements = []
+            persistedState.hunter.discoveredHiddenJobIds = []
+            
+            const jobNamesMap: Record<string, string> = {
+              'novice-hunter': '초보 헌터',
+              'swordsman': '검객',
+              'warrior': '전사',
+              'mage': '마법사',
+              'guardian': '수호자',
+              'scout': '추적자',
+              'tactician': '전술가',
+              'swordsmaster': '검호',
+              'spellsword': '마검사',
+              'berserker': '광전사',
+              'paladin': '성역 기사',
+              'chronomancer': '시간술사',
+              'battle-alchemist': '전투 연금술사',
+              'abyss-stalker': '심연 추적자',
+              'grand-strategist': '마도 전략가',
+              'sword-saint': '검성',
+              'rune-spellsword': '룬 마검사',
+              'dragon-knight': '용혈 기사',
+              'divine-guardian': '성역 수호자',
+              'time-governor': '시간의 관리자',
+              'sage-alchemist': '현자의 연금술사',
+              'abyss-emperor': '심연검제',
+              'grand-master-strategist': '마도 전략가 상위직',
+              'shadow-lord': '그림자 군주',
+              'puppet-master': '저주 인형사',
+              'soul-reaper': '영혼 약탈자',
+              'dimension-hunter': '차원 사냥꾼'
+            }
+            persistedState.hunter.job = jobNamesMap[activeV2Id] || '초보 헌터'
+            persistedState.hunter.jobId = activeV2Id
+          }
         }
         // Ensure achievementStats exists
         if (!persistedState?.achievementStats) {
@@ -8059,6 +9054,8 @@ export const useGame = create<GameState>()(
         if (!Array.isArray(persistedState.selectedChallengeCardIds)) persistedState.selectedChallengeCardIds = []
         if (!persistedState.challengeCardHistory) persistedState.challengeCardHistory = {}
         if (!persistedState.shopPurchases) persistedState.shopPurchases = {}
+        if (!persistedState.shadowLegionNodes) persistedState.shadowLegionNodes = {}
+
 
         return persistedState;
       },
@@ -8077,3 +9074,8 @@ const isDevRuntime = ((import.meta as ImportMeta & { env?: { DEV?: boolean } }).
 if (isDevRuntime && typeof window !== 'undefined') {
   window.__levelup_secret_debug__ = () => useGame.getState().secretProgress
 }
+
+registerLegionNodeLevelResolver((nodeId) => {
+  return useGame.getState().shadowLegionNodes?.[nodeId] ?? 0
+})
+

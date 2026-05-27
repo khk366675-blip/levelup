@@ -17,8 +17,20 @@ import {
   getHunterCombatPowerBreakdown,
 } from '../lib/combatPower'
 import { getEquipmentPowerBreakdown } from '../lib/equipmentPower'
-import { STAT_META, type StatKey, JOB_DEFINITIONS, JOB_LINE_META } from '../lib/types'
+import { STAT_META, type StatKey, JOB_DEFINITIONS, JOB_LINE_META, CATEGORY_META } from '../lib/types'
+import { JOB_DEFINITIONS_V2 } from '../lib/jobs'
+import type { JobDefinitionV2 } from '../lib/types'
 import { Flame, Plus, Swords } from 'lucide-react'
+
+function formatJobModifiers(job: JobDefinitionV2): string[] {
+  const mods: string[] = []
+  if (job.statModifiers) {
+    Object.entries(job.statModifiers).forEach(([stat, val]) => {
+      mods.push(`${STAT_META[stat as keyof typeof STAT_META]?.label || stat} +${val}`)
+    })
+  }
+  return mods.length > 0 ? mods : ['기본 스탯 효과']
+}
 import { useState } from 'react'
 import { JobPanel } from './JobPanel'
 import { SkillPanel } from './SkillPanel'
@@ -42,8 +54,10 @@ export function HunterStatus() {
   const xpPct = Math.min(100, (hunter.xp / xpNeeded) * 100)
 
   // Get current job definition
-  const currentJob = JOB_DEFINITIONS.find(j => j.id === hunter.jobId)
-  const jobLine = currentJob ? JOB_LINE_META[currentJob.line] : null
+  const activeJobId = hunter.activeJobId || hunter.jobId
+  const currentJobV2 = JOB_DEFINITIONS_V2.find(j => j.id === activeJobId)
+  const currentJobLegacy = JOB_DEFINITIONS.find(j => j.id === activeJobId)
+  const jobLine = currentJobLegacy ? JOB_LINE_META[currentJobLegacy.line] : null
   const equippedTitleDef = getEquippedTitleDefinition(hunter)
 
   // Get equipment stat bonuses
@@ -140,19 +154,31 @@ export function HunterStatus() {
                 >
                   직업 — {hunter.job}
                 </div>
-                {currentJob && jobLine && (
+                {currentJobV2 && (
+                  <div className="text-[10px] text-cyan-300/50 system-text mt-0.5">
+                    전투 스타일: {currentJobV2.combatStyle} | 부여 효과: {formatJobModifiers(currentJobV2).join(', ')}
+                    {currentJobV2.growthAffinity?.questCategoryBonus && Object.keys(currentJobV2.growthAffinity.questCategoryBonus).length > 0 && (
+                      <span className="ml-2">
+                        · 성장 친화도: {Object.entries(currentJobV2.growthAffinity.questCategoryBonus)
+                          .map(([cat, val]) => `${CATEGORY_META[cat as keyof typeof CATEGORY_META]?.label || cat} XP +${Math.round((val ?? 0) * 100)}%`)
+                          .join(', ')}
+                      </span>
+                    )}
+                  </div>
+                )}
+                {currentJobLegacy && jobLine && (
                   <div className="text-[10px] text-cyan-300/50 system-text mt-0.5">
                     {jobLine.icon} 계열: {jobLine.label}
-                    {currentJob.id !== 'unawakened' && currentJob.effects.xpBonusByCategory && (
+                    {currentJobLegacy.id !== 'unawakened' && currentJobLegacy.effects.xpBonusByCategory && (
                       <span className="ml-2">
-                        · 효과: {Object.entries(currentJob.effects.xpBonusByCategory)
+                        · 효과: {Object.entries(currentJobLegacy.effects.xpBonusByCategory)
                           .map(([cat, bonus]) => `${cat} XP +${Math.round((bonus as number) * 100)}%`)
                           .join(', ')}
                       </span>
                     )}
                   </div>
                 )}
-                {currentJob?.id === 'unawakened' && (
+                {activeJobId === 'novice-hunter' && (
                   <div className="text-[10px] text-cyan-300/40 system-text mt-0.5 italic">
                     각성 조건을 달성하면 직업이 개방됩니다.
                   </div>

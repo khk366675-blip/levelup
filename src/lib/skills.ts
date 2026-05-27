@@ -10,6 +10,7 @@ import type {
   SkillType,
   Title,
 } from './types'
+import { JOB_DEFINITIONS_V2 } from './jobs'
 
 export const BASIC_COMBAT_SKILL_IDS = ['basic-attack', 'basic-focus-slash', 'basic-guard-stance']
 
@@ -91,11 +92,13 @@ export const getEquippedSkillItems = (items: Item[], equipment: EquipmentState):
 
 export const getAvailableCombatSkillsForLoadout = ({
   jobId,
+  jobLevel = 1,
   equippedItems = [],
   allSkills,
   includeBasicKit = false,
 }: {
   jobId?: JobId
+  jobLevel?: number
   equippedItems?: Item[]
   allSkills: SkillDefinition[]
   includeBasicKit?: boolean
@@ -104,8 +107,17 @@ export const getAvailableCombatSkillsForLoadout = ({
   if (includeBasicKit) {
     for (const id of BASIC_COMBAT_SKILL_IDS) skillIds.add(id)
   }
+  
   if (jobId) {
-    for (const id of JOB_COMBAT_SKILL_IDS[jobId] ?? []) skillIds.add(id)
+    const v2Job = JOB_DEFINITIONS_V2.find(j => j.id === jobId)
+    if (v2Job) {
+      const unlockedV2Skills = v2Job.skills
+        ?.filter(s => s.unlockLevel <= jobLevel)
+        .map(s => s.skillId) || []
+      for (const id of unlockedV2Skills) skillIds.add(id)
+    } else {
+      for (const id of JOB_COMBAT_SKILL_IDS[jobId] ?? []) skillIds.add(id)
+    }
   }
 
   for (const item of equippedItems) {
@@ -128,8 +140,11 @@ export const getAvailableSkills = ({
   allSkills: SkillDefinition[]
   titles?: Title[]
 }): SkillDefinition[] => {
+  const activeJobId = hunter.activeJobId || hunter.jobId
+  const jobLevel = hunter.jobs?.[activeJobId]?.level ?? 1
   return getAvailableCombatSkillsForLoadout({
-    jobId: hunter.jobId,
+    jobId: activeJobId,
+    jobLevel,
     equippedItems: getEquippedSkillItems(items, equipment),
     allSkills,
     includeBasicKit: true,

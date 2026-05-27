@@ -65,9 +65,12 @@ const powerFor = ({
   activeConsumableEffects?: ActiveConsumableEffect[]
   includeSkills?: boolean
 }): { power: number; combatStats: PlayerCombatStats } => {
+  const activeJobId = hunter.activeJobId || hunter.jobId
+  const jobLevel = hunter.jobs?.[activeJobId]?.level ?? 1
   const skills = includeSkills
     ? getPlayerCombatSkills({
-        jobId: hunter.jobId,
+        jobId: activeJobId,
+        jobLevel,
         equippedItems,
         allSkills: SKILL_DEFINITIONS,
       })
@@ -77,7 +80,7 @@ const powerFor = ({
     stats,
     equippedItems,
     activeConsumableEffects,
-    jobId: hunter.jobId,
+    jobId: activeJobId,
     skills,
   })
   return { power: calculateCombatPower(combatStats), combatStats }

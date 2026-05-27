@@ -59,6 +59,63 @@ export type JobId =
   | 'steelheart-fighter'
   | 'chrono-judge'
   | 'fate-harmonizer'
+  // v2 Jobs
+  | 'novice-hunter'
+  | 'swordsman'
+  | 'warrior'
+  | 'mage'
+  | 'guardian'
+  | 'scout'
+  | 'tactician'
+  | 'swordsmaster'
+  | 'spellsword'
+  | 'berserker'
+  | 'paladin'
+  | 'chronomancer'
+  | 'battle-alchemist'
+  | 'abyss-stalker'
+  | 'grand-strategist'
+  | 'sword-saint'
+  | 'rune-spellsword'
+  | 'dragon-knight'
+  | 'divine-guardian'
+  | 'time-governor'
+  | 'sage-alchemist'
+  | 'abyss-emperor'
+  | 'grand-master-strategist'
+  | 'shadow-lord'
+  | 'puppet-master'
+  | 'soul-reaper'
+  | 'dimension-hunter'
+  // v2 3rd normal jobs
+  | 'illusory-swordmaster'
+  | 'speed-striker'
+  | 'abyss-spellsword'
+  | 'elemental-spellsword'
+  | 'immortal-berserker'
+  | 'hellfire-slayer'
+  | 'holy-redeemer'
+  | 'judgment-knight'
+  | 'infinity-mage'
+  | 'entropy-manipulator'
+  | 'elixir-creator'
+  | 'chimera-summoner'
+  | 'shadow-assassin'
+  | 'phantom-stalker'
+  | 'war-orchestrator'
+  | 'fate-weaver'
+  // v2 hidden classes
+  | 'shadow-disciple'
+  | 'shadow-commander'
+  | 'abyss-summoner'
+  | 'phantom-general'
+  | 'curse-initiate'
+  | 'doom-herald'
+  | 'fate-breaker'
+  | 'rift-sensing-hunter'
+  | 'dimension-traveler'
+  | 'void-navigator'
+  | 'chrono-saber'
 
 export type JobLine =
   | 'market'
@@ -80,6 +137,91 @@ export interface JobDefinition {
     statBonus?: Partial<Record<StatKey, number>>
     dropBonus?: number
   }
+}
+
+// ── Job System v2 Types ──────────────────────────────────────────────
+
+export type JobTier = 'novice' | 'first' | 'second' | 'third' | 'hidden' | 'unique'
+export type JobRarity = 'common' | 'rare' | 'epic' | 'legendary' | 'hidden' | 'unique'
+export type JobArchetype = 'warrior' | 'mage' | 'rogue' | 'cleric' | 'tactician' | 'special'
+export type JobBranch = 'sword' | 'shield' | 'magic' | 'shadow' | 'chrono' | 'alchemy' | 'curse' | 'none'
+
+export interface JobSkillUnlock {
+  skillId: string
+  unlockLevel: number
+  source: 'job'
+}
+
+export interface JobPassiveUnlock {
+  passiveId: string
+  unlockLevel: number
+}
+
+export interface JobGrowthAffinity {
+  questCategoryBonus?: Partial<Record<Category, number>>
+  activityTags?: string[]
+}
+
+export interface JobUnlockCondition {
+  hunterLevel?: number
+  previousJobLevel?: number
+  towerFloorCleared?: number
+  gateClearCount?: number
+  bossClearCount?: number
+  skillUseCount?: Record<string, number>
+  mainStageCompletedCount?: number
+  shadowCount?: number
+  hiddenSignalKeys?: string[]
+}
+
+export interface JobHiddenProfile {
+  isHidden: boolean
+  maskedName?: string
+  revealName?: string
+  hintLevel?: 'none' | 'vague' | 'partial' | 'clear'
+  hintText?: string
+}
+
+export interface JobDefinitionV2 {
+  id: JobId
+  name: string
+  tier: JobTier
+  rarity: JobRarity
+  description: string
+  combatStyle: string
+  archetype: JobArchetype
+  branch: JobBranch
+  previousJobIds?: JobId[]
+  nextJobIds?: JobId[]
+  primaryStats: StatKey[]
+  secondaryStats?: StatKey[]
+  statModifiers?: Partial<Record<StatKey, number>>
+  battleModifiers?: {
+    maxHpPct?: number
+    atkPct?: number
+    defPct?: number
+    spdPct?: number
+    skillPowerPct?: number
+    critPct?: number
+    supportPct?: number
+    controlPct?: number
+    survivalPct?: number
+  }
+  skills?: JobSkillUnlock[]
+  passives?: JobPassiveUnlock[]
+  growthAffinity?: JobGrowthAffinity
+  unlockCondition?: JobUnlockCondition
+  hiddenProfile?: JobHiddenProfile
+}
+
+export interface OwnedJobState {
+  jobId: JobId
+  level: number
+  xp: number
+  unlockedAt?: string
+  advancedAt?: string
+  masteredAt?: string
+  isNew?: boolean
 }
 
 export const JOB_DEFINITIONS: JobDefinition[] = [
@@ -501,6 +643,46 @@ export interface ShadowDefinition {
   variantKey?: string
 }
 
+export interface ShadowTraitDefinition {
+  id: string
+  name: string
+  description: string
+  rarity: 'common' | 'rare' | 'epic' | 'legendary'
+  roleTags?: ShadowRole[]
+  effect: {
+    statBonusPct?: Partial<Record<'hp' | 'atk' | 'def' | 'spd' | 'skill', number>>
+    xpGainPct?: number
+    expeditionPowerPct?: number
+    essenceGainPct?: number
+    extractionAffinityPct?: number
+    synergyTag?: string
+  }
+}
+
+export interface ShadowLegionNode {
+  id: string
+  name: string
+  description: string
+  maxLevel: number
+  costBase: number
+  costGrowth: number
+  effect: {
+    shadowHpPct?: number
+    shadowAtkPct?: number
+    shadowDefPct?: number
+    expeditionPowerPct?: number
+    shadowXpGainPct?: number
+    essenceGainPct?: number
+    summonShardBonusPct?: number
+  }
+  unlockCondition?: {
+    totalOwnedShadows?: number
+    evolvedShadowCount?: number
+    namedShadowCount?: number
+    towerFloorCleared?: number
+  }
+}
+
 export interface OwnedShadow {
   instanceId: string
   definitionId: string
@@ -529,6 +711,13 @@ export interface OwnedShadow {
   secretTraits?: string[]
   variantKey?: string
   awakenedAt?: string
+  // 12-35B Advanced Trait & Slot fields
+  traitIds?: string[]
+  traitRerollCount?: number
+  unlockedSkillSlots?: number
+  unlockedPassiveSlots?: number
+  shadowSkillIds?: string[]
+  shadowPassiveIds?: string[]
 }
 
 export interface ShadowSummonTicket {
@@ -1532,6 +1721,13 @@ export interface HunterState {
   ownedTitleIds: string[]
   /** ID of currently equipped title */
   equippedTitleId?: string
+
+  // ── Job System v2 State ───────────────────────────────────────────
+  activeJobId?: JobId
+  jobs?: Partial<Record<JobId, OwnedJobState>>
+  availableAdvancements?: JobId[]
+  discoveredHiddenJobIds?: JobId[]
+  hiddenSignalKeys?: string[]
 }
 
 // ── Random Quest System ────────────────────────────────────────────

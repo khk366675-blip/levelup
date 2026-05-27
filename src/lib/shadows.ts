@@ -16,6 +16,8 @@ import type {
   ShadowVisualTheme,
   ShadowTrait,
   StatKey,
+  ShadowTraitDefinition,
+  ShadowLegionNode,
 } from './types'
 import {
   SHADOW_INNATE_GRADE_WEIGHTS_BY_SOURCE,
@@ -665,9 +667,11 @@ export const rollShadowExtraction = (
   gate: GateDefinition,
   hunter: HunterState,
   equippedShadows: OwnedShadow[] = [],
-  rng: () => number = Math.random
+  rng: () => number = Math.random,
+  bonusChance: number = 0
 ) => {
-  const chance = getShadowExtractionChance(hunter, gate, equippedShadows)
+  const baseChance = getShadowExtractionChance(hunter, gate, equippedShadows)
+  const chance = Math.min(1.0, baseChance + bonusChance)
   if (rng() > chance) {
     return {
       gateId: gate.id,
@@ -832,3 +836,277 @@ export const canEvolveShadow = (shadow: OwnedShadow, shadowEssence: number = 0):
   if (shadowEssence < cost) return { canEvolve: false, reason: `그림자 정수 ${cost} 필요`, cost, targetDefinition: target }
   return { canEvolve: true, cost, targetDefinition: target }
 }
+
+export interface ShadowTrainingOption {
+  id: string
+  name: string
+  essenceCost: number
+  xpGain: number
+}
+
+export const SHADOW_TRAINING_OPTIONS: ShadowTrainingOption[] = [
+  { id: 'small', name: '소형 훈련', essenceCost: 5, xpGain: 20 },
+  { id: 'standard', name: '표준 훈련', essenceCost: 15, xpGain: 70 },
+  { id: 'focus', name: '집중 훈련', essenceCost: 40, xpGain: 200 },
+]
+
+export const getShadowTrainingCostMultiplier = (shadow: OwnedShadow): number => {
+  let mult = 1.0
+  const isNamed = shadow.isAchievementNamed || shadow.isGateNamed || shadow.rank === 'named'
+  if (isNamed) mult *= 1.5
+  
+  if (shadow.rarity === 'legendary') mult *= 1.3
+  else if (shadow.rarity === 'epic') mult *= 1.15
+  
+  if (shadow.innateGrade === 'S') mult *= 1.5
+  else if (shadow.innateGrade === 'A') mult *= 1.2
+  
+  return mult
+}
+
+// ==========================================
+// 12-35B: Advanced Usage Expansion Data
+// ==========================================
+
+export const SHADOW_TRAIT_DEFINITIONS: ShadowTraitDefinition[] = [
+  // Common Traits
+  {
+    id: 'trait_common_hp',
+    name: '강인한 마력',
+    description: '그림자 HP +2.5%',
+    rarity: 'common',
+    effect: { statBonusPct: { hp: 0.025 } }
+  },
+  {
+    id: 'trait_common_atk',
+    name: '어둠의 칼날',
+    description: '그림자 ATK +2.5%',
+    rarity: 'common',
+    effect: { statBonusPct: { atk: 0.025 } }
+  },
+  {
+    id: 'trait_common_def',
+    name: '어둠의 장벽',
+    description: '그림자 DEF +2.5%',
+    rarity: 'common',
+    effect: { statBonusPct: { def: 0.025 } }
+  },
+  {
+    id: 'trait_common_spd',
+    name: '신속한 그림자',
+    description: '그림자 SPD +2.5%',
+    rarity: 'common',
+    effect: { statBonusPct: { spd: 0.025 } }
+  },
+  {
+    id: 'trait_common_exp',
+    name: '원정 훈련',
+    description: '그림자 원정대 전투력 +3%',
+    rarity: 'common',
+    effect: { expeditionPowerPct: 0.03 }
+  },
+
+  // Rare Traits
+  {
+    id: 'trait_rare_hp',
+    name: '심연의 심장',
+    description: '그림자 HP +5%',
+    rarity: 'rare',
+    effect: { statBonusPct: { hp: 0.05 } }
+  },
+  {
+    id: 'trait_rare_atk',
+    name: '파괴의 발톱',
+    description: '그림자 ATK +5%',
+    rarity: 'rare',
+    effect: { statBonusPct: { atk: 0.05 } }
+  },
+  {
+    id: 'trait_rare_xp',
+    name: '배움의 열망',
+    description: '훈련으로 획득하는 XP +8%',
+    rarity: 'rare',
+    effect: { xpGainPct: 0.08 }
+  },
+  {
+    id: 'trait_rare_exp',
+    name: '정찰 특화',
+    description: '그림자 원정대 전투력 +7%',
+    rarity: 'rare',
+    effect: { expeditionPowerPct: 0.07 }
+  },
+
+  // Epic Traits
+  {
+    id: 'trait_epic_all',
+    name: '흑화의 마력',
+    description: '그림자 HP/ATK/DEF +4%',
+    rarity: 'epic',
+    effect: { statBonusPct: { hp: 0.04, atk: 0.04, def: 0.04 } }
+  },
+  {
+    id: 'trait_epic_essence',
+    name: '정수 수집가',
+    description: '분해 시 정수 획득 +10%',
+    rarity: 'epic',
+    effect: { essenceGainPct: 0.10 }
+  },
+  {
+    id: 'trait_epic_affinity',
+    name: '그림자 친화력',
+    description: '추출 성공 확률 보정 +2%',
+    rarity: 'epic',
+    effect: { extractionAffinityPct: 0.02 }
+  },
+
+  // Legendary Traits
+  {
+    id: 'trait_legendary_monarch',
+    name: '그림자 군주의 권능',
+    description: '그림자 전 능력치 +6% & 원정대 전투력 +10%',
+    rarity: 'legendary',
+    effect: { 
+      statBonusPct: { hp: 0.06, atk: 0.06, def: 0.06, spd: 0.06, skill: 0.06 },
+      expeditionPowerPct: 0.10
+    }
+  },
+  {
+    id: 'trait_legendary_seeker',
+    name: '어둠의 심연 탐색자',
+    description: '정수 획득 +15% & 추출 확률 +3%',
+    rarity: 'legendary',
+    effect: {
+      essenceGainPct: 0.15,
+      extractionAffinityPct: 0.03
+    }
+  }
+]
+
+export const getShadowMaxTraitSlots = (shadow: OwnedShadow): number => {
+  const isNamed = shadow.isAchievementNamed || shadow.isGateNamed || shadow.rank === 'named'
+  if (isNamed) return 2
+  const isRareOrMore = shadow.rarity === 'rare' || shadow.rarity === 'epic' || shadow.rarity === 'legendary'
+  const isEvolved = (shadow.evolutionStage ?? 0) > 0
+  if (isRareOrMore || isEvolved) return 2
+  return 1
+}
+
+export const rollShadowTraitDefinition = (
+  role: ShadowRole,
+  excludeIds: string[] = [],
+  rng: () => number = Math.random
+): ShadowTraitDefinition => {
+  const candidates = SHADOW_TRAIT_DEFINITIONS.filter(d => {
+    if (excludeIds.includes(d.id)) return false
+    if (d.roleTags && !d.roleTags.includes(role)) return false
+    return true
+  })
+  
+  const pool = candidates.length > 0 ? candidates : SHADOW_TRAIT_DEFINITIONS.filter(d => !excludeIds.includes(d.id))
+  const finalPool = pool.length > 0 ? pool : SHADOW_TRAIT_DEFINITIONS
+
+  const roll = rng()
+  let targetRarity: 'common' | 'rare' | 'epic' | 'legendary' = 'common'
+  if (roll < 0.03) targetRarity = 'legendary'
+  else if (roll < 0.15) targetRarity = 'epic'
+  else if (roll < 0.40) targetRarity = 'rare'
+  
+  const rarityPool = finalPool.filter(d => d.rarity === targetRarity)
+  const actualPool = rarityPool.length > 0 ? rarityPool : finalPool
+  
+  return actualPool[Math.floor(rng() * actualPool.length)]
+}
+
+// Unlocked Passives / Skills Configuration
+export interface ShadowPassiveDefinition {
+  id: string
+  name: string
+  description: string
+  effect: {
+    statBonusPct?: Partial<Record<'hp' | 'atk' | 'def' | 'spd' | 'skill', number>>
+    expeditionPowerPct?: number
+    xpGainPct?: number
+  }
+}
+
+export const SHADOW_PASSIVE_DEFINITIONS: ShadowPassiveDefinition[] = [
+  { id: 'pass_hp_3', name: '어둠의 장막', description: '그림자 체력 +3%', effect: { statBonusPct: { hp: 0.03 } } },
+  { id: 'pass_atk_3', name: '어둠의 군대 공격', description: '그림자 공격력 +3%', effect: { statBonusPct: { atk: 0.03 } } },
+  { id: 'pass_def_3', name: '강철의 결속', description: '그림자 방어력 +3%', effect: { statBonusPct: { def: 0.03 } } },
+  { id: 'pass_exp_5', name: '원정 선봉장', description: '그림자 원정대 전투력 +5%', effect: { expeditionPowerPct: 0.05 } },
+  { id: 'pass_xp_5', name: '영혼의 가르침', description: '훈련 획득 그림자 XP +5%', effect: { xpGainPct: 0.05 } },
+]
+
+export interface ShadowActiveSkillDefinition {
+  id: string
+  name: string
+  description: string
+  effect: {
+    combatDamagePct?: number
+    combatDefensePct?: number
+  }
+}
+
+export const SHADOW_SKILL_DEFINITIONS: ShadowActiveSkillDefinition[] = [
+  { id: 'skill_shadow_strike', name: '그림자 강타', description: '전투 시 추가 +3.5% 피해 지원', effect: { combatDamagePct: 0.035 } },
+  { id: 'skill_shadow_barrier', name: '어둠의 장벽', description: '전투 중 받는 피해 -3.5% 보조', effect: { combatDefensePct: 0.035 } },
+]
+
+// Shadow Legion Node Definitions
+export const SHADOW_LEGION_NODES: ShadowLegionNode[] = [
+  {
+    id: 'node_hp',
+    name: '군단의 체력',
+    description: '모든 그림자의 HP +1% (최대 10레벨)',
+    maxLevel: 10,
+    costBase: 40,
+    costGrowth: 30,
+    effect: { shadowHpPct: 0.01 }
+  },
+  {
+    id: 'node_atk',
+    name: '군단의 칼날',
+    description: '모든 그림자의 ATK +1% (최대 10레벨)',
+    maxLevel: 10,
+    costBase: 40,
+    costGrowth: 30,
+    effect: { shadowAtkPct: 0.01 }
+  },
+  {
+    id: 'node_def',
+    name: '군단의 방패',
+    description: '모든 그림자의 DEF +1% (최대 10레벨)',
+    maxLevel: 10,
+    costBase: 40,
+    costGrowth: 30,
+    effect: { shadowDefPct: 0.01 }
+  },
+  {
+    id: 'node_expedition',
+    name: '원정 숙련',
+    description: '그림자 원정대 전투력 +2% (최대 10레벨)',
+    maxLevel: 10,
+    costBase: 50,
+    costGrowth: 40,
+    effect: { expeditionPowerPct: 0.02 }
+  },
+  {
+    id: 'node_xp',
+    name: '어둠의 수련',
+    description: '그림자 XP 획득량 +3% (최대 10레벨)',
+    maxLevel: 10,
+    costBase: 50,
+    costGrowth: 40,
+    effect: { shadowXpGainPct: 0.03 }
+  },
+  {
+    id: 'node_essence',
+    name: '정수 회수',
+    description: '그림자 정수 추가 획득 확률 +3% (최대 10레벨)',
+    maxLevel: 10,
+    costBase: 60,
+    costGrowth: 50,
+    effect: { essenceGainPct: 0.03 }
+  }
+]
+

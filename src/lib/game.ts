@@ -807,16 +807,18 @@ export const createGateSuccessCombatEffects = (
 
 export const getPlayerCombatSkills = ({
   jobId,
+  jobLevel = 1,
   equippedItems = [],
   allSkills,
   includeBasicKit = false,
 }: {
   jobId?: JobId
+  jobLevel?: number
   equippedItems?: Item[]
   allSkills: SkillDefinition[]
   includeBasicKit?: boolean
 }): SkillDefinition[] => {
-  return getAvailableCombatSkillsForLoadout({ jobId, equippedItems, allSkills, includeBasicKit })
+  return getAvailableCombatSkillsForLoadout({ jobId, jobLevel, equippedItems, allSkills, includeBasicKit })
 }
 
 export interface CalculatePlayerCombatStatsParams {

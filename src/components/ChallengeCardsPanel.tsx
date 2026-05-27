@@ -75,11 +75,17 @@ function conditionShortText(card: ChallengeCard): string {
 
 export function ChallengeCardsPanel() {
   const cards = useGame(s => s.todayChallengeCards ?? [])
-  const selectedIds = useGame(s => s.selectedChallengeCardIds ?? [])
+  const selectedIdsFromStore = useGame(s => s.selectedChallengeCardIds)
+  const selectedIds = selectedIdsFromStore ?? []
   const selectChallengeCards = useGame(s => s.selectChallengeCards)
   const [draftIds, setDraftIds] = useState<string[]>(selectedIds)
   const [cardReveal, setCardReveal] = useState<'selected' | 'completed' | undefined>()
   const previousCompletedRef = useRef<number | undefined>(undefined)
+
+  const selectedIdsKey = (selectedIdsFromStore ?? []).join(',')
+  useEffect(() => {
+    setDraftIds(selectedIdsFromStore ?? [])
+  }, [selectedIdsKey])
 
   const hasSelected = selectedIds.length > 0
   const selectedSet = new Set(hasSelected ? selectedIds : draftIds)

@@ -1,5 +1,11 @@
 import type { OwnedShadow, ShadowDefinition, ShadowInnateGrade, ShadowRole, ShadowStatKey } from './types'
-import { getShadowDefinition } from './shadows'
+import { getShadowDefinition, SHADOW_TRAIT_DEFINITIONS, SHADOW_PASSIVE_DEFINITIONS, SHADOW_LEGION_NODES } from './shadows'
+
+let getLegionNodeLevelFn: (nodeId: string) => number = () => 0
+
+export const registerLegionNodeLevelResolver = (fn: (nodeId: string) => number) => {
+  getLegionNodeLevelFn = fn
+}
 
 export type ShadowStatBlock = Record<ShadowStatKey, number>
 
@@ -331,8 +337,73 @@ export const getShadowCombatProfile = (
   const basePower = getBasePowerScale(definition)
   const multiplier = rarity * innateGrade * level * enhancement * evolution * named * basePower
 
+  // Advanced Stats Bonuses from 12-35B
+  let hpBonus = 0
+  let atkBonus = 0
+  let defBonus = 0
+  let spdBonus = 0
+  let skillBonus = 0
+  let expeditionPowerBonus = 0
+
+  const activeTraits = (shadow.traitIds ?? []).map(id => SHADOW_TRAIT_DEFINITIONS.find(t => t.id === id)).filter(Boolean)
+  for (const trait of activeTraits) {
+    if (trait?.effect.statBonusPct) {
+      hpBonus += trait.effect.statBonusPct.hp ?? 0
+      atkBonus += trait.effect.statBonusPct.atk ?? 0
+      defBonus += trait.effect.statBonusPct.def ?? 0
+      spdBonus += trait.effect.statBonusPct.spd ?? 0
+      skillBonus += trait.effect.statBonusPct.skill ?? 0
+    }
+    if (trait?.effect.expeditionPowerPct) {
+      expeditionPowerBonus += trait.effect.expeditionPowerPct
+    }
+  }
+
+  const activePassives = (shadow.shadowPassiveIds ?? []).map(id => SHADOW_PASSIVE_DEFINITIONS.find(p => p.id === id)).filter(Boolean)
+  for (const passive of activePassives) {
+    if (passive?.effect.statBonusPct) {
+      hpBonus += passive.effect.statBonusPct.hp ?? 0
+      atkBonus += passive.effect.statBonusPct.atk ?? 0
+      defBonus += passive.effect.statBonusPct.def ?? 0
+      spdBonus += passive.effect.statBonusPct.spd ?? 0
+      skillBonus += passive.effect.statBonusPct.skill ?? 0
+    }
+    if (passive?.effect.expeditionPowerPct) {
+      expeditionPowerBonus += passive.effect.expeditionPowerPct
+    }
+  }
+
+  let legionHpBonus = 0
+  let legionAtkBonus = 0
+  let legionDefBonus = 0
+  let legionExpeditionBonus = 0
+  for (const nodeDef of SHADOW_LEGION_NODES) {
+    const level = getLegionNodeLevelFn(nodeDef.id)
+    if (level > 0) {
+      if (nodeDef.effect.shadowHpPct) legionHpBonus += nodeDef.effect.shadowHpPct * level
+      if (nodeDef.effect.shadowAtkPct) legionAtkBonus += nodeDef.effect.shadowAtkPct * level
+      if (nodeDef.effect.shadowDefPct) legionDefBonus += nodeDef.effect.shadowDefPct * level
+      if (nodeDef.effect.expeditionPowerPct) legionExpeditionBonus += nodeDef.effect.expeditionPowerPct * level
+    }
+  }
+
   const stats = SHADOW_STAT_KEYS.reduce((next, key) => {
-    next[key] = Math.max(1, Math.round(roleProfile[key] * multiplier))
+    let base = roleProfile[key] * multiplier
+    
+    let bonusMult = 1.0
+    if (key === 'shadowAttack' || key === 'shadowCrit') {
+      bonusMult += atkBonus + legionAtkBonus
+    } else if (key === 'shadowDefense') {
+      bonusMult += defBonus + legionDefBonus
+    } else if (key === 'shadowDurability' || key === 'shadowSurvival') {
+      bonusMult += hpBonus + legionHpBonus
+    } else if (key === 'shadowSpeed') {
+      bonusMult += spdBonus
+    } else {
+      bonusMult += skillBonus
+    }
+
+    next[key] = Math.max(1, Math.round(base * bonusMult))
     return next
   }, {} as ShadowStatBlock)
 
@@ -366,7 +437,8 @@ export const getShadowCombatProfile = (
     [stats.shadowSynergy, 0.24],
     [stats.shadowSpeed, 0.16],
     [stats.shadowSupport, 0.18],
-  )
+  ) * (1 + expeditionPowerBonus + legionExpeditionBonus)
+
   const roleSpecificContribution = ROLE_PRIMARY_STATS[shadow.role]
     .reduce((sum, key) => sum + stats[key], 0) * 0.22
   const totalPower = Math.round(

@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { motion } from 'framer-motion'
-import { Crown, Eclipse, Eye, Gem, Lock, Search, Shield, Sparkles, Star, Swords, Ticket, X } from 'lucide-react'
+import { Crown, Eclipse, Eye, Gem, Lock, Search, Shield, Sparkles, Star, Swords, Ticket, X, ChevronDown, ChevronUp, Dumbbell, FlaskConical } from 'lucide-react'
 import { useGame } from '../lib/store'
 import { ShadowCard as VisualShadowCard } from './shadows/ShadowCard'
 import { ShadowExpeditionPanel } from './shadows/ShadowExpeditionPanel'
@@ -27,6 +27,13 @@ import {
   SHADOW_DECOMPOSE_ESSENCE,
   SHADOW_FRAGMENT_SUMMON_COST,
   SHADOW_INNATE_GRADE_LABEL,
+  SHADOW_TRAINING_OPTIONS,
+  getShadowTrainingCostMultiplier,
+  SHADOW_TRAIT_DEFINITIONS,
+  SHADOW_PASSIVE_DEFINITIONS,
+  SHADOW_SKILL_DEFINITIONS,
+  SHADOW_LEGION_NODES,
+  getShadowMaxTraitSlots,
 } from '../lib/shadows'
 import {
   SHADOW_STAT_GROUPS,
@@ -785,6 +792,17 @@ export function ShadowPanel() {
   const toggleShadowLock = useGame(s => s.toggleShadowLock)
   const toggleShadowFavorite = useGame(s => s.toggleShadowFavorite)
   const evolveShadow = useGame(s => s.evolveShadow)
+  const trainShadowWithEssence = useGame(s => s.trainShadowWithEssence)
+  const buyShadowTicketWithEssence = useGame(s => s.buyShadowTicketWithEssence)
+  const buyExtractionCatalystWithEssence = useGame(s => s.buyExtractionCatalystWithEssence)
+  const reawakenShadowInnateGrade = useGame(s => s.reawakenShadowInnateGrade)
+  const rerollShadowTrait = useGame(s => s.rerollShadowTrait)
+  const unlockShadowSlot = useGame(s => s.unlockShadowSlot)
+  const equipShadowSlotAbility = useGame(s => s.equipShadowSlotAbility)
+  const upgradeLegionNode = useGame(s => s.upgradeLegionNode)
+  const craftHiddenEvolutionMaterial = useGame(s => s.craftHiddenEvolutionMaterial)
+  const shadowLegionNodes = useGame(s => s.shadowLegionNodes ?? {})
+  const [labOpen, setLabOpen] = useState(true)
   const [pendingEvolution, setPendingEvolution] = useState<{
     shadow: OwnedShadow
     targetName: string
@@ -1227,6 +1245,519 @@ export function ShadowPanel() {
               ))}
             </div>
           )}
+      </div>
+
+      {/* 그림자 정수 연구소 & 상점 (Essence Lab) */}
+      <div className="panel corner-bracket p-4 border-purple-500/30 bg-ink-950/70">
+        <div className="br" />
+        <div className="flex items-center justify-between cursor-pointer" onClick={() => setLabOpen(!labOpen)}>
+          <div className="flex items-center gap-2">
+            <FlaskConical className="w-5 h-5 text-purple-400" />
+            <div>
+              <div className="system-text text-[11px] text-purple-300/70">SHADOW ESSENCE RESEARCH LAB & SHOP</div>
+              <h3 className="text-base font-bold text-white/95">그림자 정수 연구소 & 상점</h3>
+            </div>
+          </div>
+          <div className="flex items-center gap-3">
+            <span className="text-xs rounded border border-purple-400/20 bg-purple-400/10 px-2.5 py-1 text-purple-200">
+              보유 정수: {shadowEssence}
+            </span>
+            {labOpen ? <ChevronUp className="w-4 h-4 text-white/40" /> : <ChevronDown className="w-4 h-4 text-white/40" />}
+          </div>
+        </div>
+
+        {labOpen && (
+          <div className="mt-4 space-y-4 border-t border-white/5 pt-4">
+            {/* 훈련소 & 상점 2단 그리드 */}
+            <div className="grid gap-4 md:grid-cols-2">
+              
+              {/* 그림자 집중 훈련소 */}
+              <div className="rounded-lg border border-cyan-400/15 bg-cyan-400/5 p-3">
+                <div className="mb-3 flex items-center gap-2">
+                  <Dumbbell className="h-4 w-4 text-cyan-300" />
+                  <div className="system-text text-[11px] text-cyan-100/75">집중 훈련소</div>
+                  <div className="h-px flex-1 bg-gradient-to-r from-cyan-300/25 to-transparent" />
+                </div>
+
+                {selectedShadow ? (
+                  <div>
+                    <div className="mb-3 flex items-center gap-3 rounded-md bg-ink-900/60 p-2 border border-white/5">
+                      <ShadowPortrait shadow={selectedShadow} size="sm" active={equippedShadowIds.includes(selectedShadow.instanceId)} innateGrade={selectedShadow.innateGrade} />
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-bold text-white/95">{selectedShadow.name}</span>
+                          <span className="text-[10px] system-text text-cyan-300">Lv.{selectedShadow.level ?? 1}/{getShadowMaxLevel(selectedShadow)}</span>
+                        </div>
+                        <div className="mt-1 flex items-center gap-1.5">
+                          <div className="h-1 flex-1 bg-white/10 rounded-full overflow-hidden">
+                            <div className="h-full bg-cyan-400/60 rounded-full" style={{ width: `${Math.min(100, Math.round(((selectedShadow.xp ?? 0) / getShadowXpForNextLevel(selectedShadow.level ?? 1)) * 100))}%` }} />
+                          </div>
+                          <span className="text-[9px] text-white/40 tabular-nums">{selectedShadow.xp ?? 0}/{getShadowXpForNextLevel(selectedShadow.level ?? 1)}</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      {SHADOW_TRAINING_OPTIONS.map(opt => {
+                        const costMult = getShadowTrainingCostMultiplier(selectedShadow)
+                        const cost = Math.ceil(opt.essenceCost * costMult)
+                        const isMax = (selectedShadow.level ?? 1) >= getShadowMaxLevel(selectedShadow)
+                        const disabled = shadowEssence < cost || isMax
+
+                        return (
+                          <div key={opt.id} className="flex items-center justify-between gap-3 rounded border border-white/5 bg-ink-950/40 p-2 text-xs">
+                            <div>
+                              <div className="font-semibold text-white/90">{opt.name}</div>
+                              <div className="text-[10px] text-cyan-300/80">+{opt.xpGain} XP 지급</div>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <span className={`system-text text-[10px] ${shadowEssence >= cost ? 'text-cyan-200' : 'text-rose-400 font-bold'}`}>
+                                정수 {cost}개 {costMult !== 1 && <span className="text-[9px] opacity-70">(x{costMult.toFixed(2)})</span>}
+                              </span>
+                              <button
+                                type="button"
+                                disabled={disabled}
+                                onClick={() => trainShadowWithEssence(selectedShadow.instanceId, opt.id)}
+                                className="btn btn-primary py-1 px-3 text-[10px] disabled:opacity-40 disabled:cursor-not-allowed"
+                              >
+                                {isMax ? '최대 레벨' : '훈련'}
+                              </button>
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                    <div className="mt-2 text-[10px] text-white/45">
+                      ※ 무제한으로 훈련 가능하나, 태생 등급, 희귀도, 네임드 여부에 따라 비용 가중치가 부여됩니다. (군단 목록에서 그림자를 선택해 대상을 바꿀 수 있습니다)
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex min-h-36 items-center justify-center rounded border border-dashed border-white/10 text-center text-xs text-white/40">
+                    훈련시킬 그림자를 위에서 선택해 주세요.
+                  </div>
+                )}
+              </div>
+
+              {/* 그림자 정수 상점 */}
+              <div className="rounded-lg border border-purple-400/15 bg-purple-400/5 p-3">
+                <div className="mb-3 flex items-center gap-2">
+                  <Gem className="h-4 w-4 text-purple-300" />
+                  <div className="system-text text-[11px] text-purple-100/75">정수 상점</div>
+                  <div className="h-px flex-1 bg-gradient-to-r from-purple-300/25 to-transparent" />
+                </div>
+
+                <div className="space-y-2">
+                  {/* 일반 소환권 구매 */}
+                  <div className="flex items-center justify-between gap-3 rounded border border-white/5 bg-ink-950/40 p-2.5 text-xs">
+                    <div className="flex items-center gap-2">
+                      <Ticket className="h-4 w-4 text-cyan-300" />
+                      <div>
+                        <div className="font-semibold text-white/90">일반 그림자 소환권</div>
+                        <div className="text-[10px] text-white/45">인벤토리에 소환권 1장을 즉시 추가합니다.</div>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className={`system-text text-[10px] ${shadowEssence >= 60 ? 'text-purple-200' : 'text-rose-400 font-bold'}`}>
+                        정수 60개
+                      </span>
+                      <button
+                        type="button"
+                        disabled={shadowEssence < 60}
+                        onClick={() => buyShadowTicketWithEssence()}
+                        className="btn btn-secondary py-1 px-3 text-[10px] disabled:opacity-40 disabled:cursor-not-allowed"
+                      >
+                        구매
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* 추출 보조 촉매 구매 */}
+                  <div className="flex items-center justify-between gap-3 rounded border border-white/5 bg-ink-950/40 p-2.5 text-xs">
+                    <div className="flex items-center gap-2 text-left">
+                      <span className="text-base">🧪</span>
+                      <div>
+                        <div className="font-semibold text-white/90">그림자 추출 보조 촉매</div>
+                        <div className="text-[10px] text-white/45">게이트 후 추출 성공률을 +5% 보정합니다. (자동 소모)</div>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className={`system-text text-[10px] ${shadowEssence >= 30 ? 'text-purple-200' : 'text-rose-400 font-bold'}`}>
+                        정수 30개
+                      </span>
+                      <button
+                        type="button"
+                        disabled={shadowEssence < 30}
+                        onClick={() => buyExtractionCatalystWithEssence()}
+                        className="btn btn-secondary py-1 px-3 text-[10px] disabled:opacity-40 disabled:cursor-not-allowed"
+                      >
+                        구매
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* 고급 정수 연구소 */}
+            <div className="rounded-lg border border-purple-500/20 bg-purple-500/5 p-3">
+              <div className="mb-3 flex items-center gap-2">
+                <Sparkles className="h-4 w-4 text-purple-300" />
+                <div className="system-text text-[11px] text-purple-100/75">고급 정수 연구소</div>
+                <div className="h-px flex-1 bg-gradient-to-r from-purple-500/20 to-transparent" />
+              </div>
+
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                {/* 태생 등급 재각성 */}
+                {selectedShadow ? (
+                  (() => {
+                    const level = selectedShadow.level ?? 1
+                    const enhance = selectedShadow.enhancementLevel ?? 0
+                    const isS = selectedShadow.innateGrade === 'S'
+                    const isValid = level >= 10 && enhance >= 3 && !isS
+                    const currentGrade = selectedShadow.innateGrade ?? 'B'
+                    const successChance = currentGrade === 'C' ? '50%' : currentGrade === 'B' ? '30%' : currentGrade === 'A' ? '10%' : '0%'
+
+                    return (
+                      <div className={`rounded-lg border p-3 text-xs flex flex-col justify-between ${
+                        isValid 
+                          ? 'border-purple-400/35 bg-purple-950/20' 
+                          : 'border-white/10 bg-ink-950/45 opacity-60'
+                      }`}>
+                        <div>
+                          <div className="flex items-center justify-between mb-1.5">
+                            <span className="font-bold text-white/95">태생 등급 재각성</span>
+                            {isValid ? (
+                              <span className="text-[10px] text-emerald-400">시도 가능</span>
+                            ) : (
+                              <span className="text-[10px] text-white/40">조건 미달</span>
+                            )}
+                          </div>
+                          <p className="text-[10px] text-white/55 leading-relaxed">
+                            {selectedShadow.name}의 한계 돌파를 시도합니다. 성공 시 태생 등급이 상승하며, 실패해도 등급은 보존됩니다.
+                          </p>
+                          <div className="mt-2 space-y-1 text-[10px] system-text text-white/45">
+                            <div>대상: <span className="text-white/80">{selectedShadow.name}</span></div>
+                            <div>현재 태생: <span className="text-cyan-300">{selectedShadow.innateGrade ?? 'B'}</span></div>
+                            <div>성공 시 등급: <span className="text-purple-300">
+                              {currentGrade === 'C' ? 'B' : currentGrade === 'B' ? 'A' : currentGrade === 'A' ? 'S' : 'MAX'}
+                            </span></div>
+                            <div>연구 확률: <span className="text-amber-200">{successChance}</span></div>
+                          </div>
+                          {!isValid && (
+                            <div className="mt-2 rounded border border-rose-500/20 bg-rose-500/10 p-1.5 text-[9px] text-rose-300">
+                              요구 조건: Lv.10+ ({level}/10) & 강화 +3+ ({enhance}/3) {isS && ' (최대 등급 도달)'}
+                            </div>
+                          )}
+                        </div>
+                        <div className="mt-3 flex items-center justify-between border-t border-white/5 pt-2">
+                          <span className={`system-text text-[10px] ${shadowEssence >= 100 ? 'text-purple-200' : 'text-rose-400 font-bold'}`}>
+                            정수 100개
+                          </span>
+                          <button
+                            type="button"
+                            disabled={!isValid || shadowEssence < 100}
+                            onClick={() => reawakenShadowInnateGrade(selectedShadow.instanceId)}
+                            className="btn btn-secondary py-1 px-3 text-[10px] disabled:opacity-40 disabled:cursor-not-allowed"
+                          >
+                            연구 개시
+                          </button>
+                        </div>
+                      </div>
+                    )
+                  })()
+                ) : (
+                  <div className="rounded-lg border border-dashed border-white/10 bg-ink-950/45 p-3 text-center flex items-center justify-center text-[10px] text-white/40">
+                    그림자를 선택하면 재각성 조건이 표시됩니다.
+                  </div>
+                )}
+
+                {/* 고유 특성 재굴림 & 부여 */}
+                {selectedShadow ? (
+                  (() => {
+                    const maxSlots = getShadowMaxTraitSlots(selectedShadow)
+                    const rerolls = selectedShadow.traitRerollCount ?? 0
+                    const baseCost = 100 + rerolls * 10
+                    const cost = Math.ceil(baseCost * getShadowTrainingCostMultiplier(selectedShadow))
+                    const traits = selectedShadow.traitIds ?? []
+
+                    return (
+                      <div className="rounded-lg border border-purple-400/35 bg-purple-950/20 p-3 text-xs flex flex-col justify-between">
+                        <div>
+                          <div className="flex items-center justify-between mb-1.5">
+                            <span className="font-bold text-white/95">고유 특성 연구소</span>
+                            <span className="text-[10px] text-cyan-300">최대 {maxSlots}개 슬롯</span>
+                          </div>
+                          <p className="text-[10px] text-white/55 leading-relaxed mb-2">
+                            정수를 사용하여 특성을 재굴림하거나 개방합니다. 높은 등급의 특성은 군단 성능을 소폭 보정합니다.
+                          </p>
+                          <div className="space-y-2">
+                            {Array.from({ length: maxSlots }).map((_, idx) => {
+                              const traitId = traits[idx]
+                              const trait = SHADOW_TRAIT_DEFINITIONS.find(t => t.id === traitId)
+
+                              return (
+                                <div key={idx} className="rounded bg-ink-900/60 p-2 border border-white/5">
+                                  <div className="flex items-center justify-between">
+                                    <span className="text-[10px] text-white/40">슬롯 {idx + 1}</span>
+                                    {trait ? (
+                                      <span className={`text-[9px] uppercase font-bold ${
+                                        trait.rarity === 'legendary' ? 'text-amber-300' :
+                                        trait.rarity === 'epic' ? 'text-purple-300' :
+                                        trait.rarity === 'rare' ? 'text-cyan-300' : 'text-zinc-400'
+                                      }`}>{trait.rarity}</span>
+                                    ) : (
+                                      <span className="text-[9px] text-rose-400">비어 있음</span>
+                                    )}
+                                  </div>
+                                  {trait ? (
+                                    <div className="mt-1">
+                                      <div className="font-bold text-white/90 text-[11px]">{trait.name}</div>
+                                      <div className="text-[10px] text-white/60">{trait.description}</div>
+                                    </div>
+                                  ) : (
+                                    <div className="mt-1 text-[10px] text-white/40">정수를 소모해 무작위 특성을 영구 부여합니다.</div>
+                                  )}
+                                  <div className="mt-2 flex justify-end">
+                                    <button
+                                      type="button"
+                                      disabled={shadowEssence < cost}
+                                      onClick={() => {
+                                        if (window.confirm(`[${selectedShadow.name}]의 ${idx + 1}번째 특성을 재굴림(혹은 신규 부여)하시겠습니까?\n소모 정수: ${cost}`)) {
+                                          rerollShadowTrait(selectedShadow.instanceId, idx)
+                                        }
+                                      }}
+                                      className="btn btn-secondary py-0.5 px-2 text-[9px] disabled:opacity-40"
+                                    >
+                                      {trait ? '재굴림' : '특성 부여'}
+                                    </button>
+                                  </div>
+                                </div>
+                              )
+                            })}
+                          </div>
+                        </div>
+                        <div className="mt-3 flex items-center justify-between border-t border-white/5 pt-2">
+                          <span className="text-[9px] text-white/40">재굴림 횟수: {rerolls}회</span>
+                          <span className={`system-text text-[10px] font-bold ${shadowEssence >= cost ? 'text-purple-200' : 'text-rose-400'}`}>
+                            정수 {cost}개
+                          </span>
+                        </div>
+                      </div>
+                    )
+                  })()
+                ) : (
+                  <div className="rounded-lg border border-dashed border-white/10 bg-ink-950/45 p-3 text-center flex items-center justify-center text-[10px] text-white/40">
+                    그림자를 선택하면 특성 연구소가 활성화됩니다.
+                  </div>
+                )}
+
+                {/* 그림자 스킬/패시브 슬롯 개방 & 장착 */}
+                {selectedShadow ? (
+                  (() => {
+                    const isNamed = selectedShadow.isAchievementNamed || selectedShadow.isGateNamed || selectedShadow.rank === 'named'
+                    const level = selectedShadow.level ?? 1
+                    const enhance = selectedShadow.enhancementLevel ?? 0
+                    const isRarityOk = ['rare', 'epic', 'legendary'].includes(selectedShadow.rarity) || (selectedShadow.evolutionStage ?? 0) > 0
+                    const condMet = isNamed || (level >= 10 && enhance >= 2 && isRarityOk)
+
+                    const skillSlots = selectedShadow.unlockedSkillSlots ?? 0
+                    const passiveSlots = selectedShadow.unlockedPassiveSlots ?? 0
+                    
+                    const skillCost = Math.ceil((skillSlots === 0 ? 200 : 350) * getShadowTrainingCostMultiplier(selectedShadow))
+                    const passiveCost = Math.ceil((passiveSlots === 0 ? 150 : 300) * getShadowTrainingCostMultiplier(selectedShadow))
+
+                    const activeSkills = selectedShadow.shadowSkillIds ?? []
+                    const activePassives = selectedShadow.shadowPassiveIds ?? []
+
+                    return (
+                      <div className="rounded-lg border border-purple-400/35 bg-purple-950/20 p-3 text-xs flex flex-col justify-between">
+                        <div>
+                          <div className="flex items-center justify-between mb-1.5">
+                            <span className="font-bold text-white/95">스킬 / 패시브 마력 회로</span>
+                            <span className={`text-[10px] ${condMet ? 'text-emerald-400 font-bold' : 'text-rose-400 font-bold'}`}>
+                              {condMet ? '조건 충족' : '조건 잠금'}
+                            </span>
+                          </div>
+                          <p className="text-[10px] text-white/55 leading-relaxed mb-2">
+                            마력 슬롯을 개방하여 추가 패시브와 액티브 기운을 장착합니다. 네임드는 조건이 완전 완화됩니다.
+                          </p>
+
+                          {!condMet && (
+                            <div className="mb-2 rounded border border-rose-500/20 bg-rose-500/10 p-1.5 text-[9px] text-rose-300">
+                              요구: Lv.10+ ({level}/10) & 강화 +2+ ({enhance}/2) & 희귀(Rare) 이상
+                            </div>
+                          )}
+
+                          <div className="space-y-3">
+                            {/* 패시브 슬롯 관리 */}
+                            <div className="rounded bg-ink-900/60 p-2 border border-white/5 space-y-2">
+                              <div className="flex items-center justify-between">
+                                <span className="font-bold text-[10px] text-cyan-200">패시브 마력 슬롯 ({passiveSlots}/2)</span>
+                                {passiveSlots < 2 && condMet && (
+                                  <button
+                                    type="button"
+                                    disabled={shadowEssence < passiveCost}
+                                    onClick={() => unlockShadowSlot(selectedShadow.instanceId, 'passive')}
+                                    className="btn btn-primary py-0.5 px-2 text-[9px]"
+                                  >
+                                    개방 ({passiveCost}정수)
+                                  </button>
+                                )}
+                              </div>
+                              {Array.from({ length: passiveSlots }).map((_, idx) => {
+                                const activeId = activePassives[idx]
+                                return (
+                                  <div key={idx} className="flex flex-col gap-1 mt-1.5">
+                                    <label className="text-[9px] text-white/40">슬롯 {idx + 1} 패시브 기운</label>
+                                    <select
+                                      value={activeId ?? ''}
+                                      onChange={(e) => equipShadowSlotAbility(selectedShadow.instanceId, 'passive', idx, e.target.value)}
+                                      className="rounded border border-white/10 bg-ink-950 px-2 py-1 text-[10px] text-white/80 outline-none"
+                                    >
+                                      <option value="">-- 패시브 기운 선택 --</option>
+                                      {SHADOW_PASSIVE_DEFINITIONS.map(p => (
+                                        <option key={p.id} value={p.id}>{p.name} ({p.description})</option>
+                                      ))}
+                                    </select>
+                                  </div>
+                                )
+                              })}
+                              {passiveSlots === 0 && <div className="text-[9px] text-white/35">슬롯을 개방하면 강력한 패시브 능력이 부여됩니다.</div>}
+                            </div>
+
+                            {/* 스킬 슬롯 관리 */}
+                            <div className="rounded bg-ink-900/60 p-2 border border-white/5 space-y-2">
+                              <div className="flex items-center justify-between">
+                                <span className="font-bold text-[10px] text-cyan-200">액티브 보조 스킬 ({skillSlots}/2)</span>
+                                {skillSlots < 2 && condMet && (
+                                  <button
+                                    type="button"
+                                    disabled={shadowEssence < skillCost}
+                                    onClick={() => unlockShadowSlot(selectedShadow.instanceId, 'skill')}
+                                    className="btn btn-primary py-0.5 px-2 text-[9px]"
+                                  >
+                                    개방 ({skillCost}정수)
+                                  </button>
+                                )}
+                              </div>
+                              {Array.from({ length: skillSlots }).map((_, idx) => {
+                                const activeId = activeSkills[idx]
+                                return (
+                                  <div key={idx} className="flex flex-col gap-1 mt-1.5">
+                                    <label className="text-[9px] text-white/40">슬롯 {idx + 1} 스킬 기운</label>
+                                    <select
+                                      value={activeId ?? ''}
+                                      onChange={(e) => equipShadowSlotAbility(selectedShadow.instanceId, 'skill', idx, e.target.value)}
+                                      className="rounded border border-white/10 bg-ink-950 px-2 py-1 text-[10px] text-white/80 outline-none"
+                                    >
+                                      <option value="">-- 보조 스킬 선택 --</option>
+                                      {SHADOW_SKILL_DEFINITIONS.map(s => (
+                                        <option key={s.id} value={s.id}>{s.name} ({s.description})</option>
+                                      ))}
+                                    </select>
+                                  </div>
+                                )
+                              })}
+                              {skillSlots === 0 && <div className="text-[9px] text-white/35">슬롯 개방 시 전투 피해/방어를 상시 보조합니다.</div>}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )
+                  })()
+                ) : (
+                  <div className="rounded-lg border border-dashed border-white/10 bg-ink-950/45 p-3 text-center flex items-center justify-center text-[10px] text-white/40">
+                    그림자를 선택하면 마력 회로 슬롯 개방이 활성화됩니다.
+                  </div>
+                )}
+
+                {/* 군단 연구 & 시너지 노드 */}
+                <div className="rounded-lg border border-purple-400/35 bg-purple-950/20 p-3 text-xs flex flex-col justify-between">
+                  <div>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <span className="font-bold text-white/95">군단 시너지 결속 성좌</span>
+                      <span className="text-[10px] text-purple-300">군단 상시 강화</span>
+                    </div>
+                    <p className="text-[10px] text-white/55 leading-relaxed mb-2.5">
+                      정수를 영구 소모해 전체 그림자 병사들에게 상시 적용되는 결속의 성좌 성장을 단련합니다.
+                    </p>
+
+                    <div className="space-y-1.5 max-h-[190px] overflow-y-auto pr-1">
+                      {SHADOW_LEGION_NODES.map(node => {
+                        const level = shadowLegionNodes[node.id] ?? 0
+                        const isMax = level >= node.maxLevel
+                        const cost = node.costBase + level * node.costGrowth
+
+                        return (
+                          <div key={node.id} className="rounded bg-ink-900/60 p-1.5 border border-white/5 flex items-center justify-between gap-2 text-[10px]">
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-center gap-1.5">
+                                <span className="font-bold text-white/90">{node.name}</span>
+                                <span className="text-[9px] text-cyan-300 font-bold">Lv.{level}/{node.maxLevel}</span>
+                              </div>
+                              <div className="text-[9px] text-white/50 truncate" title={node.description}>{node.description}</div>
+                            </div>
+                            <button
+                              type="button"
+                              disabled={isMax || shadowEssence < cost}
+                              onClick={() => upgradeLegionNode(node.id)}
+                              className="btn btn-secondary py-0.5 px-2 text-[9px] shrink-0"
+                            >
+                              {isMax ? 'MAX' : `${cost}정수`}
+                            </button>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
+                </div>
+
+                {/* 히든 진화 재료 합성 */}
+                <div className="rounded-lg border border-purple-400/35 bg-purple-950/20 p-3 text-xs flex flex-col justify-between">
+                  <div>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <span className="font-bold text-white/95">히든 진화 물질 합성</span>
+                      <span className="text-[10px] text-amber-300 font-semibold">전설 재료</span>
+                    </div>
+                    <p className="text-[10px] text-white/55 leading-relaxed mb-2.5">
+                      대량의 정수를 가공/융합하여 네임드 그림자들의 히든 2차 진화에 필요한 미지의 영적 물체들을 연성합니다.
+                    </p>
+
+                    <div className="space-y-1.5">
+                      {[
+                        { id: 'shadow_hidden_core', name: '그림자 히든 코어', cost: 300, icon: '💎' },
+                        { id: 'abyss_evolution_core', name: '심연의 진화핵', cost: 400, icon: '💎' },
+                        { id: 'named_shadow_catalyst', name: '네임드 진화 촉매', cost: 350, icon: '🧪' },
+                        { id: 'ancient_shadow_relic', name: '고대 그림자 성물', cost: 500, icon: '🏺' }
+                      ].map(mat => {
+                        return (
+                          <div key={mat.id} className="rounded bg-ink-900/60 p-1.5 border border-white/5 flex items-center justify-between gap-2 text-[10px]">
+                            <div className="flex items-center gap-1.5 min-w-0">
+                              <span className="text-xs">{mat.icon}</span>
+                              <span className="font-bold text-white/90 truncate" title={mat.name}>{mat.name}</span>
+                            </div>
+                            <button
+                              type="button"
+                              disabled={shadowEssence < mat.cost}
+                              onClick={() => {
+                                if (window.confirm(`[${mat.name}]을 합성하시겠습니까?\n소모 정수: ${mat.cost}개`)) {
+                                  craftHiddenEvolutionMaterial(mat.id)
+                                }
+                              }}
+                              className="btn btn-secondary py-0.5 px-2 text-[9px] shrink-0"
+                            >
+                              합성 ({mat.cost}정수)
+                            </button>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       <ShadowExpeditionPanel />
