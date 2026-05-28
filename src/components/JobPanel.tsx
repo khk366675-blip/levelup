@@ -52,6 +52,51 @@ function formatJobModifiers(job: JobDefinitionV2): string[] {
   return mods.length > 0 ? mods : ['기본 스탯 효과']
 }
 
+function getDynamicHiddenHint(
+  job: JobDefinitionV2,
+  progress: Record<string, any> = {},
+  targetResonance: number
+) {
+  const branchMap: Record<string, string> = {
+    shadow: 'shadow',
+    curse: 'curse',
+    chrono: 'rift'
+  }
+  const pathId = branchMap[job.branch] || 'shadow'
+  const currentProgress = progress[pathId]
+  const currentResonance = currentProgress ? currentProgress.resonance : 0
+
+  if (currentResonance === 0) {
+    let baseHint = '알 수 없는 깊은 침묵만이 흐릅니다.'
+    if (pathId === 'shadow') baseHint = '어둠 속에서 아무런 기척도 느껴지지 않습니다.'
+    if (pathId === 'curse') baseHint = '가로막힌 저주의 장벽이 침묵하고 있습니다.'
+    if (pathId === 'rift') baseHint = '공간의 뒤틀림이 전혀 감지되지 않습니다.'
+    return { maskedName: '???', hintText: baseHint }
+  }
+
+  if (currentResonance < targetResonance * 0.5) {
+    let hint = '무언가 미세한 움직임이 느껴집니다.'
+    if (pathId === 'shadow') hint = '어둠이 당신의 그림자에 반응하고 있다.'
+    if (pathId === 'curse') hint = '피어오르는 저주가 생사경의 위기를 기다리고 있다.'
+    if (pathId === 'rift') hint = '시공간의 찰나가 미세한 진동을 보내고 있다.'
+    return { maskedName: '???', hintText: hint }
+  }
+
+  if (currentResonance < targetResonance) {
+    let hint = '기척이 뚜렷해지고 있다.'
+    if (pathId === 'shadow') hint = '어둠 속 한 계열의 기척이 뚜렷해지고 있다.'
+    if (pathId === 'curse') hint = '피의 도가니 속에서 저주의 기척이 뚜렷해지고 있다.'
+    if (pathId === 'rift') hint = '균열의 틈새 너머로 기척이 뚜렷해지고 있다.'
+    return { maskedName: '???', hintText: hint }
+  }
+
+  // resonance 충족 완료
+  return {
+    maskedName: job.hiddenProfile?.maskedName || '미확인 기척 클래스',
+    hintText: job.hiddenProfile?.hintText || '기척이 완전히 활성화되었습니다. 다른 세부 조건을 확인하세요.'
+  }
+}
+
 export function JobPanel() {
   const [isJobListOpen, setIsJobListOpen] = useState(false)
   const hunter = useGame(s => s.hunter)
@@ -287,6 +332,9 @@ export function JobPanel() {
 
               // Render MASKED hidden class
               if (isHidden && !canAdvance) {
+                const branchKey = (job.branch === 'chrono' ? 'rift' : job.branch) as 'shadow' | 'curse' | 'rift'
+                const targetResonance = cond?.resonanceRequired?.[branchKey] || 10
+                const dynamicHint = getDynamicHiddenHint(job, hunter.hiddenResonanceProgress || {}, targetResonance)
                 return (
                   <div 
                     key={job.id} 
@@ -296,12 +344,12 @@ export function JobPanel() {
                     <div className="flex items-center gap-2 mb-2">
                       <Lock className="w-3.5 h-3.5 text-rose-500/70" />
                       <h4 className="font-bold text-zinc-500 system-text tracking-wide">
-                        {job.hiddenProfile?.maskedName || '미확인 기척 클래스'}
+                        {dynamicHint.maskedName}
                       </h4>
                       <span className="text-[9px] text-rose-400 bg-rose-950/40 px-1 py-0.5 rounded border border-rose-500/20">히든</span>
                     </div>
                     <p className="text-[11px] text-zinc-500 italic leading-relaxed">
-                      힌트: {job.hiddenProfile?.hintText || '심연에 도사린 고유 시련이 해금 조건을 충족해야 합니다.'}
+                      힌트: {dynamicHint.hintText}
                     </p>
                   </div>
                 )
@@ -405,6 +453,9 @@ export function JobPanel() {
 
                 // If hidden job is not discovered, render masked state
                 if (isHidden && !isDiscovered) {
+                  const branchKey = (job.branch === 'chrono' ? 'rift' : job.branch) as 'shadow' | 'curse' | 'rift'
+                  const targetResonance = job.unlockCondition?.resonanceRequired?.[branchKey] || 10
+                  const dynamicHint = getDynamicHiddenHint(job, hunter.hiddenResonanceProgress || {}, targetResonance)
                   return (
                     <div 
                       key={job.id} 
@@ -414,12 +465,12 @@ export function JobPanel() {
                       <div className="flex items-center gap-2 mb-2">
                         <Lock className="w-3.5 h-3.5 text-zinc-700" />
                         <h4 className="font-bold text-zinc-600 system-text">
-                          {job.hiddenProfile?.maskedName || '???' }
+                          {dynamicHint.maskedName}
                         </h4>
                         <span className="text-[8px] text-zinc-700 bg-zinc-900 px-1 py-0.5 rounded">히든</span>
                       </div>
                       <p className="text-[10px] text-zinc-600 italic">
-                        힌트: {job.hiddenProfile?.hintText || '기척이 숨겨져 있습니다.'}
+                        힌트: {dynamicHint.hintText}
                       </p>
                     </div>
                   )

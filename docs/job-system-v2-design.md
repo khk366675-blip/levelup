@@ -81,23 +81,42 @@ graph TD
 
 ---
 
-## 4. 히든 직업 계열 구조 및 특수 기믹 해금
+## 4. 히든 직업 계열 구조 및 특수 기믹 해금 (12-34D 고도화)
 
-히든 직업군은 일반 트리와 독립적으로 존재하며, 단순 수치 누적이 아닌 **특수한 플레이 패턴**에 의해 해금됩니다.
+히든 직업군은 일반 트리와 독립적으로 존재하며, 기존의 단순 1회성 단일 트리거 감지가 아닌 **"테마별 Hidden Resonance(공명) 점수 및 다중 신호 조합 누적"** 구조를 통해 고도의 희귀성을 띱니다.
 
-### 4.1 히든 계열 트리
-1. **그림자 계열**: `shadow-disciple` (1차) $\rightarrow$ `shadow-commander` (2차) $\rightarrow$ `shadow-lord` / `abyss-summoner` / `phantom-general` (3차)
-2. **저주 계열**: `curse-initiate` (1차) $\rightarrow$ `puppet-master` (2차) $\rightarrow$ `soul-reaper` / `doom-herald` / `fate-breaker` (3차)
-3. **차원 계열**: `rift-sensing-hunter` (1차) $\rightarrow$ `dimension-traveler` (2차) $\rightarrow$ `dimension-hunter` / `void-navigator` / `chrono-saber` (3차)
+### 4.1 히든 계열 트리 및 해금 요건
+1. **그림자 계열 (branch: 'shadow')**:
+   - `shadow-disciple` (1차): 그림자 공명 10 이상, 그림자 보유 1마리 이상, 그림자 추출 성공 경험, 그림자 원정 완료(성공/대성공) 경험 필요.
+   - `shadow-commander` (2차): 그림자 공명 25 이상, `shadow-disciple` 레벨 10 이상, 그림자 보유 3마리 이상.
+   - `shadow-lord` / `abyss-summoner` / `phantom-general` (3차): 그림자 공명 50 이상, `shadow-commander` 레벨 20 이상, 특정 신호(그림자 진화 등) 조합 필요.
 
-### 4.2 히든 조건 및 밸런스 정책
-- **기믹 감지**:
-  - `shadow-disciple` (그림자 1차): 그림자 추출 시도 시점 감지.
-  - `curse-initiate` (저주 1차): 직접 전투/무한의 탑에서 헌터 HP 15% 이하인 상태로 긴박하게 승리.
-  - `rift-sensing-hunter` (차원 1차): 직접 전투/무한의 탑에서 20턴 이상 격전을 벌인 뒤 역전 승리.
-- **밸런스**:
-  - 히든 클래스는 특정 상황(예: 소환수 대폭 강화, 디버프 반사, 높은 회피율)에서 고유한 위력을 뿜어냅니다.
-  - 일반 클래스는 스탯의 안정적인 배분과 직관적인 스킬셋, 폭넓은 마스터리 성장을 가지고 있으므로 히든 클래스로 인한 밸런스 붕괴는 없도록 가중치가 균형을 이룹니다.
+2. **저주 계열 (branch: 'curse')**:
+   - `curse-initiate` (1차): 저주 공명 12 이상, 헌터 레벨 15 이상, HP 15% 이하 긴박한 승리 1회 이상, 장기전(20턴 이상) 또는 보스전 긴박 승리 조합 필요.
+   - `puppet-master` (2차): 저주 공명 25 이상, `curse-initiate` 레벨 10 이상, 게이트 클리어 15회 이상.
+   - `soul-reaper` / `doom-herald` / `fate-breaker` (3차): 저주 공명 50 이상 (영혼 약탈자는 45), `puppet-master` 레벨 20 이상.
+
+3. **차원 계열 (branch: 'chrono')**:
+   - `rift-sensing-hunter` (1차): 차원 공명 12 이상, 헌터 레벨 15 이상, 장기전(20턴 이상) 승리 1회 이상, 무한의 탑 10층 클리어 또는 탑 보스 긴박 승리 조합 필요.
+   - `dimension-traveler` (2차): 차원 공명 25 이상, `rift-sensing-hunter` 레벨 10 이상, 게이트 클리어 25회 이상.
+   - `dimension-hunter` / `void-navigator` / `chrono-saber` (3차): 차원 공명 50 이상, `dimension-traveler` 레벨 20 이상.
+
+### 4.2 신호별 공명(Resonance) 가중치 설계
+- `shadow-extraction-attempt`: `shadow` +1
+- `shadow-extract-success`: `shadow` +3
+- `shadow-rare-acquired` / `shadow-named-acquired` / `shadow-evolved`: `shadow` +4 ~ +5
+- `shadow-expedition-success` / `shadow-expedition-great`: `shadow` +2 ~ +4
+- `low-hp-victory` / `low-hp-boss-victory`: `curse` +3 ~ +5
+- `long-battle-victory`: `curse` +2, `rift` +2
+- `tower-boss-clutch-victory` / `rift-special-victory`: `rift` +3 ~ +5
+
+### 4.3 UI 힌트 동적 마스킹 및 스포일러 방지
+플레이어의 공명 수준에 따라 미해금 히든 전직 후보의 마스킹 텍스트가 동적으로 변화합니다:
+- **공명 0**: `???` 마스킹, "어둠 속에서 아무런 기척도 느껴지지 않습니다." (계열별 완전 침묵 힌트)
+- **공명 50% 미만**: `???` 마스킹, "어둠이 당신의 그림자에 반응하고 있다." (일부 신호 감지 힌트)
+- **공명 100% 미만**: `???` 마스킹, "한 계열의 기척이 뚜렷해지고 있다." (임박 힌트)
+- **조건 충족**: 이름 복원(예: `어두운 그늘의 신도`), "히든 전직 후보의 기척이 활성화되었습니다. 다른 세부 조건을 충족하십시오."
+정확한 요구 공명 수치 및 해금 조건 수식은 UI에 일절 노출하지 않아 신비감을 보존합니다.
 
 ---
 

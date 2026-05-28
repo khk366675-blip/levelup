@@ -1,4 +1,12 @@
 
+## 히든 직업 해금 조건 난이도 재조정 및 희귀성 강화 (12-34D) — (2026-05-28)
+- **Hidden Resonance 공명 데이터 모델 구축**: 계열별(`shadow`, `curse`, `rift`) 누적 공명 수치 및 신호 발생 횟수를 추적하는 `HiddenJobPathProgress` 타입을 [types.ts](file:///c:/Users/khdkf/levelup/src/lib/types.ts)에 정의하고 `HunterState`에 저장 구조 연동 완료.
+- **신호 공명 가중치 설계 및 누적 연동**: [store.ts](file:///c:/Users/khdkf/levelup/src/lib/store.ts) 내부에 `SIGNAL_WEIGHTS` 가중치 테이블과 `addHiddenSignalToState` 헬퍼 함수를 적용하여 그림자 추출 시도(+1) 및 성공(+3), rare 이상(+4) 및 named 획득(+5), 원정 성공(+2) 및 대성공(+4), 생사경 극복 승리(+3) 및 S급/보스전 긴박 승리(+5), 장기전(+2/curse & rift), 탑 보스 긴박 승리(+5) 등 정밀 신호 가중치 누적 구현 완료.
+- **히든 1~3차 전직 조건 다중화**: [jobs.ts](file:///c:/Users/khdkf/levelup/src/lib/jobs.ts)의 모든 히든 직업 `unlockCondition`에 `resonanceRequired` 요구량과 관련 signal 조건 등록. 스토어의 `checkJobAwakening`에서 런타임 검증(히든 1차는 원정 성공 경험이나 생사경 극복 등 다중 조건 조합 필수, 히든 2/3차는 이전 히든 직업 레벨 충족 여부 체크) 구현 완료.
+- **하위 호환 마이그레이션**: 저장 파일 로드 런타임에 resonance 데이터가 없을 경우 기존 단방향 `hiddenSignalKeys`를 기반으로 공명 점수를 정밀 복원하여 자동 저장(persist)해주는 `migrateHiddenResonance` 탑재.
+- **UI 동적 힌트 마스킹 및 스포일러 방지**: [JobPanel.tsx](file:///c:/Users/khdkf/levelup/src/components/JobPanel.tsx)에 `getDynamicHiddenHint` 헬퍼를 추가하여 미해금 히든 클래스 카드의 힌트 문구와 이름(???)이 공명 누적 수준에 따라 4단계로 동적 변화하도록 구현 (0%: 완전 침묵 -> 50% 미만: 반응 시작 -> 100% 미만: 기척 뚜렷 -> 충족: 복원 및 임박). 상세 공명 수치는 일절 차단하여 RPG 게임 감성 보존 완료.
+- **무결성 검증**: `npx tsc --noEmit` 타입 검사 무오류 통과, `npm run build` 빌드 검사 통과, `scripts/smoke-direct-battle-runtime.ts` 테스트 통과 완료.
+
 ## Shadow Essence Advanced Usage Expansion — 그림자 정수 고급/후반 사용처 확장 (2026-05-27)
 - **그림자 고유 특성(Trait) 재굴림 및 부여**: 그림자 등급에 따라 특성 슬롯 개수를 차등 배분(`getShadowMaxTraitSlots`, 네임드/진화체/Rare+: 2개, 일반: 1개)하고, 전설 3%, 영웅 12%, 희귀 25%, 일반 60% 가중치 기반 특성 재굴림(`rerollShadowTrait`) 기능 및 점증 비용 공식 구현.
 - **스킬 및 패시브 마력 회로 (슬롯 개방)**: 레벨 10 이상, 강화 +2 이상, Rare 등급 이상 조건에서 패시브 및 액티브 보조 스킬 슬롯 개방(`unlockShadowSlot`) 및 기운 장착 드롭다운 연동 구현. 네임드 그림자는 마력 회로 완전 개방 혜택 부여.

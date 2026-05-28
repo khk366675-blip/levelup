@@ -864,7 +864,7 @@ export const JOB_DEFINITIONS_V2: JobDefinitionV2[] = [
     growthAffinity: {
       questCategoryBonus: { mind: 0.15, challenge: 0.15 }
     },
-    unlockCondition: { shadowCount: 1, hiddenSignalKeys: ['shadow-extraction-attempt'] },
+    unlockCondition: { shadowCount: 1, resonanceRequired: { shadow: 10 }, hiddenSignalKeys: ['shadow-extract-success'] },
     hiddenProfile: {
       isHidden: true,
       maskedName: '어두운 그늘의 신도',
@@ -890,7 +890,7 @@ export const JOB_DEFINITIONS_V2: JobDefinitionV2[] = [
     growthAffinity: {
       questCategoryBonus: { mind: 0.2, challenge: 0.2 }
     },
-    unlockCondition: { hunterLevel: 30, previousJobLevel: 10, shadowCount: 3 },
+    unlockCondition: { hunterLevel: 30, previousJobLevel: 10, shadowCount: 3, resonanceRequired: { shadow: 25 } },
     hiddenProfile: {
       isHidden: true,
       maskedName: '검은 장군',
@@ -918,7 +918,7 @@ export const JOB_DEFINITIONS_V2: JobDefinitionV2[] = [
     growthAffinity: {
       questCategoryBonus: { mind: 0.25, challenge: 0.25 }
     },
-    unlockCondition: { shadowCount: 5, towerFloorCleared: 20, hiddenSignalKeys: ['shadow-extract-success'] },
+    unlockCondition: { shadowCount: 5, towerFloorCleared: 20, resonanceRequired: { shadow: 50 }, hiddenSignalKeys: ['shadow-evolved'] },
     hiddenProfile: {
       isHidden: true,
       maskedName: '미확인 군주',
@@ -946,7 +946,7 @@ export const JOB_DEFINITIONS_V2: JobDefinitionV2[] = [
     growthAffinity: {
       questCategoryBonus: { mind: 0.2, study: 0.2 }
     },
-    unlockCondition: { hunterLevel: 50, previousJobLevel: 20, towerFloorCleared: 30 },
+    unlockCondition: { hunterLevel: 50, previousJobLevel: 20, towerFloorCleared: 30, resonanceRequired: { shadow: 50 } },
     hiddenProfile: {
       isHidden: true,
       maskedName: '기괴한 강령술사',
@@ -974,7 +974,7 @@ export const JOB_DEFINITIONS_V2: JobDefinitionV2[] = [
     growthAffinity: {
       questCategoryBonus: { mind: 0.2, workout: 0.2 }
     },
-    unlockCondition: { hunterLevel: 50, previousJobLevel: 20, bossClearCount: 20 },
+    unlockCondition: { hunterLevel: 50, previousJobLevel: 20, bossClearCount: 20, resonanceRequired: { shadow: 50 } },
     hiddenProfile: {
       isHidden: true,
       maskedName: '칠흑의 군단 사령관',
@@ -1005,7 +1005,7 @@ export const JOB_DEFINITIONS_V2: JobDefinitionV2[] = [
     growthAffinity: {
       questCategoryBonus: { study: 0.15, mind: 0.15 }
     },
-    unlockCondition: { hunterLevel: 15, hiddenSignalKeys: ['low-hp-victory'] },
+    unlockCondition: { hunterLevel: 15, resonanceRequired: { curse: 12 }, hiddenSignalKeys: ['low-hp-victory'] },
     hiddenProfile: {
       isHidden: true,
       maskedName: '희미한 사령 마법사',
@@ -1031,7 +1031,7 @@ export const JOB_DEFINITIONS_V2: JobDefinitionV2[] = [
     growthAffinity: {
       questCategoryBonus: { study: 0.2, mind: 0.2 }
     },
-    unlockCondition: { hunterLevel: 30, previousJobLevel: 10, gateClearCount: 15 },
+    unlockCondition: { hunterLevel: 30, previousJobLevel: 10, gateClearCount: 15, resonanceRequired: { curse: 25 } },
     hiddenProfile: {
       isHidden: true,
       maskedName: '어둠의 직포자',
@@ -1059,7 +1059,7 @@ export const JOB_DEFINITIONS_V2: JobDefinitionV2[] = [
     growthAffinity: {
       questCategoryBonus: { workout: 0.2, challenge: 0.2 }
     },
-    unlockCondition: { hunterLevel: 45, bossClearCount: 10 },
+    unlockCondition: { hunterLevel: 45, bossClearCount: 10, resonanceRequired: { curse: 45 } },
     hiddenProfile: {
       isHidden: true,
       maskedName: '영혼 수집가',
@@ -1087,7 +1087,7 @@ export const JOB_DEFINITIONS_V2: JobDefinitionV2[] = [
     growthAffinity: {
       questCategoryBonus: { study: 0.25, mind: 0.15 }
     },
-    unlockCondition: { hunterLevel: 50, previousJobLevel: 20, towerFloorCleared: 25 },
+    unlockCondition: { hunterLevel: 50, previousJobLevel: 20, towerFloorCleared: 25, resonanceRequired: { curse: 50 } },
     hiddenProfile: {
       isHidden: true,
       maskedName: '파멸을 부르는 오라',
@@ -1115,7 +1115,7 @@ export const JOB_DEFINITIONS_V2: JobDefinitionV2[] = [
     growthAffinity: {
       questCategoryBonus: { study: 0.2, challenge: 0.2 }
     },
-    unlockCondition: { hunterLevel: 50, previousJobLevel: 20, gateClearCount: 35 },
+    unlockCondition: { hunterLevel: 50, previousJobLevel: 20, gateClearCount: 35, resonanceRequired: { curse: 50 } },
     hiddenProfile: {
       isHidden: true,
       maskedName: '운명을 끊어내는 바늘',
@@ -1146,7 +1146,7 @@ export const JOB_DEFINITIONS_V2: JobDefinitionV2[] = [
     growthAffinity: {
       questCategoryBonus: { habit: 0.15, finance: 0.15 }
     },
-    unlockCondition: { hunterLevel: 15, hiddenSignalKeys: ['long-battle-victory'] },
+    unlockCondition: { hunterLevel: 15, resonanceRequired: { rift: 12 }, hiddenSignalKeys: ['long-battle-victory'] },
     hiddenProfile: {
       isHidden: true,
       maskedName: '시공간의 부스러기 목격자',
@@ -1172,7 +1172,7 @@ export const JOB_DEFINITIONS_V2: JobDefinitionV2[] = [
     growthAffinity: {
       questCategoryBonus: { habit: 0.2, finance: 0.2 }
     },
-    unlockCondition: { hunterLevel: 30, previousJobLevel: 10, gateClearCount: 25 },
+    unlockCondition: { hunterLevel: 30, previousJobLevel: 10, gateClearCount: 25, resonanceRequired: { rift: 25 } },
     hiddenProfile: {
       isHidden: true,
       maskedName: '경계의 도약자',
@@ -1200,7 +1200,7 @@ export const JOB_DEFINITIONS_V2: JobDefinitionV2[] = [
     growthAffinity: {
       questCategoryBonus: { habit: 0.25, finance: 0.25 }
     },
-    unlockCondition: { hunterLevel: 50, gateClearCount: 50 },
+    unlockCondition: { hunterLevel: 50, gateClearCount: 50, resonanceRequired: { rift: 50 } },
     hiddenProfile: {
       isHidden: true,
       maskedName: '경계의 파수꾼',
@@ -1228,7 +1228,7 @@ export const JOB_DEFINITIONS_V2: JobDefinitionV2[] = [
     growthAffinity: {
       questCategoryBonus: { study: 0.25, finance: 0.15 }
     },
-    unlockCondition: { hunterLevel: 50, previousJobLevel: 20, towerFloorCleared: 30 },
+    unlockCondition: { hunterLevel: 50, previousJobLevel: 20, towerFloorCleared: 30, resonanceRequired: { rift: 50 } },
     hiddenProfile: {
       isHidden: true,
       maskedName: '성간의 방랑자',
@@ -1256,7 +1256,7 @@ export const JOB_DEFINITIONS_V2: JobDefinitionV2[] = [
     growthAffinity: {
       questCategoryBonus: { habit: 0.25, workout: 0.15 }
     },
-    unlockCondition: { hunterLevel: 50, previousJobLevel: 20, bossClearCount: 20 },
+    unlockCondition: { hunterLevel: 50, previousJobLevel: 20, bossClearCount: 20, resonanceRequired: { rift: 50 } },
     hiddenProfile: {
       isHidden: true,
       maskedName: '찰나의 광검사',

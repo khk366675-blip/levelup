@@ -578,6 +578,79 @@ const applyDirectBattleSkillRuntimeUses = (
   return changed ? next : skillStates
 }
 
+const SIGNAL_WEIGHTS: Record<string, Array<{ pathId: 'shadow' | 'curse' | 'rift'; weight: number }>> = {
+  'shadow-extraction-attempt': [{ pathId: 'shadow', weight: 1 }],
+  'shadow-extract-success': [{ pathId: 'shadow', weight: 3 }],
+  'shadow-rare-acquired': [{ pathId: 'shadow', weight: 4 }],
+  'shadow-named-acquired': [{ pathId: 'shadow', weight: 5 }],
+  'shadow-evolved': [{ pathId: 'shadow', weight: 5 }],
+  'shadow-expedition-success': [{ pathId: 'shadow', weight: 2 }],
+  'shadow-expedition-great': [{ pathId: 'shadow', weight: 4 }],
+
+  'low-hp-victory': [{ pathId: 'curse', weight: 3 }],
+  'low-hp-boss-victory': [{ pathId: 'curse', weight: 5 }],
+  'long-battle-victory': [
+    { pathId: 'curse', weight: 2 },
+    { pathId: 'rift', weight: 2 }
+  ],
+  'tower-boss-clutch-victory': [{ pathId: 'rift', weight: 5 }],
+  'rift-special-victory': [{ pathId: 'rift', weight: 3 }],
+  'debuff-skill-use': [{ pathId: 'curse', weight: 3 }]
+}
+
+const addHiddenSignalToState = (hunter: HunterState, signalKey: string): HunterState => {
+  const currentProgress = hunter.hiddenResonanceProgress || {}
+  const currentSignalKeys = hunter.hiddenSignalKeys || []
+  
+  const nextSignalKeys = Array.from(new Set([...currentSignalKeys, signalKey]))
+
+  const nextProgress = { ...currentProgress }
+  const mappings = SIGNAL_WEIGHTS[signalKey] || []
+  
+  mappings.forEach(({ pathId, weight }) => {
+    const prev = nextProgress[pathId] || {
+      pathId,
+      resonance: 0,
+      signals: {}
+    }
+    
+    const prevSignals = prev.signals || {}
+    const nextSignals = {
+      ...prevSignals,
+      [signalKey]: (prevSignals[signalKey] || 0) + 1
+    }
+    
+    const nextResonance = prev.resonance + weight
+    
+    nextProgress[pathId] = {
+      ...prev,
+      resonance: nextResonance,
+      signals: nextSignals,
+      discoveredAt: prev.discoveredAt || todayISO()
+    }
+  })
+
+  return {
+    ...hunter,
+    hiddenSignalKeys: nextSignalKeys,
+    hiddenResonanceProgress: nextProgress
+  }
+}
+
+export const migrateHiddenResonance = (hunter: HunterState): HunterState => {
+  if (hunter.hiddenResonanceProgress && Object.keys(hunter.hiddenResonanceProgress).length > 0) {
+    return hunter
+  }
+  
+  let nextHunter = { ...hunter }
+  const signals = hunter.hiddenSignalKeys || []
+  signals.forEach(sig => {
+    nextHunter = addHiddenSignalToState(nextHunter, sig)
+  })
+  
+  return nextHunter
+}
+
 const applySecretProgressEvent = (
   s: GameState,
   event: SecretEvent,
@@ -3068,7 +3141,8 @@ export const useGame = create<GameState>()(
 
       checkJobAwakening: () => {
         const s = get()
-        const h = s.hunter
+        // 런타임 마이그레이션 적용
+        const h = migrateHiddenResonance(s.hunter)
         const stats = s.achievementStats
         
         const unlockedJobIds = h.unlockedJobIds || ['unawakened']
@@ -3178,6 +3252,53 @@ export const useGame = create<GameState>()(
             })
           }
 
+          // 8. resonanceRequired 검증
+          if (cond.resonanceRequired) {
+            const progress = h.hiddenResonanceProgress || {}
+            Object.entries(cond.resonanceRequired).forEach(([pathKey, reqVal]) => {
+              const resVal = progress[pathKey]?.resonance ?? 0
+              if (resVal < reqVal) {
+                isMet = false
+              }
+            })
+          }
+
+          // 9. 직업별 특수 시나리오 복합 조건 검증
+          if (isMet) {
+            // 그림자 추종자 (shadow-disciple)
+            if (job.id === 'shadow-disciple') {
+              const hasExpedition = (h.hiddenSignalKeys || []).includes('shadow-expedition-success') || 
+                                    (h.hiddenSignalKeys || []).includes('shadow-expedition-great')
+              if (!hasExpedition) {
+                isMet = false
+              }
+            }
+            // 저주 입문자 (curse-initiate)
+            if (job.id === 'curse-initiate') {
+              const hasLongOrBoss = (h.hiddenSignalKeys || []).includes('long-battle-victory') || 
+                                    (h.hiddenSignalKeys || []).includes('low-hp-boss-victory')
+              if (!hasLongOrBoss) {
+                isMet = false
+              }
+            }
+            // 균열 감응자 (rift-sensing-hunter)
+            if (job.id === 'rift-sensing-hunter') {
+              const highestFloor = s.infiniteTower?.highestClearedFloor ?? 0
+              const clutchVictory = (h.hiddenSignalKeys || []).includes('tower-boss-clutch-victory')
+              if (highestFloor < 10 && !clutchVictory) {
+                isMet = false
+              }
+            }
+            // 그림자 군주 (shadow-lord)
+            if (job.id === 'shadow-lord') {
+              const hasEvolvedOrNamed = (h.hiddenSignalKeys || []).includes('shadow-evolved') || 
+                                        (h.hiddenSignalKeys || []).includes('shadow-named-acquired')
+              if (!hasEvolvedOrNamed) {
+                isMet = false
+              }
+            }
+          }
+
           if (isMet) {
             if (job.hiddenProfile?.isHidden) {
               nextHidden.push(job.id)
@@ -3203,14 +3324,14 @@ export const useGame = create<GameState>()(
           }
         })
 
-        if (advancementsChanged || hiddenChanged) {
+        if (advancementsChanged || hiddenChanged || h !== s.hunter) {
           set({
             hunter: {
               ...h,
               availableAdvancements: nextAdvancements,
               discoveredHiddenJobIds: nextHidden
             },
-            messages: [...s.messages, ...newMessages]
+            messages: newMessages.length > 0 ? [...s.messages, ...newMessages] : s.messages
           })
         }
       },
@@ -4160,8 +4281,13 @@ export const useGame = create<GameState>()(
           const maxHp = playerStats.maxHp
           const remainingHp = combatLog.playerHpRemaining
           const hpPercent = maxHp > 0 ? remainingHp / maxHp : 1
+          const isBoss = gate.rank === 'S' || gate.rewardTableId?.includes('boss')
           if (hpPercent <= 0.15) {
-            addedSignals.push('low-hp-victory')
+            if (isBoss) {
+              addedSignals.push('low-hp-boss-victory')
+            } else {
+              addedSignals.push('low-hp-victory')
+            }
           }
           if ((combatLog.totalTurns || 0) >= 20) {
             addedSignals.push('long-battle-victory')
@@ -4183,12 +4309,14 @@ export const useGame = create<GameState>()(
           }
         )
 
+        let nextHunter = (outcome.state as any).hunter || s.hunter
+        addedSignals.forEach(sig => {
+          nextHunter = addHiddenSignalToState(nextHunter, sig)
+        })
+
         set({
           ...outcome.state,
-          hunter: {
-            ...((outcome.state as any).hunter || s.hunter),
-            hiddenSignalKeys: updatedSignals
-          }
+          hunter: nextHunter
         })
         set(current => applyChallengeProgress(current, {
           gateAttempt: true,
@@ -5230,7 +5358,23 @@ export const useGame = create<GameState>()(
           ? [...(s.ownedShadows ?? []), result.shadow]
           : (s.ownedShadows ?? [])
 
-        const updatedSignals = Array.from(new Set([...(s.hunter.hiddenSignalKeys || []), 'shadow-extraction-attempt']))
+        const addedSignals: string[] = ['shadow-extraction-attempt']
+        if (result.success && result.shadow) {
+          addedSignals.push('shadow-extract-success')
+          const isRarePlus = ['rare', 'epic', 'legendary'].includes(result.shadow.rarity)
+          if (isRarePlus) {
+            addedSignals.push('shadow-rare-acquired')
+          }
+          const isNamed = result.shadow.isNamed || result.shadow.isGateNamed || result.shadow.isAchievementNamed
+          if (isNamed) {
+            addedSignals.push('shadow-named-acquired')
+          }
+        }
+
+        let nextHunter = s.hunter
+        addedSignals.forEach(sig => {
+          nextHunter = addHiddenSignalToState(nextHunter, sig)
+        })
 
         set(applySecretProgressEvent(s, {
           context: 'shadow',
@@ -5241,10 +5385,7 @@ export const useGame = create<GameState>()(
           ownedShadows,
           lastShadowExtractResult: result,
           shadowExtractHistory: [result, ...(s.shadowExtractHistory ?? [])].slice(0, 50),
-          hunter: {
-            ...s.hunter,
-            hiddenSignalKeys: updatedSignals
-          }
+          hunter: nextHunter
         }))
 
         setTimeout(() => {
@@ -5502,9 +5643,11 @@ export const useGame = create<GameState>()(
               }
             : sh
         )
+        const nextHunter = addHiddenSignalToState(s.hunter, 'shadow-evolved')
         return applySecretProgressEvent(s, { context: 'shadow', action: 'evolve', shadowInstanceId }, {
           ownedShadows: nextOwned,
           shadowEssence: (s.shadowEssence ?? 0) - cost,
+          hunter: nextHunter,
           messages: [...s.messages, {
             id: uid(),
             kind: 'shadow' as const,
@@ -6118,10 +6261,22 @@ export const useGame = create<GameState>()(
           })
           setTimeout(() => {
             set(current => applyChallengeProgress(current, { shadowExpeditionCompleted: true }))
+            get().checkJobAwakening()
           }, 0)
         }
 
+        let nextHunter = s.hunter
+        if (resolved.result && !expedition.result) {
+          const outcome = resolved.result.outcome
+          if (outcome === 'success') {
+            nextHunter = addHiddenSignalToState(nextHunter, 'shadow-expedition-success')
+          } else if (outcome === 'great_success') {
+            nextHunter = addHiddenSignalToState(nextHunter, 'shadow-expedition-great')
+          }
+        }
+
         const baseState: Partial<GameState> = {
+          hunter: nextHunter,
           ownedShadows: nextOwnedShadows,
           shadowEssence: nextShadowEssence,
           activeShadowExpeditionId: resolved.status === 'completed' ? undefined : s.activeShadowExpeditionId,
@@ -6495,14 +6650,21 @@ export const useGame = create<GameState>()(
           const remainingHp = combatLog.playerHpRemaining
           const hpPercent = maxHp > 0 ? remainingHp / maxHp : 1
           if (hpPercent <= 0.15) {
-            addedSignals.push('low-hp-victory')
+            if (floorType === 'boss') {
+              addedSignals.push('tower-boss-clutch-victory')
+            } else {
+              addedSignals.push('low-hp-victory')
+            }
           }
           if ((combatLog.totalTurns || 0) >= 20) {
             addedSignals.push('long-battle-victory')
           }
         }
 
-        const updatedSignals = Array.from(new Set([...(s.hunter.hiddenSignalKeys || []), ...addedSignals]))
+        let nextHunter = s.hunter
+        addedSignals.forEach(sig => {
+          nextHunter = addHiddenSignalToState(nextHunter, sig)
+        })
 
         set({
           infiniteTower: {
@@ -6522,10 +6684,7 @@ export const useGame = create<GameState>()(
           },
           combatLogs: [{ ...combatLog, result: outcome, source: 'tower' as const }, ...s.combatLogs].slice(0, 20),
           manualBattleSession: undefined,
-          hunter: {
-            ...s.hunter,
-            hiddenSignalKeys: updatedSignals
-          }
+          hunter: nextHunter
         })
 
         get().resolveTowerBattle()

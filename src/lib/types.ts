@@ -172,6 +172,15 @@ export interface JobUnlockCondition {
   mainStageCompletedCount?: number
   shadowCount?: number
   hiddenSignalKeys?: string[]
+  resonanceRequired?: Partial<Record<'shadow' | 'curse' | 'rift', number>>
+}
+
+export interface HiddenJobPathProgress {
+  pathId: 'shadow' | 'curse' | 'rift'
+  resonance: number
+  signals: Record<string, number>
+  discoveredAt?: string
+  candidateUnlockedAt?: string
 }
 
 export interface JobHiddenProfile {
@@ -1728,6 +1737,7 @@ export interface HunterState {
   availableAdvancements?: JobId[]
   discoveredHiddenJobIds?: JobId[]
   hiddenSignalKeys?: string[]
+  hiddenResonanceProgress?: Record<string, HiddenJobPathProgress>
 }
 
 // ── Random Quest System ────────────────────────────────────────────
