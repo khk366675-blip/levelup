@@ -47,27 +47,27 @@ type ExtractionStage = 'detect' | 'resonance' | 'resistance' | 'command' | 'thre
 type ExtractionIntensity = 'quick' | 'high' | 'apex'
 
 const QUICK_STAGES: Array<{ id: ExtractionStage; ms: number }> = [
-  { id: 'detect', ms: 800 },
-  { id: 'resonance', ms: 600 },
-  { id: 'resistance', ms: 600 },
-  { id: 'command', ms: 600 },
-  { id: 'threshold', ms: 800 },
+  { id: 'detect', ms: 1600 },
+  { id: 'resonance', ms: 1600 },
+  { id: 'resistance', ms: 1600 },
+  { id: 'command', ms: 1200 },
+  { id: 'threshold', ms: 2000 },
 ]
 
 const HIGH_STAGES: Array<{ id: ExtractionStage; ms: number }> = [
-  { id: 'detect', ms: 1000 },
-  { id: 'resonance', ms: 1000 },
-  { id: 'resistance', ms: 1200 },
-  { id: 'command', ms: 800 },
-  { id: 'threshold', ms: 1500 },
+  { id: 'detect', ms: 2200 },
+  { id: 'resonance', ms: 2400 },
+  { id: 'resistance', ms: 2600 },
+  { id: 'command', ms: 1600 },
+  { id: 'threshold', ms: 3200 },
 ]
 
 const APEX_STAGES: Array<{ id: ExtractionStage; ms: number }> = [
-  { id: 'detect', ms: 1200 },
-  { id: 'resonance', ms: 1500 },
-  { id: 'resistance', ms: 1800 },
-  { id: 'command', ms: 1000 },
-  { id: 'threshold', ms: 2200 },
+  { id: 'detect', ms: 2800 },
+  { id: 'resonance', ms: 3200 },
+  { id: 'resistance', ms: 3800 },
+  { id: 'command', ms: 2000 },
+  { id: 'threshold', ms: 4800 },
 ]
 
 const rarityShadowAccent: Record<ShadowRarity, { glow: string; border: string; aura: string }> = {
