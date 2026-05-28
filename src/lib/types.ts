@@ -765,6 +765,12 @@ export interface ShadowExtractResult {
   rewardFragmentName?: string
   rewardFragmentCount?: number
   resonanceBonusPercent?: number
+  redGateExtraction?: {
+    isRedGate: boolean
+    highGradeBonusPercent: number
+    bossShadowWeightBonusPercent: number
+    fragmentBonusCount: number
+  }
 }
 
 export type ShadowExpeditionType = 'training' | 'essence' | 'hunt' | 'scout'
@@ -1004,6 +1010,17 @@ export interface GateRunEncounter {
   shadowTraceEffect?: string
 }
 
+export interface RedGateState {
+  status: 'none' | 'unstable' | 'opened' | 'cleared' | 'failed'
+  instabilityScore: number
+  triggeredAtEncounterId?: string
+  redGateSeed?: string
+  extractionBonusPercent?: number     // 추출 성공률 보정 절대값 (%)
+  highGradeShadowBonus?: number       // 고등급 가중치 보정 절대값 (%)
+  bossShadowWeightBonus?: number      // 보스/네임드 가중치 보정 절대값 (%)
+  fragmentBonusCount?: number         // 실패 시 추가 조각 수량
+}
+
 export interface GateRunState {
   gateId: string
   seed: string
@@ -1018,6 +1035,7 @@ export interface GateRunState {
   clearedEncounterIds: string[]
   failed?: boolean
   completed?: boolean
+  redGateState?: RedGateState
 }
 
 
@@ -1824,6 +1842,47 @@ export interface HunterState {
   discoveredHiddenJobIds?: JobId[]
   hiddenSignalKeys?: string[]
   hiddenResonanceProgress?: Record<string, HiddenJobPathProgress>
+
+  // ── [Optional Hooks for 12-40F Extension] ──
+  dailyStabilityBonus?: number
+  redGateInstabilityResist?: number
+}
+
+// ── Daily Progression State (12-40F) ──────────────────────────────────
+// 현실 행동이 게임 준비도를 올린다: 매일 daily 퀘스트를 완료할수록
+// 각 카테고리별 Resonance가 쌓이고, 던전 런 입장 시 보너스로 반영된다.
+
+export type DailyReadinessLevel = 'dormant' | 'awakening' | 'focused' | 'resonant' | 'transcendent'
+
+export interface DailyProgressionState {
+  /** 오늘 날짜 키 (YYYY-MM-DD). 날짜가 바뀌면 리셋하여 재계산한다. */
+  dateKey: string
+  /** 집중력 공명 (study, career, finance 완료 기반, 0~100) */
+  focusResonance: number
+  /** 신체 준비도 (workout, health 완료 기반, 0~100) */
+  bodyReadiness: number
+  /** 정신 균형 (mind, habit 완료 기반, 0~100) */
+  mindBalance: number
+  /** 루틴 점수 (social, challenge 포함 전체 daily 완료율 기반, 0~100) */
+  routineScore: number
+  /** 종합 준비도 (0~100). Gate 보너스 적용 기준치. */
+  overallReadiness: number
+  /** 준비도 레벨 텍스트 */
+  readinessLevel: DailyReadinessLevel
+  /** 던전 런 보상 배율 보너스 (0.0 ~ 0.30) */
+  gateRewardBonus: number
+  /** 레드 게이트 불안정성 저항 (0.0 ~ 0.25) */
+  redGateResistBonus: number
+  /** 스킬 XP 획득 보너스 (0.0 ~ 0.20) */
+  skillXpBonus: number
+  /** 쉐도우 추출 성공률 보너스 (0.0 ~ 0.15) */
+  extractionBonus: number
+  /** 오늘 완료한 카테고리별 daily 수 (스냅샷) */
+  todayCompletionsByCategory: Partial<Record<Category, number>>
+  /** 오늘 완료한 daily 총 수 */
+  todayTotalCompletions: number
+  /** 리커버리 모드 (어제 daily를 하나도 못했을 때 활성화. 패널티 없이 가이드 제공) */
+  isRecoveryMode: boolean
 }
 
 // ── Random Quest System ────────────────────────────────────────────

@@ -18,6 +18,7 @@ import type {
   StatKey,
   ShadowTraitDefinition,
   ShadowLegionNode,
+  RedGateState,
 } from './types'
 import {
   SHADOW_INNATE_GRADE_WEIGHTS_BY_SOURCE,
@@ -670,15 +671,19 @@ export const rollShadowExtraction = (
   hunter: HunterState,
   equippedShadows: OwnedShadow[] = [],
   rng: () => number = Math.random,
-  bonusChance: number = 0
+  bonusChance: number = 0,
+  redGateState?: RedGateState
 ) => {
   const isBossExtraction = gate.monsterIds.some(mId => {
     const m = getMockDirectBattleMonster(mId)
     return m?.unitType === 'boss'
   })
 
+  const isRedGate = redGateState && (redGateState.status === 'opened' || redGateState.status === 'cleared')
+  const redGateBonusChance = isRedGate ? (redGateState.extractionBonusPercent ?? 0) / 100 : 0
+
   const baseChance = getShadowExtractionChance(hunter, gate, equippedShadows)
-  const chance = Math.min(1.0, baseChance + bonusChance)
+  const chance = Math.min(1.0, baseChance + bonusChance + redGateBonusChance)
   if (rng() > chance) {
     let rewardFragmentId = ''
     let rewardFragmentName = ''
@@ -705,7 +710,8 @@ export const rollShadowExtraction = (
       }
     }
 
-    const fragmentCount = isBossExtraction ? 2 : 1
+    const fragmentBonus = isRedGate ? (redGateState.fragmentBonusCount ?? 0) : 0
+    const fragmentCount = (isBossExtraction ? 2 : 1) + fragmentBonus
 
     return {
       gateId: gate.id,
@@ -726,12 +732,50 @@ export const rollShadowExtraction = (
   const qualityBonus = Math.min(0.06, getShadowEffectTotal(equippedShadows, 'extraction_quality_bonus'))
   const rankKey = gate.rank === 'C' ? 'C' : gate.rank === 'D' ? 'D' : 'E'
   const baseWeights = { ...rarityWeightsByRank[rankKey] }
+
+  // 레드 게이트 고등급 가중치 보정
+  if (isRedGate && redGateState.highGradeShadowBonus) {
+    const hgBonus = redGateState.highGradeShadowBonus // 20 ~ 35
+    baseWeights.legendary += hgBonus * 0.4
+    baseWeights.epic += hgBonus * 0.6
+    baseWeights.rare += hgBonus * 0.8
+    baseWeights.common = Math.max(5, baseWeights.common - hgBonus * 1.0)
+    baseWeights.uncommon = Math.max(10, baseWeights.uncommon - hgBonus * 0.8)
+  }
+
   baseWeights.legendary += qualityBonus * 80
   baseWeights.epic += qualityBonus * 120
   baseWeights.common = Math.max(5, baseWeights.common - qualityBonus * 120)
+
   const rolledRarity = pickWeighted(baseWeights, rng)
   const pool = rankPoolFor(gate, rolledRarity)
-  const definition = pool[Math.floor(rng() * pool.length)] ?? pool[0]
+
+  let definition = pool[0]
+  if (pool.length > 0) {
+    // 레드 게이트 보스/네임드 가중치 보정
+    if (isRedGate && redGateState.bossShadowWeightBonus) {
+      const weightBonus = redGateState.bossShadowWeightBonus
+      const defWeights = pool.map(def => {
+        const isNamed = def.isGateNamed || def.sourceType === 'gate_named'
+        return {
+          def,
+          weight: isNamed ? 10 + weightBonus : 10
+        }
+      })
+      const totalWeight = defWeights.reduce((sum, item) => sum + item.weight, 0)
+      let roll = rng() * totalWeight
+      for (const item of defWeights) {
+        roll -= item.weight
+        if (roll <= 0) {
+          definition = item.def
+          break
+        }
+      }
+    } else {
+      definition = pool[Math.floor(rng() * pool.length)] ?? pool[0]
+    }
+  }
+
   const shadow = createOwnedShadow(definition, rng, { innateSource: 'gate_extract' })
   const prefix = definition.isGateNamed
     ? '평범한 그림자가 아닙니다.'

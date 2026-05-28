@@ -53,6 +53,11 @@ import type {
   Title,
   InfiniteTowerState,
   TowerBattleResult,
+  GateRunEventChoice,
+  GateRunState,
+  GateRunEncounter,
+  DailyProgressionState,
+  DailyReadinessLevel,
 } from './types'
 
 import {
@@ -81,7 +86,7 @@ import {
   RANDOM_QUEST_POOL,
   SKILL_DEFINITIONS,
 } from './seed'
-import { generateGateRunState } from './gateRunEvents'
+import { generateGateRunState, hydrateGateRunEncounterChoices } from './gateRunEvents'
 import {
   CATEGORY_TO_STAT,
   calculatePlayerCombatStats,
@@ -224,6 +229,71 @@ import {
 
 import { registerLegionNodeLevelResolver } from './shadowStats'
 
+function rollRedGateInstability(runState: GateRunState, encounterId: string, customIncrease?: number) {
+  if (!runState) return
+  if (!runState.redGateState) {
+    runState.redGateState = { status: 'none', instabilityScore: 0 }
+  }
+
+  const red = runState.redGateState
+  // 이미 열렸거나 클리어/실패된 경우 재판정 금지 (Gate당 최대 1회 개방 보장)
+  if (red.status === 'opened' || red.status === 'cleared' || red.status === 'failed') return
+
+  // 1. instabilityScore 누적
+  const increase = customIncrease ?? 5
+  red.instabilityScore = Math.min(100, red.instabilityScore + increase)
+
+  // 개방 판정 롤링 개시
+  red.status = 'unstable'
+  
+  // 개방 기본 확률: instabilityScore * 0.4%
+  const baseChance = red.instabilityScore * 0.004
+
+  // 게이트 랭크 및 보스 보정 가중치
+  const gate = GATE_DEFINITIONS.find(g => g.id === runState.gateId)
+  const rank = gate?.rank ?? 'E'
+  const isBossGate = runState.gateId.includes('boss') || rank === 'S' || gate?.rewardTableId?.includes('boss')
+  
+  let rankMultiplier = 1.0
+  if (rank === 'E' || rank === 'D') rankMultiplier = 0.2
+  else if (rank === 'C' || rank === 'B') rankMultiplier = 0.6
+  else if (rank === 'A') rankMultiplier = 1.0
+  else if (rank === 'S') rankMultiplier = 1.5
+  
+  if (isBossGate) rankMultiplier *= 2.0
+
+  const finalChance = baseChance * rankMultiplier
+
+  // 3. 개방 여부 롤링
+  if (Math.random() < finalChance) {
+    red.status = 'opened'
+    red.triggeredAtEncounterId = encounterId
+    red.redGateSeed = `${runState.seed}-red-${Date.now()}`
+    
+    // 레드 게이트 전용 붉은 보정 수치 주입
+    red.extractionBonusPercent = 5 + Math.floor(Math.random() * 6)  // +5~10% 절대 보정 성공률
+    red.highGradeShadowBonus = 20 + Math.floor(Math.random() * 16)  // +20~35% 고등급 가중치
+    red.bossShadowWeightBonus = 10 + Math.floor(Math.random() * 11)  // +10~20% 보스/네임드 가중치
+    red.fragmentBonusCount = 1 + Math.floor(Math.random() * 2)     // 실패 시 추가 잔향 조각 수 +1~2개
+
+    // 4. 남은 던전의 붉은 변형 (정책 A)
+    if (runState.encounters) {
+      runState.encounters.forEach((enc: GateRunEncounter) => {
+        if (enc.status === 'cleared') return
+        
+        // 난이도 및 보상 가산
+        enc.difficultyMod = (enc.difficultyMod ?? 1.0) + (0.2 + Math.random() * 0.25)
+        enc.rewardMultiplier = (enc.rewardMultiplier ?? 1.0) + (0.15 + Math.random() * 0.15)
+        
+        enc.title = `[RED GATE] ${enc.title}`
+        if (enc.type === 'battle' || enc.type === 'elite' || enc.type === 'boss') {
+          enc.description = `[레드 게이트 변이] 붉게 뒤틀린 차원의 불안정성이 전장에 유입되어 적들이 폭주하고 전리품의 가치가 상승했습니다. ${enc.description}`
+        }
+      })
+    }
+  }
+}
+
 export interface GameState {
   hunter: HunterState
   quests: Quest[]
@@ -272,6 +342,8 @@ export interface GameState {
   secretProgress?: SecretProgressState
   aiCoachMemory?: AiCoachMemoryState
   aiCoachCoreContext?: AiCoachCoreContext
+  /** 12-40F: 현실 행동 기반 게임 준비도 상태 */
+  dailyProgression?: DailyProgressionState
   initialized: boolean
 
   // hunter
@@ -419,6 +491,9 @@ export interface GameState {
   recordAiCoachPlannedQuests: (quests: Omit<AiCoachQuestOutcome, 'status' | 'addedAt'>[]) => void
   updateAiCoachQuestOutcomeOnComplete: (questId: string) => void
   rebuildAiCoachRollingSummary: () => void
+
+  // 12-40F: daily progression
+  recalculateDailyProgression: () => void
 }
 
 const initialHunter: HunterState = {
@@ -577,6 +652,7 @@ const applyDirectBattleSkillRuntimeUses = (
   turns: BattleTurn[],
   isVictory = false,
   isBoss = false,
+  skillXpBonus = 0,  // 12-40F: daily progression 기반 스킬 XP 배율 보너스
 ): Record<string, SkillRuntimeState> | undefined => {
   let next = skillStates ?? {}
   let changed = false
@@ -599,8 +675,13 @@ const applyDirectBattleSkillRuntimeUses = (
     if (isVictory) totalGain += 1
     if (isBoss) totalGain += 1
 
-    // Soft Cap (최대 15 XP)
-    if (totalGain > 15) totalGain = 15
+    // 12-40F: 현실 준비도 스킬 XP 보너스 적용
+    if (skillXpBonus > 0) {
+      totalGain = Math.round(totalGain * (1 + skillXpBonus))
+    }
+
+    // Soft Cap (최대 20 XP, 보너스 반영 후)
+    if (totalGain > 20) totalGain = 20
 
     next = recordSkillRuntimeUse(next, skillId, totalGain)
     changed = true
@@ -750,6 +831,90 @@ const recoverGateInjuryByQuestCompletion = (gateStatus: GateStatus, now = new Da
 
 const recoverGateAfterQuestCompletion = (gateStatus: GateStatus): GateStatus => {
   return recoverGateInjuryByQuestCompletion(recoverGateStaminaByQuest(gateStatus))
+}
+
+// ── 12-40F: Daily Progression Builder ─────────────────────────────────
+// 현실 행동 완료도를 0~100 스코어로 계산하여 DailyProgressionState를 반환한다.
+// 퀘스트 미완료에 패널티를 주지 않되, 완료할수록 게임 준비도가 상승한다.
+const buildDailyProgression = (
+  quests: Quest[],
+  achievementStats: AchievementStats
+): DailyProgressionState => {
+  const dateKey = todayKey()
+  const todayHistory = achievementStats.dailyHistory?.[dateKey]
+  const completedIds = todayHistory?.completedDailyQuestIds ?? []
+
+  // 오늘 완료한 daily 퀘스트들 가져오기
+  const todayDailies = quests.filter(q => q.type === 'daily')
+  const completedToday = todayDailies.filter(q => completedIds.includes(q.id))
+
+  // 카테고리별 완료 수 집계
+  const byCategory: Partial<Record<Category, number>> = {}
+  for (const q of completedToday) {
+    byCategory[q.category] = (byCategory[q.category] ?? 0) + 1
+  }
+
+  // 총 daily 수 (가용 기준)
+  const totalAvailable = Math.max(1, todayDailies.length)
+  const totalCompleted = completedToday.length
+
+  // 카테고리 그룹별 스코어 계산 (1개당 +25점, 최대 100)
+  const focusCount = (byCategory['study'] ?? 0) + (byCategory['career'] ?? 0) + (byCategory['finance'] ?? 0)
+  const bodyCount = (byCategory['workout'] ?? 0) + (byCategory['health'] ?? 0)
+  const mindCount = (byCategory['mind'] ?? 0) + (byCategory['habit'] ?? 0)
+
+  const focusResonance = Math.min(100, focusCount * 25)
+  const bodyReadiness = Math.min(100, bodyCount * 30)
+  const mindBalance = Math.min(100, mindCount * 25)
+  // routineScore: 전체 완료율 기반 (0~100)
+  const completionRate = totalCompleted / totalAvailable
+  const routineScore = Math.min(100, Math.round(completionRate * 100))
+
+  // 종합 준비도: 4개 축의 가중 평균
+  const overallReadiness = Math.min(100, Math.round(
+    focusResonance * 0.25 +
+    bodyReadiness * 0.25 +
+    mindBalance * 0.20 +
+    routineScore * 0.30
+  ))
+
+  // 준비도 레벨 분류
+  let readinessLevel: DailyReadinessLevel = 'dormant'
+  if (overallReadiness >= 80) readinessLevel = 'transcendent'
+  else if (overallReadiness >= 55) readinessLevel = 'resonant'
+  else if (overallReadiness >= 35) readinessLevel = 'focused'
+  else if (overallReadiness >= 15) readinessLevel = 'awakening'
+
+  // 게임 보너스 산출 (overallReadiness 비례)
+  const r = overallReadiness / 100
+  const gateRewardBonus = parseFloat((r * 0.30).toFixed(3))        // 최대 +30%
+  const redGateResistBonus = parseFloat((r * 0.25).toFixed(3))     // 최대 +25% 저항
+  const skillXpBonus = parseFloat((r * 0.20).toFixed(3))           // 최대 +20%
+  const extractionBonus = parseFloat((r * 0.15).toFixed(3))        // 최대 +15%
+
+  // 리커버리 모드: 어제 daily를 하나도 완료하지 않았을 때 활성화
+  const yesterdayDate = new Date()
+  yesterdayDate.setDate(yesterdayDate.getDate() - 1)
+  const yesterdayKey = yesterdayDate.toISOString().slice(0, 10)
+  const yesterdayHistory = achievementStats.dailyHistory?.[yesterdayKey]
+  const isRecoveryMode = (yesterdayHistory?.completedDailyCount ?? 0) === 0 && totalCompleted === 0
+
+  return {
+    dateKey,
+    focusResonance,
+    bodyReadiness,
+    mindBalance,
+    routineScore,
+    overallReadiness,
+    readinessLevel,
+    gateRewardBonus,
+    redGateResistBonus,
+    skillXpBonus,
+    extractionBonus,
+    todayCompletionsByCategory: byCategory,
+    todayTotalCompletions: totalCompleted,
+    isRecoveryMode,
+  }
 }
 
 const consumeNextGateConsumables = (effects: ActiveConsumableEffect[]): ActiveConsumableEffect[] => {
@@ -1696,6 +1861,9 @@ const createGateBattleOutcomeUpdate = (
         }
       } else {
         run.completed = true
+        if (run.redGateState && run.redGateState.status === 'opened') {
+          run.redGateState.status = 'cleared'
+        }
         nextActiveGate = { ...activeGate, status: 'cleared', runState: run }
 
         nextGateStatus = {
@@ -1791,6 +1959,12 @@ const createGateBattleOutcomeUpdate = (
       }
     } else {
       run.failed = true
+      let redGateShardBonus = false
+      if (run.redGateState && run.redGateState.status === 'opened') {
+        run.redGateState.status = 'failed'
+        nextShadowSummonShards = addShadowSummonShards(nextShadowSummonShards, { named: 1 })
+        redGateShardBonus = true
+      }
       nextActiveGate = { ...activeGate, status: 'failed', runState: run }
 
       const earnedGold = run.accumulatedRewards.gold
@@ -1825,9 +1999,10 @@ const createGateBattleOutcomeUpdate = (
       const lines = [
         `[${gate.name}] 던전 런 중 [${currentEncounter.title}]에서 패배했습니다.`,
         `누적 획득 골드: +${earnedGold}, 정수: +${earnedEssence}`,
+        redGateShardBonus ? '레드 게이트 잔향 조각(네임드 조각) 획득: +1' : '',
         `스태미나 -${finalStaminaCost}`,
         `부상을 입었습니다. 6시간 경과 또는 퀘스트 3개 완료 시 회복됩니다.`,
-      ]
+      ].filter(Boolean)
 
       const newMessages = [
         {
@@ -1946,7 +2121,8 @@ const createGateBattleOutcomeUpdate = (
     return m?.unitType === 'boss'
   })
   const nextSkillStates = finalLog.battleId.startsWith('direct-gate-')
-    ? applyDirectBattleSkillRuntimeUses(s.skillStates, finalLog.turns, isVictory, isBoss)
+    ? applyDirectBattleSkillRuntimeUses(s.skillStates, finalLog.turns, isVictory, isBoss,
+        s.dailyProgression?.dateKey === todayKey() ? (s.dailyProgression?.skillXpBonus ?? 0) : 0)
     : s.skillStates
 
   const finalMessages = shadowLevelUps.length > 0
@@ -3065,6 +3241,9 @@ export const useGame = create<GameState>()(
         const activeDateKeys = stats.app.activeDateKeys.includes(dateKey)
           ? stats.app.activeDateKeys
           : [...stats.app.activeDateKeys, dateKey]
+
+        // 12-40F: 앱 열 때마다 daily 준비도 재계산 (날짜 바뀐 경우 리셋 포함)
+        const dp = buildDailyProgression(s.quests, stats)
         
         return {
           achievementStats: {
@@ -3076,6 +3255,7 @@ export const useGame = create<GameState>()(
               activeDateKeys,
             },
           },
+          dailyProgression: dp,
         }
       }),
 
@@ -4188,6 +4368,25 @@ export const useGame = create<GameState>()(
         const seed = `${gate.id}-${Date.now()}-${Math.floor(Math.random() * 100000)}`
         const runState = generateGateRunState(gate.id, seed)
 
+        // 12-40F: 현실 준비도 보너스를 게이트 런 보상 배율에 적용
+        const dp = s.dailyProgression
+        if (dp && dp.dateKey === todayKey()) {
+          // 보상 배율에 daily progression 보너스 가산
+          if (dp.gateRewardBonus > 0) {
+            runState.rewardMultiplier = parseFloat(
+              (runState.rewardMultiplier * (1 + dp.gateRewardBonus)).toFixed(3)
+            )
+          }
+          // 레드 게이트 불안정성 저항 주입 (hunter 필드 임시 반영)
+          if (dp.redGateResistBonus > 0 && runState.redGateState) {
+            // instabilityScore를 직접 낮춰 레드 게이트 발동 확률 감소
+            runState.redGateState.instabilityScore = Math.max(
+              0,
+              (runState.redGateState.instabilityScore ?? 0) - Math.round(dp.redGateResistBonus * 40)
+            )
+          }
+        }
+
         set({
           activeGate: {
             instanceId: `gate-${gate.id}-${Date.now()}`,
@@ -4202,7 +4401,10 @@ export const useGame = create<GameState>()(
             id: uid(),
             kind: 'info',
             title: '게이트 출현',
-            lines: [`[${gate.name}]이(가) 열렸습니다. (던전 런 탑재)`],
+            lines: [
+              `[${gate.name}]이(가) 열렸습니다. (던전 런 탑재)`,
+              ...(dp && dp.overallReadiness >= 15 ? [`현실 준비도 ${dp.overallReadiness}% — 보상 +${Math.round(dp.gateRewardBonus * 100)}%`] : [])
+            ],
             createdAt: todayISO(),
           }],
         })
@@ -5075,7 +5277,33 @@ export const useGame = create<GameState>()(
         const currentEncounter = run.encounters[run.currentEncounterIndex]
         if (currentEncounter.type !== 'event') return
 
-        const choice = currentEncounter.eventChoices?.find(c => c.id === choiceId)
+        let choice = currentEncounter.eventChoices?.find(c => c.id === choiceId)
+        if (!choice) {
+          // 1. 현재 encounter 실시간 재수화 복구 시도
+          const hydrated = hydrateGateRunEncounterChoices(currentEncounter)
+          currentEncounter.eventChoices = hydrated.eventChoices
+          currentEncounter.eventTemplateId = hydrated.eventTemplateId
+          currentEncounter.title = hydrated.title
+          currentEncounter.description = hydrated.description
+          
+          choice = currentEncounter.eventChoices?.find(c => c.id === choiceId)
+          
+          // 2. 템플릿 복구 실패 시 안전 fallback 우회로 동적 부여
+          if (!choice) {
+            if (import.meta.env.DEV) {
+              console.warn('[GateRun] Missing event choice or unable to hydrate', { encounterId: currentEncounter.id, choiceId })
+            }
+            const fallbackChoice: GateRunEventChoice = {
+              id: choiceId,
+              label: '차원 마력 안정화',
+              description: '불안정하게 뒤틀려 요동치던 에너지가 마력 공명에 의해 평온하게 중화되었습니다.',
+              riskDelta: -5,
+              immediateReward: { gold: 300, essence: 50, xp: 0, items: [] }
+            }
+            choice = fallbackChoice
+          }
+        }
+
         if (!choice) return
 
         currentEncounter.selectedChoiceId = choiceId
@@ -5098,6 +5326,28 @@ export const useGame = create<GameState>()(
           if (reward.essence) run.accumulatedRewards.essence += reward.essence
           if (reward.xp) run.accumulatedRewards.xp += reward.xp
         }
+
+        // Red Gate Instability 롤링 연동
+        let instabilityDelta = 5 // 기본 누적치
+        const choiceInstabilityMap: Record<string, number> = {
+          choice_rift_force_open: 25,
+          choice_trace_follow: 15,
+          choice_supply_open: 10,
+          choice_lock_force: 10,
+          choice_contract_accept: 20,
+          choice_warning_ignore: 25,
+          choice_reverb_absorb: 15,
+          choice_merchant_threaten: 20,
+          choice_shadow_bind: 10,
+          choice_storm_rush: 15,
+          choice_curse_take: 25,
+          choice_omen_taunt: 25,
+          choice_passage_dash: 10
+        }
+        if (choiceId in choiceInstabilityMap) {
+          instabilityDelta = choiceInstabilityMap[choiceId]
+        }
+        rollRedGateInstability(run, currentEncounter.id, instabilityDelta)
 
         const isLast = run.currentEncounterIndex === run.encounters.length - 1
         if (!isLast) {
@@ -5991,7 +6241,13 @@ export const useGame = create<GameState>()(
         const failCount = failCountMap[gate.id] ?? 0
         const bonusChance = Math.min(0.80, failCount * 0.05)
 
-        const rawResult = rollShadowExtraction(gate, s.hunter, equippedShadows, Math.random, bonusChance)
+        const redGateState = activeGate.runState?.redGateState
+        // 12-40F: 현실 준비도 기반 추출 보너스 합산
+        const dpExtractBonus = (s.dailyProgression?.dateKey === todayKey())
+          ? (s.dailyProgression?.extractionBonus ?? 0)
+          : 0
+        const rawResult = rollShadowExtraction(gate, s.hunter, equippedShadows, Math.random, bonusChance + dpExtractBonus, redGateState)
+
         
         const nextFailCountMap = { ...failCountMap }
         const nextFragments = { ...(s.shadowFragments ?? {}) }
@@ -6007,10 +6263,17 @@ export const useGame = create<GameState>()(
           }
         }
 
+        const isRed = redGateState && (redGateState.status === 'opened' || redGateState.status === 'cleared')
         const result: ShadowExtractResult = {
           ...rawResult,
           gateInstanceId,
           resonanceBonusPercent: nextFailCountMap[gate.id] * 5,
+          redGateExtraction: isRed ? {
+            isRedGate: true,
+            highGradeBonusPercent: redGateState.highGradeShadowBonus ?? 0,
+            bossShadowWeightBonusPercent: redGateState.bossShadowWeightBonus ?? 0,
+            fragmentBonusCount: redGateState.fragmentBonusCount ?? 0
+          } : undefined
         }
 
         const ownedShadows = result.success && result.shadow
@@ -8740,6 +9003,8 @@ export const useGame = create<GameState>()(
           if (q.type === 'daily') {
             get().ensureTodayShadowExpedition()
             get().rollGateSpawn('daily_completion')
+            // 12-40F: daily 완료 시마다 현실 준비도 재계산
+            get().recalculateDailyProgression()
           }
           if (q.type === 'main') {
             get().applyMainQuestCompletionBonus(q)
@@ -9142,7 +9407,9 @@ export const useGame = create<GameState>()(
             const template = getDefaultMainQuestTemplate(quest)
             if (template) {
               changed = true
-              console.log(`[Backfill] Backfilling milestones for main quest: "${quest.title}" (${quest.id})`)
+              if (import.meta.env.DEV) {
+                console.log(`[Backfill] Backfilling milestones for main quest: "${quest.title}" (${quest.id})`)
+              }
               return backfillMainQuestFromDefaultTemplate(quest, template)
             }
           }
@@ -9545,6 +9812,13 @@ export const useGame = create<GameState>()(
           aiCoachCoreContext: undefined
         }
       }),
+
+      // ── 12-40F: Daily Progression ─────────────────────────────────────
+      recalculateDailyProgression: () => set((s) => {
+        const dp = buildDailyProgression(s.quests, s.achievementStats)
+        return { dailyProgression: dp }
+      }),
+
     }),
     {
       name: 'levelup-save',
@@ -9689,10 +9963,17 @@ export const useGame = create<GameState>()(
         }
         if (!('activeGate' in persistedState)) {
           persistedState.activeGate = undefined
-        } else if (persistedState.activeGate && persistedState.activeGate.status === 'active' && !persistedState.activeGate.runState) {
-          const gate = persistedState.activeGate
-          const seed = `${gate.gateId}-${Date.now()}`
-          persistedState.activeGate.runState = generateGateRunState(gate.gateId, seed)
+        } else if (persistedState.activeGate && persistedState.activeGate.status === 'active') {
+          if (!persistedState.activeGate.runState) {
+            const gate = persistedState.activeGate
+            const seed = `${gate.gateId}-${Date.now()}`
+            persistedState.activeGate.runState = generateGateRunState(gate.gateId, seed)
+          } else if (persistedState.activeGate.runState.encounters) {
+            // 이미 생성된 기존 던전런 중 선택지가 유실된 인카운터들을 복원 및 강제 재수화
+            persistedState.activeGate.runState.encounters = persistedState.activeGate.runState.encounters.map(
+              (encounter: any) => hydrateGateRunEncounterChoices(encounter)
+            )
+          }
         }
         if (!persistedState.combatLogs) {
           persistedState.combatLogs = []
@@ -9906,9 +10187,23 @@ export const useGame = create<GameState>()(
         if (!persistedState.challengeCardHistory) persistedState.challengeCardHistory = {}
         if (!persistedState.shopPurchases) persistedState.shopPurchases = {}
         if (!persistedState.shadowLegionNodes) persistedState.shadowLegionNodes = {}
+        if (persistedState.activeGate && persistedState.activeGate.runState) {
+          const run = persistedState.activeGate.runState
+          if (!run.redGateState) {
+            run.redGateState = { status: 'none', instabilityScore: 0 }
+          }
+        }
 
+        // 12-40F: dailyProgression 마이그레이션 가드 (기존 세이브 호환)
+        if (!persistedState.dailyProgression) {
+          persistedState.dailyProgression = undefined
+        } else if (persistedState.dailyProgression.dateKey !== new Date().toISOString().slice(0, 10)) {
+          // 날짜가 바뀌었으면 null로 리셋 → recordAppOpen 시 재계산됨
+          persistedState.dailyProgression = undefined
+        }
 
         return persistedState;
+
       },
     }
   )

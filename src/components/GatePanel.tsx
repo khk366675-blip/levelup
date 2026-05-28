@@ -31,7 +31,7 @@ import { ShadowPortrait } from './shadows/ShadowPortrait'
 import { ShadowExtractionReveal } from './shadows/ShadowExtractionReveal'
 import { SkillActionCard, skillSourceSortRank, skillTypeSortRank } from './SkillActionCard'
 import { GATE_DEFINITIONS, GATE_PENALTIES, GATE_REWARD_TABLES, MONSTER_DEFINITIONS, SKILL_DEFINITIONS } from '../lib/seed'
-import { GATE_THEMES, GATE_MODIFIERS } from '../lib/gateRunEvents'
+import { GATE_THEMES, GATE_MODIFIERS, hydrateGateRunEncounterChoices } from '../lib/gateRunEvents'
 import {
   calculatePlayerCombatStats,
   formatStatReward,
@@ -63,8 +63,16 @@ import {
 } from '../lib/skills'
 import { getSecretVisibleFragments } from '../lib/secrets'
 import { pickDirectGateEncounterKey } from '../lib/directBattleEncounters'
+import { DailyProgressionPanel } from './DailyProgressionPanel'
 
 const GATE_ENTRY_COST = 20
+
+// GatePanel 내에서 사용하는 inline 래퍼
+function DailyProgressionPanelInline() {
+  return <DailyProgressionPanel />
+}
+
+
 
 function ArchiveTraceChip({ count }: { count: number }) {
   if (count <= 0) return null
@@ -945,23 +953,28 @@ function GateStatusPanel() {
 
 function EmptyGateState() {
   return (
-    <div className="panel corner-bracket p-8 text-center">
-      <div className="br" />
-      <div className="text-5xl mb-3 opacity-30">🌀</div>
-      <h3 className="text-lg font-bold text-cyan-100">열린 게이트 없음</h3>
-      <p className="text-sm text-white/50 mt-2 max-w-xl mx-auto leading-relaxed">
-        현재 감지된 균열이 없습니다. daily 퀘스트를 수행하거나 던전을 클리어하면 낮은 확률로 게이트가 출현합니다.
-      </p>
+    <div className="flex flex-col gap-4">
+      {/* Daily Progression Readiness Panel */}
+      <DailyProgressionPanelInline />
 
-      <div className="grid md:grid-cols-4 gap-3 mt-6 text-left">
-        <StatPill label="하루 첫 접속" value="7%" />
-        <StatPill label="daily 완료" value="3%" />
-        <StatPill label="던전 클리어" value="25~30%" />
-        <StatPill label="main 완료" value="50%" />
-      </div>
+      <div className="panel corner-bracket p-8 text-center">
+        <div className="br" />
+        <div className="text-5xl mb-3 opacity-30">🌀</div>
+        <h3 className="text-lg font-bold text-cyan-100">열린 게이트 없음</h3>
+        <p className="text-sm text-white/50 mt-2 max-w-xl mx-auto leading-relaxed">
+          현재 감지된 균열이 없습니다. daily 퀘스트를 수행하거나 던전을 클리어하면 낮은 확률로 게이트가 출현합니다.
+        </p>
 
-      <div className="text-[11px] system-text text-cyan-300/45 mt-5">
-        동시에 하나의 게이트만 활성화됩니다.
+        <div className="grid md:grid-cols-4 gap-3 mt-6 text-left">
+          <StatPill label="하루 첫 접속" value="7%" />
+          <StatPill label="daily 완료" value="3%" />
+          <StatPill label="던전 클리어" value="25~30%" />
+          <StatPill label="main 완료" value="50%" />
+        </div>
+
+        <div className="text-[11px] system-text text-cyan-300/45 mt-5">
+          동시에 하나의 게이트만 활성화됩니다.
+        </div>
       </div>
     </div>
   )
@@ -2134,7 +2147,10 @@ function GateRunPanel({
 
   const currentEncounterIndex = runState.currentEncounterIndex
   const encounters = runState.encounters
-  const currentEncounter = encounters[currentEncounterIndex]
+  const rawCurrentEncounter = encounters[currentEncounterIndex]
+  const currentEncounter = useMemo(() => hydrateGateRunEncounterChoices(rawCurrentEncounter), [rawCurrentEncounter])
+
+  const isRedGate = runState.redGateState && (runState.redGateState.status === 'opened' || runState.redGateState.status === 'cleared')
 
   // 테마 디자인 매핑
   const theme = GATE_THEMES.find(t => t.id === runState.themeId) ?? GATE_THEMES[0]
@@ -2146,7 +2162,8 @@ function GateRunPanel({
     theme_supply: 'from-emerald-950/40 via-teal-900/10 to-emerald-900/20 border-emerald-500/35 text-emerald-200',
     theme_cursed: 'from-amber-950/45 via-amber-900/15 to-orange-950/35 border-amber-500/35 text-amber-200',
   }
-  const themeStyle = themeClass[theme.id] ?? themeClass.theme_rift
+  const redThemeStyle = 'from-red-950/65 via-red-900/20 to-zinc-950 border-red-500/50 text-red-200 shadow-[0_0_20px_rgba(239,68,68,0.2)] bg-red-950/30'
+  const themeStyle = isRedGate ? redThemeStyle : (themeClass[theme.id] ?? themeClass.theme_rift)
 
   // 모디파이어 상세 정보 매핑
   const getModInfo = (modId: string) => {
@@ -2182,7 +2199,8 @@ function GateRunPanel({
   }
 
   // UI 상에서 선택된 인카운터의 세부 내용
-  const activeDetailEnc = encounters.find((e: any) => e.id === (selectedEncId ?? currentEncounter.id)) ?? currentEncounter
+  const rawActiveDetailEnc = encounters.find((e: any) => e.id === (selectedEncId ?? currentEncounter.id)) ?? currentEncounter
+  const activeDetailEnc = useMemo(() => hydrateGateRunEncounterChoices(rawActiveDetailEnc), [rawActiveDetailEnc])
 
   // 수동 전투 공략
   const onStartManual = () => {
@@ -2200,6 +2218,19 @@ function GateRunPanel({
 
   return (
     <div className="space-y-4">
+      {/* Red Gate Warning Banner */}
+      {isRedGate && (
+        <div className="mb-4 rounded-lg border border-red-500 bg-red-950/60 p-4 text-red-200 animate-pulse flex items-start gap-3 shadow-[0_0_15px_rgba(239,68,68,0.3)]">
+          <AlertTriangle className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
+          <div>
+            <div className="font-bold text-xs tracking-wider uppercase text-red-400">RED GATE INSTABILITY ACTIVATED</div>
+            <p className="text-[11px] text-red-300 leading-relaxed mt-0.5">
+              게이트가 붉게 뒤틀립니다. 도망칠 수 없는 붉은 균열이 전장을 삼킵니다! 남은 구역의 몬스터 전투 난이도가 대폭 강화되지만, 클리어 시 해당 게이트의 몬스터 그림자 추출 성공률 및 고등급/보스급 그림자의 공명 확률이 대폭 가산됩니다.
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* 1. Theme and Modifier banner */}
       <div className={`panel corner-bracket p-5 bg-gradient-to-br border ${themeStyle}`}>
         <div className="br" />
@@ -2241,11 +2272,14 @@ function GateRunPanel({
 
       {/* 2. Dungeon Dashboard (위험도 / 보상 계기판) */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <div className="panel p-3 border-rose-500/20 bg-rose-500/5 text-center">
-          <div className="text-[10px] system-text text-rose-300/80">누적 위험도</div>
-          <div className="text-xl font-bold text-rose-100 mt-1">{runState.accumulatedRisk} / 100</div>
+        <div className={clsx(
+          "panel p-3 text-center transition-all duration-300",
+          isRedGate ? "border-red-500/30 bg-red-950/20 shadow-[inset_0_0_10px_rgba(239,68,68,0.1)]" : "border-rose-500/20 bg-rose-500/5"
+        )}>
+          <div className={clsx("text-[10px] system-text", isRedGate ? "text-red-400" : "text-rose-300/80")}>누적 위험도</div>
+          <div className={clsx("text-xl font-bold mt-1", isRedGate ? "text-red-100" : "text-rose-100")}>{runState.accumulatedRisk} / 100</div>
           <div className="w-full bg-rose-950/40 rounded-full h-1 mt-2 overflow-hidden">
-            <div className="bg-rose-500 h-1 transition-all duration-300" style={{ width: `${runState.accumulatedRisk}%` }} />
+            <div className={clsx("h-1 transition-all duration-300", isRedGate ? "bg-red-500 animate-pulse" : "bg-rose-500")} style={{ width: `${runState.accumulatedRisk}%` }} />
           </div>
         </div>
         <div className="panel p-3 border-amber-500/20 bg-amber-500/5 text-center">
@@ -2288,7 +2322,9 @@ function GateRunPanel({
                 className={clsx(
                   'flex-1 text-left p-3.5 border rounded-lg transition-all duration-300 relative overflow-hidden',
                   isCleared && 'border-zinc-800/40 bg-zinc-950/30 opacity-60 hover:opacity-90',
-                  isAvailable && 'border-amber-400 bg-amber-500/5 shadow-[0_0_10px_rgba(245,158,11,0.15)] ring-1 ring-amber-400/25',
+                  isAvailable && (isRedGate 
+                    ? 'border-red-500 bg-red-950/20 shadow-[0_0_12px_rgba(239,68,68,0.25)] ring-1 ring-red-500/30' 
+                    : 'border-amber-400 bg-amber-500/5 shadow-[0_0_10px_rgba(245,158,11,0.15)] ring-1 ring-amber-400/25'),
                   isLocked && 'border-zinc-800 bg-zinc-950/20 opacity-30 cursor-not-allowed',
                   selectedEncId === enc.id ? 'ring-2 ring-cyan-400 border-cyan-400' : ''
                 )}
@@ -2301,7 +2337,11 @@ function GateRunPanel({
                     <span>{meta.label}</span>
                   </div>
                   {isCleared && <Check className="w-3.5 h-3.5 text-emerald-400" />}
-                  {isAvailable && <span className="text-[8px] px-1 bg-amber-400 text-zinc-950 rounded font-bold animate-pulse">ACTIVE</span>}
+                  {isAvailable && (
+                    isRedGate
+                      ? <span className="text-[8px] px-1 bg-red-600 text-white rounded font-bold animate-pulse">RED ACTIVE</span>
+                      : <span className="text-[8px] px-1 bg-amber-400 text-zinc-950 rounded font-bold animate-pulse">ACTIVE</span>
+                  )}
                   {isLocked && <Lock className="w-3 h-3 text-zinc-600" />}
                 </div>
 
@@ -2382,22 +2422,14 @@ function GateRunPanel({
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-2">
+                <div className="pt-2">
                   <button
                     type="button"
                     onClick={onStartAuto}
-                    className="btn btn-primary min-h-12 text-sm flex items-center justify-center gap-2"
+                    className="btn btn-primary w-full min-h-12 text-sm flex items-center justify-center gap-2"
                   >
-                    <FastForward className="w-4 h-4" />
-                    <span>자동 전투 공략 (오버레이)</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={onStartManual}
-                    className="btn border border-cyan-400/30 bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-200 min-h-12 text-sm flex items-center justify-center gap-2"
-                  >
-                    <Swords className="w-4 h-4" />
-                    <span>수동 직접 조작 공략</span>
+                    <Swords className="w-5 h-5 animate-pulse" />
+                    <span>균열 공략 개시 (2.5D 전투)</span>
                   </button>
                 </div>
               </div>
@@ -2409,7 +2441,7 @@ function GateRunPanel({
                 <div className="text-xs font-semibold text-cyan-300 tracking-wider">차원의 선택지 수집 완료 — 선택하십시오</div>
                 <div className="grid grid-cols-1 gap-2.5">
                   {/* store.ts나 events 데이터 구조에서 choices 매핑 */}
-                  {runState.encounters[runState.currentEncounterIndex].eventChoices?.map((choice: any) => (
+                  {activeDetailEnc.eventChoices?.map((choice: any) => (
                     <button
                       key={choice.id}
                       type="button"
@@ -2423,15 +2455,15 @@ function GateRunPanel({
                       <div className="text-xs text-white/70 mt-1.5 pl-6">{choice.description}</div>
                     </button>
                   ))}
-                  {(!runState.encounters[runState.currentEncounterIndex].eventChoices || runState.encounters[runState.currentEncounterIndex].eventChoices.length === 0) && (
+                  {(!activeDetailEnc.eventChoices || activeDetailEnc.eventChoices.length === 0) && (
                     <div className="text-center text-xs text-zinc-500 border border-zinc-800 p-4 rounded-lg">
-                      이벤트의 선택지 정보가 유실되었습니다. 즉시 우회하여 다음으로 통과합니다.
+                      차원 불안정 현상 감지. 마력 공명을 통해 구역 안정화 후 우회하여 다음으로 통과합니다.
                       <button
                         type="button"
                         onClick={() => chooseGateRunEventChoice('choice_rift_stabilize')}
                         className="btn btn-secondary text-xs mt-3 block mx-auto"
                       >
-                        강제 안정화 후 우회 통과
+                        마력 공명을 통해 구역 안정화 후 우회
                       </button>
                     </div>
                   )}

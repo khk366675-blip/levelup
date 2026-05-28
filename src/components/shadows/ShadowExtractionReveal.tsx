@@ -252,10 +252,20 @@ export function ShadowExtractionReveal({ result, gateName, onClose }: Props) {
     '--extraction-ash': `url(${failureAshUrl})`,
   } as CSSProperties
 
+  const isRedGate = Boolean(result?.redGateExtraction?.isRedGate)
+
   return createPortal(
-    <div className="fixed inset-0 z-[1080] overflow-hidden bg-black text-white" style={artVars}>
+    <div className={clsx(
+      "fixed inset-0 z-[1080] overflow-hidden bg-black text-white",
+      isRedGate && "border-4 border-red-950/40 shadow-[inset_0_0_120px_rgba(239,68,68,0.22)]"
+    )} style={artVars}>
       <div className="shadow-extraction-scene-bg" />
-      <div className="shadow-extraction-scene-grade" style={{ opacity: showReveal && success ? 1 : 0, background: `radial-gradient(circle at 50% 42%, ${accent.glow}, transparent 45%)` }} />
+      <div className="shadow-extraction-scene-grade" style={{
+        opacity: showReveal && (success || isRedGate) ? 1 : 0,
+        background: isRedGate
+          ? 'radial-gradient(circle at 50% 42%, rgba(239, 68, 68, 0.45), transparent 45%)'
+          : `radial-gradient(circle at 50% 42%, ${accent.glow}, transparent 45%)`
+      }} />
       <div className="shadow-extraction-scene-fog" />
       <div className="shadow-extraction-scene-vignette" />
 
@@ -273,9 +283,16 @@ export function ShadowExtractionReveal({ result, gateName, onClose }: Props) {
       >
         <div className="mb-3 flex items-center justify-between gap-3">
           <div className="flex min-w-0 flex-wrap items-center gap-1.5">
-            <div className="inline-flex items-center gap-2 rounded border border-purple-200/20 bg-black/30 px-2.5 py-1 text-[10px] system-text text-purple-100/80 backdrop-blur-sm">
+            <div className={clsx(
+              "inline-flex items-center gap-2 rounded border px-2.5 py-1 text-[10px] system-text backdrop-blur-sm",
+              isRedGate 
+                ? "border-red-500 bg-red-950/70 text-red-200 animate-pulse shadow-[0_0_8px_rgba(239,68,68,0.25)]"
+                : "border-purple-200/20 bg-black/30 text-purple-100/80"
+            )}>
               <Skull className="h-3.5 w-3.5" />
-              {result.isBossExtraction ? 'BOSS SHADOW EXTRACTION' : 'SHADOW EXTRACTION'}
+              {isRedGate 
+                ? 'RED GATE EXTRACTION' 
+                : (result.isBossExtraction ? 'BOSS SHADOW EXTRACTION' : 'SHADOW EXTRACTION')}
             </div>
             {gateName && (
               <div className="rounded border border-white/10 bg-black/24 px-2.5 py-1 text-[10px] system-text text-white/55 backdrop-blur-sm">
@@ -333,6 +350,7 @@ export function ShadowExtractionReveal({ result, gateName, onClose }: Props) {
               reducedMotion={Boolean(reducedMotion)}
               monsterSpriteUrl={monsterSpriteUrl}
               isBossExtraction={Boolean(result.isBossExtraction)}
+              isRedGate={isRedGate}
             />
           )}
         </div>
@@ -349,6 +367,7 @@ function StageBody({
   reducedMotion,
   monsterSpriteUrl,
   isBossExtraction,
+  isRedGate,
 }: {
   stage: ExtractionStage
   intensity: ExtractionIntensity
@@ -356,6 +375,7 @@ function StageBody({
   reducedMotion: boolean
   monsterSpriteUrl?: string
   isBossExtraction: boolean
+  isRedGate: boolean
 }) {
   return (
     <div className={clsx(
@@ -363,7 +383,7 @@ function StageBody({
       `shadow-extraction-stage-${stage}`,
       `shadow-extraction-intensity-${intensity}`,
       reducedMotion && 'shadow-extraction-reduced',
-      isBossExtraction && 'shadow-extraction-boss-mode border border-red-500/20 shadow-[0_0_80px_rgba(239,68,68,0.15)] bg-black/60',
+      (isBossExtraction || isRedGate) && 'shadow-extraction-boss-mode border border-red-500/20 shadow-[0_0_80px_rgba(239,68,68,0.15)] bg-black/60',
     )}>
       <div className="shadow-extraction-ground-haze" />
       <div className="shadow-extraction-art-command-flare" />
@@ -379,13 +399,15 @@ function StageBody({
             alt="Monster Silhouette"
             className={clsx(
               "object-contain transition-all duration-300 pointer-events-none",
-              (stage === 'resistance' || (isBossExtraction && stage === 'resonance')) ? "animate-pulse scale-[1.08] shadow-[0_0_50px_rgba(239,68,68,0.2)]" : "scale-[1.02]",
-              isBossExtraction ? "h-64 opacity-[0.32]" : "h-52 opacity-[0.16]"
+              (stage === 'resistance' || ((isBossExtraction || isRedGate) && stage === 'resonance')) ? "animate-pulse scale-[1.08] shadow-[0_0_50px_rgba(239,68,68,0.2)]" : "scale-[1.02]",
+              (isBossExtraction || isRedGate) ? "h-64 opacity-[0.35]" : "h-52 opacity-[0.16]"
             )}
             style={{
-              filter: isBossExtraction 
-                ? 'drop-shadow(0 0 35px rgba(239, 68, 68, 0.7)) brightness(0)' 
-                : 'drop-shadow(0 0 15px rgba(6, 182, 212, 0.45)) brightness(0) invert(1)',
+              filter: isRedGate
+                ? 'drop-shadow(0 0 35px rgba(239, 68, 68, 0.9)) brightness(0)'
+                : (isBossExtraction 
+                    ? 'drop-shadow(0 0 35px rgba(239, 68, 68, 0.7)) brightness(0)' 
+                    : 'drop-shadow(0 0 15px rgba(6, 182, 212, 0.45)) brightness(0) invert(1)'),
             }}
           />
         </div>
@@ -397,7 +419,7 @@ function StageBody({
       
       <div className="shadow-extraction-stage-copy z-10 flex flex-col items-center">
         <div className="system-text text-[10px] tracking-[0.36em] text-cyan-100/52">
-          {isBossExtraction ? 'BOSS RITUAL' : 'EXTRACTION RITUAL'} · {stageLabel[stage]}
+          {isRedGate ? 'RED RITUAL' : (isBossExtraction ? 'BOSS RITUAL' : 'EXTRACTION RITUAL')} · {stageLabel[stage]}
         </div>
         <h3 className="mt-2 text-2xl font-black leading-tight text-white sm:text-3xl">
           {copy.title}
@@ -541,6 +563,11 @@ function RevealResult({
                 NAMED
               </span>
             )}
+            {result.redGateExtraction?.isRedGate && (
+              <span className="rounded border border-red-500 bg-red-950/20 px-2 py-1 text-red-200 animate-pulse font-bold shadow-[0_0_6px_rgba(239,68,68,0.25)]">
+                RED GATE RESONANCE
+              </span>
+            )}
             <span className="rounded border border-emerald-300/30 bg-emerald-400/10 px-2 py-1 text-emerald-100">
               EXTRACTED
             </span>
@@ -555,6 +582,11 @@ function RevealResult({
               {result.resonanceBonusPercent !== undefined && result.resonanceBonusPercent > 0 && (
                 <span className="rounded border border-amber-300/35 bg-amber-400/15 px-2 py-1 text-amber-200 animate-pulse font-bold">
                   다음 공명 보정 +{result.resonanceBonusPercent}% 누적
+                </span>
+              )}
+              {result.redGateExtraction?.isRedGate && (
+                <span className="rounded border border-red-500 bg-red-950/20 px-2 py-1 text-red-200 animate-pulse font-bold shadow-[0_0_6px_rgba(239,68,68,0.25)]">
+                  레드 게이트 잔향 보정 (+{result.redGateExtraction.fragmentBonusCount}개 조각)
                 </span>
               )}
             </div>

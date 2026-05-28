@@ -1,4 +1,4 @@
-import { GateRunEncounterType, GateRunEventChoice, GateRunRewardBundle, GateReward, GateRunState, GateRunEncounter, GateRank } from './types'
+import { GateRunEncounterType, GateRunEventChoice, GateRunRewardBundle, GateReward, GateRunState, GateRunEncounter, GateRank, RedGateState } from './types'
 import { GATE_DEFINITIONS, MONSTER_DEFINITIONS } from './seed'
 
 export interface GateTheme {
@@ -653,13 +653,16 @@ export function generateGateRunState(gateId: string, seed: string): GateRunState
   const gateMonsters = gate?.monsterIds ?? []
 
   for (let i = 0; i < encounterCount; i++) {
-    const encType = getNextEncounterType(i)
+    let encType = getNextEncounterType(i)
     let title = ''
     let description = ''
     let monsterIds: string[] = []
     let difficultyMod = 1.0
     let riskDelta = 0
     let rewardMultiplier = 1.0
+    let eventTemplateId: string | undefined = undefined
+    let eventChoices: GateRunEventChoice[] | undefined = undefined
+    let treasureReward: Partial<GateRunRewardBundle> | undefined = undefined
 
     if (encType === 'battle' || encType === 'elite' || encType === 'boss') {
       difficultyMod = encType === 'elite' ? 1.3 : encType === 'boss' ? 1.6 : 1.0
@@ -713,10 +716,25 @@ export function generateGateRunState(gateId: string, seed: string): GateRunState
         }
       }
     } else if (encType === 'event') {
-      // 이벤트 선택
-      const evtTemplate = GATE_RUN_EVENTS[Math.floor(rand() * GATE_RUN_EVENTS.length)]
-      title = `의외의 징후: ${evtTemplate.title}`
-      description = evtTemplate.description
+      // 이벤트 선택 전수 가드 및 검증 (빈 선택지 생성 원천 방지)
+      const validTemplates = GATE_RUN_EVENTS.filter(evt => evt && evt.id && evt.choices && evt.choices.length >= 2)
+      if (validTemplates.length > 0) {
+        const evtTemplate = validTemplates[Math.floor(rand() * validTemplates.length)]
+        title = `의외의 징후: ${evtTemplate.title}`
+        description = evtTemplate.description
+        eventTemplateId = evtTemplate.id
+        eventChoices = evtTemplate.choices.map(c => ({ ...c }))
+      } else {
+        // 극단적 템플릿 부재 상황 시 안전한 treasure로 자동 대체
+        encType = 'treasure'
+        const baseGold = (rank === 'E' || rank === 'D') ? 400 : (rank === 'C' || rank === 'B') ? 800 : 1500
+        const baseEssence = (rank === 'E' || rank === 'D') ? 100 : (rank === 'C' || rank === 'B') ? 200 : 400
+        const goldAmt = Math.round(baseGold * (0.8 + rand() * 0.4))
+        const essAmt = Math.round(baseEssence * (0.8 + rand() * 0.4))
+        title = '흘러나온 차원 보물 방'
+        description = '어둡고 비좁은 통로 끝에서 찬란하게 금색 마력 광채를 발하는 오래된 상자를 찾아냈습니다!'
+        treasureReward = { gold: goldAmt, essence: essAmt, xp: 0, items: [] }
+      }
     } else if (encType === 'rest') {
       const restTypes = [
         { name: '안전한 모닥불', desc: '따뜻한 온기가 감도는 모닥불 주위에서 상처를 꿰맵니다. (HP 40% 회복)' },
@@ -734,6 +752,7 @@ export function generateGateRunState(gateId: string, seed: string): GateRunState
 
       title = '흘러나온 차원 보물 방'
       description = '어둡고 비좁은 통로 끝에서 찬란하게 금색 마력 광채를 발하는 오래된 상자를 찾아냈습니다!'
+      treasureReward = { gold: goldAmt, essence: essAmt, xp: 0, items: [] }
     } else if (encType === 'shadow_trace') {
       title = '짙게 얼룩진 그림자 흔적'
       description = '강력한 고대 마력의 흔적이 은은하게 소용돌이칩니다. 다음 그림자 추출의 성공 가능성을 한층 높여줄 것입니다.'
@@ -752,6 +771,9 @@ export function generateGateRunState(gateId: string, seed: string): GateRunState
       themeTag: theme.tag,
       riskDelta,
       rewardMultiplier,
+      eventTemplateId,
+      eventChoices,
+      treasureReward,
     })
   }
 
@@ -761,6 +783,23 @@ export function generateGateRunState(gateId: string, seed: string): GateRunState
     gold: 0,
     essence: 0,
     items: [],
+  }
+
+  // Red Gate 초기 상태 산출 (불안정 균열/저주/과밀 모디파이어 시 보너스)
+  let initialInstability = 0
+  if (theme.id === 'theme_rift' || theme.id === 'theme_cursed') {
+    initialInstability += 15
+  }
+  if (modifierIds.includes('mod_unstable_rift')) {
+    initialInstability += 10
+  }
+  if (modifierIds.includes('mod_shadow_congestion')) {
+    initialInstability += 10
+  }
+
+  const redGateState: RedGateState = {
+    status: 'none',
+    instabilityScore: initialInstability,
   }
 
   return {
@@ -777,5 +816,56 @@ export function generateGateRunState(gateId: string, seed: string): GateRunState
     clearedEncounterIds: [],
     failed: false,
     completed: false,
+    redGateState,
   }
 }
+
+// 20개 이벤트 템플릿 탐색 헬퍼
+export function getGateRunEventTemplate(templateId: string): GateRunEventTemplate | undefined {
+  return GATE_RUN_EVENTS.find(t => t.id === templateId)
+}
+
+// 깨지거나 선택지가 빈 이벤트 방 복구 및 재수화(Hydration) 헬퍼
+export function hydrateGateRunEncounterChoices(encounter: GateRunEncounter): GateRunEncounter {
+  if (encounter.type !== 'event') return encounter
+
+  // 이미 정상적인 선택지가 2개 이상 채워져 있다면 그대로 반환
+  if (encounter.eventChoices && encounter.eventChoices.length >= 2) {
+    return encounter
+  }
+
+  // eventTemplateId가 존재한다면 템플릿 DB 풀에서 원본을 매핑하여 신속 수화 복원
+  if (encounter.eventTemplateId) {
+    const template = getGateRunEventTemplate(encounter.eventTemplateId)
+    if (template && template.choices && template.choices.length >= 2) {
+      return {
+        ...encounter,
+        title: encounter.title || `의외의 징후: ${template.title}`,
+        description: encounter.description || template.description,
+        eventChoices: template.choices.map(c => ({ ...c })),
+      }
+    }
+  }
+
+  // 최종 복구도 실패하는 비상 상황 시 safe encounter로 보장 전환하여 사용자 에러 전면 차단
+  return convertBrokenEventToSafeEncounter(encounter)
+}
+
+// 복구 불가한 깨진 이벤트를 컨셉에 어울리는 안전 보물방으로 전환하는 헬퍼
+export function convertBrokenEventToSafeEncounter(encounter: GateRunEncounter): GateRunEncounter {
+  return {
+    ...encounter,
+    type: 'treasure',
+    title: '균열 안정화 우회로 (보물 상자)',
+    description: '차원 균열의 불안정한 왜곡 현상이 감지되었으나, 아치의 공명 주파수를 안전하게 정렬하여 우회로를 찾았습니다. 주변의 보석함에서 잔여 전리품을 회수하십시오.',
+    eventTemplateId: undefined,
+    eventChoices: undefined,
+    treasureReward: {
+      gold: 500,
+      essence: 150,
+      xp: 0,
+      items: []
+    }
+  }
+}
+
