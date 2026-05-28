@@ -267,7 +267,7 @@ export function HunterStatus() {
             <img
               src={avatarUrl}
               alt={hunter.name}
-              className="h-56 md:h-64 object-contain scale-[1.2] transition-all duration-300 group-hover:scale-[1.28] origin-bottom object-bottom z-10"
+              className="h-56 md:h-64 object-contain scale-[1.2] translate-y-4 transition-all duration-300 group-hover:scale-[1.28] origin-bottom object-bottom z-10"
               style={{ filter: `drop-shadow(0 -5px 20px ${rankGlowStyle}90) drop-shadow(0 0 30px ${rankGlowStyle}50)` }}
               draggable={false}
             />
