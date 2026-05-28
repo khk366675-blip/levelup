@@ -257,6 +257,309 @@ export function BattleActorSprite({
       : 'bg-[radial-gradient(circle,rgba(239,68,68,0.15),transparent_70%)]'
   )
 
+  // Signature Skill Presentation Pack 01: Prepare Overlay
+  const renderPrepareEffect = () => {
+    if (!activeMotion || activeMotion === 'default') return null
+
+    let element: React.ReactNode = null
+
+    if (activeMotion === 'dash-slash') {
+      // Swordsman Prepare: 청백색 스파크 섬광 수축
+      element = (
+        <motion.div
+          initial={{ scale: 2, opacity: 0 }}
+          animate={{ scale: [1.8, 0.7, 0], opacity: [0, 1, 1, 0] }}
+          transition={{ duration: 0.35, ease: 'easeIn' }}
+          className="absolute inset-0 rounded-full border-4 border-cyan-400 filter blur-[1px] shadow-[0_0_15px_#22d3ee]"
+        />
+      )
+    } else if (activeMotion === 'heavy-lunge') {
+      // Warrior Prepare: 붉은/오렌지색 파워 축적
+      element = (
+        <motion.div
+          initial={{ scale: 0.8, opacity: 0 }}
+          animate={{ scale: [1, 1.25, 0.9], opacity: [0, 0.8, 0.8, 0] }}
+          transition={{ duration: 0.42 }}
+          className="absolute inset-0 bg-gradient-to-t from-amber-600/30 via-red-500/40 to-transparent filter blur-sm"
+        />
+      )
+    } else if (activeMotion === 'cast-hold') {
+      // Mage Prepare: 신비한 룬 마법진 회전
+      element = (
+        <motion.div
+          initial={{ scale: 0.5, rotate: 0, opacity: 0 }}
+          animate={{ scale: [0.8, 1.1, 1], rotate: [0, 120, 180], opacity: [0, 0.9, 0] }}
+          transition={{ duration: 0.48, ease: 'easeOut' }}
+          className="absolute -top-6 left-1/2 -translate-x-1/2 w-14 h-14 border border-dashed border-indigo-400 rounded-full flex items-center justify-center bg-indigo-500/5 shadow-[0_0_10px_rgba(129,140,248,0.5)]"
+        >
+          <span className="text-[8px] text-indigo-200">🔮</span>
+        </motion.div>
+      )
+    } else if (activeMotion === 'guard-raise') {
+      // Guardian Prepare: 초록빛 방패 오라
+      element = (
+        <motion.div
+          initial={{ scale: 0.9, opacity: 0 }}
+          animate={{ scale: [1, 1.12, 1], opacity: [0, 1, 0] }}
+          transition={{ duration: 0.38 }}
+          className="absolute -inset-1 border-2 border-emerald-400/60 rounded-full bg-emerald-500/5 filter blur-[0.5px]"
+        />
+      )
+    } else if (activeMotion === 'afterimage-strike') {
+      // Tracker Prepare: 투명 잔상 흐려짐
+      element = (
+        <motion.div
+          initial={{ opacity: 0, scale: 1 }}
+          animate={{ opacity: [0, 0.6, 0], scale: [1, 1.2, 1.3] }}
+          transition={{ duration: 0.32 }}
+          className="absolute inset-0 bg-emerald-400/20 rounded-full filter blur-md"
+        />
+      )
+    } else if (activeMotion === 'command-cast') {
+      // Tactician Prepare: 금빛 책 홀로그램
+      element = (
+        <motion.div
+          initial={{ scale: 0.6, opacity: 0 }}
+          animate={{ scale: [0.8, 1.15, 0.8], opacity: [0, 0.95, 0] }}
+          transition={{ duration: 0.4 }}
+          className="absolute -top-4 w-12 h-12 border-2 border-amber-400/40 rounded bg-amber-500/5 rotate-45 flex items-center justify-center"
+        >
+          <span className="text-[8px] text-amber-200 -rotate-45">📖</span>
+        </motion.div>
+      )
+    } else if (activeMotion === 'vanish-shadow-strike') {
+      // Hidden Shadow Prepare: 자색 어둠 안개
+      element = (
+        <motion.div
+          initial={{ scale: 0.9, opacity: 0 }}
+          animate={{ scale: [1, 1.35, 1.1], opacity: [0, 0.9, 0] }}
+          transition={{ duration: 0.44 }}
+          className="absolute inset-0 bg-purple-950/60 border border-purple-500/30 rounded-full filter blur-sm shadow-[0_0_15px_rgba(168,85,247,0.8)]"
+        />
+      )
+    } else if (activeMotion === 'curse-cast') {
+      // Hidden Curse Prepare: 붉은 균열
+      element = (
+        <motion.div
+          initial={{ scale: 0.8, opacity: 0 }}
+          animate={{ scale: [1, 1.2, 1], opacity: [0, 0.85, 0] }}
+          transition={{ duration: 0.42 }}
+          className="absolute inset-0 bg-red-950/45 border-2 border-red-500/35 rounded-full filter blur-[1px] shadow-[0_0_12px_rgba(239,68,68,0.7)]"
+        />
+      )
+    } else if (activeMotion === 'rift-step') {
+      // Hidden Rift Prepare: 공간 왜곡 지글거림
+      element = (
+        <motion.div
+          initial={{ scaleX: 1, opacity: 0 }}
+          animate={{ scaleX: [1, 0.1, 1.2, 1], opacity: [0, 0.9, 0] }}
+          transition={{ duration: 0.4 }}
+          className="absolute inset-0 border-2 border-violet-400 bg-violet-500/10 rounded-full filter blur-xs shadow-[0_0_15px_rgba(139,92,246,0.6)]"
+        />
+      )
+    } else if (activeMotion === 'hostile-heavy') {
+      // Boss Prepare: 적색 해골 경고 오라
+      element = (
+        <motion.div
+          initial={{ scale: 0.7, opacity: 0 }}
+          animate={{ scale: [1, 1.45, 1.1], opacity: [0, 1, 0] }}
+          transition={{ duration: 0.5 }}
+          className="absolute -top-12 left-1/2 -translate-x-1/2 w-16 h-16 flex items-center justify-center z-30"
+        >
+          <div className="absolute inset-0 bg-red-600/10 rounded-full filter blur-md animate-ping" />
+          <span className="text-4xl filter drop-shadow-[0_0_10px_rgba(239,68,68,0.95)]">👹</span>
+        </motion.div>
+      )
+    }
+
+    return (
+      <div className="absolute inset-0 pointer-events-none z-25 overflow-visible">
+        {element}
+      </div>
+    )
+  }
+
+  // Signature Skill Presentation Pack 01: Impact & Reaction Overlay
+  const renderImpactEffect = () => {
+    if (hitReaction === 'none') return null
+
+    let element: React.ReactNode = null
+
+    if (hitReaction === 'quick-hit-shake') {
+      // Swordsman Impact: 청백 사선 베기 흔적
+      element = (
+        <motion.div
+          initial={{ scaleX: 0.1, scaleY: 0.6, rotate: -30, opacity: 0 }}
+          animate={{ scaleX: [0.1, 1.45, 0.2], scaleY: [0.6, 0.3, 0.1], opacity: [0, 1, 1, 0] }}
+          transition={{ duration: 0.32, ease: 'easeOut' }}
+          className="absolute w-44 h-8 bg-gradient-to-r from-transparent via-cyan-200 to-transparent filter blur-[0.5px] shadow-[0_0_12px_#22d3ee] z-30"
+        />
+      )
+    } else if (hitReaction === 'heavy-recoil') {
+      // Warrior Impact: 발밑 충격파 균열
+      element = (
+        <div className="absolute inset-0 flex items-center justify-center">
+          <motion.div
+            initial={{ scale: 0.2, opacity: 1 }}
+            animate={{ scale: [0.2, 1.7, 1.9], opacity: [1, 0.8, 0] }}
+            transition={{ duration: 0.44, ease: 'easeOut' }}
+            className="absolute w-36 h-36 rounded-full border-4 border-amber-500 bg-amber-950/20 filter blur-xs shadow-[0_0_20px_#f59e0b] z-20"
+          />
+          <motion.div
+            initial={{ scale: 0.1, opacity: 1 }}
+            animate={{ scale: [0.1, 1.2, 0], opacity: [1, 0.9, 0] }}
+            transition={{ duration: 0.25 }}
+            className="absolute w-16 h-16 rounded-full bg-white filter blur-[1px] z-30"
+          />
+        </div>
+      )
+    } else if (hitReaction === 'magic-hit-shake') {
+      // Mage Impact: 신비로운 보라 폭발
+      element = (
+        <div className="absolute inset-0 flex items-center justify-center">
+          <motion.div
+            initial={{ scale: 0.3, opacity: 0 }}
+            animate={{ scale: [0.3, 1.5, 1.7], opacity: [0, 1, 0] }}
+            transition={{ duration: 0.48 }}
+            className="absolute w-32 h-32 rounded-full bg-[radial-gradient(circle,rgba(129,140,248,0.7),transparent_70%)] filter blur-sm shadow-[0_0_25px_rgba(99,102,241,0.85)] z-30"
+          />
+          <motion.div
+            animate={{ rotate: [0, 90], scale: [0.5, 1.25], opacity: [0.9, 0] }}
+            transition={{ duration: 0.45 }}
+            className="absolute w-20 h-20 border-2 border-dashed border-indigo-400 rounded-full"
+          />
+        </div>
+      )
+    } else if (hitReaction === 'guard-block') {
+      // Guardian Impact: 에메랄드 헥사곤 보호막 Aegis Shield
+      element = (
+        <motion.div
+          initial={{ scale: 0.6, opacity: 0 }}
+          animate={{ scale: [0.6, 1.15, 0.9], opacity: [0, 1, 1, 0] }}
+          transition={{ duration: 0.38, ease: 'easeOut' }}
+          className="absolute w-24 h-24 border-3 border-emerald-400 bg-emerald-500/10 shadow-[0_0_20px_rgba(16,185,129,0.7)] z-35 flex items-center justify-center font-black text-emerald-200"
+          style={{
+            clipPath: 'polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%)',
+            textShadow: '0 0 5px rgba(52,211,153,0.8)'
+          }}
+        >
+          <span className="text-[10px] tracking-widest system-text">AEGIS</span>
+        </motion.div>
+      )
+    } else if (hitReaction === 'fast-stagger') {
+      // Tracker Impact: 쾌속 민트 X자 참격
+      element = (
+        <div className="absolute inset-0 flex items-center justify-center">
+          <motion.div
+            initial={{ scaleX: 0.1, rotate: 45, opacity: 0 }}
+            animate={{ scaleX: [0.1, 1.5, 0.2], opacity: [0, 1, 0] }}
+            transition={{ duration: 0.28 }}
+            className="absolute w-36 h-4 bg-gradient-to-r from-transparent via-emerald-300 to-transparent filter blur-[0.5px] z-30"
+          />
+          <motion.div
+            initial={{ scaleX: 0.1, rotate: -45, opacity: 0 }}
+            animate={{ scaleX: [0.1, 1.5, 0.2], opacity: [0, 1, 0] }}
+            transition={{ duration: 0.28, delay: 0.08 }}
+            className="absolute w-36 h-4 bg-gradient-to-r from-transparent via-emerald-300 to-transparent filter blur-[0.5px] z-30"
+          />
+        </div>
+      )
+    } else if (hitReaction === 'buff-debuff-pulse') {
+      // Tactician Impact: 골드색 전술 기하 펄스
+      element = (
+        <div className="absolute inset-0 flex items-center justify-center">
+          <motion.div
+            initial={{ scale: 0.5, rotate: 0, opacity: 0 }}
+            animate={{ scale: [0.5, 1.2, 1.4], rotate: [0, 45], opacity: [0, 0.9, 0] }}
+            transition={{ duration: 0.42 }}
+            className="absolute w-24 h-24 border-2 border-amber-400 bg-amber-400/5 rounded-lg z-30 shadow-[0_0_15px_rgba(245,158,11,0.6)]"
+            style={{ clipPath: 'polygon(50% 0%, 100% 38%, 82% 100%, 18% 100%, 0% 38%)' }}
+          />
+          <motion.div
+            initial={{ scale: 0.8, opacity: 0 }}
+            animate={{ scale: [0.8, 1.5], opacity: [0.8, 0] }}
+            transition={{ duration: 0.4 }}
+            className="absolute w-28 h-28 rounded-full border border-amber-300 z-20"
+          />
+        </div>
+      )
+    } else if (hitReaction === 'dark-flash-shake') {
+      // Hidden Shadow Impact: 검은 자색 처형 참격
+      element = (
+        <div className="absolute inset-0 flex items-center justify-center">
+          <motion.div
+            initial={{ scaleY: 0.1, opacity: 0 }}
+            animate={{ scaleY: [0.1, 1.6, 0.2], opacity: [0, 1, 0] }}
+            transition={{ duration: 0.42 }}
+            className="absolute w-8 h-44 bg-gradient-to-b from-transparent via-purple-950/90 to-transparent border-l border-purple-400/40 filter blur-[1px] z-30"
+          />
+          <motion.div
+            initial={{ scale: 0.4, opacity: 0 }}
+            animate={{ scale: [0.4, 1.4, 1.6], opacity: [0, 0.85, 0] }}
+            transition={{ duration: 0.48 }}
+            className="absolute w-36 h-36 bg-[radial-gradient(circle,rgba(168,85,247,0.5),transparent_70%)] filter blur-md z-20"
+          />
+        </div>
+      )
+    } else if (hitReaction === 'curse-flicker-stagger') {
+      // Hidden Curse Impact: 불길한 핏빛 낙인
+      element = (
+        <div className="absolute inset-0 flex items-center justify-center">
+          <motion.div
+            initial={{ scale: 0.2, opacity: 0 }}
+            animate={{ scale: [0.2, 1.15, 1.25], opacity: [0, 1, 0.8, 0] }}
+            transition={{ duration: 0.45 }}
+            className="absolute w-20 h-20 border-2 border-dashed border-red-600 rounded-full flex items-center justify-center z-30 shadow-[0_0_15px_rgba(239,68,68,0.7)]"
+          >
+            <span className="text-xl text-red-500 filter drop-shadow-[0_0_4px_red] animate-pulse">🩸</span>
+          </motion.div>
+          <motion.div
+            initial={{ scale: 0.8, opacity: 0 }}
+            animate={{ scale: [0.8, 1.4], opacity: [0.75, 0] }}
+            transition={{ duration: 0.42 }}
+            className="absolute w-28 h-28 bg-[radial-gradient(circle,rgba(239,68,68,0.4),transparent_70%)] filter blur-sm z-20"
+          />
+        </div>
+      )
+    } else if (hitReaction === 'warp-shake') {
+      // Hidden Rift Impact: 청자 공간 균열
+      element = (
+        <div className="absolute inset-0 flex items-center justify-center">
+          <motion.div
+            initial={{ scale: 0.4, opacity: 0 }}
+            animate={{ scale: [0.4, 1.35, 1.45], rotate: [0, 90], opacity: [0, 0.95, 0] }}
+            transition={{ duration: 0.44 }}
+            className="absolute w-28 h-28 border-2 border-violet-500 bg-violet-600/10 rounded-full filter blur-xs shadow-[0_0_20px_rgba(139,92,246,0.8)] z-30"
+          />
+          <motion.div
+            initial={{ scale: 0.2, opacity: 0 }}
+            animate={{ scale: [0.2, 1.25, 0], opacity: [0, 1, 0] }}
+            transition={{ duration: 0.35 }}
+            className="absolute w-16 h-16 border-3 border-cyan-400 rounded-full shadow-[0_0_15px_rgba(34,211,238,0.6)] z-35"
+          />
+        </div>
+      )
+    } else if (hitReaction === 'boss-heavy-recoil') {
+      // Boss hostile impact: 큰 적색 충격파
+      element = (
+        <div className="absolute inset-0 flex items-center justify-center">
+          <motion.div
+            initial={{ scale: 0.2, opacity: 1 }}
+            animate={{ scale: [0.2, 1.8, 2.1], opacity: [1, 0.8, 0] }}
+            transition={{ duration: 0.52, ease: 'easeOut' }}
+            className="absolute w-44 h-44 rounded-full border-6 border-rose-600 bg-rose-950/20 filter blur-xs shadow-[0_0_30px_#ef4444] z-20"
+          />
+        </div>
+      )
+    }
+
+    return (
+      <div className="absolute inset-0 pointer-events-none z-35 overflow-visible flex items-center justify-center">
+        {element}
+      </div>
+    )
+  }
+
   const cardBorderClass = clsx(
     'relative transition-all rounded-full bg-transparent border border-transparent',
     hasSprite
@@ -281,6 +584,12 @@ export function BattleActorSprite({
     >
       {/* 2.5D Aura Glow */}
       <div className={auraClass} />
+
+      {/* Prepare Effect (Signature Prepare Visuals) */}
+      {renderPrepareEffect()}
+
+      {/* Impact/Reaction Effect (Signature Impact Visuals) */}
+      {renderImpactEffect()}
 
       {/* Shadow Ellipse on Floor */}
       <div
