@@ -3154,12 +3154,12 @@ export const useGame = create<GameState>()(
         let advancementsChanged = false
         let hiddenChanged = false
         const nextAdvancements = [...availableAdvancements]
-        const nextHidden = [...discoveredHiddenJobIds]
+        let nextHidden = [...discoveredHiddenJobIds]
         const newMessages: SystemMessage[] = []
 
         JOB_DEFINITIONS_V2.forEach(job => {
           if (unlockedJobIds.includes(job.id) || jobs[job.id]) return
-          if (nextAdvancements.includes(job.id) || nextHidden.includes(job.id)) return
+          if (!job.hiddenProfile?.isHidden && nextAdvancements.includes(job.id)) return
 
           const cond = job.unlockCondition
           if (!cond) return
@@ -3301,25 +3301,34 @@ export const useGame = create<GameState>()(
 
           if (isMet) {
             if (job.hiddenProfile?.isHidden) {
-              nextHidden.push(job.id)
-              hiddenChanged = true
-              newMessages.push({
-                id: uid(),
-                kind: 'info',
-                title: '── SYSTEM ── 어둠 속의 기척',
-                lines: [`무언가 강력한 히든 직업의 기척이 느껴집니다. 직업 패널을 확인하십시오.`],
-                createdAt: todayISO(),
-              })
+              if (!nextHidden.includes(job.id)) {
+                nextHidden.push(job.id)
+                hiddenChanged = true
+                newMessages.push({
+                  id: uid(),
+                  kind: 'info',
+                  title: '── SYSTEM ── 어둠 속의 기척',
+                  lines: [`무언가 강력한 히든 직업의 기척이 느껴집니다. 직업 패널을 확인하십시오.`],
+                  createdAt: todayISO(),
+                })
+              }
             } else {
-              nextAdvancements.push(job.id)
-              advancementsChanged = true
-              newMessages.push({
-                id: uid(),
-                kind: 'info',
-                title: '── SYSTEM ── 전직 트리 개방',
-                lines: [`신규 직업 [${job.name}] 전직이 가능해졌습니다.`],
-                createdAt: todayISO(),
-              })
+              if (!nextAdvancements.includes(job.id)) {
+                nextAdvancements.push(job.id)
+                advancementsChanged = true
+                newMessages.push({
+                  id: uid(),
+                  kind: 'info',
+                  title: '── SYSTEM ── 전직 트리 개방',
+                  lines: [`신규 직업 [${job.name}] 전직이 가능해졌습니다.`],
+                  createdAt: todayISO(),
+                })
+              }
+            }
+          } else {
+            if (job.hiddenProfile?.isHidden && nextHidden.includes(job.id)) {
+              nextHidden = nextHidden.filter(id => id !== job.id)
+              hiddenChanged = true
             }
           }
         })
