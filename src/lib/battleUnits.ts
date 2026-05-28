@@ -32,6 +32,7 @@ import { getEquipmentPowerBreakdown } from './equipmentPower'
 import { calculatePlayerCombatStats, getEquippedItems, getPlayerCombatSkills } from './game'
 import { getShadowDefinition } from './shadows'
 import { getShadowCombatUnitProfile } from './shadowSkills'
+import { getValuePreview } from './shadowCombatRuntime'
 import { SKILL_DEFINITIONS } from './seed'
 import { buildMockMonsterEncounterDefinitions, getDirectBattleMockParty } from './directBattleMonsters'
 
@@ -145,9 +146,51 @@ const baseAction = (
   effectColor: actionId === 'guard' ? 'slate' : 'zinc',
 })
 
+const buildShadowActionEffects = (
+  profile: ShadowCombatUnitProfile,
+  ability: ShadowSkillDefinition | ShadowPassiveDefinition,
+  sourceKind: 'active' | 'passive',
+): any[] => {
+  const value = getValuePreview(profile, ability, sourceKind)
+  const isEnemyTarget = ability.effectKind === 'control' || ability.effectKind === 'bossing'
+  const targetScope = isEnemyTarget ? 'enemy' : 'self'
+
+  if (ability.effectKind === 'control') {
+    return [
+      { kind: 'stat', stat: 'def', value: -value * 1.5, durationTurns: 2, target: targetScope },
+      { kind: 'stat', stat: 'speed', value: -value * 1.1, durationTurns: 2, target: targetScope },
+      { kind: 'stat', stat: 'accuracy', value: -0.12, durationTurns: 2, target: targetScope },
+    ]
+  }
+  if (ability.effectKind === 'bossing') {
+    return [
+      { kind: 'stat', stat: 'def', value: -value * 1.8, durationTurns: 2, target: targetScope },
+      { kind: 'stat', stat: 'evasionRate', value: -0.15, durationTurns: 2, target: targetScope },
+    ]
+  }
+  if (ability.effectKind === 'guard' || ability.effectKind === 'survival') {
+    return [
+      { kind: 'damage_reduction', value: value, durationTurns: 1, target: 'self' },
+    ]
+  }
+  if (ability.effectKind === 'support' || ability.effectKind === 'cooldown' || ability.effectKind === 'synergy') {
+    return [
+      { kind: 'stat', stat: 'atk', value: value * 1.2, durationTurns: 2, target: 'self' },
+      { kind: 'stat', stat: 'speed', value: value * 0.8, durationTurns: 2, target: 'self' },
+    ]
+  }
+  if (ability.effectKind === 'damage' || ability.effectKind === 'hybrid') {
+    return [
+      { kind: 'stat', stat: 'critRate', value: 0.12, durationTurns: 1, target: 'self' },
+    ]
+  }
+  return []
+}
+
 const skillAction = (
   unitId: string,
   skill: ShadowSkillDefinition,
+  effects: any[] = [],
 ): BattleActionDefinition => ({
   actionId: `${unitId}:skill:${skill.id}`,
   label: skill.name || skill.shortLabel,
@@ -161,6 +204,7 @@ const skillAction = (
   actionCue: skill.actionCue,
   animationCue: skill.animationCue,
   effectColor: skill.effectColor,
+  effects,
 })
 
 const hunterSkillEffectKind = (skill: SkillDefinition): BattleActionDefinition['effectKind'] => {
@@ -205,6 +249,7 @@ const hunterSkillAction = (
 const passiveAction = (
   unitId: string,
   passive: ShadowPassiveDefinition,
+  effects: any[] = [],
 ): BattleActionDefinition => ({
   actionId: `${unitId}:passive:${passive.id}`,
   label: passive.shortLabel || passive.name,
@@ -216,6 +261,8 @@ const passiveAction = (
   actionCue: passive.actionCue,
   animationCue: passive.triggerCue,
   effectColor: 'slate',
+  effects,
+  timing: passive.condition?.timing ?? 'round_start',
 })
 
 const roleSkillStat = (role: ShadowRole, stats: ShadowStatBlock): number => {
@@ -312,7 +359,9 @@ export const buildShadowBattleUnit = (
   const stats = convertShadowProfileToBattleStats(profile, options.currentHp)
   const actionList = [
     baseAction(unitId, 'basic', 'Basic Attack', 'single_enemy', 0),
-    ...profile.activeSkills.slice(0, 2).map(skill => skillAction(unitId, skill)),
+    ...profile.activeSkills.slice(0, 2).map(skill => 
+      skillAction(unitId, skill, buildShadowActionEffects(profile, skill, 'active'))
+    ),
     baseAction(unitId, 'guard', 'Guard', 'single_ally', 2),
     baseAction(unitId, 'wait', 'Wait', 'self', -1),
   ]
@@ -330,7 +379,9 @@ export const buildShadowBattleUnit = (
       statusEffects: [],
       cooldowns: {},
       actionList,
-      passiveList: profile.passives.slice(0, 3).map(passive => passiveAction(unitId, passive)),
+      passiveList: profile.passives.slice(0, 3).map(passive => 
+        passiveAction(unitId, passive, buildShadowActionEffects(profile, passive, 'passive'))
+      ),
       actionPriority: ROLE_PRIORITY[profile.role],
       boardLane: profile.actionProfile.boardLane,
       actionCue: profile.actionProfile.actionCue,

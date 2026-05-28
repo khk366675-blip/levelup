@@ -54,6 +54,12 @@ export function BattleDamagePopup({ popups }: Props) {
               else if (popStyle === 'shadow') textColorClass = 'text-purple-600/75'
               else if (popStyle === 'curse') textColorClass = 'text-red-600/75'
               else if (popStyle === 'rift') textColorClass = 'text-blue-600/75'
+              else if (popStyle === 'shadow-silence') textColorClass = 'text-cyan-600/75'
+              else if (popStyle === 'shadow-rend') textColorClass = 'text-rose-600/75'
+              else if (popStyle === 'shadow-guard') textColorClass = 'text-cyan-600/75'
+              else if (popStyle === 'shadow-mend') textColorClass = 'text-emerald-600/75'
+              else if (popStyle === 'shadow-scan') textColorClass = 'text-teal-600/75'
+              else if (popStyle === 'shadow-void') textColorClass = 'text-indigo-600/75'
               else textColorClass = 'text-rose-600/75'
             }
           } else {
@@ -90,6 +96,30 @@ export function BattleDamagePopup({ popups }: Props) {
                 textColorClass = 'text-cyan-200'
                 critBadge = 'RIFT 🌀'
                 critBadgeColor = 'text-cyan-200 border-cyan-300 bg-cyan-950/80'
+              } else if (popStyle === 'shadow-silence') {
+                textColorClass = 'text-cyan-200'
+                critBadge = 'SILENCE 🤫'
+                critBadgeColor = 'text-cyan-300 border-cyan-400 bg-cyan-950/85'
+              } else if (popStyle === 'shadow-rend') {
+                textColorClass = 'text-rose-300'
+                critBadge = 'REND ⚔️'
+                critBadgeColor = 'text-rose-300 border-rose-400 bg-rose-950/85'
+              } else if (popStyle === 'shadow-guard') {
+                textColorClass = 'text-cyan-300'
+                critBadge = 'GUARD 🛡️'
+                critBadgeColor = 'text-cyan-300 border-cyan-400 bg-cyan-950/85'
+              } else if (popStyle === 'shadow-mend') {
+                textColorClass = 'text-emerald-300'
+                critBadge = 'MEND 💚'
+                critBadgeColor = 'text-emerald-300 border-emerald-400 bg-emerald-950/85'
+              } else if (popStyle === 'shadow-scan') {
+                textColorClass = 'text-teal-300'
+                critBadge = 'SCAN 👁️'
+                critBadgeColor = 'text-teal-300 border-teal-400 bg-teal-950/85'
+              } else if (popStyle === 'shadow-void') {
+                textColorClass = 'text-indigo-200'
+                critBadge = 'VOID 🌀'
+                critBadgeColor = 'text-indigo-200 border-indigo-300 bg-indigo-950/85'
               } else {
                 textColorClass = 'text-yellow-300'
                 critBadge = 'CRIT 🔥'
@@ -127,6 +157,30 @@ export function BattleDamagePopup({ popups }: Props) {
                   textColorClass = 'text-blue-400'
                   critBadge = 'RIFT'
                   critBadgeColor = 'text-blue-400 border-blue-600/50 bg-blue-950/50'
+                } else if (popStyle === 'shadow-silence') {
+                  textColorClass = 'text-cyan-400'
+                  critBadge = 'SILENCE'
+                  critBadgeColor = 'text-cyan-400 border-cyan-600/50 bg-cyan-950/50'
+                } else if (popStyle === 'shadow-rend') {
+                  textColorClass = 'text-rose-400'
+                  critBadge = 'REND'
+                  critBadgeColor = 'text-rose-400 border-rose-600/50 bg-rose-950/50'
+                } else if (popStyle === 'shadow-guard') {
+                  textColorClass = 'text-cyan-400'
+                  critBadge = 'GUARD'
+                  critBadgeColor = 'text-cyan-400 border-cyan-600/50 bg-cyan-950/50'
+                } else if (popStyle === 'shadow-mend') {
+                  textColorClass = 'text-emerald-400'
+                  critBadge = 'MEND'
+                  critBadgeColor = 'text-emerald-400 border-emerald-600/50 bg-emerald-950/50'
+                } else if (popStyle === 'shadow-scan') {
+                  textColorClass = 'text-teal-400'
+                  critBadge = 'SCAN'
+                  critBadgeColor = 'text-teal-400 border-teal-600/50 bg-teal-950/50'
+                } else if (popStyle === 'shadow-void') {
+                  textColorClass = 'text-indigo-400'
+                  critBadge = 'VOID'
+                  critBadgeColor = 'text-indigo-400 border-indigo-600/50 bg-indigo-950/50'
                 } else {
                   textColorClass = 'text-rose-500'
                   critBadge = 'FOCUS'
@@ -141,6 +195,12 @@ export function BattleDamagePopup({ popups }: Props) {
                 else if (popStyle === 'shadow') textColorClass = 'text-purple-400'
                 else if (popStyle === 'curse') textColorClass = 'text-red-500'
                 else if (popStyle === 'rift') textColorClass = 'text-blue-400'
+                else if (popStyle === 'shadow-silence') textColorClass = 'text-cyan-400'
+                else if (popStyle === 'shadow-rend') textColorClass = 'text-rose-400'
+                else if (popStyle === 'shadow-guard') textColorClass = 'text-cyan-400'
+                else if (popStyle === 'shadow-mend') textColorClass = 'text-emerald-400'
+                else if (popStyle === 'shadow-scan') textColorClass = 'text-teal-400'
+                else if (popStyle === 'shadow-void') textColorClass = 'text-indigo-400'
                 else textColorClass = 'text-rose-500'
               }
             }
@@ -159,7 +219,7 @@ export function BattleDamagePopup({ popups }: Props) {
 
         // Setup drop shadow styling based on crit magnitude
         const dropShadow = pop.isCrit
-          ? `drop-shadow(0 0 10px ${popStyle === 'shadow' ? 'rgba(168,85,247,0.7)' : popStyle === 'curse' ? 'rgba(239,68,68,0.7)' : 'rgba(245,158,11,0.7)'}) drop-shadow(0 4px 8px rgba(0,0,0,0.95))`
+          ? `drop-shadow(0 0 10px ${popStyle === 'shadow' || popStyle.startsWith('shadow-') ? 'rgba(168,85,247,0.7)' : popStyle === 'curse' ? 'rgba(239,68,68,0.7)' : 'rgba(245,158,11,0.7)'}) drop-shadow(0 4px 8px rgba(0,0,0,0.95))`
           : 'drop-shadow(0 3px 6px rgba(0,0,0,0.9)'
 
         const textStyle: React.CSSProperties = {

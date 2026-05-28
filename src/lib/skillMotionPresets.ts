@@ -47,6 +47,12 @@ export type DamagePopupStyle =
   | 'shadow'
   | 'curse'
   | 'rift'
+  | 'shadow-silence'
+  | 'shadow-rend'
+  | 'shadow-guard'
+  | 'shadow-mend'
+  | 'shadow-scan'
+  | 'shadow-void'
   | 'default'
 
 export interface SkillMotionPreset {
@@ -143,6 +149,69 @@ export const SKILL_MOTION_PRESETS: Record<string, SkillMotionPreset> = {
     vfxTone: '#6366f1', // Cyan-indigo distortion
     durationMs: 640,
   },
+  'shadow-silence': {
+    id: 'shadow-silence',
+    actorMotion: 'cast-hold',
+    targetReaction: 'magic-hit-shake',
+    impactStyle: 'magic-explosion',
+    damagePopupStyle: 'shadow-silence',
+    vfxTone: '#06b6d4', // Muted Cyan
+    durationMs: 600,
+  },
+  'shadow-rend': {
+    id: 'shadow-rend',
+    actorMotion: 'dash-slash',
+    targetReaction: 'quick-hit-shake',
+    impactStyle: 'quick-cut',
+    damagePopupStyle: 'shadow-rend',
+    vfxTone: '#f43f5e', // Rose Red
+    durationMs: 400,
+  },
+  'shadow-guard': {
+    id: 'shadow-guard',
+    actorMotion: 'guard-raise',
+    targetReaction: 'guard-block',
+    impactStyle: 'shield-flare',
+    damagePopupStyle: 'shadow-guard',
+    vfxTone: '#06b6d4', // Cyan Shield Flare
+    durationMs: 450,
+  },
+  'shadow-mend': {
+    id: 'shadow-mend',
+    actorMotion: 'command-cast',
+    targetReaction: 'buff-debuff-pulse',
+    impactStyle: 'tactical-marker',
+    damagePopupStyle: 'shadow-mend',
+    vfxTone: '#10b981', // Emerald Green
+    durationMs: 500,
+  },
+  'shadow-scan': {
+    id: 'shadow-scan',
+    actorMotion: 'command-cast',
+    targetReaction: 'buff-debuff-pulse',
+    impactStyle: 'tactical-marker',
+    damagePopupStyle: 'shadow-scan',
+    vfxTone: '#14b8a6', // Teal weakpoint glyph
+    durationMs: 500,
+  },
+  'shadow-void': {
+    id: 'shadow-void',
+    actorMotion: 'rift-step',
+    targetReaction: 'warp-shake',
+    impactStyle: 'rift-crack',
+    damagePopupStyle: 'shadow-void',
+    vfxTone: '#6366f1', // Purple-cyan crack
+    durationMs: 600,
+  },
+  'shadow-execute': {
+    id: 'shadow-execute',
+    actorMotion: 'vanish-shadow-strike',
+    targetReaction: 'dark-flash-shake',
+    impactStyle: 'shadow-cut',
+    damagePopupStyle: 'shadow',
+    vfxTone: '#a855f7', // Deep purple shadow cut
+    durationMs: 550,
+  },
   'boss-action': {
     id: 'boss-action',
     actorMotion: 'hostile-heavy',
@@ -204,7 +273,40 @@ export function getSkillMotionPreset(
   else if (kind === 'guard') {
     basePreset = SKILL_MOTION_PRESETS['guardian']  // Blocking actions map defensively
   }
-  // 3. Resolve role-based preset IDs
+  // 3. Resolve Shadow-specific Skill/Passive presets if actionId matches shadow identifiers
+  else if (actionId && (actionId.includes(':skill:') || actionId.includes(':passive:'))) {
+    const actId = actionId.toLowerCase()
+    if (actId.includes('silence') || actId.includes('suppress')) {
+      basePreset = SKILL_MOTION_PRESETS['shadow-silence']
+    } else if (actId.includes('cleave') || actId.includes('slash') || actId.includes('strike') || actId.includes('chase') || actId.includes('hit')) {
+      basePreset = SKILL_MOTION_PRESETS['shadow-rend']
+    } else if (actId.includes('execute') || actId.includes('shadow') || actId.includes('abyss')) {
+      basePreset = SKILL_MOTION_PRESETS['shadow-execute']
+    } else if (actId.includes('barrier') || actId.includes('guard') || actId.includes('intercept') || actId.includes('protect')) {
+      basePreset = SKILL_MOTION_PRESETS['shadow-guard']
+    } else if (actId.includes('mend') || actId.includes('pulse') || actId.includes('heal') || actId.includes('aura')) {
+      basePreset = SKILL_MOTION_PRESETS['shadow-mend']
+    } else if (actId.includes('mark') || actId.includes('scan') || actId.includes('weak') || actId.includes('index') || actId.includes('debuff') || actId.includes('read')) {
+      basePreset = SKILL_MOTION_PRESETS['shadow-scan']
+    } else if (actId.includes('rift') || actId.includes('void') || actId.includes('crack') || actId.includes('dimension')) {
+      basePreset = SKILL_MOTION_PRESETS['shadow-void']
+    } else {
+      // Fallback based on shadow role if any
+      const r = role ? role.toLowerCase() : ''
+      if (r === 'assault' || r === 'hunter') {
+        basePreset = SKILL_MOTION_PRESETS['shadow-rend']
+      } else if (r === 'guard') {
+        basePreset = SKILL_MOTION_PRESETS['shadow-guard']
+      } else if (r === 'support') {
+        basePreset = SKILL_MOTION_PRESETS['shadow-mend']
+      } else if (r === 'analyst' || r === 'scout') {
+        basePreset = SKILL_MOTION_PRESETS['shadow-scan']
+      } else {
+        basePreset = SKILL_MOTION_PRESETS['shadow-rend']
+      }
+    }
+  }
+  // 4. Resolve role-based preset IDs
   else if (!role) {
     // If enemy monster unit has no explicit role
     basePreset = SKILL_MOTION_PRESETS['monster-action']

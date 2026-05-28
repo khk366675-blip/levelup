@@ -435,7 +435,11 @@ const formatBattleLogKo = (
   } else if (log.eventType === 'status' && (action?.effectKind === 'guard' || action?.effectKind === 'survival')) {
     message = `${actorName}이/가 ${actionName}으로 ${targetName}의 방어 태세를 강화했다.`
   } else if (log.eventType === 'status') {
-    message = `${actorName}이/가 ${actionName} 효과를 발동했다.`
+    if (log.message.startsWith('[PASSIVE]')) {
+      message = log.message
+    } else {
+      message = `${actorName}이/가 ${actionName} 효과를 발동했다.`
+    }
   } else if (log.eventType === 'reaction') {
     message = `${actorName}이/가 ${targetName}을 보호하며 ${value} 피해를 대신 받았다.`
   } else if (log.eventType === 'fizzle') {
@@ -472,6 +476,7 @@ const directLogBadge = (
   action?: BattleActionDefinition,
 ): string => {
   if (log.eventType === 'result') return 'RESULT'
+  if (log.timing === 'passive_trigger' || log.actionId?.includes(':passive:') || action?.actionType === 'passive') return 'PASSIVE'
   if (log.eventType === 'damage') return action?.actionType === 'skill' ? 'SKILL' : 'ATTACK'
   if (log.eventType === 'heal') return 'HEAL'
   if (log.eventType === 'status' || log.eventType === 'reaction') return 'DEFENSE'
@@ -704,12 +709,16 @@ export function DirectBattlePreviewPanel({
     const val = log.value ?? 0
     let kind = 'attack'
     
+    const isShadowAbility = log.actionId?.includes(':skill:') || log.actionId?.includes(':passive:')
+    
     if (log.eventType === 'heal') kind = 'heal'
     else if (log.eventType === 'status') {
       const isGuard = log.actionCue === 'guard' || log.animationCue?.includes('guard')
-      kind = isGuard ? 'guard' : 'magic'
+      kind = isGuard ? 'guard' : isShadowAbility ? 'shadow' : 'magic'
     } else if (log.eventType === 'reaction') {
       kind = 'guard'
+    } else if (isShadowAbility) {
+      kind = 'shadow'
     } else if (log.eventType === 'damage' && (log.actionCue?.includes('shadow') || log.animationCue?.includes('shadow'))) {
       kind = 'shadow'
     }

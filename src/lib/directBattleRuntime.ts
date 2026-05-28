@@ -315,6 +315,60 @@ const resolveTargets = (
   return [(firstAlive(enemies))?.unitId].filter((id): id is string => Boolean(id))
 }
 
+const resolveShadowPassivesInBattle = (
+  state: DirectBattleState,
+  timing: 'wave_start' | 'round_start' | 'battle_start',
+) => {
+  if (state.isFinished) return
+
+  const shadows = state.units.filter(unit => unit.team === 'player' && unit.unitType === 'shadow' && isAlive(unit))
+  if (shadows.length === 0) return
+
+  for (const shadow of shadows) {
+    if ((shadow as any)._passiveTriggeredRound === state.round) continue
+
+    for (const passive of shadow.passiveList) {
+      const passiveTiming = (passive as any).timing
+      if (passiveTiming !== timing) continue
+
+      const procStability = 1.0
+      const baseChance = 0.18
+      const chance = Math.min(0.15, baseChance * 0.32 * procStability)
+      const roll = Math.random()
+
+      if (roll <= chance) {
+        (shadow as any)._passiveTriggeredRound = state.round
+
+        const targetIds = [shadow.unitId]
+        const snapshotIds = uniqueUnitIds([shadow.unitId])
+        const hpBeforeByUnitId = hpSnapshotsFor(state, snapshotIds)
+        const statusBeforeByUnitId = statusSnapshotsFor(state, snapshotIds)
+
+        if (passive.effects && passive.effects.length > 0) {
+          applyDynamicEffects(state, shadow, shadow, passive)
+        }
+
+        addLog(state, {
+          actorUnitId: shadow.unitId,
+          targetUnitIds: targetIds,
+          actionId: passive.actionId,
+          timing: 'passive_trigger',
+          message: `[PASSIVE] ${shadow.displayName}의 ${passive.label} 발동! ${passive.description}`,
+          eventType: 'status',
+          effectColor: 'emerald',
+          actionCue: passive.actionCue,
+          animationCue: passive.animationCue,
+          hpBeforeByUnitId,
+          hpAfterByUnitId: hpSnapshotsFor(state, snapshotIds),
+          statusBeforeByUnitId,
+          statusAfterByUnitId: statusSnapshotsFor(state, snapshotIds),
+        })
+        break
+      }
+    }
+  }
+}
+
 const getDefaultAction = (unit: BattleUnit): BattleActionDefinition | undefined =>
   unit.actionList.find(action => action.actionType === 'basic') ?? unit.actionList[0]
 
@@ -440,6 +494,10 @@ export const createDirectBattleState = (
       computeTelegraphForUnit(state, u)
     }
   }
+
+  // [HOTFIX] 그림자 패시브 실시간 격발기 (Battle/Wave Start)
+  resolveShadowPassivesInBattle(state, 'battle_start')
+  resolveShadowPassivesInBattle(state, 'wave_start')
 
   return state
 }
@@ -1070,6 +1128,10 @@ export const executeDirectBattleRound = (
   state.round += 1
   state.status = 'in_progress'
   tickRoundStart(state)
+  
+  // [HOTFIX] 그림자 패시브 실시간 격발기 (Round Start)
+  resolveShadowPassivesInBattle(state, 'round_start')
+
   addLog(state, { message: `Round ${state.round} started.`, eventType: 'round' })
 
   const monsterSelections = chooseMockMonsterActions(state)

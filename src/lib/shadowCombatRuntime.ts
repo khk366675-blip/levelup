@@ -182,7 +182,7 @@ const timingMatches = (
   return params.phase === 'player_after_action'
 }
 
-const statScalingScore = (
+export const statScalingScore = (
   profile: ShadowCombatUnitProfile,
   ability: ShadowSkillDefinition | ShadowPassiveDefinition,
 ): number =>
@@ -210,7 +210,7 @@ const getChance = (
   return Math.max(0, Math.min(hardCap, scaled))
 }
 
-const getValuePreview = (
+export const getValuePreview = (
   profile: ShadowCombatUnitProfile,
   ability: ShadowSkillDefinition | ShadowPassiveDefinition,
   sourceKind: 'active' | 'passive',

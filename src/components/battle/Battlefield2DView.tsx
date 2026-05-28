@@ -265,7 +265,7 @@ export function Battlefield2DView({
         type: vfxType,
         targetX: coords.x,
         targetY: coords.y,
-        actorRole: actor.role,
+        actorRole: actor.kind === 'shadow' ? `shadow-${actor.role}` : actor.role,
         isBoss: actor.isBoss || actor.kind === 'boss',
       }
     })
