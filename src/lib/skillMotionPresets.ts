@@ -77,7 +77,7 @@ export const SKILL_MOTION_PRESETS: Record<string, SkillMotionPreset> = {
     impactStyle: 'blunt-impact',
     damagePopupStyle: 'heavy',
     vfxTone: '#f59e0b', // Amber-orange
-    durationMs: 460,
+    durationMs: 480,
   },
   mage: {
     id: 'mage',
@@ -86,7 +86,7 @@ export const SKILL_MOTION_PRESETS: Record<string, SkillMotionPreset> = {
     impactStyle: 'magic-explosion',
     damagePopupStyle: 'magic',
     vfxTone: '#818cf8', // Indigo
-    durationMs: 500,
+    durationMs: 720,
   },
   guardian: {
     id: 'guardian',
@@ -113,7 +113,7 @@ export const SKILL_MOTION_PRESETS: Record<string, SkillMotionPreset> = {
     impactStyle: 'tactical-marker',
     damagePopupStyle: 'tactical',
     vfxTone: '#f59e0b', // Strategic Gold
-    durationMs: 420,
+    durationMs: 600,
   },
   'hidden-shadow': {
     id: 'hidden-shadow',
@@ -122,7 +122,7 @@ export const SKILL_MOTION_PRESETS: Record<string, SkillMotionPreset> = {
     impactStyle: 'shadow-cut',
     damagePopupStyle: 'shadow',
     vfxTone: '#a855f7', // Deep purple
-    durationMs: 480,
+    durationMs: 550,
   },
   'hidden-curse': {
     id: 'hidden-curse',
@@ -131,7 +131,7 @@ export const SKILL_MOTION_PRESETS: Record<string, SkillMotionPreset> = {
     impactStyle: 'curse-seal',
     damagePopupStyle: 'curse',
     vfxTone: '#ef4444', // Crimson red
-    durationMs: 450,
+    durationMs: 680,
   },
   'hidden-rift': {
     id: 'hidden-rift',
@@ -140,7 +140,7 @@ export const SKILL_MOTION_PRESETS: Record<string, SkillMotionPreset> = {
     impactStyle: 'rift-crack',
     damagePopupStyle: 'rift',
     vfxTone: '#6366f1', // Cyan-indigo distortion
-    durationMs: 440,
+    durationMs: 640,
   },
   'boss-action': {
     id: 'boss-action',
@@ -149,7 +149,7 @@ export const SKILL_MOTION_PRESETS: Record<string, SkillMotionPreset> = {
     impactStyle: 'blunt-impact',
     damagePopupStyle: 'heavy',
     vfxTone: '#f43f5e', // Destructive rose
-    durationMs: 520,
+    durationMs: 560,
   },
   'monster-action': {
     id: 'monster-action',

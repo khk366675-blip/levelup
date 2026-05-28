@@ -82,10 +82,11 @@ export function BattleActorSprite({
     activeTimes = [0, 0.24, 0.74, 1]
     activeDuration = 0.48
   } else if (activeMotion === 'cast-hold') {
+    // Mage: Float gently and charge kinetic energy during 45% cast time, burst at 55%
     activeY = [0, -22, -22, 0]
-    activeScale = [1, 1.12, 1.12, 1]
-    activeTimes = [0, 0.25, 0.75, 1]
-    activeDuration = 0.52
+    activeScale = [1, 1.15, 1.15, 1]
+    activeTimes = [0, 0.45, 0.85, 1]
+    activeDuration = 0.72
   } else if (activeMotion === 'guard-raise') {
     activeX = actor.team === 'ally' ? [0, 10, 0] : [0, -10, 0]
     activeScale = [1, 1.06, 1]
@@ -93,37 +94,42 @@ export function BattleActorSprite({
     activeTimes = [0, 0.2, 0.7, 1]
     activeDuration = 0.4
   } else if (activeMotion === 'afterimage-strike') {
+    // Tracker: Vanish near-completely (opacity 0.05) and appear on side-step instantly
     activeX = actor.team === 'ally' ? [0, 68, 0] : [0, -68, 0]
-    activeOpacity = [1, 0.25, 0.25, 1]
-    activeTimes = [0, 0.16, 0.66, 1]
+    activeOpacity = [1, 0.05, 0.05, 1]
+    activeTimes = [0, 0.15, 0.65, 1]
     activeDuration = 0.35
   } else if (activeMotion === 'command-cast') {
+    // Tactician: Raise arm, command glyph pulses for 45% timing
     activeY = [0, -14, 0]
-    activeScale = [1, 1.1, 1]
-    activeTimes = [0, 0.22, 0.72, 1]
-    activeDuration = 0.42
+    activeScale = [1, 1.12, 1]
+    activeTimes = [0, 0.45, 0.8, 1]
+    activeDuration = 0.6
   } else if (activeMotion === 'vanish-shadow-strike') {
-    activeX = actor.team === 'ally' ? [0, 55, 0] : [0, -55, 0]
-    activeOpacity = [1, 0.08, 0.08, 1]
-    activeTimes = [0, 0.2, 0.7, 1]
-    activeDuration = 0.48
+    // Hidden Shadow: Vanish 100% into shadow mist (opacity 0) for 35% prepare, then execute
+    activeX = actor.team === 'ally' ? [0, 65, 0] : [0, -65, 0]
+    activeOpacity = [1, 0, 0, 1]
+    activeTimes = [0, 0.35, 0.85, 1]
+    activeDuration = 0.55
   } else if (activeMotion === 'curse-cast') {
-    activeY = [0, -8, 0]
-    activeRotate = [0, 4, -4, 0]
-    activeTimes = [0, 0.22, 0.72, 1]
-    activeDuration = 0.45
+    // Hidden Curse: Dark blood curse ritual hover vibration
+    activeY = [0, -12, 0]
+    activeRotate = [0, 6, -6, 0]
+    activeTimes = [0, 0.5, 0.85, 1]
+    activeDuration = 0.68
   } else if (activeMotion === 'rift-step') {
-    activeX = actor.team === 'ally' ? [0, 58, 0] : [0, -58, 0]
-    activeScale = [1, 0.12, 1.22, 1]
-    activeOpacity = [1, 0.1, 0.9, 1]
-    activeTimes = [0, 0.18, 0.68, 1]
-    activeDuration = 0.44
+    // Hidden Rift: Distort space, compress horizontally (scaleX 0.05) to warp adjacent to target
+    activeX = actor.team === 'ally' ? [0, 62, 0] : [0, -62, 0]
+    activeScale = [1, 0.05, 1.25, 1]
+    activeOpacity = [1, 0.05, 0.95, 1]
+    activeTimes = [0, 0.45, 0.85, 1]
+    activeDuration = 0.64
   } else if (activeMotion === 'hostile-heavy') {
     activeX = actor.team === 'ally' ? [0, 60, 0] : [0, -60, 0]
     activeY = [0, 14, -14, 0]
     activeScale = [1, 1.3, 1]
     activeTimes = [0, 0.26, 0.76, 1]
-    activeDuration = 0.54
+    activeDuration = 0.56
   } else if (activeMotion === 'hostile-normal') {
     activeX = actor.team === 'ally' ? [0, 35, 0] : [0, -35, 0]
     activeScale = [1, 1.12, 1]
@@ -144,19 +150,19 @@ export function BattleActorSprite({
     reactTimes = [0, 0.12, 0.28, 0.44, 0.6, 0.76, 0.92, 1]
     reactDuration = 0.38
   } else if (hitReaction === 'heavy-recoil') {
-    // Massive 2.5D physical Recoil: Pushed back along X axis and rotated heavily, staggering back
     reactX = actor.team === 'ally' ? [0, -42, -48, -12, 0] : [0, 42, 48, 12, 0]
     reactRotate = actor.team === 'ally' ? [0, -15, -18, -4, 0] : [0, 15, 18, 4, 0]
     reactScale = [1, 0.94, 0.94, 0.98, 1]
-    reactTimes = [0, 0.15, 0.65, 0.85, 1] // Stays recoiled during attackers Hit Stop!
+    reactTimes = [0, 0.15, 0.65, 0.85, 1]
     reactDuration = 0.48
   } else if (hitReaction === 'magic-hit-shake') {
-    reactX = [0, -6, 6, -6, 6, 0]
-    reactY = [0, -14, 14, 0]
-    reactScale = [1, 1.08, 1]
-    reactDuration = 0.5
+    // Mage target stays idle during 45% cast time, then shakes intensely when burst occurs
+    reactX = [0, 0, -12, 12, -8, 8, 0]
+    reactY = [0, 0, -18, 18, -10, 10, 0]
+    reactScale = [1, 1, 1.15, 0.95, 1]
+    reactTimes = [0, 0.45, 0.6, 0.75, 0.9, 1]
+    reactDuration = 0.72
   } else if (hitReaction === 'guard-block') {
-    // Solid defensive block: barely any backward movement, high resistance
     reactX = actor.team === 'ally' ? [0, -4, 0] : [0, 4, 0]
     reactScale = [1, 0.97, 1]
     reactTimes = [0, 0.15, 0.75, 1]
@@ -166,27 +172,32 @@ export function BattleActorSprite({
     reactRotate = actor.team === 'ally' ? [0, -6, 0] : [0, 6, 0]
     reactDuration = 0.35
   } else if (hitReaction === 'buff-debuff-pulse') {
-    reactScale = [1, 1.1, 1]
-    reactDuration = 0.42
+    reactScale = [1, 1.18, 1]
+    reactDuration = 0.6
   } else if (hitReaction === 'dark-flash-shake') {
-    reactX = actor.team === 'ally' ? [0, -48, 0] : [0, 48, 0]
-    reactRotate = actor.team === 'ally' ? [0, -22, 0] : [0, 22, 0]
-    reactScale = [1, 0.88, 1]
-    reactTimes = [0, 0.2, 0.7, 1]
-    reactDuration = 0.48
+    // Hidden Shadow: Target dim-shred flash recoil occurs starting at 35% vanish step
+    reactX = actor.team === 'ally' ? [0, 0, -48, -54, -12, 0] : [0, 0, 48, 54, 12, 0]
+    reactRotate = actor.team === 'ally' ? [0, 0, -22, -25, -5, 0] : [0, 0, 22, 25, 5, 0]
+    reactScale = [1, 1, 0.85, 0.85, 0.95, 1]
+    reactTimes = [0, 0.35, 0.5, 0.7, 0.88, 1]
+    reactDuration = 0.55
   } else if (hitReaction === 'curse-flicker-stagger') {
-    reactX = [0, -5, 5, -5, 5, 0]
-    reactY = [0, 6, -6, 0]
-    reactScale = [1, 0.94, 1]
-    reactDuration = 0.45
+    // Hidden Curse: Crimson seal pulses for 40% time, then target corrodes and staggered
+    reactX = [0, 0, -8, 8, -6, 6, 0]
+    reactY = [0, 0, 9, -9, 5, -5, 0]
+    reactScale = [1, 1.05, 0.92, 0.92, 0.98, 1]
+    reactTimes = [0, 0.4, 0.55, 0.7, 0.85, 0.95, 1]
+    reactDuration = 0.68
   } else if (hitReaction === 'warp-shake') {
-    reactScale = [1, 0.84, 1.12, 1]
-    reactX = [0, -12, 12, 0]
-    reactDuration = 0.44
+    // Hidden Rift: Space cracks at 45%, target gets sucked in (scale 0.72) and warped staggered
+    reactScale = [1, 1, 0.72, 1.25, 1]
+    reactX = [0, 0, -18, 18, 0]
+    reactTimes = [0, 0.45, 0.6, 0.8, 1]
+    reactDuration = 0.64
   } else if (hitReaction === 'boss-heavy-recoil') {
     reactX = [0, -14, 14, -10, 10, 0]
     reactY = [0, 8, -8, 0]
-    reactDuration = 0.52
+    reactDuration = 0.56
   }
 
   // Motion variants for 2.5D effects with cinematic staging
@@ -284,12 +295,12 @@ export function BattleActorSprite({
         />
       )
     } else if (activeMotion === 'cast-hold') {
-      // Mage Prepare: 신비한 룬 마법진 회전
+      // Mage Prepare: 캐스팅 룬 45% 캐스팅 전조 동안 압축 회전
       element = (
         <motion.div
           initial={{ scale: 0.5, rotate: 0, opacity: 0 }}
-          animate={{ scale: [0.8, 1.1, 1], rotate: [0, 120, 180], opacity: [0, 0.9, 0] }}
-          transition={{ duration: 0.48, ease: 'easeOut' }}
+          animate={{ scale: [0.8, 1.25, 1.25, 0], rotate: [0, 180, 270, 360], opacity: [0, 0.95, 0.95, 0] }}
+          transition={{ duration: 0.72, ease: 'easeOut' }}
           className="absolute -top-6 left-1/2 -translate-x-1/2 w-14 h-14 border border-dashed border-indigo-400 rounded-full flex items-center justify-center bg-indigo-500/5 shadow-[0_0_10px_rgba(129,140,248,0.5)]"
         >
           <span className="text-[8px] text-indigo-200">🔮</span>
@@ -306,12 +317,12 @@ export function BattleActorSprite({
         />
       )
     } else if (activeMotion === 'afterimage-strike') {
-      // Tracker Prepare: 투명 잔상 흐려짐
+      // Tracker Prepare: 투명 잔상 기습 실루엣 흐려짐 강화
       element = (
         <motion.div
           initial={{ opacity: 0, scale: 1 }}
-          animate={{ opacity: [0, 0.6, 0], scale: [1, 1.2, 1.3] }}
-          transition={{ duration: 0.32 }}
+          animate={{ opacity: [0, 0.85, 0], scale: [1, 1.35, 1.6] }}
+          transition={{ duration: 0.35 }}
           className="absolute inset-0 bg-emerald-400/20 rounded-full filter blur-md"
         />
       )
@@ -321,29 +332,29 @@ export function BattleActorSprite({
         <motion.div
           initial={{ scale: 0.6, opacity: 0 }}
           animate={{ scale: [0.8, 1.15, 0.8], opacity: [0, 0.95, 0] }}
-          transition={{ duration: 0.4 }}
+          transition={{ duration: 0.6 }}
           className="absolute -top-4 w-12 h-12 border-2 border-amber-400/40 rounded bg-amber-500/5 rotate-45 flex items-center justify-center"
         >
           <span className="text-[8px] text-amber-200 -rotate-45">📖</span>
         </motion.div>
       )
     } else if (activeMotion === 'vanish-shadow-strike') {
-      // Hidden Shadow Prepare: 자색 어둠 안개
+      // Hidden Shadow Prepare: 자색 어둠 안개 침강
       element = (
         <motion.div
           initial={{ scale: 0.9, opacity: 0 }}
-          animate={{ scale: [1, 1.35, 1.1], opacity: [0, 0.9, 0] }}
-          transition={{ duration: 0.44 }}
+          animate={{ scale: [1, 1.45, 1.25, 0], opacity: [0, 0.95, 0.95, 0] }}
+          transition={{ duration: 0.55 }}
           className="absolute inset-0 bg-purple-950/60 border border-purple-500/30 rounded-full filter blur-sm shadow-[0_0_15px_rgba(168,85,247,0.8)]"
         />
       )
     } else if (activeMotion === 'curse-cast') {
-      // Hidden Curse Prepare: 붉은 균열
+      // Hidden Curse Prepare: 붉은 균열 오라
       element = (
         <motion.div
           initial={{ scale: 0.8, opacity: 0 }}
-          animate={{ scale: [1, 1.2, 1], opacity: [0, 0.85, 0] }}
-          transition={{ duration: 0.42 }}
+          animate={{ scale: [1, 1.25, 1], opacity: [0, 0.85, 0] }}
+          transition={{ duration: 0.68 }}
           className="absolute inset-0 bg-red-950/45 border-2 border-red-500/35 rounded-full filter blur-[1px] shadow-[0_0_12px_rgba(239,68,68,0.7)]"
         />
       )
@@ -353,7 +364,7 @@ export function BattleActorSprite({
         <motion.div
           initial={{ scaleX: 1, opacity: 0 }}
           animate={{ scaleX: [1, 0.1, 1.2, 1], opacity: [0, 0.9, 0] }}
-          transition={{ duration: 0.4 }}
+          transition={{ duration: 0.64 }}
           className="absolute inset-0 border-2 border-violet-400 bg-violet-500/10 rounded-full filter blur-xs shadow-[0_0_15px_rgba(139,92,246,0.6)]"
         />
       )
@@ -363,7 +374,7 @@ export function BattleActorSprite({
         <motion.div
           initial={{ scale: 0.7, opacity: 0 }}
           animate={{ scale: [1, 1.45, 1.1], opacity: [0, 1, 0] }}
-          transition={{ duration: 0.5 }}
+          transition={{ duration: 0.56 }}
           className="absolute -top-12 left-1/2 -translate-x-1/2 w-16 h-16 flex items-center justify-center z-30"
         >
           <div className="absolute inset-0 bg-red-600/10 rounded-full filter blur-md animate-ping" />
@@ -414,18 +425,19 @@ export function BattleActorSprite({
         </div>
       )
     } else if (hitReaction === 'magic-hit-shake') {
-      // Mage Impact: 신비로운 보라 폭발
+      // Mage: Explodes with 45% (0.32s) delay synced with signature casting timing
       element = (
         <div className="absolute inset-0 flex items-center justify-center">
           <motion.div
             initial={{ scale: 0.3, opacity: 0 }}
-            animate={{ scale: [0.3, 1.5, 1.7], opacity: [0, 1, 0] }}
-            transition={{ duration: 0.48 }}
+            animate={{ scale: [0.3, 0.3, 1.7, 1.9, 0], opacity: [0, 0, 1, 0.8, 0] }}
+            transition={{ duration: 0.72, times: [0, 0.45, 0.6, 0.75, 1] }}
             className="absolute w-32 h-32 rounded-full bg-[radial-gradient(circle,rgba(129,140,248,0.7),transparent_70%)] filter blur-sm shadow-[0_0_25px_rgba(99,102,241,0.85)] z-30"
           />
           <motion.div
-            animate={{ rotate: [0, 90], scale: [0.5, 1.25], opacity: [0.9, 0] }}
-            transition={{ duration: 0.45 }}
+            initial={{ scale: 0.5, opacity: 0 }}
+            animate={{ rotate: [0, 90], scale: [0.5, 0.5, 1.45, 0], opacity: [0, 0, 0.95, 0] }}
+            transition={{ duration: 0.72, times: [0, 0.45, 0.7, 1] }}
             className="absolute w-20 h-20 border-2 border-dashed border-indigo-400 rounded-full"
           />
         </div>
@@ -447,95 +459,96 @@ export function BattleActorSprite({
         </motion.div>
       )
     } else if (hitReaction === 'fast-stagger') {
-      // Tracker Impact: 쾌속 민트 X자 참격
+      // Tracker: 15% (0.05s) vanish strike delay, rendering quick X cuts on side-step
       element = (
         <div className="absolute inset-0 flex items-center justify-center">
           <motion.div
             initial={{ scaleX: 0.1, rotate: 45, opacity: 0 }}
-            animate={{ scaleX: [0.1, 1.5, 0.2], opacity: [0, 1, 0] }}
-            transition={{ duration: 0.28 }}
+            animate={{ scaleX: [0.1, 0.1, 1.65, 0.2], opacity: [0, 0, 1, 0] }}
+            transition={{ duration: 0.35, times: [0, 0.15, 0.45, 1] }}
             className="absolute w-36 h-4 bg-gradient-to-r from-transparent via-emerald-300 to-transparent filter blur-[0.5px] z-30"
           />
           <motion.div
             initial={{ scaleX: 0.1, rotate: -45, opacity: 0 }}
-            animate={{ scaleX: [0.1, 1.5, 0.2], opacity: [0, 1, 0] }}
-            transition={{ duration: 0.28, delay: 0.08 }}
+            animate={{ scaleX: [0.1, 0.1, 1.65, 0.2], opacity: [0, 0, 1, 0] }}
+            transition={{ duration: 0.35, times: [0, 0.25, 0.55, 1] }}
             className="absolute w-36 h-4 bg-gradient-to-r from-transparent via-emerald-300 to-transparent filter blur-[0.5px] z-30"
           />
         </div>
       )
     } else if (hitReaction === 'buff-debuff-pulse') {
-      // Tactician Impact: 골드색 전술 기하 펄스
+      // Tactician: Command glyph pulses for 45% timing on target, followed by gold command pulse aura
       element = (
         <div className="absolute inset-0 flex items-center justify-center">
+          {/* Tactical Marker brackets */}
           <motion.div
-            initial={{ scale: 0.5, rotate: 0, opacity: 0 }}
-            animate={{ scale: [0.5, 1.2, 1.4], rotate: [0, 45], opacity: [0, 0.9, 0] }}
-            transition={{ duration: 0.42 }}
-            className="absolute w-24 h-24 border-2 border-amber-400 bg-amber-400/5 rounded-lg z-30 shadow-[0_0_15px_rgba(245,158,11,0.6)]"
+            initial={{ scale: 0.2, rotate: 45, opacity: 0 }}
+            animate={{ scale: [0.2, 1.25, 1.25, 0], rotate: [45, 45, 90, 90], opacity: [0, 0.95, 0.95, 0] }}
+            transition={{ duration: 0.6, times: [0, 0.15, 0.45, 1] }}
+            className="absolute w-22 h-22 border-3 border-amber-400 bg-amber-400/5 rounded-lg z-30 shadow-[0_0_18px_rgba(245,158,11,0.7)]"
             style={{ clipPath: 'polygon(50% 0%, 100% 38%, 82% 100%, 18% 100%, 0% 38%)' }}
           />
           <motion.div
             initial={{ scale: 0.8, opacity: 0 }}
-            animate={{ scale: [0.8, 1.5], opacity: [0.8, 0] }}
-            transition={{ duration: 0.4 }}
-            className="absolute w-28 h-28 rounded-full border border-amber-300 z-20"
+            animate={{ scale: [0.8, 0.8, 1.65, 1.85], opacity: [0, 0, 0.9, 0] }}
+            transition={{ duration: 0.6, times: [0, 0.45, 0.75, 1] }}
+            className="absolute w-28 h-28 rounded-full border-2 border-dashed border-amber-300 z-20"
           />
         </div>
       )
     } else if (hitReaction === 'dark-flash-shake') {
-      // Hidden Shadow Impact: 검은 자색 처형 참격
+      // Hidden Shadow: Execution blade drops down at exactly 35% vanish step
       element = (
         <div className="absolute inset-0 flex items-center justify-center">
           <motion.div
-            initial={{ scaleY: 0.1, opacity: 0 }}
-            animate={{ scaleY: [0.1, 1.6, 0.2], opacity: [0, 1, 0] }}
-            transition={{ duration: 0.42 }}
+            initial={{ scaleY: 0, opacity: 0 }}
+            animate={{ scaleY: [0, 0, 1.75, 0.2], opacity: [0, 0, 1, 0] }}
+            transition={{ duration: 0.55, times: [0, 0.35, 0.55, 1] }}
             className="absolute w-8 h-44 bg-gradient-to-b from-transparent via-purple-950/90 to-transparent border-l border-purple-400/40 filter blur-[1px] z-30"
           />
           <motion.div
             initial={{ scale: 0.4, opacity: 0 }}
-            animate={{ scale: [0.4, 1.4, 1.6], opacity: [0, 0.85, 0] }}
-            transition={{ duration: 0.48 }}
+            animate={{ scale: [0.4, 0.4, 1.5, 1.75, 0], opacity: [0, 0, 0.9, 0.9, 0] }}
+            transition={{ duration: 0.55, times: [0, 0.35, 0.6, 0.85, 1] }}
             className="absolute w-36 h-36 bg-[radial-gradient(circle,rgba(168,85,247,0.5),transparent_70%)] filter blur-md z-20"
           />
         </div>
       )
     } else if (hitReaction === 'curse-flicker-stagger') {
-      // Hidden Curse Impact: 불길한 핏빛 낙인
+      // Hidden Curse: Brand seal pulses for 40% time, then target shatters in crimson flakes
       element = (
         <div className="absolute inset-0 flex items-center justify-center">
           <motion.div
             initial={{ scale: 0.2, opacity: 0 }}
-            animate={{ scale: [0.2, 1.15, 1.25], opacity: [0, 1, 0.8, 0] }}
-            transition={{ duration: 0.45 }}
-            className="absolute w-20 h-20 border-2 border-dashed border-red-600 rounded-full flex items-center justify-center z-30 shadow-[0_0_15px_rgba(239,68,68,0.7)]"
+            animate={{ scale: [0.2, 1.25, 1.05, 1.35, 0], opacity: [0, 1, 0.85, 1, 0] }}
+            transition={{ duration: 0.68, times: [0, 0.15, 0.4, 0.55, 1] }}
+            className="absolute w-20 h-20 border-2 border-dashed border-red-600 rounded-full flex items-center justify-center bg-red-950/10 shadow-[0_0_15px_rgba(239,68,68,0.8)] z-30"
           >
             <span className="text-xl text-red-500 filter drop-shadow-[0_0_4px_red] animate-pulse">🩸</span>
           </motion.div>
           <motion.div
             initial={{ scale: 0.8, opacity: 0 }}
-            animate={{ scale: [0.8, 1.4], opacity: [0.75, 0] }}
-            transition={{ duration: 0.42 }}
-            className="absolute w-28 h-28 bg-[radial-gradient(circle,rgba(239,68,68,0.4),transparent_70%)] filter blur-sm z-20"
+            animate={{ scale: [0.8, 0.8, 1.45, 0], opacity: [0, 0, 0.85, 0] }}
+            transition={{ duration: 0.68, times: [0, 0.4, 0.7, 1] }}
+            className="absolute w-28 h-28 bg-[radial-gradient(circle,rgba(239,68,68,0.45),transparent_70%)] filter blur-sm z-20"
           />
         </div>
       )
     } else if (hitReaction === 'warp-shake') {
-      // Hidden Rift Impact: 청자 공간 균열
+      // Hidden Rift: Rift dimensional crack distortion opens at 45% time, sucking target in
       element = (
         <div className="absolute inset-0 flex items-center justify-center">
           <motion.div
-            initial={{ scale: 0.4, opacity: 0 }}
-            animate={{ scale: [0.4, 1.35, 1.45], rotate: [0, 90], opacity: [0, 0.95, 0] }}
-            transition={{ duration: 0.44 }}
-            className="absolute w-28 h-28 border-2 border-violet-500 bg-violet-600/10 rounded-full filter blur-xs shadow-[0_0_20px_rgba(139,92,246,0.8)] z-30"
+            initial={{ scale: 0.4, rotate: 0, opacity: 0 }}
+            animate={{ scale: [0.4, 1.35, 1.35, 0], rotate: [0, 90, 120, 180], opacity: [0, 0.95, 0.95, 0] }}
+            transition={{ duration: 0.64, times: [0, 0.25, 0.45, 1] }}
+            className="absolute w-28 h-28 border-2 border-violet-500 bg-violet-600/10 rounded-full filter blur-xs shadow-[0_0_20px_rgba(139,92,246,0.85)] z-30"
           />
           <motion.div
             initial={{ scale: 0.2, opacity: 0 }}
-            animate={{ scale: [0.2, 1.25, 0], opacity: [0, 1, 0] }}
-            transition={{ duration: 0.35 }}
-            className="absolute w-16 h-16 border-3 border-cyan-400 rounded-full shadow-[0_0_15px_rgba(34,211,238,0.6)] z-35"
+            animate={{ scale: [0.2, 0.2, 1.35, 0], opacity: [0, 0, 1, 0] }}
+            transition={{ duration: 0.64, times: [0, 0.45, 0.75, 1] }}
+            className="absolute w-16 h-16 border-3 border-cyan-400 rounded-full shadow-[0_0_15px_rgba(34,211,238,0.7)] z-35"
           />
         </div>
       )
@@ -546,7 +559,7 @@ export function BattleActorSprite({
           <motion.div
             initial={{ scale: 0.2, opacity: 1 }}
             animate={{ scale: [0.2, 1.8, 2.1], opacity: [1, 0.8, 0] }}
-            transition={{ duration: 0.52, ease: 'easeOut' }}
+            transition={{ duration: 0.56, ease: 'easeOut' }}
             className="absolute w-44 h-44 rounded-full border-6 border-rose-600 bg-rose-950/20 filter blur-xs shadow-[0_0_30px_#ef4444] z-20"
           />
         </div>
