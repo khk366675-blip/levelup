@@ -32,8 +32,29 @@ function formatJobModifiers(job: JobDefinitionV2): string[] {
   return mods.length > 0 ? mods : ['기본 스탯 효과']
 }
 import { useState } from 'react'
+import { getHunterBattleSpriteUrl } from '../lib/hunterBattleSprites'
 import { JobPanel } from './JobPanel'
 import { SkillPanel } from './SkillPanel'
+
+const rankFrame: Record<string, string> = {
+  E: 'border-zinc-500/25 bg-zinc-500/5',
+  D: 'border-emerald-400/32 bg-emerald-400/6',
+  C: 'border-cyan-400/38 bg-cyan-400/7',
+  B: 'border-purple-400/44 bg-purple-400/8',
+  A: 'border-pink-400/44 bg-pink-400/8',
+  S: 'border-amber-400/52 bg-amber-400/8',
+  National: 'border-red-400/60 bg-red-400/10',
+}
+
+const rankGlow: Record<string, string> = {
+  E: 'rgba(148, 163, 184, 0.3)',
+  D: 'rgba(52, 211, 153, 0.4)',
+  C: 'rgba(34, 211, 238, 0.5)',
+  B: 'rgba(167, 139, 250, 0.58)',
+  A: 'rgba(244, 114, 182, 0.58)',
+  S: 'rgba(245, 158, 11, 0.7)',
+  National: 'rgba(239, 68, 68, 0.8)',
+}
 
 export function HunterStatus() {
   const hunter = useGame(s => s.hunter)
@@ -77,6 +98,10 @@ export function HunterStatus() {
   const equipmentAnalysisValue = equipmentPowerSummaries.reduce((sum, item) => sum + item.totalEquipmentValue, 0)
   const equipmentAnalysisTags = Array.from(new Set(equipmentPowerSummaries.flatMap(item => item.topTags))).slice(0, 3)
 
+  const avatarUrl = getHunterBattleSpriteUrl(activeJobId)
+  const rankGlowStyle = rankGlow[hunter.rank] || rankGlow.E
+  const rankFrameClass = rankFrame[hunter.rank] || rankFrame.E
+
   // Stat effect descriptions
   const getStatEffect = (key: StatKey): string | null => {
     const baseValue = hunter.stats[key]
@@ -116,180 +141,196 @@ export function HunterStatus() {
           </div>
         </div>
 
-        <div className="flex items-end justify-between mb-4">
-          <div>
-            {editingName ? (
-              <input
-                autoFocus
-                value={nameDraft}
-                onChange={(e) => setNameDraft(e.target.value)}
-                onBlur={() => { setName(nameDraft || '플레이어'); setEditingName(false) }}
-                onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
-                className="bg-transparent border-b border-cyan-400/40 text-3xl font-bold tracking-wide focus:outline-none focus:border-cyan-400 max-w-xs"
-              />
-            ) : (
-              <h1
-                className="text-3xl font-bold tracking-wide cursor-text hover:text-cyan-200 transition-colors"
-                onClick={() => { setNameDraft(hunter.name); setEditingName(true) }}
-                title="클릭하여 이름 변경"
-              >
-                {hunter.name}
-              </h1>
-            )}
-            {editingJob ? (
-              <input
-                autoFocus
-                value={jobDraft}
-                onChange={(e) => setJobDraft(e.target.value)}
-                onBlur={() => { setJob(jobDraft || '미각성자'); setEditingJob(false) }}
-                onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
-                className="bg-transparent border-b border-cyan-400/40 text-sm text-cyan-300/80 focus:outline-none focus:border-cyan-400 mt-1 max-w-xs"
-              />
-            ) : (
-              <div className="mt-1">
-                <div
-                  className="text-sm text-cyan-300/70 cursor-text hover:text-cyan-200 transition-colors"
-                  onClick={() => { setJobDraft(hunter.job); setEditingJob(true) }}
-                  title="클릭하여 직업 변경"
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-5 items-stretch">
+          {/* Left Column: Player Info & Combat Power Card */}
+          <div className="flex flex-col justify-between space-y-4">
+            <div>
+              {editingName ? (
+                <input
+                  autoFocus
+                  value={nameDraft}
+                  onChange={(e) => setNameDraft(e.target.value)}
+                  onBlur={() => { setName(nameDraft || '플레이어'); setEditingName(false) }}
+                  onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
+                  className="bg-transparent border-b border-cyan-400/40 text-3xl font-bold tracking-wide focus:outline-none focus:border-cyan-400 w-full"
+                />
+              ) : (
+                <h1
+                  className="text-3xl font-bold tracking-wide cursor-text hover:text-cyan-200 transition-colors"
+                  onClick={() => { setNameDraft(hunter.name); setEditingName(true) }}
+                  title="클릭하여 이름 변경"
                 >
-                  직업 — {hunter.job}
+                  {hunter.name}
+                </h1>
+              )}
+              {editingJob ? (
+                <input
+                  autoFocus
+                  value={jobDraft}
+                  onChange={(e) => setJobDraft(e.target.value)}
+                  onBlur={() => { setJob(jobDraft || '미각성자'); setEditingJob(false) }}
+                  onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
+                  className="bg-transparent border-b border-cyan-400/40 text-sm text-cyan-300/80 focus:outline-none focus:border-cyan-400 mt-1 w-full"
+                />
+              ) : (
+                <div className="mt-1">
+                  <div
+                    className="text-sm text-cyan-300/70 cursor-text hover:text-cyan-200 transition-colors"
+                    onClick={() => { setJobDraft(hunter.job); setEditingJob(true) }}
+                    title="클릭하여 직업 변경"
+                  >
+                    직업 — {hunter.job}
+                  </div>
+                  {currentJobV2 && (
+                    <div className="text-[10px] text-cyan-300/50 system-text mt-0.5 leading-relaxed">
+                      전투 스타일: {currentJobV2.combatStyle}
+                      <div className="mt-0.5">부여 효과: {formatJobModifiers(currentJobV2).join(', ')}</div>
+                      {currentJobV2.growthAffinity?.questCategoryBonus && Object.keys(currentJobV2.growthAffinity.questCategoryBonus).length > 0 && (
+                        <div className="mt-0.5">
+                          성장 친화도: {Object.entries(currentJobV2.growthAffinity.questCategoryBonus)
+                            .map(([cat, val]) => `${CATEGORY_META[cat as keyof typeof CATEGORY_META]?.label || cat} XP +${Math.round((val ?? 0) * 100)}%`)
+                            .join(', ')}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  {currentJobLegacy && jobLine && (
+                    <div className="text-[10px] text-cyan-300/50 system-text mt-0.5">
+                      {jobLine.icon} 계열: {jobLine.label}
+                      {currentJobLegacy.id !== 'unawakened' && currentJobLegacy.effects.xpBonusByCategory && (
+                        <span className="ml-2">
+                          · 효과: {Object.entries(currentJobLegacy.effects.xpBonusByCategory)
+                            .map(([cat, bonus]) => `${cat} XP +${Math.round((bonus as number) * 100)}%`)
+                            .join(', ')}
+                        </span>
+                      )}
+                    </div>
+                  )}
+                  {activeJobId === 'novice-hunter' && (
+                    <div className="text-[10px] text-cyan-300/40 system-text mt-0.5 italic">
+                      각성 조건을 달성하면 직업이 개방됩니다.
+                    </div>
+                  )}
+                  {equippedTitleDef && (
+                    <div className="text-[10px] text-amber-200/60 system-text mt-0.5 leading-relaxed">
+                      칭호 — {equippedTitleDef.name}
+                      <div className="mt-0.5 text-[9px] text-amber-200/50">
+                        효과: {formatTitleEffects(equippedTitleDef).join(', ')}
+                      </div>
+                    </div>
+                  )}
                 </div>
-                {currentJobV2 && (
-                  <div className="text-[10px] text-cyan-300/50 system-text mt-0.5">
-                    전투 스타일: {currentJobV2.combatStyle} | 부여 효과: {formatJobModifiers(currentJobV2).join(', ')}
-                    {currentJobV2.growthAffinity?.questCategoryBonus && Object.keys(currentJobV2.growthAffinity.questCategoryBonus).length > 0 && (
-                      <span className="ml-2">
-                        · 성장 친화도: {Object.entries(currentJobV2.growthAffinity.questCategoryBonus)
-                          .map(([cat, val]) => `${CATEGORY_META[cat as keyof typeof CATEGORY_META]?.label || cat} XP +${Math.round((val ?? 0) * 100)}%`)
-                          .join(', ')}
-                      </span>
-                    )}
-                  </div>
-                )}
-                {currentJobLegacy && jobLine && (
-                  <div className="text-[10px] text-cyan-300/50 system-text mt-0.5">
-                    {jobLine.icon} 계열: {jobLine.label}
-                    {currentJobLegacy.id !== 'unawakened' && currentJobLegacy.effects.xpBonusByCategory && (
-                      <span className="ml-2">
-                        · 효과: {Object.entries(currentJobLegacy.effects.xpBonusByCategory)
-                          .map(([cat, bonus]) => `${cat} XP +${Math.round((bonus as number) * 100)}%`)
-                          .join(', ')}
-                      </span>
-                    )}
-                  </div>
-                )}
-                {activeJobId === 'novice-hunter' && (
-                  <div className="text-[10px] text-cyan-300/40 system-text mt-0.5 italic">
-                    각성 조건을 달성하면 직업이 개방됩니다.
-                  </div>
-                )}
-                {equippedTitleDef && (
-                  <div className="text-[10px] text-amber-200/60 system-text mt-0.5">
-                    칭호 — {equippedTitleDef.name}
-                    <span className="ml-2">
-                      · 효과: {formatTitleEffects(equippedTitleDef).join(', ')}
-                    </span>
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-
-          <div className="text-right">
-            <div className="system-text text-[11px] text-cyan-400/60">LEVEL</div>
-            <motion.div
-              key={hunter.level}
-              initial={{ scale: 1.4, color: '#fef3c7' }}
-              animate={{ scale: 1, color: '#ffffff' }}
-              transition={{ duration: 0.6 }}
-              className="text-5xl font-bold tracking-tight font-mono"
-            >
-              {hunter.level}
-            </motion.div>
-          </div>
-        </div>
-
-        <div className="mb-5">
-          <div className="rounded-lg border border-amber-300/25 bg-amber-400/10 px-3 py-2">
-            <div className="flex items-center justify-between gap-3">
-              <div className="min-w-0">
-                <div className="system-text text-[10px] text-amber-200/70">COMBAT POWER</div>
-                <div className="flex items-baseline gap-2">
-                  <div className="text-2xl font-black tabular-nums text-amber-100">
-                    {combatPower.total.toLocaleString()}
-                  </div>
-                  <div className="text-xs text-amber-200/70">{combatPowerHint}</div>
-                </div>
-              </div>
-              <Swords className="h-5 w-5 shrink-0 text-amber-200/70" />
+              )}
             </div>
-            <div className="mt-1 text-[10px] leading-relaxed text-white/45">
-              장비 · 칭호 · 출전 그림자 · 전투 스킬 반영
-            </div>
-            {equipmentAnalysisValue > 0 && (
-              <div className="mt-2 flex flex-wrap items-center gap-1.5 text-[9px] system-text">
-                <span className="rounded border border-amber-300/18 bg-amber-300/8 px-2 py-0.5 text-amber-100/65">
-                  EQUIP VALUE {equipmentAnalysisValue.toLocaleString()}
-                </span>
-                {equipmentAnalysisTags.map(tag => (
-                  <span key={tag} className="rounded border border-white/10 bg-white/5 px-1.5 py-0.5 text-white/45">
-                    {tag}
-                  </span>
-                ))}
-              </div>
-            )}
-            {shadowCombat.totalPower > 0 && (
-              <div className="mt-2 rounded border border-cyan-300/15 bg-cyan-300/5 p-2">
-                <div className="flex items-center justify-between gap-2">
-                  <div>
-                    <div className="system-text text-[9px] text-cyan-100/55">SHADOW ANALYSIS POWER</div>
-                    <div className="text-sm font-black tabular-nums text-cyan-100">
-                      SCP {shadowCombat.totalPower.toLocaleString()}
+
+            <div className="mt-3">
+              <div className="rounded-lg border border-amber-300/25 bg-amber-400/10 p-3 flex flex-col justify-between">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="system-text text-[10px] text-amber-200/70">COMBAT POWER</div>
+                    <div className="flex items-baseline gap-2">
+                      <div className="text-xl font-black tabular-nums text-amber-100">
+                        {combatPower.total.toLocaleString()}
+                      </div>
+                      <div className="text-[10px] text-amber-200/70">{combatPowerHint}</div>
                     </div>
                   </div>
-                  <div className="flex flex-wrap justify-end gap-1 text-[9px] system-text">
-                    {shadowCombat.topStats.map(stat => (
-                      <span key={stat.key} className="rounded border border-cyan-300/20 bg-cyan-300/10 px-1.5 py-0.5 text-cyan-100/70">
-                        {stat.shortLabel}
+                  <Swords className="h-5 w-5 shrink-0 text-amber-200/70" />
+                </div>
+                {equipmentAnalysisValue > 0 && (
+                  <div className="mt-2 flex flex-wrap items-center gap-1.5 text-[9px] system-text">
+                    <span className="rounded border border-amber-300/18 bg-amber-300/8 px-1.5 py-0.5 text-amber-100/65">
+                      장비 파워 {equipmentAnalysisValue.toLocaleString()}
+                    </span>
+                    {equipmentAnalysisTags.map(tag => (
+                      <span key={tag} className="rounded border border-white/10 bg-white/5 px-1 py-0.5 text-white/45">
+                        {tag}
                       </span>
                     ))}
                   </div>
-                </div>
-                <div className="mt-2 grid grid-cols-5 gap-1 text-[9px]">
-                  {[
-                    ['Assist', shadowCombat.assistPower],
-                    ['Guard', shadowCombat.guardPower],
-                    ['Control', shadowCombat.controlPower],
-                    ['Boss', shadowCombat.bossPower],
-                    ['Exped', shadowCombat.expeditionPower],
-                  ].map(([label, value]) => (
-                    <div key={label} className="rounded bg-ink-950/45 px-1.5 py-1 text-center">
-                      <div className="system-text text-white/35">{label}</div>
-                      <div className="tabular-nums text-white/65">{Number(value).toLocaleString()}</div>
-                    </div>
-                  ))}
-                </div>
-                <div className="mt-1.5 text-[9px] leading-relaxed text-white/35">
-                  Display-only shadow language. Hunter combat power and battle results are unchanged.
+                )}
+                <div className="mt-1.5 text-[9px] leading-relaxed text-white/45">
+                  장비 · 칭호 · 출전 그림자 · 전투 스킬 반영
                 </div>
               </div>
-            )}
+            </div>
           </div>
-        </div>
 
-        {/* XP Bar */}
-        <div className="mb-5">
-          <div className="flex justify-between text-[11px] system-text mb-1 text-cyan-300/70">
-            <span>EXP</span>
-            <span>{hunter.xp} / {xpNeeded}</span>
+          {/* Center Column: Beautiful Player Portrait Card */}
+          <div className="flex flex-col justify-center items-center">
+            <div className={`panel corner-bracket overflow-hidden border p-3 flex flex-col justify-between items-center w-full min-h-[220px] ${rankFrameClass} card-premium-shine group shadow-glow`}
+                 style={{ boxShadow: `0 0 16px ${rankGlowStyle}` }}>
+              <div className="br" />
+              <div className="w-full flex items-center justify-between text-[9px] system-text opacity-70 z-20">
+                <span className="rounded border px-1.5 py-0.5 border-cyan-400/30 bg-cyan-400/10 text-cyan-200">
+                  {currentJobV2?.name || hunter.job || '미각성자'}
+                </span>
+                <span className="rounded border px-1.5 py-0.5 border-amber-300/30 bg-amber-300/10 text-amber-200">
+                  {RANK_LABEL[hunter.rank]}
+                </span>
+              </div>
+
+              <div className="relative w-full flex-1 flex items-center justify-center min-h-[140px] z-10">
+                <div className="absolute inset-0 rounded-full" 
+                     style={{ background: `radial-gradient(circle at 50% 50%, ${rankGlowStyle}25, transparent 65%)` }} />
+                <img
+                  src={avatarUrl}
+                  alt={hunter.name}
+                  className="absolute h-36 object-contain scale-[1.12] transition-transform duration-300 group-hover:scale-[1.2] origin-bottom object-bottom"
+                  style={{ filter: `drop-shadow(0 -3px 8px ${rankGlowStyle}) drop-shadow(0 0 12px ${rankGlowStyle})` }}
+                  draggable={false}
+                />
+              </div>
+
+              <div className="w-full text-center z-20">
+                <div className="text-[11px] font-black text-white/95">{hunter.name}</div>
+              </div>
+            </div>
           </div>
-          <div className="h-3 bg-ink-900/80 rounded-full overflow-hidden border border-cyan-400/20 relative">
-            <motion.div
-              className="h-full xp-bar-fill"
-              initial={false}
-              animate={{ width: `${xpPct}%` }}
-              transition={{ type: 'spring', stiffness: 120, damping: 20 }}
-            />
+
+          {/* Right Column: Level, XP Bar, Streak Info */}
+          <div className="flex flex-col justify-between space-y-4">
+            <div className="text-right">
+              <div className="system-text text-[11px] text-cyan-400/60">LEVEL</div>
+              <motion.div
+                key={hunter.level}
+                initial={{ scale: 1.4, color: '#fef3c7' }}
+                animate={{ scale: 1, color: '#ffffff' }}
+                transition={{ duration: 0.6 }}
+                className="text-5xl font-bold tracking-tight font-mono"
+              >
+                {hunter.level}
+              </motion.div>
+            </div>
+
+            <div>
+              {/* XP Bar */}
+              <div className="mb-4">
+                <div className="flex justify-between text-[11px] system-text mb-1 text-cyan-300/70">
+                  <span>EXP</span>
+                  <span>{hunter.xp} / {xpNeeded}</span>
+                </div>
+                <div className="h-3 bg-ink-900/80 rounded-full overflow-hidden border border-cyan-400/20 relative">
+                  <motion.div
+                    className="h-full xp-bar-fill"
+                    initial={false}
+                    animate={{ width: `${xpPct}%` }}
+                    transition={{ type: 'spring', stiffness: 120, damping: 20 }}
+                  />
+                </div>
+              </div>
+
+              <div className="rounded border border-white/10 bg-ink-900/40 p-2 text-[10px] space-y-1 text-white/60">
+                <div className="flex justify-between">
+                  <span>출전 상태</span>
+                  <span className="font-semibold text-cyan-300">{equippedShadowIds.length}마리 소환</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>활성 버프</span>
+                  <span className="font-semibold text-purple-300">{activeConsumableEffects.length}개 적용</span>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
 
