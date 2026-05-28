@@ -29,9 +29,13 @@ import {
   SHADOW_RARITY_LABEL,
   SHADOW_ROLE_LABEL,
   getShadowDefinition,
+  SHADOW_FRAGMENT_SUMMON_COST,
 } from '../../lib/shadows'
 import type { OwnedShadow, ShadowExtractResult, ShadowRarity } from '../../lib/types'
 import { ShadowPortrait } from './ShadowPortrait'
+import { GATE_DEFINITIONS } from '../../lib/seed'
+import { getMockDirectBattleMonster } from '../../lib/directBattleMonsters'
+import { getMonsterBattleSpriteUrl } from '../../lib/monsterBattleSprites'
 
 type Props = {
   result?: ShadowExtractResult
@@ -39,31 +43,31 @@ type Props = {
   onClose: () => void
 }
 
-type ExtractionStage = 'command' | 'pressure' | 'raising' | 'resistance' | 'submission' | 'reveal'
+type ExtractionStage = 'detect' | 'resonance' | 'resistance' | 'command' | 'threshold' | 'reveal'
 type ExtractionIntensity = 'quick' | 'high' | 'apex'
 
 const QUICK_STAGES: Array<{ id: ExtractionStage; ms: number }> = [
-  { id: 'command', ms: 1100 },
-  { id: 'pressure', ms: 950 },
-  { id: 'raising', ms: 2150 },
-  { id: 'resistance', ms: 2200 },
-  { id: 'submission', ms: 2100 },
+  { id: 'detect', ms: 800 },
+  { id: 'resonance', ms: 600 },
+  { id: 'resistance', ms: 600 },
+  { id: 'command', ms: 600 },
+  { id: 'threshold', ms: 800 },
 ]
 
 const HIGH_STAGES: Array<{ id: ExtractionStage; ms: number }> = [
-  { id: 'command', ms: 1250 },
-  { id: 'pressure', ms: 1050 },
-  { id: 'raising', ms: 2700 },
-  { id: 'resistance', ms: 2950 },
-  { id: 'submission', ms: 2850 },
+  { id: 'detect', ms: 1000 },
+  { id: 'resonance', ms: 1000 },
+  { id: 'resistance', ms: 1200 },
+  { id: 'command', ms: 800 },
+  { id: 'threshold', ms: 1500 },
 ]
 
 const APEX_STAGES: Array<{ id: ExtractionStage; ms: number }> = [
-  { id: 'command', ms: 1350 },
-  { id: 'pressure', ms: 1250 },
-  { id: 'raising', ms: 3650 },
-  { id: 'resistance', ms: 3950 },
-  { id: 'submission', ms: 3900 },
+  { id: 'detect', ms: 1200 },
+  { id: 'resonance', ms: 1500 },
+  { id: 'resistance', ms: 1800 },
+  { id: 'command', ms: 1000 },
+  { id: 'threshold', ms: 2200 },
 ]
 
 const rarityShadowAccent: Record<ShadowRarity, { glow: string; border: string; aura: string }> = {
@@ -95,45 +99,47 @@ const rarityShadowAccent: Record<ShadowRarity, { glow: string; border: string; a
 }
 
 const stageCopy: Record<ExtractionStage, { title: string; detail: string }> = {
-  command: {
-    title: '그림자여, 응답하라.',
-    detail: '전장이 잠깁니다. 쓰러진 잔영 아래로 명령이 내려앉습니다.',
+  detect: {
+    title: '잔류 그림자 감지',
+    detail: '전장에 일렁이는 마력의 잔영을 탐색하고 있습니다.',
   },
-  pressure: {
-    title: '정적이 내려앉습니다.',
-    detail: '어둠이 숨을 죽이고, 바닥 아래의 잔영이 아주 작게 떨립니다.',
-  },
-  raising: {
-    title: '잔영을 붙잡습니다.',
-    detail: '검은 기운이 바닥에서 솟아올라 무너진 형체를 일으켜 세웁니다.',
+  resonance: {
+    title: '영혼 공명 측정',
+    detail: '잔영과 주파수를 일치시키는 중입니다. 공명율 측정 진행 중...',
   },
   resistance: {
-    title: '잔영이 저항합니다.',
-    detail: '형체가 무너지고 다시 붙으며, 균열 속에서 응답이 흔들립니다.',
+    title: '그림자의 강한 저항',
+    detail: '잔영이 군주의 속박을 벗어나려고 격렬하게 저항하고 있습니다.',
   },
-  submission: {
-    title: '어둠이 명령을 듣습니다.',
-    detail: '검은 속박이 잔영을 조여 붙들고, 마지막 응답을 기다립니다.',
+  command: {
+    title: '군주의 절대 명령',
+    detail: '"일어나라." 거부할 수 없는 절대적인 어둠의 음성이 내려앉습니다.',
+  },
+  threshold: {
+    title: '추출 임계점 도달...',
+    detail: '마력의 속박이 최고조에 달했습니다. 잔영의 반응을 조율하는 중입니다.',
   },
   reveal: {
-    title: '응답이 도착했습니다.',
-    detail: '추출의 결과가 드러납니다.',
+    title: '응답의 순간',
+    detail: '추출 결과가 온전하게 마주합니다.',
   },
 }
 
 const stageLabel: Record<ExtractionStage, string> = {
-  command: 'COMMAND',
-  pressure: 'SILENCE',
-  raising: 'RAISING',
+  detect: 'DETECTION',
+  resonance: 'RESONANCE',
   resistance: 'RESISTANCE',
-  submission: 'SUBMISSION',
+  command: 'MONARCH\'S COMMAND',
+  threshold: 'THRESHOLD',
   reveal: 'RESULT',
 }
 
 const resolveIntensity = (
   shadow?: OwnedShadow,
   rolledRarity?: ShadowRarity,
+  isBossExtraction?: boolean,
 ): ExtractionIntensity => {
+  if (isBossExtraction) return 'apex'
   const rarity = shadow?.rarity ?? rolledRarity
   const named = Boolean(shadow?.isNamed || shadow?.isGateNamed || shadow?.isAchievementNamed)
   const grade = shadow?.innateGrade
@@ -144,12 +150,13 @@ const resolveIntensity = (
 
 export function ShadowExtractionReveal({ result, gateName, onClose }: Props) {
   const reducedMotion = useReducedMotion()
-  const [stage, setStage] = useState<ExtractionStage>('command')
+  const [stage, setStage] = useState<ExtractionStage>('detect')
+  const [isFast, setIsFast] = useState(false)
   const timersRef = useRef<number[]>([])
 
   const intensity = useMemo(
-    () => resolveIntensity(result?.shadow, result?.rolledRarity),
-    [result?.shadow, result?.rolledRarity],
+    () => resolveIntensity(result?.shadow, result?.rolledRarity, result?.isBossExtraction),
+    [result?.shadow, result?.rolledRarity, result?.isBossExtraction],
   )
 
   const stages = useMemo(() => {
@@ -168,13 +175,26 @@ export function ShadowExtractionReveal({ result, gateName, onClose }: Props) {
   const named = Boolean(result?.shadow?.isNamed || result?.shadow?.isGateNamed || result?.shadow?.isAchievementNamed)
   const innateGrade = result?.shadow?.innateGrade
 
+  // 12-40D: 연출 단계 중 노출할 몬스터 실루엣 스프라이트 도출
+  const monsterSpriteUrl = useMemo(() => {
+    if (!result) return undefined
+    const gateDef = GATE_DEFINITIONS.find(g => g.id === result.gateId)
+    if (!gateDef) return undefined
+    const representativeMonsterId = gateDef.monsterIds.find(mId => {
+      const m = getMockDirectBattleMonster(mId)
+      return m?.unitType === 'boss'
+    }) ?? gateDef.monsterIds[0] ?? 'mock-minion'
+    const targetMonster = getMockDirectBattleMonster(representativeMonsterId)
+    return getMonsterBattleSpriteUrl(representativeMonsterId, targetMonster?.role, targetMonster?.unitType === 'boss')
+  }, [result])
+
   const clearTimers = () => {
     for (const handle of timersRef.current) window.clearTimeout(handle)
     timersRef.current = []
   }
 
   useEffect(() => {
-    setStage('command')
+    setStage('detect')
     clearTimers()
     if (!result) return
     if (reducedMotion) {
@@ -184,7 +204,8 @@ export function ShadowExtractionReveal({ result, gateName, onClose }: Props) {
 
     let elapsed = 0
     for (const step of stages) {
-      elapsed += step.ms
+      const duration = isFast ? step.ms / 2.5 : step.ms
+      elapsed += duration
       const id = step.id
       const handle = window.setTimeout(() => {
         const nextIndex = stages.findIndex(item => item.id === id) + 1
@@ -194,7 +215,7 @@ export function ShadowExtractionReveal({ result, gateName, onClose }: Props) {
       timersRef.current.push(handle)
     }
     return clearTimers
-  }, [result, stages, reducedMotion])
+  }, [result, stages, reducedMotion, isFast])
 
   useEffect(() => {
     if (!result) return
@@ -244,7 +265,7 @@ export function ShadowExtractionReveal({ result, gateName, onClose }: Props) {
         transition={{ duration: reducedMotion ? 0 : 0.24, ease: 'easeOut' }}
         className={clsx(
           'relative z-10 flex h-full w-full flex-col overflow-y-auto p-4 sm:p-6',
-          !reducedMotion && !showReveal && intensity === 'apex' && (stage === 'resistance' || stage === 'submission') && 'shadow-extraction-shake',
+          !reducedMotion && !showReveal && intensity === 'apex' && (stage === 'resistance' || stage === 'resonance') && 'shadow-extraction-shake',
         )}
         role="dialog"
         aria-modal="true"
@@ -254,7 +275,7 @@ export function ShadowExtractionReveal({ result, gateName, onClose }: Props) {
           <div className="flex min-w-0 flex-wrap items-center gap-1.5">
             <div className="inline-flex items-center gap-2 rounded border border-purple-200/20 bg-black/30 px-2.5 py-1 text-[10px] system-text text-purple-100/80 backdrop-blur-sm">
               <Skull className="h-3.5 w-3.5" />
-              SHADOW EXTRACTION
+              {result.isBossExtraction ? 'BOSS SHADOW EXTRACTION' : 'SHADOW EXTRACTION'}
             </div>
             {gateName && (
               <div className="rounded border border-white/10 bg-black/24 px-2.5 py-1 text-[10px] system-text text-white/55 backdrop-blur-sm">
@@ -265,14 +286,30 @@ export function ShadowExtractionReveal({ result, gateName, onClose }: Props) {
               {stageLabel[stage]}
             </div>
           </div>
-          <button
-            type="button"
-            onClick={showReveal ? onClose : skipToReveal}
-            className="inline-flex min-h-8 items-center gap-1 rounded border border-white/12 bg-black/30 px-2 text-[10px] system-text text-white/62 backdrop-blur-sm transition hover:bg-white/10 hover:text-white/90"
-          >
-            <FastForward className="h-3 w-3" />
-            {showReveal ? 'Fast Close' : 'Skip'}
-          </button>
+          <div className="flex items-center gap-2">
+            {!showReveal && (
+              <button
+                type="button"
+                onClick={() => setIsFast(!isFast)}
+                className={clsx(
+                  "inline-flex min-h-8 items-center gap-1 rounded border px-2.5 text-[10px] system-text transition backdrop-blur-sm",
+                  isFast 
+                    ? "border-amber-300 bg-amber-400/20 text-amber-200" 
+                    : "border-white/12 bg-black/30 text-white/62 hover:bg-white/10 hover:text-white/90"
+                )}
+              >
+                FAST 2.5x
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={showReveal ? onClose : skipToReveal}
+              className="inline-flex min-h-8 items-center gap-1 rounded border border-white/12 bg-black/30 px-2 text-[10px] system-text text-white/62 backdrop-blur-sm transition hover:bg-white/10 hover:text-white/90"
+            >
+              <FastForward className="h-3 w-3" />
+              {showReveal ? 'Fast Close' : 'Skip'}
+            </button>
+          </div>
         </div>
 
         <div className="relative flex min-h-[calc(100vh-8rem)] items-center justify-center">
@@ -294,6 +331,8 @@ export function ShadowExtractionReveal({ result, gateName, onClose }: Props) {
               intensity={intensity}
               copy={stageCopy[stage]}
               reducedMotion={Boolean(reducedMotion)}
+              monsterSpriteUrl={monsterSpriteUrl}
+              isBossExtraction={Boolean(result.isBossExtraction)}
             />
           )}
         </div>
@@ -308,31 +347,101 @@ function StageBody({
   intensity,
   copy,
   reducedMotion,
+  monsterSpriteUrl,
+  isBossExtraction,
 }: {
   stage: ExtractionStage
   intensity: ExtractionIntensity
   copy: { title: string; detail: string }
   reducedMotion: boolean
+  monsterSpriteUrl?: string
+  isBossExtraction: boolean
 }) {
   return (
     <div className={clsx(
-      'shadow-extraction-cutscene',
+      'shadow-extraction-cutscene relative flex flex-col items-center justify-center text-center',
       `shadow-extraction-stage-${stage}`,
       `shadow-extraction-intensity-${intensity}`,
       reducedMotion && 'shadow-extraction-reduced',
+      isBossExtraction && 'shadow-extraction-boss-mode border border-red-500/20 shadow-[0_0_80px_rgba(239,68,68,0.15)] bg-black/60',
     )}>
       <div className="shadow-extraction-ground-haze" />
       <div className="shadow-extraction-art-command-flare" />
       <div className="shadow-extraction-art-smoke shadow-extraction-smoke-back" />
       <div className="shadow-extraction-art-rift" />
       <div className="shadow-extraction-art-column" />
+      
+      {/* 12-40D: 추출 대상 몬스터의 흑백 실루엣 표시 */}
+      {monsterSpriteUrl && (
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-[5]">
+          <img
+            src={monsterSpriteUrl}
+            alt="Monster Silhouette"
+            className={clsx(
+              "object-contain transition-all duration-300 pointer-events-none",
+              (stage === 'resistance' || (isBossExtraction && stage === 'resonance')) ? "animate-pulse scale-[1.08] shadow-[0_0_50px_rgba(239,68,68,0.2)]" : "scale-[1.02]",
+              isBossExtraction ? "h-64 opacity-[0.32]" : "h-52 opacity-[0.16]"
+            )}
+            style={{
+              filter: isBossExtraction 
+                ? 'drop-shadow(0 0 35px rgba(239, 68, 68, 0.7)) brightness(0)' 
+                : 'drop-shadow(0 0 15px rgba(6, 182, 212, 0.45)) brightness(0) invert(1)',
+            }}
+          />
+        </div>
+      )}
+
       <div className="shadow-extraction-art-mass" />
       <div className="shadow-extraction-art-binding" />
       <div className="shadow-extraction-art-smoke shadow-extraction-smoke-front" />
-      <div className="shadow-extraction-stage-copy">
-        <div className="system-text text-[10px] tracking-[0.36em] text-cyan-100/52">{stageLabel[stage]}</div>
-        <h3 className="mt-2 text-2xl font-black leading-tight text-white sm:text-3xl">{copy.title}</h3>
-        <p className="mt-2 max-w-xl text-sm leading-relaxed text-slate-200/62">{copy.detail}</p>
+      
+      <div className="shadow-extraction-stage-copy z-10 flex flex-col items-center">
+        <div className="system-text text-[10px] tracking-[0.36em] text-cyan-100/52">
+          {isBossExtraction ? 'BOSS RITUAL' : 'EXTRACTION RITUAL'} · {stageLabel[stage]}
+        </div>
+        <h3 className="mt-2 text-2xl font-black leading-tight text-white sm:text-3xl">
+          {copy.title}
+        </h3>
+        <p className="mt-2 max-w-xl text-sm leading-relaxed text-slate-200/62">
+          {copy.detail}
+        </p>
+
+        {/* 12-40D: 실시간 공명도 및 저항력 게이지바 연출 */}
+        {stage === 'resonance' && (
+          <div className="mt-6 w-full max-w-xs bg-cyan-950/40 border border-cyan-800/30 rounded-lg p-2.5 backdrop-blur-sm">
+            <div className="flex justify-between text-[10px] system-text text-cyan-200 mb-1">
+              <span>군주 파동 동기화 중...</span>
+              <span className="animate-pulse font-bold">78%</span>
+            </div>
+            <div className="h-1.5 w-full bg-cyan-950 rounded-full overflow-hidden">
+              <div className="h-full bg-gradient-to-r from-cyan-600 to-cyan-400 animate-pulse transition-all duration-500" style={{ width: '78%' }} />
+            </div>
+          </div>
+        )}
+
+        {stage === 'resistance' && (
+          <div className="mt-6 w-full max-w-xs bg-red-950/40 border border-red-800/30 rounded-lg p-2.5 backdrop-blur-sm">
+            <div className="flex justify-between text-[10px] system-text text-red-200 mb-1">
+              <span>그림자 반발지수</span>
+              <span className="font-bold text-red-400 animate-pulse">DANGER (92%)</span>
+            </div>
+            <div className="h-1.5 w-full bg-red-950 rounded-full overflow-hidden">
+              <div className="h-full bg-gradient-to-r from-red-600 to-red-400 animate-pulse transition-all duration-300" style={{ width: '92%' }} />
+            </div>
+          </div>
+        )}
+
+        {stage === 'threshold' && (
+          <div className="mt-6 w-full max-w-xs bg-purple-950/40 border border-purple-800/30 rounded-lg p-2.5 backdrop-blur-sm animate-pulse">
+            <div className="flex justify-between text-[10px] system-text text-purple-200 mb-1">
+              <span>마력 봉착 임계치</span>
+              <span className="font-bold text-purple-300">LIMIT REACHED</span>
+            </div>
+            <div className="h-1.5 w-full bg-purple-950 rounded-full overflow-hidden">
+              <div className="h-full bg-gradient-to-r from-purple-600 to-purple-400 transition-all duration-100" style={{ width: '100%' }} />
+            </div>
+          </div>
+        )}
       </div>
     </div>
   )
@@ -368,7 +477,9 @@ function RevealResult({
         : intensity === 'high'
           ? '그림자가 형체를 얻고 군단에 합류했습니다.'
           : '명령에 응답했습니다. 새 그림자가 군단에 합류했습니다.'
-    : '명령이 닿지 않았습니다. 잔영이 어둠 속으로 흩어졌습니다.'
+    : result.isBossExtraction
+      ? '보스 그림자의 파동이 너무 강해 추출에 실패했습니다. 하지만 잔향 속에서 강한 흔적을 수집했습니다.'
+      : '명령이 닿지 않았습니다. 잔영이 어둠 속으로 흩어졌으나, 소량의 파편 흔적을 수집했습니다.'
 
   return (
     <div className={clsx(
@@ -436,10 +547,23 @@ function RevealResult({
           </div>
         )}
         {!success && (
-          <div className="mt-3 flex flex-wrap justify-center gap-1.5 text-[10px] system-text">
-            <span className="rounded border border-slate-300/25 bg-slate-400/10 px-2 py-1 text-slate-100">
-              EXTRACTION FAILED
-            </span>
+          <div className="mt-3 flex flex-col items-center gap-2">
+            <div className="flex flex-wrap justify-center gap-1.5 text-[10px] system-text">
+              <span className="rounded border border-slate-300/25 bg-slate-400/10 px-2 py-1 text-slate-100">
+                EXTRACTION FAILED
+              </span>
+              {result.resonanceBonusPercent !== undefined && result.resonanceBonusPercent > 0 && (
+                <span className="rounded border border-amber-300/35 bg-amber-400/15 px-2 py-1 text-amber-200 animate-pulse font-bold">
+                  다음 공명 보정 +{result.resonanceBonusPercent}% 누적
+                </span>
+              )}
+            </div>
+            {result.rewardFragmentName && (
+              <div className="mt-2 text-xs text-cyan-200/90 bg-cyan-950/50 border border-cyan-800/40 rounded-lg px-4 py-2 flex items-center gap-2 max-w-sm">
+                <span className="text-[10px] bg-cyan-900/60 px-1.5 py-0.5 rounded text-cyan-300 font-semibold">REWARD</span>
+                <span>{result.rewardFragmentName} 조각 +{result.rewardFragmentCount ?? 1} 획득</span>
+              </div>
+            )}
           </div>
         )}
         <p className="mt-4 text-sm font-semibold leading-relaxed text-white/82">{summaryCopy}</p>
@@ -448,7 +572,7 @@ function RevealResult({
       <button
         type="button"
         onClick={onClose}
-        className="relative z-10 mt-2 inline-flex min-h-10 items-center justify-center gap-2 rounded-md border border-white/15 bg-white/10 px-5 text-xs font-bold text-white transition hover:bg-white/15"
+        className="relative z-10 mt-4 inline-flex min-h-10 items-center justify-center gap-2 rounded-md border border-white/15 bg-white/10 px-5 text-xs font-bold text-white transition hover:bg-white/15"
       >
         <X className="h-3.5 w-3.5" />
         Close

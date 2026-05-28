@@ -760,6 +760,11 @@ export interface ShadowExtractResult {
   rolledRarity?: ShadowRarity
   shadow?: OwnedShadow
   message: string
+  isBossExtraction?: boolean
+  rewardFragmentId?: string
+  rewardFragmentName?: string
+  rewardFragmentCount?: number
+  resonanceBonusPercent?: number
 }
 
 export type ShadowExpeditionType = 'training' | 'essence' | 'hunt' | 'scout'

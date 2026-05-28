@@ -246,6 +246,7 @@ export interface GameState {
   ownedShadows: OwnedShadow[]
   equippedShadowIds: string[]
   shadowExtractHistory?: ShadowExtractResult[]
+  shadowExtractFailCount?: Record<string, number>
   lastShadowExtractResult?: ShadowExtractResult
   gold?: number
   shadowEssence?: number
@@ -2617,6 +2618,7 @@ export const useGame = create<GameState>()(
       ownedShadows: [],
       equippedShadowIds: [],
       shadowExtractHistory: [],
+      shadowExtractFailCount: {},
       lastShadowExtractResult: undefined,
       gold: 0,
       shadowEssence: 0,
@@ -5389,11 +5391,34 @@ export const useGame = create<GameState>()(
         if ((s.shadowExtractHistory ?? []).some(result => result.gateInstanceId === gateInstanceId)) return
 
         const equippedShadows = getEquippedShadows(s.ownedShadows, s.equippedShadowIds, s.hunter)
-        const rawResult = rollShadowExtraction(gate, s.hunter, equippedShadows)
+        
+        // 12-40D: 실패 횟수 누적에 따른 공명 보정율 산출 (1회당 +5%, 최대 80%)
+        const failCountMap = s.shadowExtractFailCount ?? {}
+        const failCount = failCountMap[gate.id] ?? 0
+        const bonusChance = Math.min(0.80, failCount * 0.05)
+
+        const rawResult = rollShadowExtraction(gate, s.hunter, equippedShadows, Math.random, bonusChance)
+        
+        const nextFailCountMap = { ...failCountMap }
+        const nextFragments = { ...(s.shadowFragments ?? {}) }
+
+        if (rawResult.success) {
+          nextFailCountMap[gate.id] = 0
+        } else {
+          nextFailCountMap[gate.id] = failCount + 1
+          if (rawResult.rewardFragmentId) {
+            const fid = rawResult.rewardFragmentId
+            const count = rawResult.rewardFragmentCount ?? 1
+            nextFragments[fid] = (nextFragments[fid] ?? 0) + count
+          }
+        }
+
         const result: ShadowExtractResult = {
           ...rawResult,
           gateInstanceId,
+          resonanceBonusPercent: nextFailCountMap[gate.id] * 5,
         }
+
         const ownedShadows = result.success && result.shadow
           ? [...(s.ownedShadows ?? []), result.shadow]
           : (s.ownedShadows ?? [])
@@ -5425,6 +5450,8 @@ export const useGame = create<GameState>()(
           ownedShadows,
           lastShadowExtractResult: result,
           shadowExtractHistory: [result, ...(s.shadowExtractHistory ?? [])].slice(0, 50),
+          shadowExtractFailCount: nextFailCountMap,
+          shadowFragments: nextFragments,
           hunter: nextHunter
         }))
 
@@ -8568,6 +8595,7 @@ export const useGame = create<GameState>()(
         ownedShadows: [],
         equippedShadowIds: [],
         shadowExtractHistory: [],
+        shadowExtractFailCount: {},
         lastShadowExtractResult: undefined,
         gold: 0,
         shadowEssence: 0,
@@ -8622,6 +8650,7 @@ export const useGame = create<GameState>()(
         ownedShadows: [],
         equippedShadowIds: [],
         shadowExtractHistory: [],
+        shadowExtractFailCount: {},
         lastShadowExtractResult: undefined,
         gold: 0,
         shadowEssence: 0,
@@ -8734,6 +8763,7 @@ export const useGame = create<GameState>()(
           ownedShadows: [],
           equippedShadowIds: [],
           shadowExtractHistory: [],
+          shadowExtractFailCount: {},
           lastShadowExtractResult: undefined,
           gold: 0,
           shadowEssence: 0,
@@ -9092,6 +9122,9 @@ export const useGame = create<GameState>()(
         }
         if (!persistedState.shadowExtractHistory) {
           persistedState.shadowExtractHistory = []
+        }
+        if (!persistedState.shadowExtractFailCount) {
+          persistedState.shadowExtractFailCount = {}
         }
         if (!('lastShadowExtractResult' in persistedState)) {
           persistedState.lastShadowExtractResult = undefined

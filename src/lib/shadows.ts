@@ -25,6 +25,8 @@ import {
   SHADOW_SUMMON_SPECIAL_POOL_WEIGHT,
 } from './shop'
 
+import { getMockDirectBattleMonster } from './directBattleMonsters'
+
 export const SHADOW_RARITY_ORDER: ShadowRarity[] = ['common', 'uncommon', 'rare', 'epic', 'legendary']
 export const SHADOW_RANK_ORDER: ShadowRank[] = ['lesser', 'soldier', 'elite', 'knight', 'marshal', 'monarch', 'named']
 
@@ -670,16 +672,54 @@ export const rollShadowExtraction = (
   rng: () => number = Math.random,
   bonusChance: number = 0
 ) => {
+  const isBossExtraction = gate.monsterIds.some(mId => {
+    const m = getMockDirectBattleMonster(mId)
+    return m?.unitType === 'boss'
+  })
+
   const baseChance = getShadowExtractionChance(hunter, gate, equippedShadows)
   const chance = Math.min(1.0, baseChance + bonusChance)
   if (rng() > chance) {
+    let rewardFragmentId = ''
+    let rewardFragmentName = ''
+    if (isBossExtraction) {
+      const namedPool = SHADOW_DEFINITIONS.filter(def => def.sourceType === 'gate_named' && def.sourceGateId === gate.id)
+      if (namedPool.length > 0) {
+        const targetDef = namedPool[Math.floor(rng() * namedPool.length)]
+        rewardFragmentId = targetDef.id
+        rewardFragmentName = targetDef.name
+      } else {
+        const generalPool = SHADOW_DEFINITIONS.filter(def => def.sourceType === 'gate_extract' && def.sourceGateRank === gate.rank)
+        if (generalPool.length > 0) {
+          const targetDef = generalPool[Math.floor(rng() * generalPool.length)]
+          rewardFragmentId = targetDef.id
+          rewardFragmentName = targetDef.name
+        }
+      }
+    } else {
+      const generalPool = SHADOW_DEFINITIONS.filter(def => def.sourceType === 'gate_extract' && def.sourceGateRank === gate.rank)
+      if (generalPool.length > 0) {
+        const targetDef = generalPool[Math.floor(rng() * generalPool.length)]
+        rewardFragmentId = targetDef.id
+        rewardFragmentName = targetDef.name
+      }
+    }
+
+    const fragmentCount = isBossExtraction ? 2 : 1
+
     return {
       gateId: gate.id,
       gateName: gate.name,
       attemptedAt: new Date().toISOString(),
       success: false,
       chance,
-      message: '그림자 추출에 실패했습니다. 흩어진 마력이 어둠 속으로 사라집니다.',
+      isBossExtraction,
+      rewardFragmentId,
+      rewardFragmentName,
+      rewardFragmentCount: fragmentCount,
+      message: isBossExtraction
+        ? `보스 그림자가 강력히 저항하여 추출에 실패했습니다. 대신 보스의 흔적이 담긴 [${rewardFragmentName} 조각] ${fragmentCount}개를 수집했습니다.`
+        : `그림자 추출에 실패했습니다. 공명이 어긋나 잔영이 흩어졌으나, [${rewardFragmentName} 조각] ${fragmentCount}개를 수집했습니다.`,
     }
   }
 
@@ -704,6 +744,7 @@ export const rollShadowExtraction = (
     chance,
     rolledRarity,
     shadow,
+    isBossExtraction,
     message: `${prefix} [${SHADOW_RARITY_LABEL[shadow.rarity]}] ${shadow.name}이(가) 군단에 합류했습니다.`,
   }
 }

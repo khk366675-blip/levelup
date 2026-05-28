@@ -680,7 +680,23 @@ function ShadowCard({
   )
 }
 
-function CodexCard({ definition, owned, ownedCount, maxEnhancement, isEquipped }: { definition: (typeof SHADOW_DEFINITIONS)[number]; owned: boolean; ownedCount: number; maxEnhancement: number; isEquipped: boolean }) {
+function CodexCard({
+  definition,
+  owned,
+  ownedCount,
+  maxEnhancement,
+  isEquipped,
+  fragmentCount,
+  failCount,
+}: {
+  definition: (typeof SHADOW_DEFINITIONS)[number]
+  owned: boolean
+  ownedCount: number
+  maxEnhancement: number
+  isEquipped: boolean
+  fragmentCount?: number
+  failCount?: number
+}) {
   const effects = definition.effects.map(formatShadowEffect)
   // 12-24H-1: locked named sealed 비주얼은 유지하되, 텍스트 숨김 여부는
   // 시드 정의의 hiddenUntilObtained flag만으로 결정한다.
@@ -770,6 +786,18 @@ function CodexCard({ definition, owned, ownedCount, maxEnhancement, isEquipped }
       <div className="mt-2 text-[10px] text-white/40 system-text">
         조건: {unlockConditionLabel}
       </div>
+      {fragmentCount !== undefined && fragmentCount > 0 && (
+        <div className="mt-2 flex items-center justify-between text-[11px] text-cyan-200/90 bg-cyan-950/45 px-2 py-1 rounded border border-cyan-800/35">
+          <span>그림자 잔향 조각</span>
+          <span>{fragmentCount}개 보유 {!owned && `(소환 필요: ${SHADOW_FRAGMENT_SUMMON_COST[definition.rarity] ?? 20}개)`}</span>
+        </div>
+      )}
+      {failCount !== undefined && failCount > 0 && !owned && (
+        <div className="mt-1 flex items-center justify-between text-[10px] text-amber-200/80 bg-amber-950/40 px-2 py-0.5 rounded border border-amber-800/30">
+          <span>실패 공명 누적</span>
+          <span>{failCount}회 (+{failCount * 5}% 보정)</span>
+        </div>
+      )}
     </motion.div>
   )
 }
@@ -822,6 +850,7 @@ export function ShadowPanel() {
   const shadowSummonTickets = useGame(s => s.shadowSummonTickets ?? [])
   const shadowSummonShards = useGame(s => s.shadowSummonShards ?? {})
   const shadowFragments = useGame(s => s.shadowFragments ?? {})
+  const shadowExtractFailCount = useGame(s => s.shadowExtractFailCount ?? {})
   const summonShadowFromTicket = useGame(s => s.summonShadowFromTicket)
   const summonShadowFromFragments = useGame(s => s.summonShadowFromFragments)
   const exchangeShadowSummonShards = useGame(s => s.exchangeShadowSummonShards)
@@ -2254,6 +2283,8 @@ export function ShadowPanel() {
                 ownedCount={instances.length}
                 maxEnhancement={maxEnh}
                 isEquipped={isEquipped}
+                fragmentCount={shadowFragments[def.id] ?? 0}
+                failCount={shadowExtractFailCount[def.sourceGateId ?? ''] ?? 0}
               />
             )
           })}
