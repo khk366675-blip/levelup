@@ -256,36 +256,21 @@ export function HunterStatus() {
             </div>
           </div>
 
-          {/* Center Column: Beautiful Player Portrait Card */}
-          <div className="flex flex-col justify-center items-center">
-            <div className={`panel corner-bracket overflow-hidden border p-3 flex flex-col justify-between items-center w-full min-h-[220px] ${rankFrameClass} card-premium-shine group shadow-glow`}
-                 style={{ boxShadow: `0 0 16px ${rankGlowStyle}` }}>
-              <div className="br" />
-              <div className="w-full flex items-center justify-between text-[9px] system-text opacity-70 z-20">
-                <span className="rounded border px-1.5 py-0.5 border-cyan-400/30 bg-cyan-400/10 text-cyan-200">
-                  {currentJobV2?.name || hunter.job || '미각성자'}
-                </span>
-                <span className="rounded border px-1.5 py-0.5 border-amber-300/30 bg-amber-300/10 text-amber-200">
-                  {RANK_LABEL[hunter.rank]}
-                </span>
-              </div>
-
-              <div className="relative w-full flex-1 flex items-center justify-center min-h-[140px] z-10">
-                <div className="absolute inset-0 rounded-full" 
-                     style={{ background: `radial-gradient(circle at 50% 50%, ${rankGlowStyle}25, transparent 65%)` }} />
-                <img
-                  src={avatarUrl}
-                  alt={hunter.name}
-                  className="absolute h-36 object-contain scale-[1.12] transition-transform duration-300 group-hover:scale-[1.2] origin-bottom object-bottom"
-                  style={{ filter: `drop-shadow(0 -3px 8px ${rankGlowStyle}) drop-shadow(0 0 12px ${rankGlowStyle})` }}
-                  draggable={false}
-                />
-              </div>
-
-              <div className="w-full text-center z-20">
-                <div className="text-[11px] font-black text-white/95">{hunter.name}</div>
-              </div>
-            </div>
+          {/* Center Column: Beautiful Player Portrait (No Card Border, No Texts) */}
+          <div className="flex flex-col justify-center items-center min-h-[240px] relative group overflow-visible">
+            {/* Aura glow background behind the avatar */}
+            <div 
+              className="absolute w-44 h-44 rounded-full blur-2xl opacity-40 pointer-events-none transition-all duration-500 group-hover:opacity-60" 
+              style={{ background: `radial-gradient(circle, ${rankGlowStyle} 0%, transparent 70%)` }}
+            />
+            {/* Avatar Image (Large and standalone) */}
+            <img
+              src={avatarUrl}
+              alt={hunter.name}
+              className="h-48 md:h-52 object-contain scale-[1.15] transition-all duration-300 group-hover:scale-[1.22] origin-bottom object-bottom z-10"
+              style={{ filter: `drop-shadow(0 -5px 15px ${rankGlowStyle}80) drop-shadow(0 0 25px ${rankGlowStyle}40)` }}
+              draggable={false}
+            />
           </div>
 
           {/* Right Column: Level, XP Bar, Streak Info */}
