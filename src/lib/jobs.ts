@@ -17,9 +17,12 @@ export const JOB_DEFINITIONS_V2: JobDefinitionV2[] = [
       questCategoryBonus: {}
     },
     unlockCondition: {},
-    skills: []
+    skills: [
+      { skillId: 'basic-focus-slash', unlockLevel: 1, source: 'job' },
+      { skillId: 'basic-combat-focus', unlockLevel: 2, source: 'job' }
+    ]
   },
-
+ 
   // 1차 직업군 (First Tier)
   {
     id: 'swordsman',
@@ -27,7 +30,7 @@ export const JOB_DEFINITIONS_V2: JobDefinitionV2[] = [
     tier: 'first',
     rarity: 'common',
     description: '날카로운 검날로 전장을 지배하는 헌터. 빠른 연속 공격과 급소 타격에 특화되어 있습니다.',
-    combatStyle: '공격적인 검술과 빠른 속도.',
+    combatStyle: '공격적인 검술 and 빠른 속도.',
     archetype: 'warrior',
     branch: 'sword',
     previousJobIds: ['novice-hunter'],
@@ -38,7 +41,11 @@ export const JOB_DEFINITIONS_V2: JobDefinitionV2[] = [
       questCategoryBonus: { workout: 0.15 }
     },
     unlockCondition: { hunterLevel: 10 },
-    skills: [{ skillId: 'skill-swordsman-slash', unlockLevel: 2, source: 'job' }]
+    skills: [
+      { skillId: 'skill-swordsman-flash', unlockLevel: 1, source: 'job' },
+      { skillId: 'skill-swordsman-combo', unlockLevel: 3, source: 'job' },
+      { skillId: 'skill-swordsman-wave', unlockLevel: 5, source: 'job' }
+    ]
   },
   {
     id: 'warrior',
@@ -46,7 +53,7 @@ export const JOB_DEFINITIONS_V2: JobDefinitionV2[] = [
     tier: 'first',
     rarity: 'common',
     description: '강인한 육체와 무거운 무기로 적을 분쇄하는 헌터. 강력한 일격과 강인함이 장점입니다.',
-    combatStyle: '묵직한 공격และ 생존력.',
+    combatStyle: '묵직한 공격 및 생존력.',
     archetype: 'warrior',
     branch: 'none',
     previousJobIds: ['novice-hunter'],
@@ -57,7 +64,11 @@ export const JOB_DEFINITIONS_V2: JobDefinitionV2[] = [
       questCategoryBonus: { workout: 0.15 }
     },
     unlockCondition: { hunterLevel: 10 },
-    skills: [{ skillId: 'skill-warrior-strike', unlockLevel: 2, source: 'job' }]
+    skills: [
+      { skillId: 'skill-warrior-strike', unlockLevel: 1, source: 'job' },
+      { skillId: 'skill-warrior-earthquake', unlockLevel: 3, source: 'job' },
+      { skillId: 'skill-warrior-shout', unlockLevel: 5, source: 'job' }
+    ]
   },
   {
     id: 'mage',
@@ -76,7 +87,11 @@ export const JOB_DEFINITIONS_V2: JobDefinitionV2[] = [
       questCategoryBonus: { study: 0.15 }
     },
     unlockCondition: { hunterLevel: 10 },
-    skills: [{ skillId: 'skill-mage-burst', unlockLevel: 2, source: 'job' }]
+    skills: [
+      { skillId: 'skill-mage-bolt', unlockLevel: 1, source: 'job' },
+      { skillId: 'skill-mage-burst', unlockLevel: 3, source: 'job' },
+      { skillId: 'skill-mage-storm', unlockLevel: 5, source: 'job' }
+    ]
   },
   {
     id: 'guardian',
@@ -95,7 +110,11 @@ export const JOB_DEFINITIONS_V2: JobDefinitionV2[] = [
       questCategoryBonus: { health: 0.15 }
     },
     unlockCondition: { hunterLevel: 10 },
-    skills: [{ skillId: 'skill-guardian-shield', unlockLevel: 2, source: 'job' }]
+    skills: [
+      { skillId: 'skill-guardian-bash', unlockLevel: 1, source: 'job' },
+      { skillId: 'skill-guardian-shield', unlockLevel: 3, source: 'job' },
+      { skillId: 'skill-guardian-stance', unlockLevel: 5, source: 'job' }
+    ]
   },
   {
     id: 'scout',
@@ -114,7 +133,11 @@ export const JOB_DEFINITIONS_V2: JobDefinitionV2[] = [
       questCategoryBonus: { habit: 0.15 }
     },
     unlockCondition: { hunterLevel: 10 },
-    skills: [{ skillId: 'skill-scout-strike', unlockLevel: 2, source: 'job' }]
+    skills: [
+      { skillId: 'skill-scout-strike', unlockLevel: 1, source: 'job' },
+      { skillId: 'skill-scout-mark', unlockLevel: 3, source: 'job' },
+      { skillId: 'skill-scout-step', unlockLevel: 5, source: 'job' }
+    ]
   },
   {
     id: 'tactician',
@@ -133,7 +156,11 @@ export const JOB_DEFINITIONS_V2: JobDefinitionV2[] = [
       questCategoryBonus: { career: 0.15 }
     },
     unlockCondition: { hunterLevel: 10 },
-    skills: [{ skillId: 'skill-tactician-analyze', unlockLevel: 2, source: 'job' }]
+    skills: [
+      { skillId: 'skill-tactician-analyze', unlockLevel: 1, source: 'job' },
+      { skillId: 'skill-tactician-command', unlockLevel: 3, source: 'job' },
+      { skillId: 'skill-tactician-analyze-pulse', unlockLevel: 5, source: 'job' }
+    ]
   },
 
   // 2차 직업군 (Second Tier)

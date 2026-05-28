@@ -171,6 +171,7 @@ const hunterSkillEffectKind = (skill: SkillDefinition): BattleActionDefinition['
 }
 
 const hunterSkillTargetType = (skill: SkillDefinition): BattleTargetType => {
+  if (skill.targetType) return skill.targetType as BattleTargetType
   const effectTarget = skill.effect?.target ?? skill.effects?.[0]?.target
   if (skill.type === 'defense' || effectTarget === 'self') return 'self'
   if (skill.type === 'heal' || skill.type === 'buff') return 'lowest_hp_ally'
@@ -195,6 +196,7 @@ const hunterSkillAction = (
   actionCue: skill.id,
   animationCue: skill.id,
   effectColor: skill.type === 'defense' ? 'cyan' : skill.type === 'debuff' ? 'violet' : 'blue',
+  effects: skill.effects ?? (skill.effect ? [skill.effect] : []),
 })
 
 const passiveAction = (

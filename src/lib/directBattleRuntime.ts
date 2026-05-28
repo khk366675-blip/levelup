@@ -564,6 +564,46 @@ const applyHeal = (
   })
 }
 
+const applyDynamicEffects = (
+  state: DirectBattleState,
+  actor: BattleUnit,
+  target: BattleUnit,
+  action: BattleActionDefinition,
+) => {
+  const effects = (action as any).effects as any[] | undefined
+  if (!effects || effects.length === 0) return
+
+  for (const eff of effects) {
+    let statusType: any | undefined
+    let effectValue = Math.abs(eff.value)
+
+    if (eff.kind === 'damage_reduction') {
+      statusType = 'guard'
+      effectValue = eff.value
+    } else if (eff.kind === 'counter') {
+      statusType = 'guard'
+    } else if (eff.stat) {
+      const isBuff = eff.value > 0
+      if (eff.stat === 'atk') statusType = isBuff ? 'attackUp' : 'attackDown'
+      else if (eff.stat === 'def') statusType = isBuff ? 'defenseUp' : 'defenseDown'
+      else if (eff.stat === 'speed') statusType = isBuff ? 'speedUp' : 'speedDown'
+      else if (eff.stat === 'critRate') statusType = isBuff ? 'attackUp' : 'attackDown'
+      else if (eff.stat === 'accuracy') statusType = isBuff ? 'speedUp' : 'speedDown'
+      else if (eff.stat === 'evasionRate') statusType = isBuff ? 'defenseUp' : 'defenseDown'
+    }
+
+    if (statusType) {
+      const targetUnit = eff.target === 'self' ? actor : target
+      addStatus(targetUnit, {
+        type: statusType,
+        sourceUnitId: actor.unitId,
+        durationRounds: eff.durationTurns ?? 1,
+        effectValue: effectValue,
+      })
+    }
+  }
+}
+
 const applyAllySupport = (
   state: DirectBattleState,
   actor: BattleUnit,
@@ -616,6 +656,7 @@ const applyAllySupport = (
       effectValue: 0.22,
     })
   }
+  applyDynamicEffects(state, actor, target, action)
   addLog(state, {
     actorUnitId: actor.unitId,
     targetUnitIds: [target.unitId],
@@ -811,6 +852,7 @@ const executeAction = (state: DirectBattleState, queued: QueuedBattleAction) => 
       if (isSuppression) {
         addStatus(target, { type: 'suppression', sourceUnitId: actor.unitId, durationRounds: 1, effectValue: 0.12 })
       }
+      applyDynamicEffects(state, actor, target, action)
       addLog(state, {
         actorUnitId: actor.unitId,
         targetUnitIds: [target.unitId],
@@ -841,7 +883,10 @@ const executeAction = (state: DirectBattleState, queued: QueuedBattleAction) => 
     if (action.cooldown) actor.cooldowns[action.actionId] = action.cooldown
     return
   }
-  for (const target of enemyTargets) applyDamage(state, actor, target, computeDamage(actor, target, action), action)
+  for (const target of enemyTargets) {
+    applyDamage(state, actor, target, computeDamage(actor, target, action), action)
+    applyDynamicEffects(state, actor, target, action)
+  }
   if (action.cooldown) actor.cooldowns[action.actionId] = action.cooldown
 }
 

@@ -993,6 +993,7 @@ export interface SkillDefinition {
   tags?: string[]
   effectSummary?: string
   recommendedUse?: string
+  targetType?: string
 
   /** 초기 전투는 player vs monster 중심. 다수 몬스터/광역 스킬이 필요하면 target을 확장한다. */
   effect?: SkillEffect

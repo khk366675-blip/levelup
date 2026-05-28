@@ -110,6 +110,7 @@ export interface BattleActionDefinition {
   actionCue: string
   animationCue?: string
   effectColor?: string
+  effects?: any[]
 }
 
 export interface BattleStatusEffect {
