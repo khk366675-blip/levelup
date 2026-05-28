@@ -15,7 +15,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import clsx from 'clsx'
-import { Activity, Bot, List, Play, RotateCcw, Shield, Sparkles, Swords, Target, X } from 'lucide-react'
+import { Activity, Bot, List, Play, RotateCcw, Shield, Sparkles, Swords, Target, X, Eye, ShieldAlert } from 'lucide-react'
 import type {
   ActiveConsumableEffect,
   EquipmentState,
@@ -23,6 +23,9 @@ import type {
   Item,
   OwnedShadow,
 } from '../lib/types'
+import { buildBattleActors } from '../lib/battlePresentation'
+import { Battlefield2DView } from './battle/Battlefield2DView'
+import { BattleArenaOverlay } from './battle/BattleArenaOverlay'
 import { getShadowDefinition } from '../lib/shadows'
 import { buildHunterBattleUnit, buildShadowBattleUnits, validateBattleUnit } from '../lib/battleUnits'
 import {
@@ -648,9 +651,9 @@ const prepareRevealDisplayState = (
 
 function PreviewStatPill({ label, value }: { label: string | number; value: string | number }) {
   return (
-    <div className="bg-ink-900/50 border border-white/10 rounded-md px-1 py-1.5 sm:px-2.5 sm:py-2 text-center sm:text-left min-w-0">
-      <div className="text-[8px] sm:text-[9px] system-text text-white/35 truncate">{label}</div>
-      <div className="text-xs sm:text-sm font-bold text-white/80 truncate">{value}</div>
+    <div className="bg-ink-900/50 border border-white/10 rounded-md px-1.5 py-0.5 sm:px-2 sm:py-1 text-center sm:text-left min-w-0">
+      <div className="text-[8px] sm:text-[9px] system-text text-white/35 truncate leading-tight">{label}</div>
+      <div className="text-[10px] sm:text-xs font-bold text-white/80 truncate leading-normal">{value}</div>
     </div>
   )
 }
@@ -681,11 +684,53 @@ export function DirectBattlePreviewPanel({
   const [encounterKey, setEncounterKey] = useState(safeRecommendedKey)
   const [preview, setPreview] = useState<DirectBattlePreviewState | undefined>()
   const [roundReveal, setRoundReveal] = useState<RoundRevealState | undefined>()
+  const [showDetailed, setShowDetailed] = useState(false)
+  const [playbackSpeed, setPlaybackSpeed] = useState<'normal' | 'fast'>('normal')
+  const [overlayOpen, setOverlayOpen] = useState(false)
   const selectedEncounter = DIRECT_BATTLE_MOCK_ENCOUNTERS.find(encounter => encounter.encounterKey === encounterKey)
     ?? DIRECT_BATTLE_MOCK_ENCOUNTERS[0]
   const previewShadows = equippedShadows.slice(0, 3)
   const canStartBattle = previewShadows.length > 0
   const isRevealingRound = Boolean(roundReveal)
+
+  // Memoized 2.5D visual action steps mapping
+  const currentRevealStep = roundReveal && roundReveal.steps[roundReveal.index - 1]
+  
+  const latestAction = useMemo(() => {
+    if (!currentRevealStep) return undefined
+    const log = currentRevealStep.log
+    const val = log.value ?? 0
+    let kind = 'attack'
+    
+    if (log.eventType === 'heal') kind = 'heal'
+    else if (log.eventType === 'status') {
+      const isGuard = log.actionCue === 'guard' || log.animationCue?.includes('guard')
+      kind = isGuard ? 'guard' : 'magic'
+    } else if (log.eventType === 'reaction') {
+      kind = 'guard'
+    } else if (log.eventType === 'damage' && (log.actionCue?.includes('shadow') || log.animationCue?.includes('shadow'))) {
+      kind = 'shadow'
+    }
+    
+    return {
+      actorId: log.actorUnitId,
+      targetIds: log.targetUnitIds ?? [],
+      kind,
+      amount: val > 0 ? Math.round(val) : undefined,
+      text: log.message,
+      isCrit: Boolean((log as any).isCrit),
+    }
+  }, [currentRevealStep])
+
+  const battlefieldPhase = useMemo(() => {
+    if (roundReveal) return 'acting'
+    if (preview?.state.isFinished) {
+      if (preview.state.winner === 'player') return 'victory'
+      if (preview.state.winner === 'enemy') return 'defeat'
+      return 'cancelled'
+    }
+    return 'idle'
+  }, [preview, roundReveal])
 
   const playerUnits = useMemo(() => preview ? livingUnits(preview.state, 'player') : [], [preview])
   const enemyUnits = useMemo(() => preview ? livingUnits(preview.state, 'enemy') : [], [preview])
@@ -740,6 +785,7 @@ export function DirectBattlePreviewPanel({
       issues: validatePreviewState(state, buildWarnings),
       logs: state.logs.slice(-10),
     })
+    setOverlayOpen(true)
   }
 
   useEffect(() => {
@@ -787,6 +833,7 @@ export function DirectBattlePreviewPanel({
         logs: nextState.logs.slice(-10),
       }
     })
+    const applyDelay = playbackSpeed === 'normal' ? 950 : 500
     const applyTimer = window.setTimeout(() => {
       setPreview(current => {
         if (!current) return current
@@ -795,7 +842,7 @@ export function DirectBattlePreviewPanel({
           state: applyRevealStepResultToState(current.state, step),
         }
       })
-    }, 620)
+    }, applyDelay)
     revealApplyTimersRef.current.push(applyTimer)
     setRoundReveal(current => current ? { ...current, index: Math.max(current.index, index + 1) } : current)
   }
@@ -851,6 +898,11 @@ export function DirectBattlePreviewPanel({
 
   const executeRound = (mode: 'manual' | 'auto') => {
     if (!preview || preview.state.isFinished || isRevealingRound) return
+    if (mode === 'auto') {
+      setPlaybackSpeed('fast')
+    } else {
+      setPlaybackSpeed('normal')
+    }
     const state = cloneBattleState(preview.state)
     const selections = mode === 'auto'
       ? chooseMockPlayerActions(state)
@@ -902,6 +954,7 @@ export function DirectBattlePreviewPanel({
       })
     }
     setPreview(undefined)
+    setOverlayOpen(false)
   }
 
   const skipRoundReveal = () => {
@@ -950,18 +1003,18 @@ export function DirectBattlePreviewPanel({
     const skillActions = getSkillActions(unit)
     const primaryActions = getPrimaryActions(unit, selection)
     return (
-      <div key={unit.unitId} className="rounded border border-white/10 bg-black/15 p-3">
-        <div className="mb-2 flex items-center justify-between gap-2">
-          <div>
-            <div className="text-xs font-bold text-white/80">{unit.displayName}</div>
-            <div className="text-[10px] system-text text-white/35">{getDirectBattleRoleLabelKo(unit.role)}</div>
+      <div key={unit.unitId} className="rounded-lg border border-white/5 bg-slate-950/40 p-1.5 sm:p-2.5">
+        <div className="mb-1 flex items-center justify-between gap-1">
+          <div className="flex items-center gap-1">
+            <span className="text-[10px] font-black text-cyan-300">{unit.displayName}</span>
+            <span className="text-[8px] text-white/35">({getDirectBattleRoleLabelKo(unit.role)})</span>
           </div>
-          <div className="text-right text-[10px] text-white/45">
-            HP {Math.round(unit.stats.currentHp)} / {Math.round(unit.stats.maxHp)}
+          <div className="text-right text-[8px] text-white/45 font-medium">
+            HP {Math.round(unit.stats.currentHp)}/{Math.round(unit.stats.maxHp)}
           </div>
         </div>
 
-        <div className="grid grid-cols-3 gap-1.5">
+        <div className="grid grid-cols-3 gap-0.5 sm:gap-1">
           {primaryActions.map(action => {
             const isSelected = selection?.actionId === action.actionId
             const isOnCooldown = (unit.cooldowns[action.actionId] ?? 0) > 0
@@ -973,21 +1026,18 @@ export function DirectBattlePreviewPanel({
                 disabled={isOnCooldown || preview.state.isFinished || isRevealingRound}
                 onClick={() => selectAction(unit, action)}
                 className={clsx(
-                  'flex min-h-[4.75rem] min-w-0 flex-col items-start justify-center gap-1 rounded border px-2 py-1.5 text-left text-[11px] font-bold transition disabled:cursor-not-allowed disabled:opacity-40',
+                  'flex min-h-[2.2rem] sm:min-h-[2.8rem] min-w-0 flex-col items-center justify-center rounded px-1 py-0.5 text-center text-[9px] sm:text-[10px] font-bold transition disabled:cursor-not-allowed disabled:opacity-30 active:scale-95',
                   isSelected
-                    ? 'border-cyan-300/60 bg-cyan-300/15 text-cyan-100'
-                    : 'border-white/10 bg-white/5 text-white/60 hover:text-white/85',
+                    ? 'border-cyan-400/80 bg-cyan-500/20 text-cyan-100 shadow-[0_0_8px_rgba(34,211,238,0.25)]'
+                    : 'border-white/5 bg-white/5 text-white/55 hover:bg-white/10 hover:text-white/80',
                 )}
               >
-                <span className="flex w-full min-w-0 items-center gap-1">
-                  {action.actionType === 'guard' ? <Shield className="h-3.5 w-3.5 shrink-0" /> : action.actionType === 'skill' ? <Sparkles className="h-3.5 w-3.5 shrink-0" /> : <Swords className="h-3.5 w-3.5 shrink-0" />}
+                <span className="flex w-full min-w-0 items-center justify-center gap-0.5">
+                  {action.actionType === 'guard' ? <Shield className="h-2.5 w-2.5 shrink-0 text-amber-400/80" /> : action.actionType === 'skill' ? <Sparkles className="h-2.5 w-2.5 shrink-0 text-cyan-400/80" /> : <Swords className="h-2.5 w-2.5 shrink-0 text-rose-400/80" />}
                   <span className="min-w-0 truncate">{getActionShortLabelKo(action)}</span>
                 </span>
-                <span className="line-clamp-2 text-[9px] font-normal leading-snug text-white/45">
-                  {getActionDescriptionKo(action)}
-                </span>
                 {cooldownText && (
-                  <span className={clsx('text-[9px] font-normal', isOnCooldown ? 'text-amber-200/80' : 'text-white/35')}>
+                  <span className={clsx('text-[7.5px] font-medium leading-none scale-90 mt-0.5', isOnCooldown ? 'text-amber-300' : 'text-white/30')}>
                     {cooldownText}
                   </span>
                 )}
@@ -997,9 +1047,9 @@ export function DirectBattlePreviewPanel({
         </div>
 
         {skillActions.length > 1 && (
-          <div className="mt-2 rounded border border-white/10 bg-black/10 p-2">
-            <div className="mb-1 text-[10px] system-text text-white/40">스킬 선택</div>
-            <div className="grid gap-1.5 sm:grid-cols-2">
+          <div className="mt-1 border border-white/5 bg-slate-950/20 p-1 rounded">
+            <div className="mb-0.5 text-[8px] text-white/35 font-bold">스킬 선택</div>
+            <div className="grid gap-0.5 sm:grid-cols-2">
               {skillActions.map(action => {
                 const isSelected = selection?.actionId === action.actionId
                 const isOnCooldown = (unit.cooldowns[action.actionId] ?? 0) > 0
@@ -1010,21 +1060,21 @@ export function DirectBattlePreviewPanel({
                     disabled={isOnCooldown || preview.state.isFinished || isRevealingRound}
                     onClick={() => selectAction(unit, action)}
                     className={clsx(
-                      'rounded border px-2 py-1.5 text-left transition disabled:cursor-not-allowed disabled:opacity-40',
+                      'rounded border px-1 py-0.5 text-left transition text-[9px] disabled:cursor-not-allowed disabled:opacity-30 active:scale-95',
                       isSelected
-                        ? 'border-cyan-300/60 bg-cyan-300/15 text-cyan-100'
-                        : 'border-white/10 bg-white/5 text-white/60 hover:text-white/85',
+                        ? 'border-cyan-400/60 bg-cyan-400/10 text-cyan-100'
+                        : 'border-white/5 bg-white/5 text-white/50 hover:bg-white/10 hover:text-white/70',
                     )}
                   >
-                    <span className="flex items-center justify-between gap-2 text-[11px] font-bold">
-                      <span className="min-w-0 truncate">{action.label || '기본 스킬'}</span>
-                      {isSelected && <span className="shrink-0 text-[9px] text-cyan-100/70">선택됨</span>}
-                    </span>
-                    <span className="mt-0.5 block text-[9px] leading-snug text-white/45">{getActionDescriptionKo(action)}</span>
-                    <span className="mt-1 block text-[9px] text-white/35">
-                      {getTargetTypeLabelKo(action)}
-                      {getCooldownTextKo(unit, action) ? ` · ${getCooldownTextKo(unit, action)}` : ''}
-                    </span>
+                    <div className="flex items-center justify-between gap-1 font-bold">
+                      <span className="min-w-0 truncate text-[9px]">{action.label || '스킬'}</span>
+                      {isSelected && <span className="shrink-0 text-[7px] text-cyan-300/80">ON</span>}
+                    </div>
+                    {getCooldownTextKo(unit, action) && (
+                      <span className="mt-0.2 block text-[7px] text-amber-200/70">
+                        {getCooldownTextKo(unit, action)}
+                      </span>
+                    )}
                   </button>
                 )
               })}
@@ -1032,19 +1082,18 @@ export function DirectBattlePreviewPanel({
           </div>
         )}
 
-        <div className="mt-2 rounded border border-white/10 bg-black/10 px-2 py-1.5 text-[11px] text-white/50">
-          선택: <span className="text-cyan-100/75">{selectedAction ? getActionLabelKo(selectedAction) : '없음'}</span>
-          {selectedAction && <span className="ml-2 text-white/35">{getTargetTypeLabelKo(selectedAction)}</span>}
-          {selectedTarget && <span className="ml-2 text-white/35">→ {selectedTarget.displayName}</span>}
+        <div className="mt-1 border border-white/5 bg-slate-950/20 px-1 py-0.5 text-[8px] text-white/40">
+          선택: <span className="text-cyan-300 font-bold">{selectedAction ? getActionLabelKo(selectedAction) : '없음'}</span>
+          {selectedTarget && <span className="ml-1 text-white/30">→ {selectedTarget.displayName}</span>}
         </div>
 
         {selectedAction && needsManualTarget(selectedAction) && (
-          <div className="mt-2">
-            <div className="mb-1 flex items-center gap-1 text-[10px] system-text text-white/40">
-              <Target className="h-3 w-3" />
+          <div className="mt-1">
+            <div className="mb-0.5 flex items-center gap-1 text-[8px] text-white/35 font-bold">
+              <Target className="h-2.5 w-2.5 text-amber-400" />
               타겟 선택
             </div>
-            <div className="flex flex-wrap gap-1.5">
+            <div className="flex flex-wrap gap-0.5">
               {candidates.map(target => {
                 const isSelected = selection?.targetIds?.includes(target.unitId)
                 return (
@@ -1054,10 +1103,10 @@ export function DirectBattlePreviewPanel({
                     disabled={!isAlive(target) || preview.state.isFinished || isRevealingRound}
                     onClick={() => selectTarget(unit, target)}
                     className={clsx(
-                      'rounded border px-2 py-1 text-[10px] transition disabled:cursor-not-allowed disabled:opacity-40',
+                      'rounded border px-1 py-0.2 text-[8px] transition disabled:cursor-not-allowed disabled:opacity-30 active:scale-95',
                       isSelected
-                        ? 'border-amber-300/60 bg-amber-300/15 text-amber-100'
-                        : 'border-white/10 bg-white/5 text-white/55 hover:text-white/85',
+                        ? 'border-amber-400/50 bg-amber-400/10 text-amber-200'
+                        : 'border-white/5 bg-white/5 text-white/50 hover:bg-white/10 hover:text-white/70',
                     )}
                   >
                     {target.displayName}
@@ -1072,219 +1121,218 @@ export function DirectBattlePreviewPanel({
   }
 
   return (
-    <div className="panel corner-bracket relative overflow-hidden p-4 border-cyan-400/20 bg-cyan-500/5">
-      <div className="br" />
-      <div className="mb-3 flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
-        <div>
-          <div className="flex items-center gap-2">
-            <Activity className="h-4 w-4 text-cyan-300" />
-            <h3 className="text-sm font-bold text-cyan-100">{title}</h3>
-          </div>
-          <p className="mt-1 text-xs text-white/45">{note}</p>
-        </div>
-        <div className="flex flex-wrap gap-1.5">
-          <button
-            type="button"
-            onClick={startBattle}
-            disabled={!canStartBattle || isRevealingRound}
-            className="btn border-cyan-400/25 bg-cyan-400/10 text-xs text-cyan-100 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            <Play className="h-3.5 w-3.5" />
-            {preview ? restartButtonLabel : startButtonLabel}
-          </button>
-          {onBattleComplete && preview && !preview.state.isFinished && (
-            <button
-              type="button"
-              onClick={cancelBattle}
-              disabled={isRevealingRound}
-              className="btn border-rose-400/25 bg-rose-400/10 text-xs text-rose-100"
-            >
-              <X className="h-3.5 w-3.5" />
-              {cancelButtonLabel}
-            </button>
-          )}
-        </div>
-      </div>
-
-      {!canStartBattle && (
-        <div className="rounded border border-amber-400/25 bg-amber-400/10 px-3 py-2 text-xs text-amber-100/75">
-          장착된 그림자가 있어야 전투를 시작할 수 있습니다.
-        </div>
-      )}
-
-      {contextStats.length > 0 && (
-        <div className="mb-3 grid gap-2 md:grid-cols-3">
-          {contextStats.map(item => (
-            <PreviewStatPill key={item.label} label={item.label} value={item.value} />
-          ))}
-        </div>
-      )}
-
-      {allowEncounterSelection ? (
-        <div className="mt-3 flex flex-wrap gap-1.5">
-          {DIRECT_BATTLE_MOCK_ENCOUNTERS.map(encounter => (
-            <button
-              key={encounter.encounterKey}
-              type="button"
-              disabled={isRevealingRound}
-              onClick={() => {
-                setEncounterKey(encounter.encounterKey)
-                setPreview(undefined)
-                setRoundReveal(undefined)
-                autoStartedRef.current = false
-              }}
-              className={clsx(
-                'rounded border px-2 py-1 text-[10px] system-text transition',
-                encounterKey === encounter.encounterKey
-                  ? 'border-cyan-300/60 bg-cyan-300/15 text-cyan-100'
-                  : 'border-white/10 bg-white/5 text-white/45 hover:text-white/75',
-              )}
-            >
-              <span>{getDirectBattleEncounterShortLabelKo(encounter.encounterKey)}</span>
-              <span className="ml-1 text-white/30">({encounter.encounterKey})</span>
-            </button>
-          ))}
-        </div>
-      ) : (
-        <div className="mt-3 rounded border border-cyan-300/15 bg-cyan-300/5 px-3 py-2 text-xs text-cyan-100/70">
-          적 조합: {getDirectBattleEncounterLabelKo(encounterKey)}
-          <span className="ml-2 text-white/30">({encounterKey})</span>
-        </div>
-      )}
-
-      <div className="mt-3 rounded border border-white/10 bg-black/10 px-3 py-2 text-xs text-white/50">
-        <span className="system-text text-cyan-200/70">{getDirectBattleDifficultyLabelKo(selectedEncounter.difficultyTag)}</span>
-        <span className="mx-2 text-white/20">/</span>
-        {getDirectBattleLessonLabelKo(selectedEncounter.encounterKey, selectedEncounter.intendedLesson)}
-      </div>
-
-      {!preview && (
-        <div className="mt-3 rounded border border-white/10 bg-black/10 px-3 py-2 text-xs text-white/40">
-          아직 실행 결과가 없습니다. 전투 시작 후 아군 유닛의 행동과 타겟을 고를 수 있습니다.
-        </div>
-      )}
-
-      {preview && (
-        <div className="mt-4 space-y-3">
-          <div className="grid gap-2 md:grid-cols-4">
-            <PreviewStatPill label="적 조합" value={getDirectBattleEncounterLabelKo(preview.encounterKey)} />
-            <PreviewStatPill label="승리 진영" value={formatDirectBattleWinnerKo(preview.state.winner)} />
-            <PreviewStatPill label="현재 라운드" value={preview.state.round} />
-            <PreviewStatPill label="검증 이슈" value={preview.issues.length} />
-          </div>
-
-          {roundReveal && (
-            <div className="rounded border border-amber-300/25 bg-amber-300/10 px-3 py-2 text-xs text-amber-50/80">
-              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                <span>
-                  라운드 결과를 순서대로 표시 중입니다.
-                  <span className="ml-2 text-white/45">{Math.min(roundReveal.index + 1, roundReveal.steps.length)} / {roundReveal.steps.length}</span>
-                </span>
-                <button
-                  type="button"
-                  onClick={skipRoundReveal}
-                  className="btn border-amber-300/25 bg-black/15 text-xs text-amber-50"
-                >
-                  즉시 결과 보기
-                </button>
-              </div>
-            </div>
-          )}
-
-          {roundReveal && roundReveal.steps.length > 0 && (
-            <div className="relative min-h-[86px] overflow-visible">
-              <CinematicLogOverlay
-                logs={roundReveal.steps.map(step => step.cinematicLog)}
-                visible={roundReveal.steps.length > 0}
-                intervalMs={1450}
-                onLogChange={handleRevealLogChange}
-                onComplete={handleRevealComplete}
-                position="battlefield"
-                className="!absolute !left-1/2 !top-1/2 !z-30 !w-[min(86vw,440px)]"
-              />
-            </div>
-          )}
-
-          <div className="grid gap-3 md:grid-cols-2">
-            <div>
-              <div className="mb-2 text-[10px] system-text text-cyan-200/70">아군 파티</div>
-              <div className="space-y-2">{preview.state.units.filter(unit => unit.team === 'player').map(unit => renderUnit(unit, 'player'))}</div>
-            </div>
-            <div>
-              <div className="mb-2 text-[10px] system-text text-rose-200/70">적 파티</div>
-              <div className="space-y-2">{preview.state.units.filter(unit => unit.team === 'enemy').map(unit => renderUnit(unit, 'enemy'))}</div>
-            </div>
-          </div>
-
-          <div className="rounded border border-cyan-300/15 bg-black/15 p-3">
-            <div className="mb-3 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+    <>
+      <div className="panel corner-bracket relative overflow-hidden p-4 border-cyan-400/20 bg-cyan-500/5">
+        <div className="br" />
+        
+        {/* 1. 전투 미시작 상태 */}
+        {!preview && (
+          <>
+            <div className="mb-3 flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
               <div>
-                <div className="text-[10px] system-text text-cyan-200/70">직접 조작</div>
-                <div className="text-xs text-white/45">헌터와 그림자를 같은 방식으로 조작합니다.</div>
+                <div className="flex items-center gap-2">
+                  <Activity className="h-4 w-4 text-cyan-300" />
+                  <h3 className="text-sm font-bold text-cyan-100">{title}</h3>
+                </div>
+                <p className="mt-1 text-xs text-white/45">{note}</p>
               </div>
               <div className="flex flex-wrap gap-1.5">
                 <button
                   type="button"
-                  onClick={setAutoSelections}
-                  disabled={preview.state.isFinished || isRevealingRound}
-                  className="btn border-white/10 bg-white/5 text-xs text-white/70 disabled:cursor-not-allowed disabled:opacity-50"
+                  onClick={startBattle}
+                  disabled={!canStartBattle || isRevealingRound}
+                  className="btn border-cyan-400/25 bg-cyan-400/10 text-xs text-cyan-100 disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                  <Bot className="h-3.5 w-3.5" />
-                  자동 선택
-                </button>
-                <button
-                  type="button"
-                  onClick={() => executeRound('auto')}
-                  disabled={preview.state.isFinished || isRevealingRound || enemyUnits.length === 0 || playerUnits.length === 0}
-                  className="btn border-amber-300/25 bg-amber-300/10 text-xs text-amber-100 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  <RotateCcw className="h-3.5 w-3.5" />
-                  자동 1라운드
-                </button>
-                <button
-                  type="button"
-                  onClick={() => executeRound('manual')}
-                  disabled={preview.state.isFinished || isRevealingRound || enemyUnits.length === 0 || playerUnits.length === 0}
-                  className="btn border-cyan-300/25 bg-cyan-300/10 text-xs text-cyan-100 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  <Swords className="h-3.5 w-3.5" />
-                  라운드 실행
+                  <Play className="h-3.5 w-3.5" />
+                  {startButtonLabel}
                 </button>
               </div>
             </div>
-            <div className="grid gap-2 lg:grid-cols-2">
-              {playerUnits.map(renderActionControls)}
-            </div>
-          </div>
 
-          {preview.issues.length > 0 && (
-            <div className="rounded border border-rose-400/25 bg-rose-500/10 p-3 text-xs text-rose-100/80">
-              {preview.issues.slice(0, 5).map(issue => (
-                <div key={issue}>- {issue}</div>
-              ))}
-            </div>
-          )}
+            {!canStartBattle && (
+              <div className="rounded border border-amber-400/25 bg-amber-400/10 px-3 py-2 text-xs text-amber-100/75">
+                장착된 그림자가 있어야 전투를 시작할 수 있습니다.
+              </div>
+            )}
 
-          <div className="rounded border border-white/10 bg-black/15 p-3">
-            <div className="mb-2 flex items-center gap-2 text-[10px] system-text text-white/45">
-              <List className="h-3.5 w-3.5" />
-              최근 전투 로그
+            {contextStats.length > 0 && (
+              <div className="mb-3 grid gap-2 md:grid-cols-3">
+                {contextStats.map(item => (
+                  <PreviewStatPill key={item.label} label={item.label} value={item.value} />
+                ))}
+              </div>
+            )}
+
+            {allowEncounterSelection ? (
+              <div className="mt-3 flex flex-wrap gap-1.5">
+                {DIRECT_BATTLE_MOCK_ENCOUNTERS.map(encounter => (
+                  <button
+                    key={encounter.encounterKey}
+                    type="button"
+                    disabled={isRevealingRound}
+                    onClick={() => {
+                      setEncounterKey(encounter.encounterKey)
+                      setPreview(undefined)
+                      setRoundReveal(undefined)
+                      autoStartedRef.current = false
+                    }}
+                    className={clsx(
+                      'rounded border px-2 py-1 text-[10px] system-text transition',
+                      encounterKey === encounter.encounterKey
+                        ? 'border-cyan-300/60 bg-cyan-300/15 text-cyan-100'
+                        : 'border-white/10 bg-white/5 text-white/45 hover:text-white/75',
+                    )}
+                  >
+                    <span>{getDirectBattleEncounterShortLabelKo(encounter.encounterKey)}</span>
+                    <span className="ml-1 text-white/30">({encounter.encounterKey})</span>
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <div className="mt-3 rounded border border-cyan-300/15 bg-cyan-300/5 px-3 py-2 text-xs text-cyan-100/70">
+                적 조합: {getDirectBattleEncounterLabelKo(encounterKey)}
+                <span className="ml-2 text-white/30">({encounterKey})</span>
+              </div>
+            )}
+
+            <div className="mt-3 rounded border border-white/10 bg-black/10 px-3 py-2 text-xs text-white/50">
+              <span className="system-text text-cyan-200/70">{getDirectBattleDifficultyLabelKo(selectedEncounter.difficultyTag)}</span>
+              <span className="mx-2 text-white/20">/</span>
+              {getDirectBattleLessonLabelKo(selectedEncounter.encounterKey, selectedEncounter.intendedLesson)}
             </div>
-            <div className="space-y-1.5">
-              {preview.logs.length === 0 ? (
-                <div className="text-xs text-white/40">아직 로그가 없습니다.</div>
-              ) : (
-                preview.logs.map((log, index) => (
-                  <div key={`${log.round}-${index}-${log.message}`} className="text-xs text-white/55">
-                    <span className="mr-2 text-cyan-200/55">{log.round}라운드</span>
-                    {log.message}
-                  </div>
-                ))
-              )}
+
+            <div className="mt-3 rounded border border-white/10 bg-black/10 px-3 py-2 text-xs text-white/40">
+              아직 실행 결과가 없습니다. 전투 시작 후 아군 유닛의 행동과 타겟을 고를 수 있습니다.
             </div>
+          </>
+        )}
+
+        {/* 2. 전투 진행 중 최소화 요약 카드 */}
+        {preview && (
+          <div className="space-y-3">
+            <div className="flex flex-col gap-2.5 sm:flex-row sm:items-center sm:justify-between border-b border-cyan-400/15 pb-2">
+              <div>
+                <div className="flex items-center gap-1.5">
+                  <Activity className="h-4 w-4 text-cyan-300 animate-pulse animate-duration-1000" />
+                  <h3 className="text-sm font-black text-cyan-100">{title} — 전투 진행 중</h3>
+                </div>
+                <p className="mt-0.5 text-xs text-white/45">
+                  현재 <span className="font-bold text-cyan-300">{preview.state.round}</span> 라운드가 진행 중입니다.
+                </p>
+              </div>
+              <div className="flex items-center gap-1.5 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setOverlayOpen(true)}
+                  className="btn border-cyan-400/25 bg-cyan-400/10 text-xs text-cyan-100 flex items-center gap-1 py-1 px-3 hover:bg-cyan-400/20 transition"
+                >
+                  <Eye className="h-3.5 w-3.5" />
+                  전투 화면 열기
+                </button>
+                <button
+                  type="button"
+                  onClick={cancelBattle}
+                  disabled={isRevealingRound}
+                  className="btn border-rose-400/25 bg-rose-400/10 text-xs text-rose-100 flex items-center gap-1 py-1 px-3 hover:bg-rose-400/20 transition disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  <ShieldAlert className="h-3.5 w-3.5" />
+                  전투 포기
+                </button>
+              </div>
+            </div>
+
+            {/* HP summary and status */}
+            <div className="grid gap-2 grid-cols-2">
+              <div className="rounded border border-cyan-500/15 bg-cyan-950/10 p-2 text-[11px]">
+                <div className="text-white/35 font-bold text-[8px] uppercase tracking-wider mb-1">아군 생존자 ({playerUnits.length})</div>
+                <div className="flex flex-wrap gap-1">
+                  {preview.state.units.filter(u => u.team === 'player').map(unit => {
+                    const alive = isAlive(unit)
+                    return (
+                      <span
+                        key={unit.unitId}
+                        className={clsx(
+                          'rounded-full px-1.5 py-0.5 text-[9px] font-semibold border',
+                          alive ? 'bg-cyan-500/10 border-cyan-400/30 text-cyan-200' : 'bg-slate-800 border-slate-700 text-white/30 line-through opacity-50'
+                        )}
+                      >
+                        {unit.displayName}
+                      </span>
+                    )
+                  })}
+                </div>
+              </div>
+              <div className="rounded border border-rose-500/15 bg-rose-950/10 p-2 text-[11px]">
+                <div className="text-white/35 font-bold text-[8px] uppercase tracking-wider mb-1">적군 생존자 ({enemyUnits.length})</div>
+                <div className="flex flex-wrap gap-1">
+                  {preview.state.units.filter(u => u.team === 'enemy').map(unit => {
+                    const alive = isAlive(unit)
+                    const isBoss = unit.metadata?.tags?.includes('boss') || unit.role === 'boss'
+                    return (
+                      <span
+                        key={unit.unitId}
+                        className={clsx(
+                          'rounded-full px-1.5 py-0.5 text-[9px] font-semibold border',
+                          alive 
+                            ? isBoss ? 'bg-rose-500/20 border-rose-400/40 text-rose-300' : 'bg-rose-500/10 border-rose-500/30 text-rose-200'
+                            : 'bg-slate-800 border-slate-700 text-white/30 line-through opacity-50'
+                        )}
+                      >
+                        {unit.displayName} {isBoss && '👹'}
+                      </span>
+                    )
+                  })}
+                </div>
+              </div>
+            </div>
+
+            {/* Latest Feed preview */}
+            {preview.logs.length > 0 && (
+              <div className="rounded border border-white/5 bg-black/25 px-2.5 py-1.5 text-[10px] sm:text-[11px] text-white/55 truncate">
+                <span className="font-bold text-cyan-300 shrink-0 mr-1.5">LATEST FEED:</span>
+                {preview.logs[preview.logs.length - 1].message}
+              </div>
+            )}
           </div>
-        </div>
+        )}
+      </div>
+
+      {/* 3. 전체화면 2.5D Battle Overlay Portal */}
+      {preview && overlayOpen && (
+        <BattleArenaOverlay
+          title={title}
+          note={note}
+          preview={preview}
+          roundReveal={roundReveal}
+          playbackSpeed={playbackSpeed}
+          setPlaybackSpeed={setPlaybackSpeed}
+          isRevealingRound={isRevealingRound}
+          battlefieldPhase={battlefieldPhase}
+          latestAction={latestAction}
+          playerUnits={playerUnits}
+          enemyUnits={enemyUnits}
+          actors={buildBattleActors(preview.state, latestAction?.actorId, latestAction?.targetIds)}
+          skipRoundReveal={skipRoundReveal}
+          setAutoSelections={setAutoSelections}
+          executeRound={executeRound}
+          renderActionControls={renderActionControls}
+          cancelBattle={cancelBattle}
+          onClose={() => setOverlayOpen(false)}
+          showDetailed={showDetailed}
+          setShowDetailed={setShowDetailed}
+          renderUnit={renderUnit}
+          isAlive={isAlive}
+          onSelectTarget={(target) => {
+            // Find active unit or first controllable player unit to redirect target select
+            const activePlayer = playerUnits.find(unit => unit.unitId === latestAction?.actorId) || playerUnits[0]
+            if (activePlayer) {
+              selectTarget(activePlayer, target)
+            }
+          }}
+          handleRevealLogChange={handleRevealLogChange}
+          handleRevealComplete={handleRevealComplete}
+        />
       )}
-    </div>
+    </>
   )
 }

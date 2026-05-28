@@ -530,7 +530,7 @@ export function ShadowPortrait({
   return (
     <div
       className={clsx(
-        'relative isolate',
+        'relative isolate w-full',
         sizeClass[size],
         highlighted && 'shadow-glow-purple',
         evolutionReady && 'shadow-glow',
@@ -544,6 +544,7 @@ export function ShadowPortrait({
       )}
       style={{
         ...style,
+        height: className?.includes('h-full') ? '100%' : undefined,
         boxShadow: highlighted || active || displayNamed
           ? `0 0 ${Math.round(24 + profile.intensity * 8)}px ${palette.glow}`
           : undefined,

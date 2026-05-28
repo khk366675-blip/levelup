@@ -35,7 +35,7 @@ interface CinematicLogOverlayProps {
   visible?: boolean
   durationMs?: number
   intervalMs?: number
-  position?: 'center' | 'battlefield'
+  position?: 'center' | 'battlefield' | 'inline'
   className?: string
   onDone?: () => void
   onComplete?: () => void
@@ -196,7 +196,9 @@ export function CinematicLogOverlay({
   if (!currentLog || !visible || !active) return null
 
   const tone = toneClass[currentLog.tone]
-  const positionClass = position === 'battlefield'
+  const positionClass = position === 'inline'
+    ? 'relative w-full z-40 transform-none'
+    : position === 'battlefield'
     ? 'absolute left-1/2 top-[46%] z-30 w-[min(88%,460px)] -translate-x-1/2 -translate-y-1/2'
     : 'absolute left-1/2 top-[47%] z-30 w-[min(90%,520px)] -translate-x-1/2 -translate-y-1/2'
 
