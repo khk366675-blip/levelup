@@ -183,27 +183,19 @@ export function ShopPanel() {
                     </div>
                   </div>
 
-                  <div className="mb-3 grid grid-cols-3 gap-1.5 text-center system-text text-[9px] text-white/42">
-                    {isExchange ? (
-                      <>
-                        <span className="rounded border border-purple-200/16 bg-purple-400/8 px-1 py-1 text-purple-100/62">
-                          정수 {product.priceEssence ?? 0}
-                        </span>
-                        <span className="grid place-items-center rounded border border-emerald-200/16 bg-emerald-400/8 px-1 py-1 text-emerald-100/72">
-                          <ArrowRight className="h-3 w-3" />
-                        </span>
-                        <span className="rounded border border-cyan-200/16 bg-cyan-400/8 px-1 py-1 text-cyan-100/62">
-                          +{normalShardReward} SHARD
-                        </span>
-                      </>
-                    ) : (
-                      [visual.glyph, 'POOL', 'ODDS'].map(mark => (
-                        <span key={mark} className="rounded border border-cyan-100/12 bg-black/14 px-1 py-1">
-                          {mark}
-                        </span>
-                      ))
-                    )}
-                  </div>
+                  {isExchange && (
+                    <div className="mb-3 grid grid-cols-3 gap-1.5 text-center system-text text-[9px] text-white/42">
+                      <span className="rounded border border-purple-200/16 bg-purple-400/8 px-1 py-1 text-purple-100/62">
+                        정수 {product.priceEssence ?? 0}
+                      </span>
+                      <span className="grid place-items-center rounded border border-emerald-200/16 bg-emerald-400/8 px-1 py-1 text-emerald-100/72">
+                        <ArrowRight className="h-3 w-3" />
+                      </span>
+                      <span className="rounded border border-cyan-200/16 bg-cyan-400/8 px-1 py-1 text-cyan-100/62">
+                        +{normalShardReward} SHARD
+                      </span>
+                    </div>
+                  )}
 
                   <div className="grid grid-cols-[1fr_auto] gap-2">
                     <button
