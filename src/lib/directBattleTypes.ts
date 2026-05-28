@@ -154,6 +154,13 @@ export interface BattleUnit {
     tags?: string[]
     hiddenSafe?: boolean
   }
+  telegraph?: DirectBattleTelegraph
+  monsterPatternState?: {
+    patternId: string
+    stepIndex: number
+    cycleIndex?: number
+    cooldowns?: Record<string, number>
+  }
 }
 
 export interface BattleUnitBuildResult {
@@ -255,4 +262,18 @@ export interface DirectBattleResult {
   logs: DirectBattleLogEntry[]
   isFinished: boolean
   reason: 'winner' | 'max_rounds' | 'no_units' | 'safety_abort'
+}
+
+export type TelegraphSeverity = 'low' | 'medium' | 'high' | 'lethal'
+
+export interface DirectBattleTelegraph {
+  actionId: string
+  actionName: string
+  actionType: string
+  telegraphName: string
+  telegraphText: string
+  severity: TelegraphSeverity
+  targetRule?: string
+  recommendedDefense?: string
+  windupTurns?: number
 }

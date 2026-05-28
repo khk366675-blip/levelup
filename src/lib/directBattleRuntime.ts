@@ -12,6 +12,7 @@ import type {
   DirectBattleWinner,
   QueuedBattleAction,
 } from './directBattleTypes'
+import { chooseTargetByRule, resolveNextActionForRole, resolveBossAction } from './monsterPatterns'
 
 export const HARD_SAFETY_ROUND_LIMIT = 200
 
@@ -352,6 +353,54 @@ const skillPriority = (action: BattleActionDefinition): number => {
   return 0
 }
 
+export const computeTelegraphForUnit = (state: DirectBattleState, unit: BattleUnit) => {
+  if (unit.team !== 'enemy' || unit.stats.currentHp <= 0) {
+    unit.telegraph = undefined
+    return
+  }
+
+  if (!unit.monsterPatternState) {
+    unit.monsterPatternState = {
+      patternId: unit.metadata?.definitionId || unit.unitId,
+      stepIndex: 0,
+    }
+  }
+
+  const isBoss = unit.unitType === 'boss' || Boolean(unit.metadata?.tags?.includes('boss'))
+  let res: {
+    action: BattleActionDefinition
+    telegraphName: string
+    telegraphText: string
+    severity: 'low' | 'medium' | 'high' | 'lethal'
+    targetRule: string
+  }
+
+  if (isBoss) {
+    res = resolveBossAction(unit, unit.monsterPatternState.stepIndex, state)
+  } else {
+    res = resolveNextActionForRole(unit, unit.monsterPatternState.stepIndex, state)
+  }
+
+  unit.telegraph = {
+    actionId: res.action.actionId,
+    actionName: res.action.label,
+    actionType: res.action.actionType,
+    telegraphName: res.telegraphName,
+    telegraphText: res.telegraphText,
+    severity: res.severity,
+    targetRule: res.targetRule,
+  }
+
+  if (res.severity !== 'low') {
+    addLog(state, {
+      actorUnitId: unit.unitId,
+      message: `⚠️ [${unit.displayName}]이(가) [${res.telegraphName}]을(를) 준비합니다! (${res.telegraphText})`,
+      eventType: 'status',
+      effectColor: res.severity === 'lethal' ? 'crimson' : res.severity === 'high' ? 'orange' : 'yellow',
+    })
+  }
+}
+
 export const createDirectBattleState = (
   units: BattleUnit[],
   options: CreateDirectBattleStateOptions = {},
@@ -368,6 +417,14 @@ export const createDirectBattleState = (
     maxRounds: options.maxRounds ?? 5,
   }
   updateBattleResult(state)
+
+  // Calculate Round 1 telegraphs for enemies
+  for (const u of state.units) {
+    if (u.team === 'enemy') {
+      computeTelegraphForUnit(state, u)
+    }
+  }
+
   return state
 }
 
@@ -729,6 +786,16 @@ const executeAction = (state: DirectBattleState, queued: QueuedBattleAction) => 
     return
   }
 
+  if (actor.team === 'enemy') {
+    if (!actor.monsterPatternState) {
+      actor.monsterPatternState = {
+        patternId: actor.metadata?.definitionId || actor.unitId,
+        stepIndex: 0,
+      }
+    }
+    actor.monsterPatternState.stepIndex += 1
+  }
+
   const targets = queued.targetIds
     .map(id => findUnit(state, id))
     .filter((target): target is BattleUnit => Boolean(target && isAlive(target)))
@@ -920,6 +987,15 @@ export const chooseMockPlayerActions = (state: DirectBattleState): DirectBattleA
 
 export const chooseMockMonsterActions = (state: DirectBattleState): DirectBattleActionSelection[] =>
   livingUnits(state, 'enemy').map(unit => {
+    if (unit.telegraph) {
+      const targetIds = chooseTargetByRule(state, unit, unit.telegraph.targetRule ?? 'frontline')
+      return {
+        actorUnitId: unit.unitId,
+        actionId: unit.telegraph.actionId,
+        targetIds: targetIds.length > 0 ? targetIds : undefined
+      }
+    }
+
     const woundedAlly = lowestHp(livingUnits(state, 'enemy'))
     const basic = getDefaultAction(unit)
     const skill = unit.actionList.find(action => action.actionType === 'skill' && (unit.cooldowns[action.actionId] ?? 0) <= 0)
@@ -989,6 +1065,15 @@ export const executeDirectBattleRound = (
       eventType: 'result',
       actionCue: 'battle_result',
     })
+  }
+
+  // Calculate next round's telegraphs for surviving enemies!
+  for (const u of state.units) {
+    if (u.team === 'enemy' && u.stats.currentHp > 0) {
+      computeTelegraphForUnit(state, u)
+    } else {
+      u.telegraph = undefined
+    }
   }
 
   return { state, queue, logs: state.logs.slice(logStart) }

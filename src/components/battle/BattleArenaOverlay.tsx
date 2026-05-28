@@ -84,6 +84,19 @@ export function BattleArenaOverlay({
     }
   }, [])
 
+  // Find any active enemy unit that has a telegraph with severity medium/high/lethal
+  const bossTelegraphs = preview.state.units
+    .filter(u => u.team === 'enemy' && u.stats.currentHp > 0 && (u as any).telegraph && (u as any).telegraph.severity !== 'low')
+    .map(u => ({
+      unitName: u.displayName,
+      isBoss: u.unitType === 'boss',
+      telegraph: (u as any).telegraph,
+    }))
+
+  const activeWarning = bossTelegraphs.find(bt => bt.telegraph.severity === 'lethal') ||
+                        bossTelegraphs.find(bt => bt.telegraph.severity === 'high') ||
+                        bossTelegraphs.find(bt => bt.telegraph.severity === 'medium')
+
   // Create HUD Panel components
   const { EnemyHud, AllyHud } = BattleHudPanel({
     playerUnits: preview.state.units.filter(u => u.team === 'player'),
@@ -177,6 +190,25 @@ export function BattleArenaOverlay({
 
       {/* Main 2.5D Battlefield Arena */}
       <main className="flex-1 relative flex items-center justify-center bg-black/30 p-2 overflow-hidden">
+        {activeWarning && !isRevealingRound && (
+          <div className="absolute top-2 left-4 right-4 z-40 bg-gradient-to-r from-red-950/80 via-red-900/60 to-red-950/80 border border-red-500/40 rounded px-3 py-1.5 backdrop-blur-sm shadow-lg flex items-center justify-between gap-3 animate-pulse">
+            <div className="flex items-center gap-2 min-w-0">
+              <span className="text-base shrink-0">⚠️</span>
+              <div className="min-w-0">
+                <div className="text-[9px] font-black text-red-400 tracking-wider uppercase leading-none">
+                  {activeWarning.isBoss ? 'BOSS WARNING' : 'ELITE WARNING'}
+                </div>
+                <div className="text-[10px] text-white/90 font-bold truncate leading-tight mt-0.5">
+                  [{activeWarning.unitName}]이(가) <span className="text-red-300">"{activeWarning.telegraph.telegraphName}"</span>을(를) 준비 중!
+                </div>
+              </div>
+            </div>
+            <div className="text-[9px] text-red-200/90 font-semibold bg-red-950/50 border border-red-400/20 rounded px-1.5 py-0.5 shrink-0">
+              {activeWarning.telegraph.telegraphText}
+            </div>
+          </div>
+        )}
+
         <Battlefield2DView
           actors={actors}
           battleType="gate"

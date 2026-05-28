@@ -498,6 +498,35 @@ export function Battlefield2DView({
                 transform: 'translate(-50%, -50%)',
               }}
             >
+              {actor.telegraph && !actor.isDefeated && (
+                <div className="absolute -top-16 left-1/2 -translate-x-1/2 z-30 flex flex-col items-center pointer-events-none select-none">
+                  {/* Severity Aura ring underneath */}
+                  {actor.telegraph.severity === 'lethal' && (
+                    <div className="absolute -inset-1 rounded-full bg-red-600/30 blur-md animate-ping" />
+                  )}
+                  {actor.telegraph.severity === 'high' && (
+                    <div className="absolute -inset-1 rounded-full bg-amber-600/20 blur-sm animate-pulse" />
+                  )}
+                  
+                  {/* Action Badge */}
+                  <div className={clsx(
+                    "px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-wider border flex items-center gap-1 shadow-md whitespace-nowrap",
+                    actor.telegraph.severity === 'lethal' ? "bg-red-950/90 border-red-500 text-red-200 animate-pulse font-black" :
+                    actor.telegraph.severity === 'high' ? "bg-amber-950/90 border-amber-500 text-amber-200" :
+                    actor.telegraph.severity === 'medium' ? "bg-orange-950/90 border-orange-500 text-orange-200" :
+                    "bg-zinc-900/90 border-zinc-700 text-zinc-300"
+                  )}>
+                    <span className="animate-pulse">⚠️</span>
+                    <span>{actor.telegraph.telegraphName}</span>
+                  </div>
+                  
+                  {/* Brief Text / Recommendation under the badge */}
+                  <div className="text-[7px] scale-90 text-white/70 font-semibold bg-black/80 px-1 mt-0.5 rounded border border-white/5 whitespace-nowrap shadow-sm">
+                    {actor.telegraph.telegraphText}
+                  </div>
+                </div>
+              )}
+
               <BattleActorSprite 
                 actor={actor} 
                 compact={isCompact} 

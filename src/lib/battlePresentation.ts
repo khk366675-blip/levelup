@@ -31,6 +31,7 @@ export interface BattleActorViewModel {
   isDefeated?: boolean
   isBoss?: boolean
   isNamed?: boolean
+  telegraph?: any
 }
 
 /**
@@ -94,6 +95,7 @@ export function mapUnitToViewModel(
     isDefeated: unit.stats.currentHp <= 0,
     isBoss,
     isNamed: named,
+    telegraph: unit.telegraph,
   }
 }
 
