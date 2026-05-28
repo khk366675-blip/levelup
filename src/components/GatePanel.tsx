@@ -11,6 +11,15 @@ import {
   Swords,
   Timer,
   Zap,
+  Lock,
+  ChevronRight,
+  Coins,
+  Flame,
+  Check,
+  HelpCircle,
+  Dices,
+  Compass,
+  Heart,
 } from 'lucide-react'
 import { useGame } from '../lib/store'
 import { CinematicLogOverlay, type CinematicLogData, type CinematicLogTone } from './CinematicLogOverlay'
@@ -22,6 +31,7 @@ import { ShadowPortrait } from './shadows/ShadowPortrait'
 import { ShadowExtractionReveal } from './shadows/ShadowExtractionReveal'
 import { SkillActionCard, skillSourceSortRank, skillTypeSortRank } from './SkillActionCard'
 import { GATE_DEFINITIONS, GATE_PENALTIES, GATE_REWARD_TABLES, MONSTER_DEFINITIONS, SKILL_DEFINITIONS } from '../lib/seed'
+import { GATE_THEMES, GATE_MODIFIERS } from '../lib/gateRunEvents'
 import {
   calculatePlayerCombatStats,
   formatStatReward,
@@ -1815,6 +1825,31 @@ export function GatePanel() {
     )
   }
 
+  if (activeGate.runState) {
+    return (
+      <GateRunPanel
+        activeGate={activeGate}
+        runState={activeGate.runState}
+        gate={gate}
+        hunter={hunter}
+        items={items}
+        equipment={equipment}
+        activeConsumableEffects={activeConsumableEffects}
+        equippedShadows={equippedShadows}
+        playerPower={playerPower}
+        riskMeta={riskMeta}
+        canStart={canStart}
+        latestGateCombatLog={latestGateCombatLog}
+        isBattleRevealing={isBattleRevealing}
+        setIsBattleRevealing={setIsBattleRevealing}
+        setIsDirectGateBattleOpen={setIsDirectGateBattleOpen}
+        handleStartManualBattle={handleStartManualBattle}
+        handleStartLegacyGateBattle={handleStartLegacyGateBattle}
+        handleStartGateBattle={handleStartGateBattle}
+      />
+    )
+  }
+
   return (
     <div className="space-y-4">
       <GateStatusPanel />
@@ -2044,3 +2079,493 @@ export function GatePanel() {
     </div>
   )
 }
+
+interface GateRunPanelProps {
+  activeGate: ActiveGate
+  runState: any
+  gate: GateDefinition
+  hunter: any
+  items: Item[]
+  equipment: any
+  activeConsumableEffects: ActiveConsumableEffect[]
+  equippedShadows: any[]
+  playerPower: number
+  riskMeta: any
+  canStart: boolean
+  latestGateCombatLog: CombatLog | undefined
+  isBattleRevealing: boolean
+  setIsBattleRevealing: (val: boolean) => void
+  setIsDirectGateBattleOpen: (val: boolean) => void
+  handleStartManualBattle: () => void
+  handleStartLegacyGateBattle: () => void
+  handleStartGateBattle: () => void
+}
+
+function GateRunPanel({
+  activeGate,
+  runState,
+  gate,
+  hunter,
+  items,
+  equipment,
+  activeConsumableEffects,
+  equippedShadows,
+  playerPower,
+  riskMeta,
+  canStart,
+  latestGateCombatLog,
+  isBattleRevealing,
+  setIsBattleRevealing,
+  setIsDirectGateBattleOpen,
+  handleStartManualBattle,
+  handleStartLegacyGateBattle,
+  handleStartGateBattle,
+}: GateRunPanelProps) {
+  const [selectedEncId, setSelectedEncId] = useState<string | null>(null)
+  const [activeRestOption, setActiveRestOption] = useState<'heal' | 'buff' | 'cooldown'>('heal')
+
+  // store actions
+  const chooseGateRunEventChoice = useGame(s => s.chooseGateRunEventChoice)
+  const claimGateRunTreasure = useGame(s => s.claimGateRunTreasure)
+  const performGateRunRest = useGame(s => s.performGateRunRest)
+  const absorbGateRunShadowTrace = useGame(s => s.absorbGateRunShadowTrace)
+  const abandonGateRun = useGame(s => s.abandonGateRun)
+  const attemptShadowExtraction = useGame(s => s.attemptShadowExtraction)
+
+  const currentEncounterIndex = runState.currentEncounterIndex
+  const encounters = runState.encounters
+  const currentEncounter = encounters[currentEncounterIndex]
+
+  // 테마 디자인 매핑
+  const theme = GATE_THEMES.find(t => t.id === runState.themeId) ?? GATE_THEMES[0]
+  const themeClass: Record<string, string> = {
+    theme_rift: 'from-purple-950/40 via-purple-900/10 to-indigo-950/30 border-purple-500/35 text-purple-200',
+    theme_beast: 'from-red-950/40 via-red-900/10 to-rose-950/30 border-rose-500/35 text-rose-200',
+    theme_iron: 'from-slate-800/50 via-slate-900/20 to-zinc-900/40 border-slate-500/35 text-slate-200',
+    theme_specter: 'from-zinc-900/60 via-stone-900/30 to-neutral-900/50 border-violet-500/35 text-violet-200',
+    theme_supply: 'from-emerald-950/40 via-teal-900/10 to-emerald-900/20 border-emerald-500/35 text-emerald-200',
+    theme_cursed: 'from-amber-950/45 via-amber-900/15 to-orange-950/35 border-amber-500/35 text-amber-200',
+  }
+  const themeStyle = themeClass[theme.id] ?? themeClass.theme_rift
+
+  // 모디파이어 상세 정보 매핑
+  const getModInfo = (modId: string) => {
+    const mod = GATE_MODIFIERS.find(m => m.id === modId)
+    if (!mod) return { name: modId, desc: '', style: 'border-zinc-500 bg-zinc-900/35 text-zinc-300' }
+    let style = 'border-zinc-500 bg-zinc-900/35 text-zinc-300'
+    if (mod.type === 'positive') style = 'border-emerald-500/40 bg-emerald-900/10 text-emerald-200'
+    else if (mod.type === 'dangerous') style = 'border-rose-500/40 bg-rose-900/10 text-rose-200'
+    else if (mod.type === 'rare') style = 'border-fuchsia-500/45 bg-fuchsia-900/15 text-fuchsia-200 animate-pulse'
+    return { name: mod.name, desc: mod.description, style }
+  }
+
+  // 인카운터 타입별 색상/아이콘 헬퍼
+  const getEncounterMeta = (type: string) => {
+    switch (type) {
+      case 'battle':
+        return { icon: <Swords className="w-4 h-4" />, label: '일반 전투', color: 'text-rose-400 border-rose-500/30' }
+      case 'elite':
+        return { icon: <AlertTriangle className="w-4 h-4 text-amber-300" />, label: '정예 강습', color: 'text-amber-400 border-amber-500/30' }
+      case 'boss':
+        return { icon: <Skull className="w-4 h-4 text-red-50 animate-bounce" />, label: '구역 보스', color: 'text-red-500 border-red-500/45 bg-red-950/15' }
+      case 'event':
+        return { icon: <Dices className="w-4 h-4" />, label: '왜곡 징후', color: 'text-cyan-400 border-cyan-500/30' }
+      case 'rest':
+        return { icon: <Activity className="w-4 h-4" />, label: '정비 휴식처', color: 'text-emerald-400 border-emerald-500/30' }
+      case 'treasure':
+        return { icon: <Package className="w-4 h-4" />, label: '보물 상자', color: 'text-yellow-400 border-yellow-500/30' }
+      case 'shadow_trace':
+        return { icon: <Zap className="w-4 h-4 text-indigo-300" />, label: '그림자 흔적', color: 'text-indigo-400 border-indigo-500/35' }
+      default:
+        return { icon: <HelpCircle className="w-4 h-4" />, label: '미지 구역', color: 'text-zinc-400 border-zinc-500/30' }
+    }
+  }
+
+  // UI 상에서 선택된 인카운터의 세부 내용
+  const activeDetailEnc = encounters.find((e: any) => e.id === (selectedEncId ?? currentEncounter.id)) ?? currentEncounter
+
+  // 수동 전투 공략
+  const onStartManual = () => {
+    if (!canStart) return
+    setIsBattleRevealing(false)
+    handleStartManualBattle()
+  }
+
+  // 자동 전투 공략
+  const onStartAuto = () => {
+    if (!canStart) return
+    setIsDirectGateBattleOpen(true)
+    setIsBattleRevealing(false)
+  }
+
+  return (
+    <div className="space-y-4">
+      {/* 1. Theme and Modifier banner */}
+      <div className={`panel corner-bracket p-5 bg-gradient-to-br border ${themeStyle}`}>
+        <div className="br" />
+        <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
+          <div>
+            <div className="flex items-center gap-2 mb-1.5">
+              <Compass className="w-5 h-5 animate-spin" style={{ animationDuration: '6s' }} />
+              <div className="system-text text-[11px] tracking-wider opacity-85">DUNGEON RUN ACTIVATED</div>
+            </div>
+            <div className="flex flex-wrap items-center gap-3">
+              <h3 className="text-2xl font-bold tracking-tight">{theme.name}</h3>
+              <span className="text-xs font-semibold px-2 py-0.5 border rounded opacity-90">
+                {theme.tag}
+              </span>
+            </div>
+            <p className="text-xs text-white/70 mt-2 leading-relaxed max-w-2xl">{theme.description}</p>
+            <div className="text-[10px] text-white/45 mt-1 border-t border-white/10 pt-1.5">
+              <span className="font-semibold text-amber-300">특수 룰:</span> {theme.specialVariable}
+            </div>
+          </div>
+
+          <div className="flex flex-wrap gap-1.5 lg:justify-end lg:max-w-xs">
+            {runState.modifierIds.map((modId: string) => {
+              const mod = getModInfo(modId)
+              return (
+                <div key={modId} className={`border rounded px-2.5 py-1 text-[10px] font-medium leading-tight ${mod.style}`} title={mod.desc}>
+                  {mod.name}
+                </div>
+              )
+            })}
+            {runState.modifierIds.length === 0 && (
+              <div className="text-[10px] text-white/35 border border-white/5 rounded px-2.5 py-1">
+                활성화된 이계 모디파이어 없음
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* 2. Dungeon Dashboard (위험도 / 보상 계기판) */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <div className="panel p-3 border-rose-500/20 bg-rose-500/5 text-center">
+          <div className="text-[10px] system-text text-rose-300/80">누적 위험도</div>
+          <div className="text-xl font-bold text-rose-100 mt-1">{runState.accumulatedRisk} / 100</div>
+          <div className="w-full bg-rose-950/40 rounded-full h-1 mt-2 overflow-hidden">
+            <div className="bg-rose-500 h-1 transition-all duration-300" style={{ width: `${runState.accumulatedRisk}%` }} />
+          </div>
+        </div>
+        <div className="panel p-3 border-amber-500/20 bg-amber-500/5 text-center">
+          <div className="text-[10px] system-text text-amber-300/80">보상 획득 배율</div>
+          <div className="text-xl font-bold text-amber-100 mt-1">x{runState.rewardMultiplier.toFixed(2)}</div>
+          <div className="text-[9px] text-amber-300/50 mt-1">이벤트 선택으로 증감</div>
+        </div>
+        <div className="panel p-3 border-indigo-500/20 bg-indigo-500/5 text-center">
+          <div className="text-[10px] system-text text-indigo-300/80">추출 공명 보정</div>
+          <div className="text-xl font-bold text-indigo-100 mt-1">+{runState.extractionBonusPercent ?? 0}%</div>
+          <div className="text-[9px] text-indigo-300/50 mt-1">군주의 조각 흡수량 비례</div>
+        </div>
+        <div className="panel p-3 border-cyan-500/20 bg-cyan-500/5 text-center">
+          <div className="text-[10px] system-text text-cyan-300/80">현재 누적 전리품</div>
+          <div className="text-[10px] text-cyan-200 mt-1 font-semibold truncate">
+            {runState.accumulatedRewards.gold}G / {runState.accumulatedRewards.essence}정수
+          </div>
+          <div className="text-[9px] text-cyan-300/50 mt-1">
+            클리어 시 최종 수령 ({runState.accumulatedRewards.items.length}개 템)
+          </div>
+        </div>
+      </div>
+
+      {/* 3. Dungeon Map / Timeline */}
+      <div className="panel p-4 border-zinc-700/40 bg-zinc-900/60">
+        <div className="system-text text-[10px] text-zinc-400 tracking-wider mb-3">DUNGEON TIMELINE MAP</div>
+        <div className="flex flex-col md:flex-row items-stretch gap-2 overflow-x-auto pb-2">
+          {encounters.map((enc: any, idx: number) => {
+            const meta = getEncounterMeta(enc.type)
+            const isCurrent = idx === currentEncounterIndex
+            const isCleared = enc.status === 'cleared'
+            const isAvailable = enc.status === 'available'
+            const isLocked = enc.status === 'locked'
+
+            return (
+              <button
+                key={enc.id}
+                type="button"
+                onClick={() => setSelectedEncId(enc.id)}
+                className={clsx(
+                  'flex-1 text-left p-3.5 border rounded-lg transition-all duration-300 relative overflow-hidden',
+                  isCleared && 'border-zinc-800/40 bg-zinc-950/30 opacity-60 hover:opacity-90',
+                  isAvailable && 'border-amber-400 bg-amber-500/5 shadow-[0_0_10px_rgba(245,158,11,0.15)] ring-1 ring-amber-400/25',
+                  isLocked && 'border-zinc-800 bg-zinc-950/20 opacity-30 cursor-not-allowed',
+                  selectedEncId === enc.id ? 'ring-2 ring-cyan-400 border-cyan-400' : ''
+                )}
+                disabled={isLocked}
+              >
+                {/* 상단 뱃지 */}
+                <div className="flex items-center justify-between gap-1 mb-2">
+                  <div className={`flex items-center gap-1.5 text-[10px] font-bold ${meta.color}`}>
+                    {meta.icon}
+                    <span>{meta.label}</span>
+                  </div>
+                  {isCleared && <Check className="w-3.5 h-3.5 text-emerald-400" />}
+                  {isAvailable && <span className="text-[8px] px-1 bg-amber-400 text-zinc-950 rounded font-bold animate-pulse">ACTIVE</span>}
+                  {isLocked && <Lock className="w-3 h-3 text-zinc-600" />}
+                </div>
+
+                <div className="text-xs font-semibold text-zinc-100 truncate">{enc.title}</div>
+                <div className="text-[9px] text-zinc-400 mt-1 truncate">{enc.description}</div>
+              </button>
+            )
+          })}
+        </div>
+      </div>
+
+      {/* 4. Encounter Detail Panel */}
+      <div className="panel p-5 border-cyan-500/30 bg-gradient-to-br from-zinc-900 via-zinc-900 to-cyan-950/15">
+        <div className="flex flex-wrap items-center justify-between border-b border-zinc-800 pb-3 mb-4 gap-2">
+          <div>
+            <div className="text-[10px] system-text text-cyan-400 font-bold tracking-wider">SELECTED ENCOUNTER PANEL</div>
+            <h4 className="text-lg font-bold text-zinc-100 mt-1 flex items-center gap-2">
+              {getEncounterMeta(activeDetailEnc.type).icon}
+              {activeDetailEnc.title}
+            </h4>
+          </div>
+          <div className="text-xs text-zinc-400">
+            상태:{' '}
+            <span className={clsx(
+              'font-semibold',
+              activeDetailEnc.status === 'cleared' && 'text-emerald-400',
+              activeDetailEnc.status === 'available' && 'text-amber-400 animate-pulse',
+              activeDetailEnc.status === 'locked' && 'text-zinc-500'
+            )}>
+              {activeDetailEnc.status === 'cleared' ? '공략 완료' : activeDetailEnc.status === 'available' ? '진행 가능' : '접근 불가'}
+            </span>
+          </div>
+        </div>
+
+        <p className="text-sm text-zinc-300 leading-relaxed mb-5">{activeDetailEnc.description}</p>
+
+        {/* 세부 인카운터별 UI 조립 */}
+        {activeDetailEnc.status === 'cleared' ? (
+          <div className="p-4 border border-zinc-800 bg-zinc-950/20 rounded-lg text-center text-xs text-zinc-500">
+            이미 완료된 구역입니다. 더 이상 상호작용할 수 없습니다.
+          </div>
+        ) : activeDetailEnc.status === 'locked' ? (
+          <div className="p-4 border border-zinc-800 bg-zinc-950/20 rounded-lg text-center text-xs text-zinc-500">
+            이전 인카운터 구역을 먼저 격파해 차원 잠금을 해제해야 합니다.
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {/* A. 전투/정예/보스 방 */}
+            {(activeDetailEnc.type === 'battle' || activeDetailEnc.type === 'elite' || activeDetailEnc.type === 'boss') && (
+              <div className="space-y-4">
+                <div className="grid md:grid-cols-2 gap-4 bg-zinc-950/40 p-4 rounded-lg border border-zinc-800">
+                  <div>
+                    <div className="text-[10px] system-text text-zinc-400 mb-1.5">매칭된 몬스터 리스트</div>
+                    <div className="space-y-1.5">
+                      {activeDetailEnc.monsterIds?.map((mId: string, idx: number) => {
+                        const monster = MONSTER_DEFINITIONS.find(m => m.id === mId)
+                        if (!monster) return null
+                        return (
+                          <div key={`${mId}-${idx}`} className="text-xs text-rose-200 font-medium flex items-center justify-between border-b border-zinc-800/40 pb-1">
+                            <span>• {monster.name} ({monster.rank}-RANK)</span>
+                            <span className="text-[9px] text-rose-400/80">HP 계수 x{(activeDetailEnc.difficultyMod ?? 1.0).toFixed(1)}</span>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-[10px] system-text text-zinc-400 mb-1.5">전투 배율 요약</div>
+                    <div className="grid grid-cols-2 gap-2 text-xs text-zinc-300">
+                      <div>위험도 계수: <span className="text-rose-400 font-bold">+{activeDetailEnc.riskDelta}</span></div>
+                      <div>보상 배율: <span className="text-amber-400 font-bold">x{(activeDetailEnc.rewardMultiplier ?? 1.0).toFixed(2)}</span></div>
+                      {activeDetailEnc.specialRuleId && (
+                        <div className="col-span-2 text-cyan-300 mt-2 border-t border-zinc-800/80 pt-1 text-[10px]">
+                          적용 버프/디버프: {activeDetailEnc.specialRuleId}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-2">
+                  <button
+                    type="button"
+                    onClick={onStartAuto}
+                    className="btn btn-primary min-h-12 text-sm flex items-center justify-center gap-2"
+                  >
+                    <FastForward className="w-4 h-4" />
+                    <span>자동 전투 공략 (오버레이)</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={onStartManual}
+                    className="btn border border-cyan-400/30 bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-200 min-h-12 text-sm flex items-center justify-center gap-2"
+                  >
+                    <Swords className="w-4 h-4" />
+                    <span>수동 직접 조작 공략</span>
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* B. 이벤트 인카운터 */}
+            {activeDetailEnc.type === 'event' && (
+              <div className="space-y-3">
+                <div className="text-xs font-semibold text-cyan-300 tracking-wider">차원의 선택지 수집 완료 — 선택하십시오</div>
+                <div className="grid grid-cols-1 gap-2.5">
+                  {/* store.ts나 events 데이터 구조에서 choices 매핑 */}
+                  {runState.encounters[runState.currentEncounterIndex].eventChoices?.map((choice: any) => (
+                    <button
+                      key={choice.id}
+                      type="button"
+                      onClick={() => chooseGateRunEventChoice(choice.id)}
+                      className="text-left p-3.5 border border-cyan-500/30 bg-cyan-950/10 hover:bg-cyan-950/20 hover:border-cyan-400 rounded-lg transition-all duration-200 group"
+                    >
+                      <div className="font-bold text-cyan-200 group-hover:text-cyan-100 flex items-center gap-2 text-sm">
+                        <ChevronRight className="w-4 h-4 text-cyan-400" />
+                        {choice.label}
+                      </div>
+                      <div className="text-xs text-white/70 mt-1.5 pl-6">{choice.description}</div>
+                    </button>
+                  ))}
+                  {(!runState.encounters[runState.currentEncounterIndex].eventChoices || runState.encounters[runState.currentEncounterIndex].eventChoices.length === 0) && (
+                    <div className="text-center text-xs text-zinc-500 border border-zinc-800 p-4 rounded-lg">
+                      이벤트의 선택지 정보가 유실되었습니다. 즉시 우회하여 다음으로 통과합니다.
+                      <button
+                        type="button"
+                        onClick={() => chooseGateRunEventChoice('choice_rift_stabilize')}
+                        className="btn btn-secondary text-xs mt-3 block mx-auto"
+                      >
+                        강제 안정화 후 우회 통과
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* C. 보물 인카운터 */}
+            {activeDetailEnc.type === 'treasure' && (
+              <div className="text-center p-6 border border-zinc-800 bg-zinc-950/40 rounded-lg">
+                <Package className="w-12 h-12 text-yellow-400 mx-auto mb-3 animate-bounce" />
+                <h5 className="text-sm font-bold text-yellow-200">흘러나온 고대 차원 보석함 발견</h5>
+                <p className="text-xs text-zinc-400 mt-1.5 max-w-md mx-auto">
+                  이계의 마력이 응축되어 생성된 보물 상자입니다. 복잡한 전투 없이 고스란히 정수와 골드로 회수할 수 있습니다.
+                </p>
+                <button
+                  type="button"
+                  onClick={claimGateRunTreasure}
+                  className="btn btn-primary mt-5 px-6 min-h-10 text-xs font-semibold"
+                >
+                  보물 상자 개봉하여 보상 적립
+                </button>
+              </div>
+            )}
+
+            {/* D. 휴식 인카운터 */}
+            {activeDetailEnc.type === 'rest' && (
+              <div className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setActiveRestOption('heal')}
+                    className={clsx(
+                      'p-3 border rounded-lg text-left transition-all duration-200',
+                      activeRestOption === 'heal' ? 'border-emerald-400 bg-emerald-950/15' : 'border-zinc-800 hover:border-zinc-700'
+                    )}
+                  >
+                    <div className="text-xs font-bold text-emerald-300 flex items-center gap-1.5">
+                      <Heart className="w-3.5 h-3.5 fill-emerald-300" />
+                      상처 봉합 및 휴식
+                    </div>
+                    <div className="text-[10px] text-zinc-400 mt-1">다음 전투 아군 받는 피해 -20% 영구 감소 버프 부여</div>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setActiveRestOption('buff')}
+                    className={clsx(
+                      'p-3 border rounded-lg text-left transition-all duration-200',
+                      activeRestOption === 'buff' ? 'border-emerald-400 bg-emerald-950/15' : 'border-zinc-800 hover:border-zinc-700'
+                    )}
+                  >
+                    <div className="text-xs font-bold text-emerald-300 flex items-center gap-1.5">
+                      <Timer className="w-3.5 h-3.5" />
+                      신속의 기류 훈련
+                    </div>
+                    <div className="text-[10px] text-zinc-400 mt-1">다음 전투 시작 시 아군 전체 속도 +15% 버프 획득</div>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setActiveRestOption('cooldown')}
+                    className={clsx(
+                      'p-3 border rounded-lg text-left transition-all duration-200',
+                      activeRestOption === 'cooldown' ? 'border-emerald-400 bg-emerald-950/15' : 'border-zinc-800 hover:border-zinc-700'
+                    )}
+                  >
+                    <div className="text-xs font-bold text-emerald-300 flex items-center gap-1.5">
+                      <FastForward className="w-3.5 h-3.5" />
+                      정신 마력 온천 욕
+                    </div>
+                    <div className="text-[10px] text-zinc-400 mt-1">마음이 정돈되며 리스크가 소폭 경감되는 효과</div>
+                  </button>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => performGateRunRest(activeRestOption)}
+                  className="btn btn-primary w-full min-h-10 text-xs font-semibold"
+                >
+                  선택한 정비 행동 수행 및 통과
+                </button>
+              </div>
+            )}
+
+            {/* E. 그림자 흔적 인카운터 */}
+            {activeDetailEnc.type === 'shadow_trace' && (
+              <div className="text-center p-6 border border-zinc-800 bg-zinc-950/40 rounded-lg">
+                <Flame className="w-12 h-12 text-indigo-400 mx-auto mb-3 animate-pulse" />
+                <h5 className="text-sm font-bold text-indigo-200">짙게 스며나온 어둠의 흔적 발견</h5>
+                <p className="text-xs text-zinc-400 mt-1.5 max-w-md mx-auto">
+                  이 방의 흔적을 헌터의 그림자 군단에 병합 정화합니다. 군주의 교감이 깊어지며 최종 공략 후 **그림자 추출 확률 공명 보정률이 +6%** 추가로 영구 축적됩니다.
+                </p>
+                <button
+                  type="button"
+                  onClick={absorbGateRunShadowTrace}
+                  className="btn btn-primary mt-5 px-6 min-h-10 text-xs font-semibold"
+                >
+                  흔적을 성불시켜 추출 공명률 축적
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* 5. Dungeon Exit & Control Board */}
+      <div className="flex flex-wrap items-center justify-between bg-zinc-950/45 p-4 border border-zinc-800/85 rounded-lg gap-3">
+        <div>
+          <div className="text-[10px] text-zinc-400">던전 공략 완료 후</div>
+          <div className="text-xs text-zinc-300 mt-1">
+            보스 및 최종 몬스터를 격파하여 던전 런을 정복하면 누적된 모든 전리품과 대량의 클리어 보상을 한 번에 가져가게 됩니다.
+          </div>
+        </div>
+
+        <div className="flex flex-wrap gap-2">
+          {runState.completed ? (
+            <button
+              type="button"
+              onClick={() => attemptShadowExtraction(activeGate.instanceId)}
+              className="btn btn-primary min-h-10 px-5 text-xs font-bold animate-pulse shadow-[0_0_15px_rgba(245,158,11,0.4)]"
+            >
+              던전 클리어 보상 수령 & 그림자 추출 개시!
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={abandonGateRun}
+              className="btn border border-rose-500/30 bg-rose-500/10 hover:bg-rose-500/25 text-rose-200 min-h-10 px-5 text-xs font-semibold"
+            >
+              공략 중단 및 탈출 (부분 누적 보상만 들고 퇴각)
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+

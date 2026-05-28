@@ -941,7 +941,85 @@ export interface ActiveGate {
   expiresAt: string
   status: 'active' | 'cleared' | 'failed' | 'expired'
   source: 'random' | 'dungeon_clear' | 'event'
+  runState?: GateRunState
 }
+
+export type GateRunEncounterType =
+  | 'battle'
+  | 'elite'
+  | 'boss'
+  | 'event'
+  | 'rest'
+  | 'treasure'
+  | 'shadow_trace'
+
+export type GateRunEncounterStatus =
+  | 'locked'
+  | 'available'
+  | 'active'
+  | 'cleared'
+  | 'skipped'
+  | 'failed'
+
+export interface GateRunRewardBundle {
+  xp: number
+  gold: number
+  essence: number
+  items: GateReward[]
+}
+
+export interface GateRunEventChoice {
+  id: string
+  label: string
+  description: string
+  riskDelta?: number
+  rewardMultiplierDelta?: number
+  immediateReward?: Partial<GateRunRewardBundle>
+  nextEncounterModifier?: string
+  extractionBonusDelta?: number
+  hpCostPercent?: number
+  healPercent?: number
+  addEncounterType?: GateRunEncounterType
+}
+
+export interface GateRunEncounter {
+  id: string
+  type: GateRunEncounterType
+  title: string
+  description: string
+  monsterIds?: string[]
+  difficultyMod?: number
+  status: GateRunEncounterStatus
+  isBoss?: boolean
+  isElite?: boolean
+  themeTag?: string
+  riskDelta?: number
+  rewardMultiplier?: number
+  specialRuleId?: string
+  eventTemplateId?: string
+  eventChoices?: GateRunEventChoice[]
+  selectedChoiceId?: string
+  restOptionName?: string
+  treasureReward?: Partial<GateRunRewardBundle>
+  shadowTraceEffect?: string
+}
+
+export interface GateRunState {
+  gateId: string
+  seed: string
+  themeId: string
+  modifierIds: string[]
+  currentEncounterIndex: number
+  encounters: GateRunEncounter[]
+  accumulatedRewards: GateRunRewardBundle
+  accumulatedRisk: number
+  rewardMultiplier: number
+  extractionBonusPercent?: number
+  clearedEncounterIds: string[]
+  failed?: boolean
+  completed?: boolean
+}
+
 
 export interface MonsterCombatStats {
   maxHp: number

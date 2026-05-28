@@ -81,6 +81,7 @@ import {
   RANDOM_QUEST_POOL,
   SKILL_DEFINITIONS,
 } from './seed'
+import { generateGateRunState } from './gateRunEvents'
 import {
   CATEGORY_TO_STAT,
   calculatePlayerCombatStats,
@@ -345,6 +346,11 @@ export interface GameState {
   performManualBattleAction: (action: ManualBattleAction) => void
   cancelManualGateBattle: () => void
   switchManualBattleToAuto: () => void
+  chooseGateRunEventChoice: (choiceId: string) => void
+  claimGateRunTreasure: () => void
+  performGateRunRest: (option: 'heal' | 'buff' | 'cooldown') => void
+  absorbGateRunShadowTrace: () => void
+  abandonGateRun: () => void
   attemptShadowExtraction: (gateInstanceId: string) => void
   equipShadow: (shadowId: string) => void
   unequipShadow: (shadowId: string) => void
@@ -1585,18 +1591,282 @@ const createGateBattleOutcomeUpdate = (
   const xpAmount = getShadowXpReward(gate.rank, combatLog.result as 'victory' | 'defeat' | 'draw')
   let nextOwnedShadows = s.ownedShadows ?? []
   const shadowLevelUps: string[] = []
-  if (xpAmount > 0 && equippedShadows.length > 0) {
-    for (const es of equippedShadows) {
-      const idx = nextOwnedShadows.findIndex(sh => sh.instanceId === es.instanceId)
-      if (idx === -1) continue
-      const result = addShadowXp(nextOwnedShadows[idx], xpAmount)
-      nextOwnedShadows = nextOwnedShadows.map((sh, i) => i === idx ? result.shadow : sh)
-      if (result.leveledUp) {
-        shadowLevelUps.push(`${es.name} Lv.${result.newLevel}`)
+
+  const distributeShadowXp = (xp: number) => {
+    if (xp > 0 && equippedShadows.length > 0) {
+      for (const es of equippedShadows) {
+        const idx = nextOwnedShadows.findIndex(sh => sh.instanceId === es.instanceId)
+        if (idx === -1) continue
+        const result = addShadowXp(nextOwnedShadows[idx], xp)
+        nextOwnedShadows = nextOwnedShadows.map((sh, i) => i === idx ? result.shadow : sh)
+        if (result.leveledUp) {
+          shadowLevelUps.push(`${es.name} Lv.${result.newLevel}`)
+        }
       }
     }
   }
 
+  // ── [A] Multi-Encounter Dungeon Run 활성화 시 ──
+  if (activeGate.runState) {
+    const run = { ...activeGate.runState }
+    const currentEncounter = run.encounters[run.currentEncounterIndex]
+    const isVictory = combatLog.result === 'victory'
+
+    if (isVictory) {
+      currentEncounter.status = 'cleared'
+      run.clearedEncounterIds = [...run.clearedEncounterIds, currentEncounter.id]
+
+      const baseGold = getGateGoldReward(gate.rank)
+      const baseXP = rewardTable?.xp ?? 100
+      const baseEssence = gate.rank === 'E' ? 100 : gate.rank === 'D' ? 150 : gate.rank === 'C' ? 250 : gate.rank === 'B' ? 400 : gate.rank === 'A' ? 600 : 1000
+
+      const portion = currentEncounter.type === 'elite' ? 0.5 : currentEncounter.type === 'boss' ? 0.6 : 0.25
+      const rewardMod = (currentEncounter.rewardMultiplier ?? 1.0) * run.rewardMultiplier
+
+      const partialXP = Math.round(baseXP * portion * rewardMod * getTitleXpMultiplier(s.hunter, 'challenge'))
+      const partialGold = Math.round(baseGold * portion * rewardMod)
+      const partialEssence = Math.round(baseEssence * portion * rewardMod)
+
+      run.accumulatedRewards.xp += partialXP
+      run.accumulatedRewards.gold += partialGold
+      run.accumulatedRewards.essence += partialEssence
+
+      const dropChance = currentEncounter.type === 'elite' ? 0.35 : currentEncounter.type === 'boss' ? 0.60 : 0.10
+      if (rewardTable && Math.random() < dropChance) {
+        const titleRarityBonus = getTitleRarityBonus(s.hunter)
+        const item = randomGateRewardItem(rewardTable, titleRarityBonus)
+        if (item) {
+          run.accumulatedRewards.items.push({
+            type: 'item',
+            itemId: item.id,
+            itemName: item.name,
+            rarity: item.rarity,
+          })
+          nextItems = [...nextItems, item]
+        }
+      }
+
+      distributeShadowXp(Math.round(xpAmount * portion))
+
+      const isLast = run.currentEncounterIndex === run.encounters.length - 1
+
+      if (!isLast) {
+        const nextIndex = run.currentEncounterIndex + 1
+        run.currentEncounterIndex = nextIndex
+        run.encounters[nextIndex].status = 'available'
+
+        run.accumulatedRisk = Math.min(100, run.accumulatedRisk + (currentEncounter.riskDelta ?? 0))
+        nextActiveGate = { ...activeGate, runState: run }
+
+        gateRewards.push({ type: 'xp', amount: partialXP })
+        gateRewards.push({ type: 'gold', amount: partialGold })
+
+        const newMessages = [
+          {
+            id: uid(),
+            kind: 'quest' as const,
+            title: `인카운터 클리어 (${run.currentEncounterIndex}/${run.encounters.length})`,
+            lines: [
+              `[${currentEncounter.title}] 정복 완료.`,
+              `부분 보상 누적: XP +${partialXP}, 골드 +${partialGold}, 마력 정수 +${partialEssence}`,
+            ],
+            createdAt: todayISO(),
+          }
+        ]
+
+        const finalLog: CombatLog = {
+          ...combatLog,
+          rewards: gateRewards,
+          source: 'gate',
+        }
+
+        return {
+          finalLog,
+          shouldCheckUnlocks,
+          state: applySecretProgressEvent(s, { context: 'gate', outcome: 'victory' }, {
+            hunter: nextHunter,
+            gold: s.gold,
+            items: nextItems,
+            ownedShadows: nextOwnedShadows,
+            activeGate: nextActiveGate,
+            combatLogs: [finalLog, ...s.combatLogs].slice(0, 20),
+            messages: [...s.messages, ...newMessages],
+            manualBattleSession: undefined,
+          }),
+        }
+      } else {
+        run.completed = true
+        nextActiveGate = { ...activeGate, status: 'cleared', runState: run }
+
+        nextGateStatus = {
+          ...gateStatus,
+          stamina: Math.max(0, gateStatus.stamina - GATE_ENTRY_COST),
+        }
+
+        const finalXP = run.accumulatedRewards.xp
+        const finalGold = run.accumulatedRewards.gold
+        const finalEssence = run.accumulatedRewards.essence
+
+        const xpResult = applyXp(s.hunter, finalXP, 'challenge')
+        nextHunter = xpResult.hunter
+        shouldCheckUnlocks = Boolean(xpResult.outcome?.leveledUp || xpResult.outcome?.rankChanged)
+
+        nextGold += finalGold
+        const nextEssenceVal = (s.shadowEssence ?? 0) + finalEssence
+
+        gateRewards.push({ type: 'xp', amount: finalXP })
+        gateRewards.push({ type: 'gold', amount: finalGold })
+        for (const itemRew of run.accumulatedRewards.items) {
+          gateRewards.push(itemRew)
+        }
+
+        const summonBonus = rollSmallSummonReward('gate')
+        nextShadowSummonTickets = [...nextShadowSummonTickets, ...(summonBonus.shadowSummonTickets ?? [])]
+        nextShadowSummonShards = addShadowSummonShards(nextShadowSummonShards, summonBonus.shadowSummonShards)
+
+        if (run.modifierIds.includes('mod_shadow_congestion')) {
+          run.extractionBonusPercent = (run.extractionBonusPercent ?? 0) + 8
+        }
+
+        const lines = [
+          `게이트 던전 런 [${gate.name}] 완벽 공략 성공!`,
+          `총 획득 XP: +${finalXP}`,
+          `총 획득 골드: +${finalGold}`,
+          `총 획득 마력 정수: +${finalEssence}`,
+          ...run.accumulatedRewards.items.map(r => `전리품: [${r.itemName}]`),
+        ]
+
+        const newMessages = [
+          {
+            id: uid(),
+            kind: 'quest' as const,
+            title: '던전 런 클리어 완료',
+            lines,
+            createdAt: todayISO(),
+          }
+        ]
+
+        if (xpResult.outcome?.leveledUp) {
+          newMessages.push({
+            id: uid(),
+            kind: 'quest' as any,
+            title: 'LEVEL UP',
+            lines: [
+              `Lv.${s.hunter.level} → Lv.${xpResult.outcome.newLevel}`,
+              `자동 분배 — ${formatStatGains(xpResult.outcome.autoStatGains)}`,
+              `자유 배분권 +${xpResult.outcome.freeStatPointsGained}`,
+            ],
+            createdAt: todayISO(),
+          })
+        }
+
+        const finalLog: CombatLog = {
+          ...combatLog,
+          rewards: gateRewards,
+          source: 'gate',
+        }
+
+        const baseState: Partial<GameState> = {
+          hunter: nextHunter,
+          gold: nextGold,
+          shadowEssence: nextEssenceVal,
+          items: nextItems,
+          shadowSummonTickets: nextShadowSummonTickets,
+          shadowSummonShards: nextShadowSummonShards,
+          ownedShadows: nextOwnedShadows,
+          gateStatus: nextGateStatus,
+          activeGate: nextActiveGate,
+          activeConsumableEffects: nextConsumables,
+          combatLogs: [finalLog, ...s.combatLogs].slice(0, 20),
+          messages: [...s.messages, ...newMessages],
+          manualBattleSession: undefined,
+          skillStates: s.skillStates,
+        }
+
+        return {
+          finalLog,
+          shouldCheckUnlocks,
+          state: applySecretProgressEvent(s, { context: 'gate', outcome: 'victory' }, baseState),
+        }
+      }
+    } else {
+      run.failed = true
+      nextActiveGate = { ...activeGate, status: 'failed', runState: run }
+
+      const earnedGold = run.accumulatedRewards.gold
+      const earnedEssence = run.accumulatedRewards.essence
+      nextGold += earnedGold
+      const nextEssenceVal = (s.shadowEssence ?? 0) + earnedEssence
+
+      const basePenalty = penalty ?? {
+        id: 'penalty-gate-basic',
+        name: '기본 게이트 패널티',
+        staminaCost: 50,
+        injuryHours: 6,
+      }
+      const penaltyReduction = getActiveGatePenaltyReduction(s.activeConsumableEffects)
+      const finalStaminaCost = Math.round(basePenalty.staminaCost * (1 - penaltyReduction))
+      const injuryHours = basePenalty.injuryHours ?? 6
+      const injuredUntil = new Date(Date.now() + injuryHours * 3_600_000).toISOString()
+
+      penaltyApplied = {
+        ...basePenalty,
+        staminaCost: finalStaminaCost,
+        injuryHours,
+      }
+      nextGateStatus = {
+        ...gateStatus,
+        stamina: Math.max(0, gateStatus.stamina - finalStaminaCost),
+        injuredUntil,
+        recoveryQuestProgress: 0,
+        recoveryQuestRequired: 3,
+      }
+
+      const lines = [
+        `[${gate.name}] 던전 런 중 [${currentEncounter.title}]에서 패배했습니다.`,
+        `누적 획득 골드: +${earnedGold}, 정수: +${earnedEssence}`,
+        `스태미나 -${finalStaminaCost}`,
+        `부상을 입었습니다. 6시간 경과 또는 퀘스트 3개 완료 시 회복됩니다.`,
+      ]
+
+      const newMessages = [
+        {
+          id: uid(),
+          kind: 'info' as const,
+          title: '던전 런 실패',
+          lines,
+          createdAt: todayISO(),
+        }
+      ]
+
+      const finalLog: CombatLog = {
+        ...combatLog,
+        rewards: [],
+        penaltyApplied,
+        source: 'gate',
+      }
+
+      return {
+        finalLog,
+        shouldCheckUnlocks: false,
+        state: applySecretProgressEvent(s, { context: 'gate', outcome: 'defeat' }, {
+          hunter: nextHunter,
+          gold: nextGold,
+          shadowEssence: nextEssenceVal,
+          items: nextItems,
+          ownedShadows: nextOwnedShadows,
+          gateStatus: nextGateStatus,
+          activeGate: nextActiveGate,
+          activeConsumableEffects: nextConsumables,
+          combatLogs: [finalLog, ...s.combatLogs].slice(0, 20),
+          messages: [...s.messages, ...newMessages],
+          manualBattleSession: undefined,
+        }),
+      }
+    }
+  }
+
+  // ── [B] 기존 단판 흐름 (runState가 없을 때의 레거시 fallback) ──
   if (combatLog.result === 'victory') {
     nextGateStatus = {
       ...gateStatus,
@@ -1690,20 +1960,20 @@ const createGateBattleOutcomeUpdate = (
     : s.messages
 
   const baseState: Partial<GameState> = {
-      hunter: nextHunter,
-      gold: nextGold,
-      items: nextItems,
-      shadowSummonTickets: nextShadowSummonTickets,
-      shadowSummonShards: nextShadowSummonShards,
-      ownedShadows: nextOwnedShadows,
-      gateStatus: nextGateStatus,
-      activeGate: nextActiveGate,
-      activeConsumableEffects: nextConsumables,
-      combatLogs: [finalLog, ...s.combatLogs].slice(0, 20),
-      messages: finalMessages,
-      manualBattleSession: undefined,
-      skillStates: nextSkillStates,
-    }
+    hunter: nextHunter,
+    gold: nextGold,
+    items: nextItems,
+    shadowSummonTickets: nextShadowSummonTickets,
+    shadowSummonShards: nextShadowSummonShards,
+    ownedShadows: nextOwnedShadows,
+    gateStatus: nextGateStatus,
+    activeGate: nextActiveGate,
+    activeConsumableEffects: nextConsumables,
+    combatLogs: [finalLog, ...s.combatLogs].slice(0, 20),
+    messages: finalMessages,
+    manualBattleSession: undefined,
+    skillStates: nextSkillStates,
+  }
 
   return {
     finalLog,
@@ -3915,6 +4185,9 @@ export const useGame = create<GameState>()(
         const expiresAt = new Date(now)
         expiresAt.setHours(expiresAt.getHours() + gate.expiresInHours)
 
+        const seed = `${gate.id}-${Date.now()}-${Math.floor(Math.random() * 100000)}`
+        const runState = generateGateRunState(gate.id, seed)
+
         set({
           activeGate: {
             instanceId: `gate-${gate.id}-${Date.now()}`,
@@ -3923,12 +4196,13 @@ export const useGame = create<GameState>()(
             expiresAt: expiresAt.toISOString(),
             status: 'active',
             source,
+            runState,
           },
           messages: [...s.messages, {
             id: uid(),
             kind: 'info',
             title: '게이트 출현',
-            lines: [`[${gate.name}]이(가) 열렸습니다.`],
+            lines: [`[${gate.name}]이(가) 열렸습니다. (던전 런 탑재)`],
             createdAt: todayISO(),
           }],
         })
@@ -4049,7 +4323,9 @@ export const useGame = create<GameState>()(
           return
         }
 
-        const monsters = gate.monsterIds
+        const activeEncounter = activeGate.runState?.encounters[activeGate.runState.currentEncounterIndex]
+        const targetMonsterIds = activeEncounter?.monsterIds ?? gate.monsterIds
+        const monsters = targetMonsterIds
           .map(id => MONSTER_DEFINITIONS.find(m => m.id === id))
           .filter((monster): monster is MonsterDefinition => Boolean(monster))
         if (monsters.length === 0) return
@@ -4408,7 +4684,9 @@ export const useGame = create<GameState>()(
           return
         }
 
-        const monsters = gate.monsterIds
+        const activeEncounter = activeGate.runState?.encounters[activeGate.runState.currentEncounterIndex]
+        const targetMonsterIds = activeEncounter?.monsterIds ?? gate.monsterIds
+        const monsters = targetMonsterIds
           .map(id => MONSTER_DEFINITIONS.find(m => m.id === id))
           .filter((monster): monster is MonsterDefinition => Boolean(monster))
         if (monsters.length === 0) return
@@ -4787,6 +5065,322 @@ export const useGame = create<GameState>()(
       },
 
       cancelManualGateBattle: () => set({ manualBattleSession: undefined }),
+
+      chooseGateRunEventChoice: (choiceId) => {
+        const s = get()
+        const activeGate = s.activeGate
+        if (!activeGate || activeGate.status !== 'active' || !activeGate.runState) return
+
+        const run = { ...activeGate.runState }
+        const currentEncounter = run.encounters[run.currentEncounterIndex]
+        if (currentEncounter.type !== 'event') return
+
+        const choice = currentEncounter.eventChoices?.find(c => c.id === choiceId)
+        if (!choice) return
+
+        currentEncounter.selectedChoiceId = choiceId
+        currentEncounter.status = 'cleared'
+        run.clearedEncounterIds = [...run.clearedEncounterIds, currentEncounter.id]
+
+        if (choice.riskDelta) {
+          run.accumulatedRisk = Math.max(0, Math.min(100, run.accumulatedRisk + choice.riskDelta))
+        }
+        if (choice.rewardMultiplierDelta) {
+          run.rewardMultiplier = Math.max(0.1, run.rewardMultiplier + choice.rewardMultiplierDelta)
+        }
+        if (choice.extractionBonusDelta) {
+          run.extractionBonusPercent = (run.extractionBonusPercent ?? 0) + choice.extractionBonusDelta
+        }
+
+        if (choice.immediateReward) {
+          const reward = choice.immediateReward
+          if (reward.gold) run.accumulatedRewards.gold += reward.gold
+          if (reward.essence) run.accumulatedRewards.essence += reward.essence
+          if (reward.xp) run.accumulatedRewards.xp += reward.xp
+        }
+
+        const isLast = run.currentEncounterIndex === run.encounters.length - 1
+        if (!isLast) {
+          const nextIndex = run.currentEncounterIndex + 1
+          run.currentEncounterIndex = nextIndex
+          run.encounters[nextIndex].status = 'available'
+          
+          if (choice.nextEncounterModifier) {
+            run.encounters[nextIndex].specialRuleId = choice.nextEncounterModifier
+          }
+        } else {
+          run.completed = true
+          
+          const finalXP = run.accumulatedRewards.xp
+          const finalGold = run.accumulatedRewards.gold
+          const finalEssence = run.accumulatedRewards.essence
+          
+          const xpResult = applyXp(s.hunter, finalXP, 'challenge')
+          const nextGold = (s.gold ?? 0) + finalGold
+          const nextEssenceVal = (s.shadowEssence ?? 0) + finalEssence
+
+          set({
+            hunter: xpResult.hunter,
+            gold: nextGold,
+            shadowEssence: nextEssenceVal,
+            activeGate: {
+              ...activeGate,
+              status: 'cleared',
+              runState: run
+            }
+          })
+        }
+
+        if (choice.addEncounterType && run.currentEncounterIndex < run.encounters.length - 1) {
+          const nextIndex = run.currentEncounterIndex
+          const nextEnc = run.encounters[nextIndex]
+          nextEnc.type = choice.addEncounterType
+          if (choice.addEncounterType === 'elite') {
+            nextEnc.title = '이벤트로 유도된 엘리트 구역 [ELITE]'
+            nextEnc.description = '이벤트의 여파로 한층 성난 정예 파수병이 매복해 있습니다!'
+            nextEnc.isElite = true
+            nextEnc.difficultyMod = 1.3
+            nextEnc.riskDelta = 15
+            nextEnc.rewardMultiplier = 1.25
+            const gate = GATE_DEFINITIONS.find(g => g.id === run.gateId)
+            const gateMonsters = gate?.monsterIds ?? []
+            nextEnc.monsterIds = [gateMonsters[Math.floor(Math.random() * gateMonsters.length)]]
+          } else if (choice.addEncounterType === 'treasure') {
+            nextEnc.title = '이벤트로 발견된 보물 창고'
+            nextEnc.description = '막다른 벽을 허물어 고대 보물 상자가 숨겨진 다락방을 개방했습니다!'
+            nextEnc.treasureReward = { gold: 500, essence: 150 }
+          }
+        }
+
+        const lines = [
+          `선택: "${choice.label}"`,
+          choice.description,
+        ]
+        if (choice.immediateReward) {
+          const rew = choice.immediateReward
+          if (rew.gold) lines.push(`골드 획득: +${rew.gold}`)
+          if (rew.essence) lines.push(`마력 정수 획득: +${rew.essence}`)
+        }
+
+        set((prev) => ({
+          activeGate: {
+            ...prev.activeGate!,
+            runState: run
+          },
+          messages: [...prev.messages, {
+            id: uid(),
+            kind: 'quest',
+            title: `이벤트 결정 — ${currentEncounter.title}`,
+            lines,
+            createdAt: todayISO(),
+          }]
+        }))
+      },
+
+      claimGateRunTreasure: () => {
+        const s = get()
+        const activeGate = s.activeGate
+        if (!activeGate || activeGate.status !== 'active' || !activeGate.runState) return
+
+        const run = { ...activeGate.runState }
+        const currentEncounter = run.encounters[run.currentEncounterIndex]
+        if (currentEncounter.type !== 'treasure') return
+
+        currentEncounter.status = 'cleared'
+        run.clearedEncounterIds = [...run.clearedEncounterIds, currentEncounter.id]
+
+        const gate = GATE_DEFINITIONS.find(g => g.id === run.gateId)
+        const rank = gate?.rank ?? 'E'
+        const baseGold = (rank === 'E' || rank === 'D') ? 400 : (rank === 'C' || rank === 'B') ? 800 : 1500
+        const baseEssence = (rank === 'E' || rank === 'D') ? 100 : (rank === 'C' || rank === 'B') ? 200 : 400
+        
+        let rewardMod = run.rewardMultiplier
+        if (run.modifierIds.includes('mod_dense_loot')) rewardMod += 0.25
+
+        const goldAmt = Math.round(baseGold * rewardMod * (0.9 + Math.random() * 0.2))
+        const essAmt = Math.round(baseEssence * rewardMod * (0.9 + Math.random() * 0.2))
+
+        run.accumulatedRewards.gold += goldAmt
+        run.accumulatedRewards.essence += essAmt
+
+        const isLast = run.currentEncounterIndex === run.encounters.length - 1
+        if (!isLast) {
+          const nextIndex = run.currentEncounterIndex + 1
+          run.currentEncounterIndex = nextIndex
+          run.encounters[nextIndex].status = 'available'
+          set({
+            activeGate: {
+              ...activeGate,
+              runState: run
+            }
+          })
+        } else {
+          run.completed = true
+          
+          const finalXP = run.accumulatedRewards.xp
+          const finalGold = run.accumulatedRewards.gold
+          const finalEssence = run.accumulatedRewards.essence
+          
+          const xpResult = applyXp(s.hunter, finalXP, 'challenge')
+          const nextGold = (s.gold ?? 0) + finalGold
+          const nextEssenceVal = (s.shadowEssence ?? 0) + finalEssence
+
+          set({
+            hunter: xpResult.hunter,
+            gold: nextGold,
+            shadowEssence: nextEssenceVal,
+            activeGate: {
+              ...activeGate,
+              status: 'cleared',
+              runState: run
+            }
+          })
+        }
+
+        set((prev) => ({
+          messages: [...prev.messages, {
+            id: uid(),
+            kind: 'quest',
+            title: '보물 상자 개봉',
+            lines: [`보물을 안전하게 회수했습니다.`, `골드 +${goldAmt}, 마력 정수 +${essAmt} 누적`],
+            createdAt: todayISO(),
+          }]
+        }))
+      },
+
+      performGateRunRest: (option) => {
+        const s = get()
+        const activeGate = s.activeGate
+        if (!activeGate || activeGate.status !== 'active' || !activeGate.runState) return
+
+        const run = { ...activeGate.runState }
+        const currentEncounter = run.encounters[run.currentEncounterIndex]
+        if (currentEncounter.type !== 'rest') return
+
+        currentEncounter.status = 'cleared'
+        run.clearedEncounterIds = [...run.clearedEncounterIds, currentEncounter.id]
+
+        const isLast = run.currentEncounterIndex === run.encounters.length - 1
+        if (!isLast) {
+          const nextIndex = run.currentEncounterIndex + 1
+          run.currentEncounterIndex = nextIndex
+          run.encounters[nextIndex].status = 'available'
+          
+          if (option === 'heal') {
+            run.encounters[nextIndex].specialRuleId = 'player_heal_40'
+          } else if (option === 'buff') {
+            run.encounters[nextIndex].specialRuleId = 'player_speed_up_1t'
+          }
+          set({
+            activeGate: {
+              ...activeGate,
+              runState: run
+            }
+          })
+        } else {
+          run.completed = true
+          set({
+            activeGate: {
+              ...activeGate,
+              status: 'cleared',
+              runState: run
+            }
+          })
+        }
+
+        let optLabel = ''
+        if (option === 'heal') optLabel = '체력 회복 조치 (다음 전투 체력 가산 버프)'
+        if (option === 'buff') optLabel = '신속 마법 부여 (다음 전투 속도 가산)'
+        if (option === 'cooldown') optLabel = '정신 집중 (안정감 고양)'
+
+        set((prev) => ({
+          messages: [...prev.messages, {
+            id: uid(),
+            kind: 'quest',
+            title: '안전지대 휴식 완료',
+            lines: [`휴식 옵션 선택: [${optLabel}]`, `피로가 해소되고 정신이 맑아집니다.`],
+            createdAt: todayISO(),
+          }]
+        }))
+      },
+
+      absorbGateRunShadowTrace: () => {
+        const s = get()
+        const activeGate = s.activeGate
+        if (!activeGate || activeGate.status !== 'active' || !activeGate.runState) return
+
+        const run = { ...activeGate.runState }
+        const currentEncounter = run.encounters[run.currentEncounterIndex]
+        if (currentEncounter.type !== 'shadow_trace') return
+
+        currentEncounter.status = 'cleared'
+        run.clearedEncounterIds = [...run.clearedEncounterIds, currentEncounter.id]
+
+        run.extractionBonusPercent = (run.extractionBonusPercent ?? 0) + 6
+
+        const isLast = run.currentEncounterIndex === run.encounters.length - 1
+        if (!isLast) {
+          const nextIndex = run.currentEncounterIndex + 1
+          run.currentEncounterIndex = nextIndex
+          run.encounters[nextIndex].status = 'available'
+          set({
+            activeGate: {
+              ...activeGate,
+              runState: run
+            }
+          })
+        } else {
+          run.completed = true
+          set({
+            activeGate: {
+              ...activeGate,
+              status: 'cleared',
+              runState: run
+            }
+          })
+        }
+
+        set((prev) => ({
+          messages: [...prev.messages, {
+            id: uid(),
+            kind: 'shadow',
+            title: '그림자 흔적 정화 완료',
+            lines: [`그림자의 불꽃이 헌터의 영혼에 흡수되었습니다.`, `그림자 추출 공명 보정률 +6% 누적 적용`],
+            createdAt: todayISO(),
+          }]
+        }))
+      },
+
+      abandonGateRun: () => {
+        const s = get()
+        const activeGate = s.activeGate
+        if (!activeGate || !activeGate.runState) return
+
+        const run = { ...activeGate.runState }
+        run.failed = true
+        
+        const earnedGold = run.accumulatedRewards.gold
+        const earnedEssence = run.accumulatedRewards.essence
+        const nextGold = (s.gold ?? 0) + earnedGold
+        const nextEssenceVal = (s.shadowEssence ?? 0) + earnedEssence
+
+        set({
+          gold: nextGold,
+          shadowEssence: nextEssenceVal,
+          activeGate: {
+            ...activeGate,
+            status: 'failed',
+            runState: run
+          },
+          messages: [...s.messages, {
+            id: uid(),
+            kind: 'info',
+            title: '던전 런 포기',
+            lines: [`던전 탐사를 도중에 철수했습니다.`, `누적 획득 보상 정산 지급: 골드 +${earnedGold}, 마력 정수 +${earnedEssence}`],
+            createdAt: todayISO(),
+          }]
+        })
+      },
 
       switchManualBattleToAuto: () => {
         const s = get()
@@ -9095,6 +9689,10 @@ export const useGame = create<GameState>()(
         }
         if (!('activeGate' in persistedState)) {
           persistedState.activeGate = undefined
+        } else if (persistedState.activeGate && persistedState.activeGate.status === 'active' && !persistedState.activeGate.runState) {
+          const gate = persistedState.activeGate
+          const seed = `${gate.gateId}-${Date.now()}`
+          persistedState.activeGate.runState = generateGateRunState(gate.gateId, seed)
         }
         if (!persistedState.combatLogs) {
           persistedState.combatLogs = []
