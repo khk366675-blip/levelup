@@ -1006,6 +1006,8 @@ export interface SkillRuntimeState {
   masteryLevel?: number
   timesUsed?: number
   lastUsedAt?: string
+  selectedUpgradeId?: string // Lv.5 진화/강화 선택지 ID
+  isCapstoneUnlocked?: boolean // Lv.10 시그니처 각성 여부
 }
 
 export interface ActiveCombatEffect {

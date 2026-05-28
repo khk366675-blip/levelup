@@ -9,6 +9,7 @@ import type {
   ShadowRarity,
   ShadowRole,
   SkillDefinition,
+  SkillRuntimeState,
   StatKey,
 } from './types'
 import type {
@@ -35,6 +36,8 @@ import { getShadowCombatUnitProfile } from './shadowSkills'
 import { getValuePreview } from './shadowCombatRuntime'
 import { SKILL_DEFINITIONS } from './seed'
 import { buildMockMonsterEncounterDefinitions, getDirectBattleMockParty } from './directBattleMonsters'
+import { getSkillMastery, getSkillMasteryEffectBonus } from './skills'
+import { getAvailableUpgradesForSkill, getSkillCapstoneUpgrade } from './skillUpgrades'
 
 export interface BuildShadowBattleUnitOptions {
   team?: BattleTeam
@@ -49,6 +52,7 @@ export interface BuildHunterBattleUnitOptions {
   equipment?: EquipmentState
   activeConsumableEffects?: ActiveConsumableEffect[]
   currentHp?: number
+  skillStates?: Record<string, SkillRuntimeState>
 }
 
 export interface BuildMonsterBattleUnitOptions {
@@ -228,23 +232,103 @@ const hunterSkillTargetType = (skill: SkillDefinition): BattleTargetType => {
 const hunterSkillAction = (
   unitId: string,
   skill: SkillDefinition,
-): BattleActionDefinition => ({
-  actionId: `${unitId}:skill:${skill.id}`,
-  label: skill.name || '헌터 스킬',
-  description: skill.effectSummary
-    ? `${skill.description} (${skill.effectSummary})`
-    : skill.description,
-  actionType: 'skill',
-  targetType: hunterSkillTargetType(skill),
-  effectKind: hunterSkillEffectKind(skill),
-  basePriority: skill.type === 'defense' ? 2 : 1,
-  cooldown: Math.max(0, skill.cooldownTurns ?? skill.cooldown ?? 0),
-  sourceSkillId: skill.id,
-  actionCue: skill.id,
-  animationCue: skill.id,
-  effectColor: skill.type === 'defense' ? 'cyan' : skill.type === 'debuff' ? 'violet' : 'blue',
-  effects: skill.effects ?? (skill.effect ? [skill.effect] : []),
-})
+  runtime?: SkillRuntimeState,
+): BattleActionDefinition => {
+  const masteryLevel = runtime?.masteryLevel ?? 1
+  const baseMultiplier = 1 + getSkillMasteryEffectBonus(skill, masteryLevel)
+  
+  let masteryMultiplier = baseMultiplier
+  let cooldownReduction = 0
+  let critRateBonus = 0
+  let defenseIgnore = 0
+  let bossDamageBonus = 0
+  let statusValueBonus = 0
+  let telegraphDamageReduction = 0
+
+  // 1차 진화/강화 (Lv.5)
+  if (runtime?.selectedUpgradeId) {
+    const upgrades = getAvailableUpgradesForSkill(skill)
+    const selected = upgrades.find(u => u.id === runtime.selectedUpgradeId)
+    if (selected?.effects) {
+      if (selected.effects.powerMultiplier) {
+        masteryMultiplier *= selected.effects.powerMultiplier
+      }
+      if (selected.effects.cooldownReduction) {
+        cooldownReduction += selected.effects.cooldownReduction
+      }
+      if (selected.effects.critRateBonus) {
+        critRateBonus += selected.effects.critRateBonus
+      }
+      if (selected.effects.defenseIgnore) {
+        defenseIgnore += selected.effects.defenseIgnore
+      }
+      if (selected.effects.bossDamageBonus) {
+        bossDamageBonus += selected.effects.bossDamageBonus
+      }
+      if (selected.effects.statusValueBonus) {
+        statusValueBonus += selected.effects.statusValueBonus
+      }
+      if (selected.effects.telegraphDamageReduction) {
+        telegraphDamageReduction += selected.effects.telegraphDamageReduction
+      }
+    }
+  }
+
+  // Capstone 각성 (Lv.10)
+  if (runtime?.isCapstoneUnlocked) {
+    const capstone = getSkillCapstoneUpgrade(skill)
+    if (capstone.cooldownReduction) {
+      cooldownReduction += capstone.cooldownReduction
+    }
+    if (capstone.powerMultiplier) {
+      masteryMultiplier *= capstone.powerMultiplier
+    }
+    if (capstone.critRateBonus) {
+      critRateBonus += capstone.critRateBonus
+    }
+    if (capstone.defenseIgnore) {
+      defenseIgnore += capstone.defenseIgnore
+    }
+    if (capstone.bossDamageBonus) {
+      bossDamageBonus += capstone.bossDamageBonus
+    }
+    if (capstone.statusValueBonus) {
+      statusValueBonus += capstone.statusValueBonus
+    }
+    if (capstone.telegraphDamageReduction) {
+      telegraphDamageReduction += capstone.telegraphDamageReduction
+    }
+  }
+
+  const baseCooldown = Math.max(0, skill.cooldownTurns ?? skill.cooldown ?? 0)
+  const finalCooldown = Math.max(baseCooldown > 0 ? 1 : 0, baseCooldown - cooldownReduction)
+
+  return {
+    actionId: `${unitId}:skill:${skill.id}`,
+    label: skill.name || '헌터 스킬',
+    description: skill.effectSummary
+      ? `${skill.description} (${skill.effectSummary})`
+      : skill.description,
+    actionType: 'skill',
+    targetType: hunterSkillTargetType(skill),
+    effectKind: hunterSkillEffectKind(skill),
+    basePriority: skill.type === 'defense' ? 2 : 1,
+    cooldown: finalCooldown,
+    sourceSkillId: skill.id,
+    actionCue: skill.id,
+    animationCue: skill.id,
+    effectColor: skill.type === 'defense' ? 'cyan' : skill.type === 'debuff' ? 'violet' : 'blue',
+    effects: skill.effects ?? (skill.effect ? [skill.effect] : []),
+    masteryMultiplier,
+    selectedUpgradeId: runtime?.selectedUpgradeId,
+    isCapstoneUnlocked: runtime?.isCapstoneUnlocked,
+    critRateBonus,
+    defenseIgnore,
+    bossDamageBonus,
+    statusValueBonus,
+    telegraphDamageReduction,
+  }
+}
 
 const passiveAction = (
   unitId: string,
@@ -459,7 +543,7 @@ export const buildHunterBattleUnit = (
   const guardSkill = skills.find(skill => skill.id === 'basic-guard-stance')
   const hunterSkillActions = skills
     .filter(skill => skill.id !== 'basic-attack' && skill.id !== 'basic-guard-stance')
-    .map(skill => hunterSkillAction(unitId, skill))
+    .map(skill => hunterSkillAction(unitId, skill, getSkillMastery(options.skillStates, skill.id)))
 
   return {
     unit: {

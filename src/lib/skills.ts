@@ -27,8 +27,21 @@ export const JOB_COMBAT_SKILL_IDS: Partial<Record<JobId, string[]>> = {
   'fate-harmonizer': ['skill-fate-alignment'],
 }
 
-export const SKILL_MASTERY_THRESHOLDS = [0, 5, 15, 35] as const
-export const MAX_SKILL_MASTERY_LEVEL = SKILL_MASTERY_THRESHOLDS.length - 1
+import { getSkillCapstoneUpgrade, getAvailableUpgradesForSkill } from './skillUpgrades'
+
+export const SKILL_MASTERY_THRESHOLDS = [
+  0,    // Lv 1
+  15,   // Lv 2
+  40,   // Lv 3
+  75,   // Lv 4
+  120,  // Lv 5
+  180,  // Lv 6
+  260,  // Lv 7
+  360,  // Lv 8
+  480,  // Lv 9
+  650,  // Lv 10
+] as const
+export const MAX_SKILL_MASTERY_LEVEL = 10
 
 type LegacySkillRuntimeState = Partial<SkillRuntimeState> & {
   uses?: number
@@ -159,12 +172,12 @@ export const getSkillProviderItem = (skill: SkillDefinition, equippedItems: Item
   )
 }
 
-export const getSkillMasteryLevelFromUses = (timesUsed = 0): number => {
-  const safeUses = toSafeInt(timesUsed)
-  for (let level = MAX_SKILL_MASTERY_LEVEL; level >= 0; level -= 1) {
-    if (safeUses >= SKILL_MASTERY_THRESHOLDS[level]) return level
+export const getSkillMasteryLevelFromXp = (xp = 0): number => {
+  const safeXp = Math.max(0, Math.floor(xp))
+  for (let level = MAX_SKILL_MASTERY_LEVEL; level >= 1; level -= 1) {
+    if (safeXp >= SKILL_MASTERY_THRESHOLDS[level - 1]) return level
   }
-  return 0
+  return 1
 }
 
 export const normalizeSkillRuntimeState = (
@@ -172,9 +185,9 @@ export const normalizeSkillRuntimeState = (
   state?: LegacySkillRuntimeState
 ): SkillRuntimeState => {
   const timesUsed = toSafeInt(state?.timesUsed ?? state?.uses)
+  // 하위 호환: 기존 세이브에 masteryXp가 없으면 timesUsed를 사용
   const masteryXp = toSafeInt(state?.masteryXp ?? state?.xp, timesUsed)
-  const progressValue = Math.max(timesUsed, masteryXp)
-  const derivedLevel = getSkillMasteryLevelFromUses(progressValue)
+  const derivedLevel = getSkillMasteryLevelFromXp(masteryXp)
   const storedLevel = state?.masteryLevel ?? state?.level
   const masteryLevel = Math.min(
     MAX_SKILL_MASTERY_LEVEL,
@@ -186,6 +199,8 @@ export const normalizeSkillRuntimeState = (
     timesUsed,
     masteryXp,
     masteryLevel,
+    selectedUpgradeId: state?.selectedUpgradeId,
+    isCapstoneUnlocked: state?.isCapstoneUnlocked ?? (masteryLevel >= 10),
     ...(state?.lastUsedAt ? { lastUsedAt: state.lastUsedAt } : {}),
   }
 }
@@ -216,53 +231,56 @@ export const recordSkillRuntimeUse = (
   const current = getSkillMastery(skillStates, skillId)
   const timesUsed = (current.timesUsed ?? 0) + 1
   const masteryXp = (current.masteryXp ?? 0) + Math.max(1, masteryXpGain)
+  const nextLevel = getSkillMasteryLevelFromXp(masteryXp)
   return {
     ...(skillStates ?? {}),
     [skillId]: {
+      ...current,
       skillId,
       timesUsed,
       masteryXp,
-      masteryLevel: getSkillMasteryLevelFromUses(timesUsed),
+      masteryLevel: nextLevel,
+      isCapstoneUnlocked: current.isCapstoneUnlocked || (nextLevel >= 10),
       lastUsedAt: new Date().toISOString(),
     },
   }
 }
 
-export const getNextMasteryUseTarget = (timesUsed = 0): number | undefined =>
-  SKILL_MASTERY_THRESHOLDS.find(threshold => threshold > timesUsed)
-
 export const getSkillMasteryProgress = (runtime?: SkillRuntimeState) => {
   const normalized = normalizeSkillRuntimeState(runtime?.skillId ?? 'unknown', runtime)
-  const level = normalized.masteryLevel ?? 0
-  const currentUses = normalized.timesUsed ?? 0
-  const currentXp = normalized.masteryXp ?? currentUses
-  const levelStartUses = SKILL_MASTERY_THRESHOLDS[level] ?? 0
-  const nextLevelUses = getNextMasteryUseTarget(currentUses)
-  const isMaxLevel = !nextLevelUses
-  const usesNeeded = nextLevelUses ? Math.max(1, nextLevelUses - levelStartUses) : 1
-  const usesIntoLevel = isMaxLevel ? usesNeeded : Math.max(0, currentUses - levelStartUses)
-  const percent = isMaxLevel ? 100 : Math.round(Math.min(1, usesIntoLevel / usesNeeded) * 100)
+  const level = normalized.masteryLevel ?? 1
+  const currentXp = normalized.masteryXp ?? 0
+  const levelStartXp = SKILL_MASTERY_THRESHOLDS[level - 1] ?? 0
+  
+  const hasNextLevel = level < MAX_SKILL_MASTERY_LEVEL
+  const nextLevelXp = hasNextLevel ? SKILL_MASTERY_THRESHOLDS[level] : undefined
+  
+  const isMaxLevel = !hasNextLevel
+  const xpNeededForNext = nextLevelXp ? Math.max(1, nextLevelXp - levelStartXp) : 1
+  const xpIntoLevel = isMaxLevel ? xpNeededForNext : Math.max(0, currentXp - levelStartXp)
+  const percent = isMaxLevel ? 100 : Math.round(Math.min(1, xpIntoLevel / xpNeededForNext) * 100)
 
   return {
     level,
     maxLevel: MAX_SKILL_MASTERY_LEVEL,
-    currentUses,
+    currentUses: normalized.timesUsed ?? 0,
     currentXp,
-    levelStartUses,
-    nextLevelUses,
-    usesIntoLevel,
-    usesNeeded,
+    levelStartXp,
+    nextLevelXp,
+    nextLevelUses: nextLevelXp, // 하위 호환 필드 추가
+    xpIntoLevel,
+    xpNeededForNext,
     percent,
     isMaxLevel,
   }
 }
 
 export const getSkillMasteryEffectBonus = (skill: SkillDefinition, masteryLevel = 0): number => {
-  const safeLevel = Math.max(0, Math.min(3, masteryLevel))
+  const safeLevel = Math.max(0, Math.min(MAX_SKILL_MASTERY_LEVEL, masteryLevel))
   if (safeLevel <= 0) return 0
-  if (isDamageSkill(skill) || skill.type === 'defense') return safeLevel * 0.025
-  if (skill.type === 'buff' || skill.type === 'debuff' || skill.type === 'heal') return safeLevel * 0.015
-  return safeLevel * 0.01
+  if (isDamageSkill(skill) || skill.type === 'defense') return safeLevel * 0.015
+  if (skill.type === 'buff' || skill.type === 'debuff' || skill.type === 'heal') return safeLevel * 0.01
+  return safeLevel * 0.008
 }
 
 export const canUseSkill = (
@@ -280,9 +298,25 @@ export const getSkillEffectiveDescription = (
   skill: SkillDefinition,
   runtime?: SkillRuntimeState
 ): string => {
-  const masteryLevel = runtime?.masteryLevel ?? 0
+  const normalized = normalizeSkillRuntimeState(skill.id, runtime)
+  const masteryLevel = normalized.masteryLevel ?? 1
   const bonus = getSkillMasteryEffectBonus(skill, masteryLevel)
   const base = skill.effectSummary ?? skill.description
-  if (masteryLevel <= 0 || bonus <= 0) return base
-  return `${base} 숙련 Lv.${masteryLevel}: 효과 +${Math.round(bonus * 100)}%`
+
+  let upgradeText = ''
+  if (normalized.selectedUpgradeId) {
+    const upgrades = getAvailableUpgradesForSkill(skill)
+    const selected = upgrades.find(u => u.id === normalized.selectedUpgradeId)
+    if (selected) {
+      upgradeText = ` [강화: ${selected.name}]`
+    }
+  }
+
+  let capstoneText = ''
+  if (normalized.isCapstoneUnlocked) {
+    capstoneText = ' [시그니처 각성]'
+  }
+
+  const bonusText = masteryLevel > 1 ? ` (숙련 Lv.${masteryLevel}: 효과 +${Math.round(bonus * 1000) / 10}%)` : ''
+  return `${base}${bonusText}${upgradeText}${capstoneText}`
 }

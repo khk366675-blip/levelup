@@ -13,6 +13,7 @@ import {
   getSkillProviderItem,
 } from '../lib/skills'
 import { SkillActionCard, getSkillSourceMeta, getSkillTypeMeta, skillSourceSortRank, skillTypeSortRank } from './SkillActionCard'
+import { getAvailableUpgradesForSkill } from '../lib/skillUpgrades'
 
 export function SkillPanel() {
   const hunter = useGame(s => s.hunter)
@@ -20,6 +21,7 @@ export function SkillPanel() {
   const equipment = useGame(s => s.equipment)
   const titles = useGame(s => s.titles)
   const skillStates = useGame(s => s.skillStates ?? {})
+  const selectSkillUpgrade = useGame(s => s.selectSkillUpgrade)
   const [expanded, setExpanded] = useState(false)
   const [selectedSkillId, setSelectedSkillId] = useState<string | undefined>()
 
@@ -112,7 +114,7 @@ export function SkillPanel() {
               <div className="mt-3 rounded border border-cyan-300/15 bg-cyan-400/8 px-2 py-2">
                 <div className="flex items-center justify-between text-[10px] system-text text-cyan-100/65">
                   <span>숙련 Lv.{selectedProgress.level}/{selectedProgress.maxLevel}</span>
-                  <span>{selectedProgress.isMaxLevel ? 'MAX' : `${selectedProgress.currentUses}/${selectedProgress.nextLevelUses}회`}</span>
+                  <span>{selectedProgress.isMaxLevel ? 'MAX' : `${selectedProgress.currentXp}/${selectedProgress.nextLevelXp} XP`}</span>
                 </div>
                 <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-black/30">
                   <div
@@ -121,6 +123,55 @@ export function SkillPanel() {
                   />
                 </div>
               </div>
+
+              {/* Evolution & Upgrades Area */}
+              {selectedProgress.level >= 5 && (
+                <div className="mt-3 border-t border-cyan-300/10 pt-3">
+                  <div className="text-[11px] font-bold text-cyan-300 mb-2">스킬 강화 분기 (Lv.5 이상)</div>
+                  
+                  {selectedRuntime.selectedUpgradeId ? (
+                    (() => {
+                      const upgrades = getAvailableUpgradesForSkill(selectedSkill)
+                      const activeUpgrade = upgrades.find(u => u.id === selectedRuntime.selectedUpgradeId)
+                      return activeUpgrade ? (
+                        <div className="rounded border border-amber-300/20 bg-amber-400/5 p-2 text-xs">
+                          <div className="font-bold text-amber-200">⚔️ {activeUpgrade.name} (적용됨)</div>
+                          <div className="mt-1 text-[10.5px] text-white/70 leading-relaxed">{activeUpgrade.description}</div>
+                        </div>
+                      ) : null
+                    })()
+                  ) : (
+                    <div className="space-y-1.5">
+                      {getAvailableUpgradesForSkill(selectedSkill).map(upgrade => (
+                        <button
+                          key={upgrade.id}
+                          type="button"
+                          onClick={() => {
+                            if (window.confirm(`"${upgrade.name}" 강화를 적용하시겠습니까?\n한 번 선택하면 변경할 수 없습니다.`)) {
+                              selectSkillUpgrade(selectedSkill.id, upgrade.id)
+                            }
+                          }}
+                          className="w-full text-left rounded border border-cyan-300/20 bg-cyan-400/5 hover:bg-cyan-400/15 hover:border-cyan-300/40 p-2 transition active:scale-[0.98]"
+                        >
+                          <div className="text-[11px] font-bold text-cyan-200 flex items-center justify-between">
+                            <span>⚡ {upgrade.name}</span>
+                            <span className="text-[9px] px-1 py-0.2 rounded bg-cyan-400/20 text-cyan-100 font-normal">선택 가능</span>
+                          </div>
+                          <div className="mt-1 text-[10px] text-white/55 leading-relaxed">{upgrade.description}</div>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Capstone Activation Indicator */}
+              {selectedRuntime.isCapstoneUnlocked && (
+                <div className="mt-3 rounded border border-amber-400/30 bg-amber-400/10 p-2 text-center text-xs font-black tracking-wider text-amber-200 animate-pulse shadow-[0_0_12px_rgba(245,158,11,0.12)]">
+                  👑 시그니처 각성 완료 (Lv.10 Capstone)
+                </div>
+              )}
+
               {selectedSkill.recommendedUse && (
                 <div className="mt-2.5 rounded border border-emerald-300/22 bg-emerald-400/8 px-2 py-2 text-[11px] leading-relaxed text-emerald-100/75">
                   {selectedSkill.recommendedUse}

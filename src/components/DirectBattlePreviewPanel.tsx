@@ -1080,14 +1080,21 @@ export function DirectBattlePreviewPanel({
                     )}
                   >
                     <div className="flex items-center justify-between gap-1 font-bold">
-                      <span className="min-w-0 truncate text-[9px]">{action.label || '스킬'}</span>
+                      <span className="min-w-0 truncate text-[9px]">
+                        {action.label || '스킬'}
+                        {action.isCapstoneUnlocked && <span className="ml-1 text-[7px] text-amber-300" title="시그니처 각성">👑</span>}
+                        {action.selectedUpgradeId && <span className="ml-1 text-[7px] text-cyan-300" title="분기 강화 적용됨">⚡</span>}
+                      </span>
                       {isSelected && <span className="shrink-0 text-[7px] text-cyan-300/80">ON</span>}
                     </div>
-                    {getCooldownTextKo(unit, action) && (
-                      <span className="mt-0.2 block text-[7px] text-amber-200/70">
-                        {getCooldownTextKo(unit, action)}
+                    <div className="flex items-center justify-between text-[7px] text-white/40 mt-0.5">
+                      <span>
+                        {getCooldownTextKo(unit, action) || '즉시 사용'}
                       </span>
-                    )}
+                      {action.masteryMultiplier && action.masteryMultiplier > 1 && (
+                        <span className="text-emerald-400">효과 +{Math.round((action.masteryMultiplier - 1) * 100)}%</span>
+                      )}
+                    </div>
                   </button>
                 )
               })}

@@ -112,6 +112,14 @@ export interface BattleActionDefinition {
   effectColor?: string
   effects?: any[]
   timing?: string
+  masteryMultiplier?: number // 스킬 숙련도 배율 (예: 1.15)
+  selectedUpgradeId?: string // 선택된 Lv.5 강화 ID
+  isCapstoneUnlocked?: boolean // Lv.10 capstone 각성 활성화 여부
+  critRateBonus?: number // 크리티컬 확률 보정
+  defenseIgnore?: number // 적 방어 무시 비율
+  bossDamageBonus?: number // 보스 대상 추가 피해
+  statusValueBonus?: number // 디버프/버프 가치 추가 강화
+  telegraphDamageReduction?: number // 보스 예고 피감 보너스
 }
 
 export interface BattleStatusEffect {

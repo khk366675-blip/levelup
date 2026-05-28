@@ -68,6 +68,7 @@ import { computeRollingSummary } from './aiCoachSummary'
 
 import { TITLE_DEFINITIONS, CATEGORY_META, JOB_DEFINITIONS, EQUIPMENT_SLOT_LABEL } from './types'
 import { JOB_DEFINITIONS_V2 } from './jobs'
+import { getMockDirectBattleMonster } from './directBattleMonsters'
 import {
   GATE_DEFINITIONS,
   GATE_PENALTIES,
@@ -398,6 +399,7 @@ export interface GameState {
 
   // dev
   hardReset: () => void
+  selectSkillUpgrade: (skillId: string, upgradeId: string) => void
   hardResetAll: () => void
   resetGameProgressOnly: () => void
 
@@ -566,15 +568,37 @@ const directSkillIdFromTurn = (turn: BattleTurn): string | undefined => {
 const applyDirectBattleSkillRuntimeUses = (
   skillStates: Record<string, SkillRuntimeState> | undefined,
   turns: BattleTurn[],
+  isVictory = false,
+  isBoss = false,
 ): Record<string, SkillRuntimeState> | undefined => {
-  let next = skillStates
+  let next = skillStates ?? {}
   let changed = false
+
+  const skillUseCounts: Record<string, number> = {}
   for (const turn of turns) {
     const skillId = directSkillIdFromTurn(turn)
     if (!skillId) continue
-    next = recordSkillRuntimeUse(next, skillId)
+    skillUseCounts[skillId] = (skillUseCounts[skillId] ?? 0) + 1
+  }
+
+  for (const [skillId, count] of Object.entries(skillUseCounts)) {
+    const skill = SKILL_DEFINITIONS.find(s => s.id === skillId)
+    if (!skill) continue
+
+    const cooldown = getSkillCooldownTurns(skill)
+    const baseGain = cooldown > 0 ? 3 : 2
+    let totalGain = baseGain * count
+
+    if (isVictory) totalGain += 1
+    if (isBoss) totalGain += 1
+
+    // Soft Cap (최대 15 XP)
+    if (totalGain > 15) totalGain = 15
+
+    next = recordSkillRuntimeUse(next, skillId, totalGain)
     changed = true
   }
+
   return changed ? next : skillStates
 }
 
@@ -1645,8 +1669,13 @@ const createGateBattleOutcomeUpdate = (
     penaltyApplied,
     source: 'gate',
   }
+  const isVictory = combatLog.result === 'victory'
+  const isBoss = gate.monsterIds.some(mId => {
+    const m = getMockDirectBattleMonster(mId)
+    return m?.unitType === 'boss'
+  })
   const nextSkillStates = finalLog.battleId.startsWith('direct-gate-')
-    ? applyDirectBattleSkillRuntimeUses(s.skillStates, finalLog.turns)
+    ? applyDirectBattleSkillRuntimeUses(s.skillStates, finalLog.turns, isVictory, isBoss)
     : s.skillStates
 
   const finalMessages = shadowLevelUps.length > 0
@@ -5155,8 +5184,10 @@ export const useGame = create<GameState>()(
         let nextGold = s.gold ?? 0
         let nextShadowEssence = s.shadowEssence ?? 0
         let nextOwnedShadows = s.ownedShadows ?? []
+        const isVictory = result === 'victory'
+        const isBoss = floor % 5 === 0
         const nextSkillStates = combatLog.battleId.startsWith('direct-tower-')
-          ? applyDirectBattleSkillRuntimeUses(s.skillStates, combatLog.turns)
+          ? applyDirectBattleSkillRuntimeUses(s.skillStates, combatLog.turns, isVictory, isBoss)
           : s.skillStates
         const newMessages: SystemMessage[] = []
 
@@ -6439,8 +6470,10 @@ export const useGame = create<GameState>()(
         const result = activeBattle.result
         if (!result) return
         const floor = activeBattle.floor
+        const isVictory = result.outcome === 'victory'
+        const isBoss = floor % 5 === 0
         const nextSkillStates = activeBattle.id.startsWith('direct-tower-')
-          ? applyDirectBattleSkillRuntimeUses(s.skillStates, activeBattle.logs)
+          ? applyDirectBattleSkillRuntimeUses(s.skillStates, activeBattle.logs, isVictory, isBoss)
           : s.skillStates
         const isFirstClear = result.firstClear
         const rewards = result.rewards
@@ -8496,6 +8529,25 @@ export const useGame = create<GameState>()(
         })
         if (!changed) return {}
         return { quests: updatedQuests }
+      }),
+
+      selectSkillUpgrade: (skillId, upgradeId) => set((s) => {
+        const currentStates = s.skillStates ?? {}
+        const current = currentStates[skillId]
+        if (!current) return {}
+        if ((current.masteryLevel ?? 1) < 5) return {}
+
+        const updated = {
+          ...current,
+          selectedUpgradeId: upgradeId,
+        }
+
+        return {
+          skillStates: {
+            ...currentStates,
+            [skillId]: updated,
+          }
+        }
       }),
 
       hardReset: () => set({

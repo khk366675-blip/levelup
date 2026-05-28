@@ -578,19 +578,32 @@ const computeDamage = (
   const controlBonus = action.effectKind === 'control' ? actor.stats.controlPower * 0.22 : 0
   const bossBonus = action.effectKind === 'bossing' && target.unitType === 'boss' ? actor.stats.bossPower * 0.34 : 0
   const rawPower = actorAttack + controlBonus + bossBonus
-  const defense = getDefenseValue(target)
+  
+  // 방어 무시 (defenseIgnore) 적용
+  const defIgnore = action.defenseIgnore ?? 0
+  const defense = getDefenseValue(target) * (1 - Math.min(0.9, defIgnore))
+  
   const defenseAnchor = action.actionType === 'skill' ? 210 : 250
   const defenseReduction = defense / (defense + defenseAnchor + rawPower * 0.42)
   const targetSpreadMultiplier = action.targetType === 'all_enemies' ? 0.48 : 1
+  
+  // 기본 숙련 배율 적용
+  const masteryMultiplier = action.masteryMultiplier ?? 1
+  
   const skillMultiplier = action.sourceSkillId === 'basic-focus-slash'
     ? 1.34
     : action.actionType === 'skill'
-      ? 1.08
+      ? 1.08 * masteryMultiplier
       : 1
+      
+  // 치명타 보정 (critRateBonus) 기대값 및 보스 보너스 (bossDamageBonus) 적용
+  const critMultiplier = action.critRateBonus ? (1 + action.critRateBonus * 0.5) : 1
+  const bossDmgMultiplier = (action.bossDamageBonus && target.unitType === 'boss') ? (1 + action.bossDamageBonus) : 1
+  
   const minimumDamage = Math.max(3, actor.level * 0.75, rawPower * 0.14)
   return round(Math.max(
     minimumDamage,
-    rawPower * (1 - defenseReduction) * skillMultiplier * targetSpreadMultiplier * getAttackMultiplier(actor) * getDamageBonus(target),
+    rawPower * (1 - defenseReduction) * skillMultiplier * targetSpreadMultiplier * getAttackMultiplier(actor) * getDamageBonus(target) * critMultiplier * bossDmgMultiplier,
   ))
 }
 
@@ -670,7 +683,9 @@ const applyHeal = (
   target: BattleUnit,
   action: BattleActionDefinition,
 ) => {
-  const heal = round(Math.max(5, actor.stats.supportPower * 0.42 + actor.stats.skillPower * 0.18))
+  const masteryMultiplier = action.masteryMultiplier ?? 1
+  const baseHeal = actor.stats.supportPower * 0.42 + actor.stats.skillPower * 0.18
+  const heal = round(Math.max(5, baseHeal * masteryMultiplier))
   const snapshotIds = uniqueUnitIds([target.unitId])
   const hpBeforeByUnitId = hpSnapshotsFor(state, snapshotIds)
   const statusBeforeByUnitId = statusSnapshotsFor(state, snapshotIds)
@@ -710,13 +725,17 @@ const applyDynamicEffects = (
     (action as any)._selfEffectsAppliedRound = state.round
   }
 
+  const masteryMultiplier = action.masteryMultiplier ?? 1
+  const statusBonus = action.statusValueBonus ?? 0
+  const combinedMultiplier = masteryMultiplier * (1 + statusBonus)
+
   for (const eff of effects) {
     let statusType: any | undefined
-    let effectValue = Math.abs(eff.value)
+    let effectValue = Math.abs(eff.value) * combinedMultiplier
 
     if (eff.kind === 'damage_reduction') {
       statusType = 'guard'
-      effectValue = eff.value
+      effectValue = eff.value * combinedMultiplier
     } else if (eff.kind === 'counter') {
       statusType = 'guard'
     } else if (eff.stat) {
@@ -762,8 +781,13 @@ const applyAllySupport = (
     return
   }
 
-  const guardValue = action.effectKind === 'survival' ? 0.32 : 0.28
-  const shieldValue = action.effectKind === 'cooldown' || action.effectKind === 'synergy' ? 0.12 : 0.18
+  const masteryMultiplier = action.masteryMultiplier ?? 1
+  const statusBonus = action.statusValueBonus ?? 0
+  const combinedMultiplier = masteryMultiplier * (1 + statusBonus)
+  const telegraphReduction = action.telegraphDamageReduction ?? 0
+
+  const guardValue = (action.effectKind === 'survival' ? 0.32 : 0.28) * combinedMultiplier + telegraphReduction
+  const shieldValue = (action.effectKind === 'cooldown' || action.effectKind === 'synergy' ? 0.12 : 0.18) * combinedMultiplier
   const snapshotIds = uniqueUnitIds([target.unitId])
   const hpBeforeByUnitId = hpSnapshotsFor(state, snapshotIds)
   const statusBeforeByUnitId = statusSnapshotsFor(state, snapshotIds)
@@ -772,7 +796,7 @@ const applyAllySupport = (
       type: 'attackUp',
       sourceUnitId: actor.unitId,
       durationRounds: 1,
-      effectValue: action.effectKind === 'bossing' ? 0.22 : 0.16,
+      effectValue: (action.effectKind === 'bossing' ? 0.22 : 0.16) * combinedMultiplier,
     })
   }
   if (action.effectKind === 'stat_shift') {
@@ -780,7 +804,7 @@ const applyAllySupport = (
       type: 'defenseUp',
       sourceUnitId: actor.unitId,
       durationRounds: 1,
-      effectValue: 0.16,
+      effectValue: 0.16 * combinedMultiplier,
     })
   }
   addStatus(target, {
