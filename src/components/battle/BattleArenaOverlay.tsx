@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react'
+import React, { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import clsx from 'clsx'
 import { X, Play, RotateCcw, Swords, Bot, List, Shield, Swords as SwordsIcon, Sparkles } from 'lucide-react'
@@ -73,6 +73,8 @@ export function BattleArenaOverlay({
   handleRevealLogChange,
   handleRevealComplete,
 }: BattleArenaOverlayProps) {
+  const [visualTestJob, setVisualTestJob] = useState<string>('off')
+
   // Body scroll lock
   useEffect(() => {
     const originalOverflow = document.body.style.overflow
@@ -141,6 +143,35 @@ export function BattleArenaOverlay({
         </div>
       </header>
 
+      {/* DEV · Battle Visual Test Override Bar */}
+      <div className="bg-slate-950/90 border-b border-cyan-500/25 px-4 py-1.5 flex flex-wrap items-center justify-between gap-2 z-30 text-[11px] shrink-0">
+        <div className="flex items-center gap-1.5 text-cyan-400 font-bold tracking-wider uppercase">
+          <Sparkles className="h-3.5 w-3.5 animate-pulse text-cyan-400" />
+          <span>DEV · Battle Visual Test</span>
+          <span className="text-[9px] font-normal text-white/50 lowercase italic ml-1 leading-none">(실제 직업/스탯/저장 영향 없음)</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="text-white/60 text-[10px]">표시 직업 오버라이드:</span>
+          <select
+            value={visualTestJob}
+            onChange={(e) => setVisualTestJob(e.target.value)}
+            className="bg-slate-900 border border-cyan-500/40 rounded px-2 py-0.5 text-cyan-200 text-[10px] font-bold focus:outline-none focus:border-cyan-400 cursor-pointer"
+          >
+            <option value="off">기존 직업 (Off)</option>
+            <option value="base">노비스 헌터 (Base)</option>
+            <option value="swordsman">검객 (Swordsman) ⚡</option>
+            <option value="warrior">마검사/전사 (Warrior) 💥</option>
+            <option value="mage">마법사 (Mage) 🔮</option>
+            <option value="guardian">수호자 (Guardian) 🛡️</option>
+            <option value="tracker">추적자 (Tracker) 🗡️</option>
+            <option value="tactician">전술가 (Tactician) 📜</option>
+            <option value="hidden-shadow">그림자 군주 (Hidden Shadow) ☠️</option>
+            <option value="hidden-curse">저주술사 (Hidden Curse) 🩸</option>
+            <option value="hidden-rift">차원지배자 (Hidden Rift) 🌀</option>
+          </select>
+        </div>
+      </div>
+
       {/* HUD: Enemy Units HP */}
       {EnemyHud}
 
@@ -153,6 +184,7 @@ export function BattleArenaOverlay({
           phase={battlefieldPhase}
           latestAction={latestAction}
           mode="overlay"
+          visualTestJob={visualTestJob}
         />
 
         {/* Round Reveal Cinematic Log Overlay */}

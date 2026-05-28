@@ -5,6 +5,8 @@ import { getBattlefieldTheme, type BattleActorViewModel, type BattleLane } from 
 import { BattleActorSprite } from './BattleActorSprite'
 import { BattleDamagePopup, type PopupType } from './BattleDamagePopup'
 import { BattlefieldVfxLayer, type VfxType } from './BattlefieldVfxLayer'
+import { getSkillMotionPreset, type ActorMotionType, type TargetReactionType } from '../../lib/skillMotionPresets'
+import { getHunterBattleSpriteUrl } from '../../lib/hunterBattleSprites'
 
 type Battlefield2DViewProps = {
   actors: BattleActorViewModel[]
@@ -21,6 +23,7 @@ type Battlefield2DViewProps = {
   }
   compact?: boolean
   mode?: 'compact' | 'overlay'
+  visualTestJob?: string
 }
 
 // Map lane/team positioning to percentage coordinates
@@ -86,11 +89,39 @@ export function Battlefield2DView({
   latestAction,
   compact = false,
   mode,
+  visualTestJob = 'off',
 }: Battlefield2DViewProps) {
   const isCompact = mode === 'compact' || (mode === undefined && compact)
   const [popups, setPopups] = useState<any[]>([])
   const [vfxs, setVfxs] = useState<any[]>([])
   const lastProcessedActionRef = useRef<string>('')
+
+  // 0. presentation-only DEV/QA job visual override
+  const overriddenActors = useMemo(() => {
+    if (!visualTestJob || visualTestJob === 'off') return actors
+    return actors.map(actor => {
+      if (actor.kind === 'hunter') {
+        let overrideRole = actor.role
+        if (visualTestJob === 'base') overrideRole = 'novice-hunter'
+        else if (visualTestJob === 'swordsman') overrideRole = 'swordsman'
+        else if (visualTestJob === 'warrior') overrideRole = 'warrior'
+        else if (visualTestJob === 'mage') overrideRole = 'mage'
+        else if (visualTestJob === 'guardian') overrideRole = 'guardian'
+        else if (visualTestJob === 'tracker') overrideRole = 'tracker'
+        else if (visualTestJob === 'tactician') overrideRole = 'tactician'
+        else if (visualTestJob === 'hidden-shadow') overrideRole = 'shadow'
+        else if (visualTestJob === 'hidden-curse') overrideRole = 'curse'
+        else if (visualTestJob === 'hidden-rift') overrideRole = 'rift'
+
+        return {
+          ...actor,
+          role: overrideRole,
+          hunterSpriteUrl: getHunterBattleSpriteUrl(overrideRole),
+        }
+      }
+      return actor
+    })
+  }, [actors, visualTestJob])
 
   const theme = getBattlefieldTheme(battleType, encounterKey)
 
@@ -103,7 +134,7 @@ export function Battlefield2DView({
     const xAllyFront = isCompact ? 35 : 33
     
     // 1. Ally Team Positioning
-    const allyActors = actors.filter(a => a.team === 'ally')
+    const allyActors = overriddenActors.filter(a => a.team === 'ally')
     const hunterActor = allyActors.find(a => a.kind === 'hunter')
     const shadowActors = allyActors.filter(a => a.kind === 'shadow')
     
@@ -137,7 +168,7 @@ export function Battlefield2DView({
     }
     
     // 2. Enemy Team Positioning (Rebalanced to prioritize Horizontal Spacing & Prevent Stack overlapping)
-    const enemyActors = actors.filter(a => a.team === 'enemy')
+    const enemyActors = overriddenActors.filter(a => a.team === 'enemy')
     const bossActor = enemyActors.find(a => a.isBoss || a.kind === 'boss')
     const minionActors = enemyActors.filter(a => !(a.isBoss || a.kind === 'boss'))
     
@@ -193,7 +224,7 @@ export function Battlefield2DView({
     }
     
     return coords
-  }, [actors, isCompact])
+  }, [overriddenActors, isCompact])
 
   // Watch for latestAction changes and trigger popup and VFX
   useEffect(() => {
@@ -207,8 +238,8 @@ export function Battlefield2DView({
     }
     lastProcessedActionRef.current = actionFingerprint
 
-    const actor = actors.find(a => a.id === latestAction.actorId)
-    const targets = actors.filter(a => latestAction.targetIds?.includes(a.id))
+    const actor = overriddenActors.find(a => a.id === latestAction.actorId)
+    const targets = overriddenActors.filter(a => latestAction.targetIds?.includes(a.id))
     if (!actor) return
 
     const actionId = `action-${Date.now()}`
@@ -246,6 +277,9 @@ export function Battlefield2DView({
     }
 
     // 2. Trigger Damage/Heal numbers on targets
+    const preset = getSkillMotionPreset(actor.role, actor.isBoss, latestAction.kind)
+    const popupStyle = preset.damagePopupStyle
+
     const newPopups = targets.map((t, idx) => {
       const coords = actorCoords[t.id] ?? { x: 50, y: 50 }
       
@@ -270,6 +304,7 @@ export function Battlefield2DView({
         isCrit: latestAction.isCrit,
         targetX: coords.x,
         targetY: coords.y,
+        style: popupStyle,
       }
     })
 
@@ -350,7 +385,7 @@ export function Battlefield2DView({
               if (!start || !end) return null
               
               const kind = latestAction.kind || 'attack'
-              const actor = actors.find(a => a.id === latestAction.actorId)
+              const actor = overriddenActors.find(a => a.id === latestAction.actorId)
               
               // Melee attacks do NOT render SVG lines or projectiles to prevent visual clutter
               if (isMeleeAction(actor?.role, kind)) return null
@@ -400,7 +435,7 @@ export function Battlefield2DView({
                       ease: "easeOut"
                     }}
                   />
-
+ 
                   {/* 3. Small secondary spark following slightly behind (creates a neat tail effect!) */}
                   <motion.circle
                     r={isCompact ? 3 : 4}
@@ -428,10 +463,25 @@ export function Battlefield2DView({
             })}
           </svg>
         )}
-
+ 
         {/* Actors positioned absolutely using coords */}
-        {actors.map(actor => {
+        {overriddenActors.map(actor => {
           const coords = actorCoords[actor.id] ?? { x: 50, y: 50 }
+          
+          let activeMotion: ActorMotionType | undefined
+          let hitReaction: TargetReactionType | undefined
+ 
+          if (latestAction && latestAction.actorId === actor.id) {
+            const preset = getSkillMotionPreset(actor.role, actor.isBoss, latestAction.kind)
+            activeMotion = preset.actorMotion
+          }
+ 
+          if (latestAction && latestAction.targetIds?.includes(actor.id)) {
+            const attacker = overriddenActors.find(a => a.id === latestAction.actorId)
+            const preset = getSkillMotionPreset(attacker?.role, attacker?.isBoss, latestAction.kind)
+            hitReaction = preset.targetReaction
+          }
+ 
           return (
             <div
               key={actor.id}
@@ -442,7 +492,12 @@ export function Battlefield2DView({
                 transform: 'translate(-50%, -50%)',
               }}
             >
-              <BattleActorSprite actor={actor} compact={isCompact} />
+              <BattleActorSprite 
+                actor={actor} 
+                compact={isCompact} 
+                activeMotion={activeMotion}
+                hitReaction={hitReaction}
+              />
             </div>
           )
         })}

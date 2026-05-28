@@ -7,10 +7,13 @@ import { ShadowPortrait } from '../shadows/ShadowPortrait'
 import { ShadowBattleSprite } from './ShadowBattleSprite'
 import { HunterBattleSprite } from './HunterBattleSprite'
 import { MonsterBattleSprite } from './MonsterBattleSprite'
+import type { ActorMotionType, TargetReactionType } from '../../lib/skillMotionPresets'
 
 type Props = {
   actor: BattleActorViewModel
   compact?: boolean
+  activeMotion?: ActorMotionType
+  hitReaction?: TargetReactionType
 }
 
 /**
@@ -27,7 +30,12 @@ function getRoleIcon(role?: string) {
   return <Swords className="h-3.5 w-3.5" />
 }
 
-export function BattleActorSprite({ actor, compact = false }: Props) {
+export function BattleActorSprite({ 
+  actor, 
+  compact = false,
+  activeMotion = 'default',
+  hitReaction = 'none',
+}: Props) {
   const isShadow = actor.kind === 'shadow'
   const isHunter = actor.kind === 'hunter'
   const isBoss = actor.kind === 'boss'
@@ -53,6 +61,134 @@ export function BattleActorSprite({ actor, compact = false }: Props) {
     ? 'targeted'
     : 'idle'
 
+  // Dynamic values based on motion presets to mimic " 준비 -> 돌격 -> 충돌(Hit Stop) -> 회귀 "
+  let activeX: number[] = [0, actor.team === 'ally' ? 32 : -32, 0]
+  let activeY: number[] = [0, 0, 0]
+  let activeScale: number[] = [1, 1.15, 1]
+  let activeRotate: number[] = [0, 0, 0]
+  let activeOpacity: number[] = [1, 1, 1]
+  let activeTimes: number[] = [0, 0.22, 0.72, 1] // Extended middle holds for Hit Stop!
+  let activeDuration = 0.44
+
+  if (activeMotion === 'dash-slash') {
+    activeX = actor.team === 'ally' ? [0, 52, 0] : [0, -52, 0]
+    activeRotate = actor.team === 'ally' ? [0, 12, 0] : [0, -12, 0]
+    activeTimes = [0, 0.18, 0.68, 1]
+    activeDuration = 0.38
+  } else if (activeMotion === 'heavy-lunge') {
+    activeY = actor.team === 'ally' ? [0, -48, -55, 0] : [0, 48, 55, 0]
+    activeX = actor.team === 'ally' ? [0, 24, 28, 0] : [0, -24, -28, 0]
+    activeScale = [1, 1.25, 1.25, 1]
+    activeTimes = [0, 0.24, 0.74, 1]
+    activeDuration = 0.48
+  } else if (activeMotion === 'cast-hold') {
+    activeY = [0, -22, -22, 0]
+    activeScale = [1, 1.12, 1.12, 1]
+    activeTimes = [0, 0.25, 0.75, 1]
+    activeDuration = 0.52
+  } else if (activeMotion === 'guard-raise') {
+    activeX = actor.team === 'ally' ? [0, 10, 0] : [0, -10, 0]
+    activeScale = [1, 1.06, 1]
+    activeRotate = actor.team === 'ally' ? [0, -5, 0] : [0, 5, 0]
+    activeTimes = [0, 0.2, 0.7, 1]
+    activeDuration = 0.4
+  } else if (activeMotion === 'afterimage-strike') {
+    activeX = actor.team === 'ally' ? [0, 68, 0] : [0, -68, 0]
+    activeOpacity = [1, 0.25, 0.25, 1]
+    activeTimes = [0, 0.16, 0.66, 1]
+    activeDuration = 0.35
+  } else if (activeMotion === 'command-cast') {
+    activeY = [0, -14, 0]
+    activeScale = [1, 1.1, 1]
+    activeTimes = [0, 0.22, 0.72, 1]
+    activeDuration = 0.42
+  } else if (activeMotion === 'vanish-shadow-strike') {
+    activeX = actor.team === 'ally' ? [0, 55, 0] : [0, -55, 0]
+    activeOpacity = [1, 0.08, 0.08, 1]
+    activeTimes = [0, 0.2, 0.7, 1]
+    activeDuration = 0.48
+  } else if (activeMotion === 'curse-cast') {
+    activeY = [0, -8, 0]
+    activeRotate = [0, 4, -4, 0]
+    activeTimes = [0, 0.22, 0.72, 1]
+    activeDuration = 0.45
+  } else if (activeMotion === 'rift-step') {
+    activeX = actor.team === 'ally' ? [0, 58, 0] : [0, -58, 0]
+    activeScale = [1, 0.12, 1.22, 1]
+    activeOpacity = [1, 0.1, 0.9, 1]
+    activeTimes = [0, 0.18, 0.68, 1]
+    activeDuration = 0.44
+  } else if (activeMotion === 'hostile-heavy') {
+    activeX = actor.team === 'ally' ? [0, 60, 0] : [0, -60, 0]
+    activeY = [0, 14, -14, 0]
+    activeScale = [1, 1.3, 1]
+    activeTimes = [0, 0.26, 0.76, 1]
+    activeDuration = 0.54
+  } else if (activeMotion === 'hostile-normal') {
+    activeX = actor.team === 'ally' ? [0, 35, 0] : [0, -35, 0]
+    activeScale = [1, 1.12, 1]
+    activeTimes = [0, 0.2, 0.7, 1]
+    activeDuration = 0.4
+  }
+
+  // Target reaction shake/recoil configs to emulate real impact physics
+  let reactX: number[] = [0, -6, 6, -4, 4, 0]
+  let reactY: number[] = [0, 0, 0]
+  let reactScale: number[] = [1, 1.04, 1]
+  let reactRotate: number[] = [0, 0, 0]
+  let reactTimes: number[] = [0, 0.15, 0.35, 0.55, 0.75, 1]
+  let reactDuration = 0.44
+
+  if (hitReaction === 'quick-hit-shake') {
+    reactX = [0, -9, 9, -6, 6, -3, 3, 0]
+    reactTimes = [0, 0.12, 0.28, 0.44, 0.6, 0.76, 0.92, 1]
+    reactDuration = 0.38
+  } else if (hitReaction === 'heavy-recoil') {
+    // Massive 2.5D physical Recoil: Pushed back along X axis and rotated heavily, staggering back
+    reactX = actor.team === 'ally' ? [0, -42, -48, -12, 0] : [0, 42, 48, 12, 0]
+    reactRotate = actor.team === 'ally' ? [0, -15, -18, -4, 0] : [0, 15, 18, 4, 0]
+    reactScale = [1, 0.94, 0.94, 0.98, 1]
+    reactTimes = [0, 0.15, 0.65, 0.85, 1] // Stays recoiled during attackers Hit Stop!
+    reactDuration = 0.48
+  } else if (hitReaction === 'magic-hit-shake') {
+    reactX = [0, -6, 6, -6, 6, 0]
+    reactY = [0, -14, 14, 0]
+    reactScale = [1, 1.08, 1]
+    reactDuration = 0.5
+  } else if (hitReaction === 'guard-block') {
+    // Solid defensive block: barely any backward movement, high resistance
+    reactX = actor.team === 'ally' ? [0, -4, 0] : [0, 4, 0]
+    reactScale = [1, 0.97, 1]
+    reactTimes = [0, 0.15, 0.75, 1]
+    reactDuration = 0.4
+  } else if (hitReaction === 'fast-stagger') {
+    reactX = actor.team === 'ally' ? [0, -18, 0] : [0, 18, 0]
+    reactRotate = actor.team === 'ally' ? [0, -6, 0] : [0, 6, 0]
+    reactDuration = 0.35
+  } else if (hitReaction === 'buff-debuff-pulse') {
+    reactScale = [1, 1.1, 1]
+    reactDuration = 0.42
+  } else if (hitReaction === 'dark-flash-shake') {
+    reactX = actor.team === 'ally' ? [0, -48, 0] : [0, 48, 0]
+    reactRotate = actor.team === 'ally' ? [0, -22, 0] : [0, 22, 0]
+    reactScale = [1, 0.88, 1]
+    reactTimes = [0, 0.2, 0.7, 1]
+    reactDuration = 0.48
+  } else if (hitReaction === 'curse-flicker-stagger') {
+    reactX = [0, -5, 5, -5, 5, 0]
+    reactY = [0, 6, -6, 0]
+    reactScale = [1, 0.94, 1]
+    reactDuration = 0.45
+  } else if (hitReaction === 'warp-shake') {
+    reactScale = [1, 0.84, 1.12, 1]
+    reactX = [0, -12, 12, 0]
+    reactDuration = 0.44
+  } else if (hitReaction === 'boss-heavy-recoil') {
+    reactX = [0, -14, 14, -10, 10, 0]
+    reactY = [0, 8, -8, 0]
+    reactDuration = 0.52
+  }
+
   // Motion variants for 2.5D effects with cinematic staging
   const variants = {
     idle: {
@@ -70,24 +206,29 @@ export function BattleActorSprite({ actor, compact = false }: Props) {
       },
     },
     active: {
-      y: actor.team === 'ally' ? -32 : 32, // More pronounced dash!
-      scale: 1.15, // Higher spotlight scaling!
-      opacity: 1,
+      x: activeX,
+      y: activeY,
+      scale: activeScale,
+      rotate: activeRotate,
+      opacity: activeOpacity,
       filter: 'contrast(1.15) brightness(1.05)',
       transition: {
-        duration: 0.35,
-        yoyo: 1,
+        duration: activeDuration,
+        times: activeTimes,
         ease: 'easeOut',
       },
     },
     targeted: {
-      x: [0, -8, 8, -6, 6, 0], // More dramatic rumble!
-      scale: 1.05,
+      x: reactX,
+      y: reactY,
+      scale: reactScale,
+      rotate: reactRotate,
       opacity: 1,
       filter: 'contrast(1.05)',
       transition: {
-        duration: 0.4,
-        ease: 'linear',
+        duration: reactDuration,
+        times: reactTimes,
+        ease: 'easeOut',
       },
     },
     defeated: {

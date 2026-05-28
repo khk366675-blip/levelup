@@ -1,5 +1,6 @@
 import { motion, AnimatePresence } from 'framer-motion'
 import clsx from 'clsx'
+import type { DamagePopupStyle } from '../../lib/skillMotionPresets'
 
 export type PopupType = 'damage' | 'heal' | 'guard' | 'miss'
 
@@ -8,6 +9,7 @@ interface DamagePopup {
   text: string
   type: PopupType
   isCrit?: boolean
+  style?: DamagePopupStyle
 }
 
 type Props = {
@@ -23,23 +25,89 @@ export function BattleDamagePopup({ popups }: Props) {
         const isGuard = pop.type === 'guard'
         const isMiss = pop.type === 'miss'
 
-        // Razor sharp black outer outline using -webkit-text-stroke
-        // Bypasses browser blending bugs where transparent text-shadow dims the body fill
+        const popStyle = pop.style ?? 'default'
+
+        // 1. Setup Solid Core High-Contrast Body Fills based on class preset
+        let textColorClass = 'text-rose-500' // General standard damage
+        let strokeColor = '#000000'
+        let strokeWidth = '1.8px'
+        let critBadge = 'CRIT 🔥'
+        let critBadgeColor = 'text-yellow-300 border-yellow-400'
+
+        if (isDamage) {
+          if (pop.isCrit) {
+            strokeWidth = '2.5px'
+            if (popStyle === 'sharp') {
+              textColorClass = 'text-cyan-300'
+              critBadge = 'SWIFT ⚡'
+              critBadgeColor = 'text-cyan-300 border-cyan-400'
+            } else if (popStyle === 'heavy') {
+              textColorClass = 'text-amber-300'
+              critBadge = 'CRUSH 💥'
+              critBadgeColor = 'text-amber-400 border-amber-500 bg-amber-950/80'
+            } else if (popStyle === 'magic') {
+              textColorClass = 'text-violet-300'
+              critBadge = 'BURST 🔮'
+              critBadgeColor = 'text-violet-300 border-violet-400 bg-violet-950/80'
+            } else if (popStyle === 'quick-sharp') {
+              textColorClass = 'text-emerald-300'
+              critBadge = 'ASSASSIN 🗡️'
+              critBadgeColor = 'text-emerald-300 border-emerald-400 bg-emerald-950/80'
+            } else if (popStyle === 'shadow') {
+              textColorClass = 'text-purple-300'
+              critBadge = 'SHADOW ☠️'
+              critBadgeColor = 'text-purple-300 border-purple-400 bg-purple-950/80'
+            } else if (popStyle === 'curse') {
+              textColorClass = 'text-red-400'
+              critBadge = 'RUIN 🩸'
+              critBadgeColor = 'text-red-400 border-red-500 bg-red-950/80'
+            } else if (popStyle === 'rift') {
+              textColorClass = 'text-cyan-200'
+              critBadge = 'RIFT 🌀'
+              critBadgeColor = 'text-cyan-200 border-cyan-300 bg-cyan-950/80'
+            } else {
+              textColorClass = 'text-yellow-300' // Default gold crit
+            }
+          } else {
+            // Normal hit color styles
+            if (popStyle === 'sharp') textColorClass = 'text-cyan-400'
+            else if (popStyle === 'heavy') textColorClass = 'text-amber-500'
+            else if (popStyle === 'magic') textColorClass = 'text-indigo-400'
+            else if (popStyle === 'quick-sharp') textColorClass = 'text-emerald-400'
+            else if (popStyle === 'shadow') textColorClass = 'text-purple-400'
+            else if (popStyle === 'curse') textColorClass = 'text-red-500'
+            else if (popStyle === 'rift') textColorClass = 'text-blue-400'
+            else textColorClass = 'text-rose-500'
+          }
+        } else if (isHeal) {
+          textColorClass = 'text-emerald-400 font-bold'
+          strokeColor = '#022c22'
+        } else if (isGuard) {
+          textColorClass = 'text-slate-100 font-bold'
+          strokeColor = '#1e293b'
+          strokeWidth = '1.5px'
+        } else if (isMiss) {
+          textColorClass = 'text-cyan-300 italic'
+          strokeColor = '#0f172a'
+        }
+
+        // Setup drop shadow styling based on crit magnitude
+        const dropShadow = pop.isCrit
+          ? `drop-shadow(0 0 10px ${popStyle === 'shadow' ? 'rgba(168,85,247,0.7)' : popStyle === 'curse' ? 'rgba(239,68,68,0.7)' : 'rgba(245,158,11,0.7)'}) drop-shadow(0 4px 8px rgba(0,0,0,0.95))`
+          : 'drop-shadow(0 3px 6px rgba(0,0,0,0.9))'
+
         const textStyle: React.CSSProperties = {
-          WebkitTextStroke: pop.isCrit ? '2.5px #000000' : '1.8px #000000',
-          filter: pop.isCrit 
-            ? 'drop-shadow(0 0 10px rgba(245,158,11,0.85)) drop-shadow(0 4px 8px rgba(0,0,0,0.95))'
-            : 'drop-shadow(0 3px 6px rgba(0,0,0,0.9))',
+          WebkitTextStroke: `${strokeWidth} ${strokeColor}`,
+          filter: dropShadow,
           fontWeight: 950,
         }
 
         const textClass = clsx(
           'font-black text-center tracking-tight select-none uppercase font-sans italic whitespace-nowrap',
-          isDamage && pop.isCrit && 'text-4xl sm:text-5xl text-yellow-300', // Super bright lemon gold
-          isDamage && !pop.isCrit && 'text-3xl sm:text-4xl text-rose-500', // Neon glowing high-contrast red
-          isHeal && 'text-3xl sm:text-4xl text-emerald-400', // Sparkling energetic bright emerald
-          isGuard && 'text-xl sm:text-2xl text-white', // Pure solid white
-          isMiss && 'text-xl sm:text-2xl text-cyan-300' // High visibility electric neon cyan
+          textColorClass,
+          pop.isCrit ? 'text-4xl sm:text-5xl' : 'text-3xl sm:text-4xl',
+          isGuard && 'text-xl sm:text-2xl',
+          isMiss && 'text-xl sm:text-2xl'
         )
 
         // Mathematical deterministic jitter based on popup ID to prevent overlapping stack issues
@@ -71,7 +139,7 @@ export function BattleDamagePopup({ popups }: Props) {
             }}
             transition={{
               type: "spring",
-              stiffness: 450, // Ultra snappy spring pop
+              stiffness: 450, // Snappy spring pop
               damping: 18,    // Fluid settle
               mass: 0.75
             }}
@@ -85,7 +153,14 @@ export function BattleDamagePopup({ popups }: Props) {
               className={textClass}
               style={textStyle}
             >
-              {pop.isCrit && <span className="text-[10px] sm:text-xs font-black mr-1 text-yellow-300 bg-black/85 border border-yellow-400 px-1 py-0.5 rounded shadow-sm inline-block">CRIT 🔥</span>}
+              {pop.isCrit && (
+                <span className={clsx(
+                  "text-[10px] sm:text-xs font-black mr-1 bg-black/85 border px-1 py-0.5 rounded shadow-sm inline-block",
+                  critBadgeColor
+                )}>
+                  {critBadge}
+                </span>
+              )}
               {isHeal && <span className="text-sm mr-0.5 font-bold">+</span>}
               {pop.text.replace('+', '')}
             </div>
