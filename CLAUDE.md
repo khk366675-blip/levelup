@@ -1,4 +1,36 @@
 
+## 12-37C Skill / Reward / Evolution Reveal Polish — (2026-05-28)
+- **보상 상자(Reward Box) 2열 카드 그리드화 (`src/components/RewardBoxPanel.tsx`)**: 기존의 수직 텍스트 목록 나열에서 탈피하여 3D 플로팅 효과가 연계된 **2열 프리미엄 카드 그리드**로 개편. Rarity별(Legendary/Epic 골드, Ticket 하늘, Fragment/Essence 보라)로 카드 테두리, HSL 광택, 섀도우를 유기적으로 적용하고 레벨업/랭크업 전용 배지(`👑 RANK UP` / `⚡ LEVEL UP`) 추가 완료.
+- **그림자 진화 3D 초상화 노출 (`src/components/ShadowPanel.tsx`)**: 진화 연출(`DramaticReveal`) 완료 시, `result` 영역에 **진화 성공한 새로운 군주급 초상화(xl 크기)와 이름**이 웅장한 골드 룬 오라 레이아웃 속에서 떠오르도록 비주얼 보완 완료.
+- **태생 등급 재각성 드라마틱 리빌 탑재 (`src/components/ShadowPanel.tsx`)**: 컴포넌트 레벨에서 시도시점 전후 스냅샷을 비교하는 안전한 감사 래퍼(`handleReawaken`) 연동. 성공 시 찬란히 고동치는 **골드 오라**와 함께 등급 상승 화살표 연출(`C -> B`, `B -> A`, `A -> S`)을 렌더링하고, 실패 시 등급이 안전 장치로 인해 안전하게 유지되었음을 안심시키는 가이드 팝업 구현 완료.
+- **특성 재굴림 & 슬롯 개방 프리미엄 리빌 (`src/components/ShadowPanel.tsx`)**: 특성 재굴림 완료 시 이전/신규 특성을 대조하고 Rarity별 등급(Legendary 황금, Epic 보라, Rare 하늘) 배지 및 아우라 카드로 시각화. 슬롯 개방 시 `MAGIC CORE EXPANDED` 배지와 함께 청록 맥동 아우라를 심어 마력 회로 확장감 극대화 완료.
+- **직업 스킬 해금 및 임박 시그널 시각화 보완 (`src/components/JobPanel.tsx`)**: 방금 해금된 신규 스킬에 **`NEW` 청록 맥동 배지**를 부여해 사용 가능한 상태임을 알리고, 다음 레벨 도달 시 바로 해금될 임박 스킬에 **`NEXT LV` 주황 맥동 배지**를 이식하여 뚜렷한 목표 제시 완료.
+- **컴파일 정합성 및 빌드 무결성 검증**: `npx tsc --noEmit` 타입 검사 완료 (오류 0개) 및 `npm run build` 프로덕션 번들 빌드 성공 완료.
+- **게임 로직 100% 보존**: 보상 테이블/확률, 소환권 획득 확률, 진화/재각성/재굴림/슬롯 해금 조건 및 성공률, 비용 공식 등 인게임 성장 경제/밸런스 공식과 로컬 저장 구조(persist v14)를 완벽하게 보존함.
+
+## 12-37B Job / Advancement Premium Visual Upgrade — (2026-05-28)
+- **Premium Job VFX CSS 설계 (`src/index.css`)**: 1차 청록 맥동(`.tier-aura-first`), 2차 자수정 보라(`.tier-aura-second`), 3차 찬란한 골드 룬(`.tier-aura-third`), 히든 그림자 칠흑(`.tier-aura-hidden-shadow`), 히든 저주 핏빛(`.tier-aura-hidden-curse`), 히든 차원 공간 왜곡(`.tier-aura-hidden-rift`) 아우라 및 전용 `@keyframes` 애니메이션 주입 완료.
+- **Active Job 카드 프리미엄화 & 스킬 트리 탑재 (`src/components/JobPanel.tsx`)**: Active Job 카드를 `motion.div` 3D 입체 플로팅 및 `card-premium-shine` 3D 광택 레이아웃으로 리디자인. 숙련도 XP 프로그레스 바 HSL 그라데이션 반짝임(`mastery-bar-fill`) 연동. **CLASS SKILLS (직업 스킬 트리)** 섹션을 신설하여 해금 스킬(Swords 쌍검 엠블럼)과 잠긴 스킬(Lock 자물쇠 엠블럼 + 해금 레벨 안내)을 콤팩트하고 미려하게 시각화 완료.
+- **전직 후보 카드 3D 연출 및 힌트 고도화 (`src/components/JobPanel.tsx`)**: 후보 카드를 `motion.div` 호버 플로팅(-4px, 1.025배) 모션 및 프리미엄 광택으로 업그레이드. 전직 가능 시 HSL 맥동 `AWAKENING READY` / `전직 가능` 배지 노출. 전직 요건 상태(`condLines`)를 둥글고 단정한 `bg-ink-950/60` 컴팩트 칩셋박스로 시각화. 미해금 히든 후보는 정체를 숨기되 계열별 균열 아우라 기척을 강화하여 신비로운 존재감 주입.
+- **클래스 도감 카드 3D 및 상태 배지 세련화 (`src/components/JobPanel.tsx`)**: 도감 목록 카드를 3D 플로팅으로 리팩토링하고 해금/장착 상태에 따른 맞춤 오라 적용 및 장착 중 / 선택하기 그라데이션 버튼 세련화 완료.
+- **컴파일 정합성 및 빌드 무결성 검증**: `npx tsc --noEmit` 타입 검사 완료 (오류 0개) 및 `npm run build` 프로덕션 번들 빌드 성공 완료.
+- **게임 로직 100% 보존**: 전직 조건 판단(`checkJobAwakening`), 전직 수락 수동 흐름(`advanceToJob`), 직업 스킬 수치, 경제 밸런스, 로컬 세이브 구조(`levelup-save`, persist v14)를 완벽하게 보존함.
+
+## 12-37A Shadow Legion Premium Visual Upgrade — (2026-05-28)
+- **Premium VFX CSS 설계 (`src/index.css`)**: S태생 황금오라(`grade-aura-s`), A태생 은백오라(`grade-aura-a`), Named 신화오라(`named-pulse`), Deployed 장착 광택(`shadow-deployed-glow`), Evolved 테두리, 3D 프리미엄 카드 광택(`card-premium-shine`) 클래스 및 전용 Keyframes 추가 완료.
+- **초상화 크기 및 Hover 인터랙션 개선 (`src/components/shadows/ShadowPortrait.tsx`)**: PNG 에셋 기본 스케일을 `scale-[1.15]`와 `translate-y-[3%]` 오프셋으로 최적화하여 도감 및 카드에서 머리가 잘려 나가는(Head Cropping) 현상 원천 해결. `group-hover:scale-[1.25] group-hover:translate-y-[1%]` 줌 호버 애니메이션 및 drop-shadow 필터 주입 완료.
+- **카드 프레임 입체화 (`src/components/shadows/ShadowCard.tsx`)**: `whileHover` 플로팅 모션(-4px) 및 `card-premium-shine` 3D 샤인 레이아웃 결합. Deployed/Evolved/Named/S태생/A태생 결속 오라 및 배지 동적 바인딩 완료.
+- **군단 사령부 대시보드 및 Deployed 슬롯 리뉴얼 (`src/components/ShadowPanel.tsx`)**: S/A태생 개수, Named 개수, 최고레벨, 평균레벨, 최고 SCP를 감사하는 통계 대시보드 추가. 장착 슬롯(`DEPLOYED LEGION`)의 `ShadowPortrait` 크기를 `md`에서 `lg`로 키워 이미지 존재감 극대화. 닫는 태그 Framer motion 정합성 보완 완료.
+- **원정 편성 및 전장 비주얼 일체화 (`src/components/shadows/ShadowExpeditionPanel.tsx` & `ShadowExpeditionBattlefield.tsx`)**: 원정대 선택 창의 미니그림자 카드를 `motion.button`으로 전환하고 3D 플로팅, 광택 적용. 포트레이트 크기를 `xs`에서 `sm`으로 20px 이상 확대. 원정 Battlefield 전장 유닛들의 오라를 `grade-aura-s`, `grade-aura-a`, `named-pulse`, `shadow-evolved-card`와 직접 연계하여 전장 시각 완성도 폭발 및 Active Actor 포트레이트 보완 완료.
+- **게임 로직 보존 및 무결성 검증**: 전투 공식, 그림자 스탯 공식, 정수 소모/강화/소환/원정 확률 및 세이브 구조(`levelup-save`, persist v14)를 100% 보존한 상태에서 `npx tsc --noEmit` 무오류 통과 및 `npm run build` 빌드 성공 검증 완료.
+
+## LEVEL UP 외부 참고용 종합 티어표 문서 작성 (12-36A) — (2026-05-28)
+- **종합 티어표 문서 신규 작성**: [levelup-tier-list.md](file:///c:/Users/khdkf/levelup/docs/levelup-tier-list.md)를 새로 만들어 그림자, 장비, 직업군 전체를 객관적인 데이터와 후반 성장성, 범용성에 기초하여 SSS~C 등급표로 체계화 완료.
+- **그림자 티어표**: 70여 종이 넘는 전체 그림자(소환형, 게이트 네임드, 성취 네임드 포함)를 basePower, effects, named 가치, 진화 가능성 및 innate grade와의 시너지를 기반으로 면밀히 분석하고 1~2문장의 평가 이유와 함께 맵핑 완료.
+- **장비 티어표**: ITEM_POOL 내의 40종 이상의 일반/특수 장비를 희귀도, 파츠별 장착 슬롯, 고유 스탯 보정치, 특수 효과(effects) 및 액티브/패시브 스킬 유무, 카테고리성장 XP 시너지를 활용해 객관적 티어로 맵핑 완료.
+- **직업 티어표**: Novice tier부터 1차, 2차, 3차 일반 및 3대 히든 계열(그림자, 저주, 시공/균열) 전직 트리 전체를 전투 성능, 기동성, 스킬 개성, 인과 반사/파멸 저주 등의 고유 효과, 운용 난이도 및 퀘스트 성장 친화도(Affinity)를 감안해 맵핑 완료.
+- **코드 무결성 유지**: 문서 작성에 초점을 두어 별도 앱 UI나 게임 로직(밸런스 수치, 전투 공식, 보상, 확률, 저장 구조)은 일체 변경하지 않았음을 100% 검증 완료.
+
 ## 히든 직업 해금 조건 난이도 재조정 및 희귀성 강화 (12-34D) — (2026-05-28)
 - **Hidden Resonance 공명 데이터 모델 구축**: 계열별(`shadow`, `curse`, `rift`) 누적 공명 수치 및 신호 발생 횟수를 추적하는 `HiddenJobPathProgress` 타입을 [types.ts](file:///c:/Users/khdkf/levelup/src/lib/types.ts)에 정의하고 `HunterState`에 저장 구조 연동 완료.
 - **신호 공명 가중치 설계 및 누적 연동**: [store.ts](file:///c:/Users/khdkf/levelup/src/lib/store.ts) 내부에 `SIGNAL_WEIGHTS` 가중치 테이블과 `addHiddenSignalToState` 헬퍼 함수를 적용하여 그림자 추출 시도(+1) 및 성공(+3), rare 이상(+4) 및 named 획득(+5), 원정 성공(+2) 및 대성공(+4), 생사경 극복 승리(+3) 및 S급/보스전 긴박 승리(+5), 장기전(+2/curse & rift), 탑 보스 긴박 승리(+5) 등 정밀 신호 가중치 누적 구현 완료.

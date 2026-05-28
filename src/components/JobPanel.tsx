@@ -1,10 +1,25 @@
 import { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
+import clsx from 'clsx'
 import { useGame } from '../lib/store'
 import { JOB_DEFINITIONS_V2 } from '../lib/jobs'
+import { SKILL_DEFINITIONS } from '../lib/seed'
 import { CATEGORY_META, STAT_META } from '../lib/types'
 import type { JobDefinitionV2, JobTier, JobRarity, JobArchetype, OwnedJobState, JobId } from '../lib/types'
-import { ChevronDown, ChevronUp, Lock, Check, Sparkles, Wand2, ShieldAlert, Award } from 'lucide-react'
+import { ChevronDown, ChevronUp, Lock, Check, Sparkles, Wand2, ShieldAlert, Award, Swords, Star, Eclipse } from 'lucide-react'
+
+function getTierAuraClass(tier: JobTier, branch?: string): string {
+  if (tier === 'hidden') {
+    if (branch === 'shadow') return 'tier-aura-hidden-shadow'
+    if (branch === 'curse') return 'tier-aura-hidden-curse'
+    if (branch === 'chrono' || branch === 'rift') return 'tier-aura-hidden-rift'
+    return 'tier-aura-hidden-shadow'
+  }
+  if (tier === 'third') return 'tier-aura-third'
+  if (tier === 'second') return 'tier-aura-second'
+  if (tier === 'first') return 'tier-aura-first'
+  return 'tier-aura-novice'
+}
 
 const TIER_LABEL: Record<JobTier, string> = {
   novice: '기본',
@@ -136,7 +151,6 @@ export function JobPanel() {
   const sortedJobs = [...JOB_DEFINITIONS_V2].sort((a, b) => {
     return tierOrder[a.tier] - tierOrder[b.tier]
   })
-
   // Candidates for Next Tier Advancement
   // 1. Regular advancement candidate paths
   const regularNextJobIds = currentJob?.nextJobIds || []
@@ -151,93 +165,166 @@ export function JobPanel() {
     ...discoveredHiddenCandidates
   ])).filter(id => !(hunter.unlockedJobIds || []).includes(id))
 
+  // 1. Current Job Card
   return (
     <div className="space-y-4">
-      {/* 1. Current Job Card */}
       {currentJob && (
-        <div className={`panel corner-bracket p-5 bg-gradient-to-br ${ARCHETYPE_GRADIENT[currentJob.archetype]} relative overflow-hidden`}>
+        <motion.div  
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          whileHover={{ y: -3, scale: 1.01 }}
+          transition={{ duration: 0.22, ease: 'easeOut' }}
+          className={`panel corner-bracket p-5 bg-gradient-to-br ${ARCHETYPE_GRADIENT[currentJob.archetype]} card-premium-shine group relative overflow-hidden transition-all duration-300 ${getTierAuraClass(currentJob.tier, currentJob.branch)}`}
+        >
           <div className="br" />
+          <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,rgba(251,191,36,0.1),transparent_55%)]" />
           
-          <div className="flex justify-between items-start mb-3">
+          <div className="relative z-10 flex justify-between items-start mb-3">
             <div>
-              <div className="system-text text-[10px] text-cyan-400/80 mb-1">
-                ── 현재 활성 클래스 ──
+              <div className="system-text text-[9px] text-cyan-400/80 mb-1 font-bold tracking-widest">
+                ── ACTIVE CLASS ──
               </div>
-              <h2 className="text-2xl font-black text-amber-300 tracking-wider">
+              <h2 className="text-2xl font-black text-amber-300 tracking-wider drop-shadow-md">
                 {currentJob.name}
               </h2>
               <div className="flex items-center gap-2 mt-1">
-                <span className={`text-xs system-text font-bold ${TIER_COLOR[currentJob.tier]}`}>
+                <span className={`text-xs system-text font-extrabold ${TIER_COLOR[currentJob.tier]}`}>
                   {TIER_LABEL[currentJob.tier]}
                 </span>
-                <span className="text-zinc-500 text-[10px]">•</span>
-                <span className="text-xs text-white/50">{currentJob.combatStyle}</span>
+                <span className="text-white/20 text-[10px]">•</span>
+                <span className="text-xs text-white/60 font-semibold">{currentJob.combatStyle}</span>
               </div>
             </div>
             <div className="text-right">
-              <span className="text-2xl font-black text-white/80 system-text">
+              <span className="text-3xl font-black text-white/95 system-text drop-shadow-[0_0_12px_rgba(255,255,255,0.2)]">
                 Lv.{currentJobState.level}
               </span>
             </div>
           </div>
 
-          <p className="text-xs text-white/70 mb-4 leading-relaxed">
+          <p className="relative z-10 text-xs text-white/75 mb-4 leading-relaxed font-medium">
             {currentJob.description}
           </p>
 
           {/* XP Progress Bar */}
-          <div className="space-y-1.5 mb-4">
+          <div className="relative z-10 space-y-1.5 mb-4">
             <div className="flex justify-between text-[10px] system-text text-white/50">
-              <span>클래스 숙련도 (XP)</span>
-              <span>{currentJobState.xp} / {reqXp} ({xpPercent}%)</span>
+              <span className="font-semibold text-white/60">클래스 숙련도 (XP)</span>
+              <span className="font-bold text-white/80">{currentJobState.xp} / {reqXp} ({xpPercent}%)</span>
             </div>
-            <div className="w-full h-2 rounded bg-black/40 overflow-hidden border border-white/5 p-0.5">
+            <div className="w-full h-2.5 rounded bg-black/50 overflow-hidden border border-white/5 p-0.5 shadow-inner">
               <div 
-                className="h-full rounded-sm bg-gradient-to-r from-amber-400 to-yellow-300 transition-all duration-300"
+                className="h-full rounded-sm bg-gradient-to-r from-amber-400 via-yellow-300 to-amber-200 mastery-bar-fill transition-all duration-500"
                 style={{ width: `${xpPercent}%` }}
               />
             </div>
           </div>
 
           {/* Job Effects Breakdown */}
-          <div className="grid grid-cols-2 gap-3 pt-3 border-t border-white/10 text-xs">
+          <div className="relative z-10 grid grid-cols-2 gap-3 pt-3 border-t border-white/10 text-xs">
             <div>
-              <span className="text-white/40 block mb-1">전투 스탯 수정치</span>
-              <div className="font-medium text-white/90 space-y-0.5">
+              <span className="text-white/40 block mb-1 font-semibold system-text text-[10px]">전투 스탯 수정치</span>
+              <div className="font-bold text-white/90 space-y-0.5">
                 {formatJobModifiers(currentJob).map((mod, i) => (
-                  <div key={i}>• {mod}</div>
+                  <div key={i} className="text-cyan-100/90">• {mod}</div>
                 ))}
               </div>
             </div>
             <div>
-              <span className="text-white/40 block mb-1">성장 카테고리 친화성</span>
-              <div className="text-purple-300 font-medium space-y-0.5">
+              <span className="text-white/40 block mb-1 font-semibold system-text text-[10px]">성장 카테고리 친화성</span>
+              <div className="text-purple-300 font-bold space-y-0.5">
                 {currentJob.growthAffinity?.questCategoryBonus && Object.keys(currentJob.growthAffinity.questCategoryBonus).length > 0 ? (
                   Object.entries(currentJob.growthAffinity.questCategoryBonus).map(([cat, val]) => {
                     const meta = CATEGORY_META[cat as keyof typeof CATEGORY_META]
                     return (
-                      <div key={cat} className="flex items-center gap-1">
+                      <div key={cat} className="flex items-center gap-1.5 text-purple-200">
                         <span>{meta?.icon}</span>
                         <span>{meta?.label} XP +{Math.round((val ?? 0) * 100)}%</span>
                       </div>
                     )
                   })
                 ) : (
-                  <span className="text-zinc-500 italic">균등 성장형</span>
+                  <span className="text-zinc-500 italic font-normal">균등 성장형</span>
                 )}
               </div>
             </div>
           </div>
 
+          {/* 클래스 고유 스킬 트리 (CLASS COMBAT SKILLS) */}
+          {currentJob.skills && currentJob.skills.length > 0 && (
+            <div className="relative z-10 mt-4 pt-3 border-t border-white/10">
+              <span className="text-white/40 text-[10px] system-text block mb-2 font-semibold">클래스 스킬 트리 (CLASS SKILLS)</span>
+              <div className="grid gap-2 sm:grid-cols-2">
+                {currentJob.skills.map((js) => {
+                  const skillDef = SKILL_DEFINITIONS.find(s => s.id === js.skillId)
+                  const isSkillUnlocked = currentJobState.level >= js.unlockLevel
+                  const isNewlyUnlocked = isSkillUnlocked && currentJobState.level === js.unlockLevel
+                  const isImminent = !isSkillUnlocked && js.unlockLevel === currentJobState.level + 1
+                  
+                  if (!skillDef) return null
+                  
+                  return (
+                    <div 
+                      key={js.skillId}
+                      className={clsx(
+                        'flex items-center gap-2.5 rounded-md border p-2 bg-ink-950/65 transition-all relative overflow-hidden',
+                        isSkillUnlocked
+                          ? isNewlyUnlocked
+                            ? 'border-cyan-400 bg-cyan-950/30 text-white/90 shadow-[0_0_15px_rgba(6,182,212,0.14)] animate-pulse'
+                            : 'border-cyan-500/25 text-white/80'
+                          : isImminent
+                            ? 'border-amber-500/30 bg-amber-950/15 opacity-80'
+                            : 'border-white/5 opacity-35'
+                      )}
+                    >
+                      {isNewlyUnlocked && (
+                        <div className="absolute -right-3 -top-3 h-8 w-8 bg-cyan-400/20 blur-md animate-pulse" />
+                      )}
+                      {isImminent && (
+                        <div className="absolute -right-3 -top-3 h-8 w-8 bg-amber-400/10 blur-md" />
+                      )}
+                      
+                      <div className={clsx(
+                        'w-8 h-8 rounded-md flex items-center justify-center border shrink-0 text-xs font-black',
+                        isSkillUnlocked
+                          ? isNewlyUnlocked
+                            ? 'bg-cyan-500/20 border-cyan-400 text-cyan-200 shadow-glow'
+                            : 'bg-cyan-500/10 border-cyan-500/35 text-cyan-300'
+                          : isImminent
+                            ? 'bg-amber-500/10 border-amber-500/30 text-amber-300/80 animate-pulse'
+                            : 'bg-black/40 border-white/5 text-white/30'
+                      )}>
+                        {isSkillUnlocked ? <Swords className="w-4 h-4" /> : <Lock className="w-3.5 h-3.5" />}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center justify-between gap-1">
+                          <span className="font-bold text-xs truncate text-white/90">{skillDef.name}</span>
+                          {isNewlyUnlocked ? (
+                            <span className="text-[7px] system-text text-cyan-300 border border-cyan-400/30 bg-cyan-400/20 px-1 rounded font-black tracking-tighter shrink-0 animate-bounce">NEW</span>
+                          ) : isImminent ? (
+                            <span className="text-[7px] system-text text-amber-300 border border-amber-400/30 bg-amber-400/15 px-1 rounded font-bold shrink-0">NEXT LV</span>
+                          ) : (
+                            <span className="text-[8px] system-text text-white/30 shrink-0 font-semibold">Lv.{js.unlockLevel} 해금</span>
+                          )}
+                        </div>
+                        <p className="text-[10px] text-white/45 truncate mt-0.5">{skillDef.description}</p>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+
           {/* Toggle bottom catalog button */}
-          <div className="mt-5 flex justify-between items-center pt-3 border-t border-white/10">
-            <div className="text-[10px] text-white/40 system-text">
+          <div className="relative z-10 mt-5 flex justify-between items-center pt-3 border-t border-white/10">
+            <div className="text-[10px] text-white/40 system-text font-bold">
               도달클래스 성취 {unlockedJobCount} / {JOB_DEFINITIONS_V2.length}
             </div>
             <button
               type="button"
               onClick={() => setIsJobListOpen(prev => !prev)}
-              className="inline-flex items-center justify-center gap-2 rounded border border-zinc-700 bg-zinc-800/50 px-3 py-1.5 text-xs system-text text-zinc-300 hover:bg-zinc-700 transition-all"
+              className="inline-flex items-center justify-center gap-2 rounded border border-zinc-700 bg-zinc-800/60 px-3 py-1.5 text-xs system-text text-zinc-200 hover:bg-zinc-700 hover:text-white transition-all shadow-sm active:scale-[0.98]"
             >
               {isJobListOpen ? (
                 <>
@@ -252,7 +339,7 @@ export function JobPanel() {
               )}
             </button>
           </div>
-        </div>
+        </motion.div>
       )}
 
       {/* 2. Next Advancement Candidate Classes (실사용 전직 선택지) */}
@@ -335,38 +422,59 @@ export function JobPanel() {
                 const branchKey = (job.branch === 'chrono' ? 'rift' : job.branch) as 'shadow' | 'curse' | 'rift'
                 const targetResonance = cond?.resonanceRequired?.[branchKey] || 10
                 const dynamicHint = getDynamicHiddenHint(job, hunter.hiddenResonanceProgress || {}, targetResonance)
+                
+                let hiddenPulseClass = 'named-pulse'
+                if (branchKey === 'curse') hiddenPulseClass = 'tier-aura-hidden-curse'
+                if (branchKey === 'rift') hiddenPulseClass = 'tier-aura-hidden-rift'
+                if (branchKey === 'shadow') hiddenPulseClass = 'tier-aura-hidden-shadow'
+
                 return (
-                  <div 
+                  <motion.div 
                     key={job.id} 
-                    className="panel corner-bracket p-4 border border-zinc-900 bg-zinc-950/60 opacity-50 relative"
+                    whileHover={{ y: -3, scale: 1.015 }}
+                    transition={{ duration: 0.2, ease: 'easeOut' }}
+                    className={`panel corner-bracket p-4 border bg-zinc-950/80 group card-premium-shine relative overflow-hidden transition-all duration-300 ${hiddenPulseClass}`}
                   >
                     <div className="br" />
-                    <div className="flex items-center gap-2 mb-2">
-                      <Lock className="w-3.5 h-3.5 text-rose-500/70" />
-                      <h4 className="font-bold text-zinc-500 system-text tracking-wide">
-                        {dynamicHint.maskedName}
-                      </h4>
-                      <span className="text-[9px] text-rose-400 bg-rose-950/40 px-1 py-0.5 rounded border border-rose-500/20">히든</span>
+                    <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,rgba(244,63,94,0.06),transparent_55%)]" />
+                    
+                    <div className="relative z-10 flex items-center justify-between gap-2 mb-2">
+                      <div className="flex items-center gap-1.5">
+                        <Lock className="w-3.5 h-3.5 text-rose-500/70" />
+                        <h4 className="font-extrabold text-zinc-400 system-text tracking-wide text-sm">
+                          {dynamicHint.maskedName}
+                        </h4>
+                      </div>
+                      <span className="text-[8px] font-bold text-rose-400 bg-rose-950/45 px-1.5 py-0.5 rounded border border-rose-500/30 uppercase tracking-wider animate-pulse">
+                        균열 감지됨
+                      </span>
                     </div>
-                    <p className="text-[11px] text-zinc-500 italic leading-relaxed">
-                      힌트: {dynamicHint.hintText}
+                    <p className="relative z-10 text-[11px] text-zinc-400 leading-relaxed font-medium bg-black/40 p-2 rounded border border-white/5">
+                      <span className="text-rose-400/80 font-bold block mb-0.5 text-[10px]">공명 반응:</span>
+                      {dynamicHint.hintText}
                     </p>
-                  </div>
+                  </motion.div>
                 )
               }
 
               // Render normal / revealed class candidates
+              const candAuraClass = getTierAuraClass(job.tier, job.branch)
+
               return (
-                <div 
+                <motion.div 
                   key={job.id}
+                  whileHover={{ y: -4, scale: 1.025 }}
+                  transition={{ duration: 0.22, ease: 'easeOut' }}
                   className={`panel corner-bracket p-4 bg-gradient-to-br ${
                     canAdvance 
-                      ? 'from-cyan-950/15 to-blue-950/5 border-cyan-400/40 shadow-[0_0_10px_rgba(34,211,238,0.05)]' 
-                      : 'from-black/10 to-black/20 opacity-75 border-zinc-800'
-                  } relative`}
+                      ? `${ARCHETYPE_GRADIENT[job.archetype]} border-cyan-400/40 shadow-[0_0_12px_rgba(34,211,238,0.08)]` 
+                      : 'from-black/20 to-black/35 opacity-75 border-zinc-800/80'
+                  } card-premium-shine group relative overflow-hidden transition-all duration-300 ${candAuraClass}`}
                 >
                   <div className="br" />
-                  <div className="flex justify-between items-start mb-2">
+                  <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,rgba(6,182,212,0.06),transparent_55%)]" />
+
+                  <div className="relative z-10 flex justify-between items-start mb-2">
                     <div>
                       <div className="flex items-center gap-1.5">
                         {isHidden ? (
@@ -374,31 +482,40 @@ export function JobPanel() {
                         ) : (
                           <Wand2 className="w-4 h-4 text-cyan-400" />
                         )}
-                        <h4 className={`font-black text-sm tracking-wide ${isHidden ? 'text-rose-300' : 'text-white/90'}`}>
-                          {job.name} {isHidden && <span className="text-[9px] text-rose-400">(히든)</span>}
+                        <h4 className={`font-black text-sm tracking-wide ${isHidden ? 'text-rose-300 drop-shadow' : 'text-white/90'}`}>
+                          {job.name}
                         </h4>
                       </div>
-                      <div className="flex items-center gap-1 text-[9px] text-white/40 mt-1">
+                      <div className="flex items-center gap-1.5 text-[9px] text-white/40 mt-1 system-text font-bold">
                         <span className={TIER_COLOR[job.tier]}>{TIER_LABEL[job.tier]}</span>
                         <span>•</span>
-                        <span>{job.combatStyle}</span>
+                        <span className="text-white/50">{job.combatStyle}</span>
                       </div>
                     </div>
+                    {canAdvance && (
+                      <span className={`text-[8px] font-bold px-2 py-0.5 rounded border uppercase tracking-wider animate-pulse ${
+                        isHidden 
+                          ? 'border-rose-400/40 bg-rose-400/15 text-rose-200' 
+                          : 'border-cyan-400/40 bg-cyan-400/15 text-cyan-200'
+                      }`}>
+                        전직 가능
+                      </span>
+                    )}
                   </div>
 
-                  <p className="text-[11px] text-white/60 mb-3 leading-relaxed">
+                  <p className="relative z-10 text-[11px] text-white/70 mb-3 leading-relaxed">
                     {job.description}
                   </p>
 
                   {/* Conditions Check Display */}
                   {condLines.length > 0 && (
-                    <div className="space-y-1 bg-black/30 p-2 rounded border border-white/5 mb-3 text-[10px] system-text">
-                      <div className="text-[9px] text-white/30 mb-1">클래스 전직 충족 요건:</div>
+                    <div className="relative z-10 space-y-1 bg-black/40 p-2.5 rounded border border-white/5 mb-3 text-[10px] system-text shadow-inner">
+                      <div className="text-[9px] text-white/30 mb-1 font-bold">전직 개방 요건:</div>
                       {condLines.map((line, idx) => (
                         <div key={idx} className="flex justify-between items-center">
-                          <span className={line.met ? 'text-white/60' : 'text-white/40'}>{line.text}</span>
-                          <span className={line.met ? 'text-emerald-400 font-bold' : 'text-red-400 font-bold'}>
-                            {line.met ? '✓ 충족' : '✗ 미달'}
+                          <span className={line.met ? 'text-white/70 font-semibold' : 'text-white/40'}>{line.met ? '✓' : '✗'} {line.text}</span>
+                          <span className={line.met ? 'text-emerald-400 font-extrabold' : 'text-red-400/80 font-bold'}>
+                            {line.met ? '만족' : '미충족'}
                           </span>
                         </div>
                       ))}
@@ -406,25 +523,27 @@ export function JobPanel() {
                   )}
 
                   {/* Advancement Accept Button */}
-                  {canAdvance ? (
-                    <button
-                      type="button"
-                      onClick={() => advanceToJob(job.id)}
-                      className={`w-full py-1.5 text-center rounded text-xs font-black transition active:scale-[0.98] ${
-                        isHidden 
-                          ? 'bg-gradient-to-r from-rose-600 to-purple-600 text-white shadow-glow-rose hover:brightness-110' 
-                          : 'bg-gradient-to-r from-cyan-500 to-blue-500 text-white shadow-glow hover:brightness-110'
-                      }`}
-                    >
-                      {isHidden ? '기척 수락 (히든 전직)' : '전직하기'}
-                    </button>
-                  ) : (
-                    <div className="w-full py-1.5 text-center rounded bg-zinc-800/40 text-zinc-500 text-xs font-medium border border-zinc-800/50 flex items-center justify-center gap-1">
-                      <ShieldAlert className="w-3.5 h-3.5" />
-                      조건 미충족
-                    </div>
-                  )}
-                </div>
+                  <div className="relative z-10">
+                    {canAdvance ? (
+                      <button
+                        type="button"
+                        onClick={() => advanceToJob(job.id)}
+                        className={`w-full py-1.5 text-center rounded text-xs font-black transition-all shadow-md hover:brightness-110 active:scale-[0.98] ${
+                          isHidden 
+                            ? 'bg-gradient-to-r from-rose-600 to-purple-600 text-white shadow-glow-rose' 
+                            : 'bg-gradient-to-r from-cyan-500 to-blue-500 text-white shadow-glow'
+                        }`}
+                      >
+                        {isHidden ? '기척 수락 (히든 전직)' : '수락 및 전직 완료'}
+                      </button>
+                    ) : (
+                      <div className="w-full py-1.5 text-center rounded bg-zinc-800/40 text-zinc-500 text-xs font-bold border border-zinc-800/50 flex items-center justify-center gap-1.5 shadow-sm">
+                        <Lock className="w-3.5 h-3.5" />
+                        클래스 잠김 (요건 미충족)
+                      </div>
+                    )}
+                  </div>
+                </motion.div>
               )
             })}
           </div>
@@ -456,44 +575,57 @@ export function JobPanel() {
                   const branchKey = (job.branch === 'chrono' ? 'rift' : job.branch) as 'shadow' | 'curse' | 'rift'
                   const targetResonance = job.unlockCondition?.resonanceRequired?.[branchKey] || 10
                   const dynamicHint = getDynamicHiddenHint(job, hunter.hiddenResonanceProgress || {}, targetResonance)
+                  
+                  let hiddenPulseClass = 'named-pulse'
+                  if (branchKey === 'curse') hiddenPulseClass = 'tier-aura-hidden-curse'
+                  if (branchKey === 'rift') hiddenPulseClass = 'tier-aura-hidden-rift'
+                  if (branchKey === 'shadow') hiddenPulseClass = 'tier-aura-hidden-shadow'
+
                   return (
-                    <div 
+                    <motion.div 
                       key={job.id} 
-                      className="panel corner-bracket p-4 border border-zinc-900 bg-zinc-950/40 opacity-40 relative"
+                      whileHover={{ y: -3, scale: 1.015 }}
+                      transition={{ duration: 0.2, ease: 'easeOut' }}
+                      className={`panel corner-bracket p-4 border bg-zinc-950/80 group card-premium-shine relative overflow-hidden transition-all duration-300 ${hiddenPulseClass} opacity-60`}
                     >
                       <div className="br" />
-                      <div className="flex items-center gap-2 mb-2">
-                        <Lock className="w-3.5 h-3.5 text-zinc-700" />
-                        <h4 className="font-bold text-zinc-600 system-text">
+                      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,rgba(244,63,94,0.04),transparent_55%)]" />
+                      <div className="relative z-10 flex items-center gap-2 mb-2">
+                        <Lock className="w-3.5 h-3.5 text-rose-500/50" />
+                        <h4 className="font-extrabold text-zinc-400 system-text tracking-wide text-xs">
                           {dynamicHint.maskedName}
                         </h4>
-                        <span className="text-[8px] text-zinc-700 bg-zinc-900 px-1 py-0.5 rounded">히든</span>
+                        <span className="text-[7px] font-bold text-rose-400/80 bg-rose-950/40 px-1 py-0.5 rounded border border-rose-500/20 uppercase tracking-widest animate-pulse">히든</span>
                       </div>
-                      <p className="text-[10px] text-zinc-600 italic">
-                        힌트: {dynamicHint.hintText}
+                      <p className="relative z-10 text-[10px] text-zinc-500 italic bg-black/40 p-2 rounded border border-white/5">
+                        {dynamicHint.hintText}
                       </p>
-                    </div>
+                    </motion.div>
                   )
                 }
 
                 // Normal and Discovered Hidden jobs rendering
                 const levelText = ownedState ? `Lv.${ownedState.level}` : 'Lv.1'
+                const tierAuraClass = getTierAuraClass(job.tier, job.branch)
 
                 return (
-                  <div
+                  <motion.div
                     key={job.id}
+                    whileHover={{ y: -3, scale: 1.015 }}
+                    transition={{ duration: 0.22, ease: 'easeOut' }}
                     className={`panel corner-bracket p-4 bg-gradient-to-br ${
                       isEquipped
-                        ? 'from-amber-500/10 to-yellow-500/5 border-amber-400/60'
+                        ? 'from-amber-500/12 to-yellow-500/6 border-amber-400/70 shadow-[0_0_12px_rgba(251,191,36,0.08)]'
                         : isUnlocked
-                        ? 'from-cyan-950/10 to-blue-950/5 hover:border-cyan-400/40 border-cyan-500/20'
-                        : 'from-black/10 to-black/20 opacity-70 border-white/5'
-                    } transition-all duration-300`}
+                        ? 'from-cyan-950/8 to-blue-950/4 border-cyan-500/25 hover:border-cyan-400/40'
+                        : 'from-black/20 to-black/35 opacity-70 border-white/5'
+                    } card-premium-shine group relative overflow-hidden transition-all duration-300 ${tierAuraClass}`}
                   >
                     <div className="br" />
+                    <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,rgba(255,255,255,0.03),transparent_55%)]" />
                     
                     {/* Top line info */}
-                    <div className="flex justify-between items-start mb-1.5">
+                    <div className="relative z-10 flex justify-between items-start mb-1.5">
                       <div>
                         <div className="flex items-center gap-2">
                           {isEquipped ? (
@@ -503,61 +635,66 @@ export function JobPanel() {
                           ) : (
                             <Lock className="w-4 h-4 text-white/30" />
                           )}
-                          <h4 className={`font-bold ${isEquipped ? 'text-amber-300' : 'text-white/80'}`}>
+                          <h4 className={`font-bold text-sm tracking-wide ${isEquipped ? 'text-amber-300 font-extrabold' : 'text-white/80'}`}>
                             {job.name}
                           </h4>
                         </div>
-                        <div className="flex items-center gap-1.5 text-[9px] system-text text-cyan-300/40 mt-1">
+                        <div className="flex items-center gap-1.5 text-[9px] system-text text-cyan-300/40 mt-1 font-bold">
                           <span className={TIER_COLOR[job.tier]}>{TIER_LABEL[job.tier]}</span>
                           <span>•</span>
                           <span className="capitalize">{job.branch !== 'none' ? job.branch : '일반'} 계열</span>
                         </div>
                       </div>
                       {isUnlocked && (
-                        <span className="text-[10px] font-bold text-zinc-400 system-text">
+                        <span className="text-[10px] font-black text-zinc-300 bg-zinc-800/60 px-1.5 py-0.5 rounded border border-white/5 system-text shadow-sm">
                           {levelText}
                         </span>
                       )}
                     </div>
 
-                    <p className="text-[11px] text-white/60 mb-3 leading-relaxed">
+                    <p className="relative z-10 text-[11px] text-white/60 mb-3 leading-relaxed">
                       {job.description}
                     </p>
 
                     {/* Modifiers and Affinity display */}
-                    <div className="text-[9px] system-text text-zinc-400 border-t border-white/5 pt-2 mb-3 grid grid-cols-2 gap-1.5">
+                    <div className="relative z-10 text-[9px] system-text text-zinc-400 border-t border-white/5 pt-2 mb-3 grid grid-cols-2 gap-2 bg-black/20 p-2 rounded shadow-inner">
                       <div>
-                        <span className="text-white/30">부여 스탯:</span> {formatJobModifiers(job).join(', ')}
+                        <span className="text-white/30 font-semibold block mb-0.5">부여 스탯:</span> 
+                        <span className="text-cyan-100/70 font-semibold">{formatJobModifiers(job).join(', ')}</span>
                       </div>
                       <div>
-                        <span className="text-white/30">친화 카테고리:</span>{' '}
-                        {job.growthAffinity?.questCategoryBonus && Object.keys(job.growthAffinity.questCategoryBonus).length > 0 ? (
-                          Object.keys(job.growthAffinity.questCategoryBonus).map(cat => CATEGORY_META[cat as keyof typeof CATEGORY_META]?.label).join(', ')
-                        ) : (
-                          '없음'
-                        )}
+                        <span className="text-white/30 font-semibold block mb-0.5">친화 카테고리:</span>{' '}
+                        <span className="text-purple-300 font-semibold">
+                          {job.growthAffinity?.questCategoryBonus && Object.keys(job.growthAffinity.questCategoryBonus).length > 0 ? (
+                            Object.keys(job.growthAffinity.questCategoryBonus).map(cat => CATEGORY_META[cat as keyof typeof CATEGORY_META]?.label).join(', ')
+                          ) : (
+                            '없음'
+                          )}
+                        </span>
                       </div>
                     </div>
 
                     {/* Selection Button */}
-                    {isEquipped ? (
-                      <div className="text-center py-1 rounded bg-amber-400/20 text-amber-300 text-xs font-bold border border-amber-400/30">
-                        장착 중
-                      </div>
-                    ) : isUnlocked ? (
-                      <button
-                        type="button"
-                        onClick={() => equipJob(job.id)}
-                        className="w-full py-1 text-center rounded border border-cyan-400/30 bg-cyan-400/10 text-cyan-300 text-xs font-bold hover:bg-cyan-400/20 transition active:scale-[0.98]"
-                      >
-                        선택하기
-                      </button>
-                    ) : (
-                      <div className="text-center py-1 rounded bg-white/5 text-white/20 text-xs font-medium border border-white/5">
-                        {job.unlockCondition?.hunterLevel ? `Lv.${job.unlockCondition.hunterLevel} 해금` : '잠김'}
-                      </div>
-                    )}
-                  </div>
+                    <div className="relative z-10">
+                      {isEquipped ? (
+                        <div className="text-center py-1 rounded bg-amber-400/20 text-amber-300 text-xs font-bold border border-amber-400/35 shadow-inner">
+                          장착 중
+                        </div>
+                      ) : isUnlocked ? (
+                        <button
+                          type="button"
+                          onClick={() => equipJob(job.id)}
+                          className="w-full py-1 text-center rounded border border-cyan-400/30 bg-cyan-400/10 text-cyan-300 text-xs font-bold hover:bg-cyan-400/20 hover:text-white transition-all active:scale-[0.98] shadow-sm"
+                        >
+                          선택하기
+                        </button>
+                      ) : (
+                        <div className="text-center py-1 rounded bg-white/5 text-white/20 text-xs font-medium border border-white/5 system-text">
+                          {job.unlockCondition?.hunterLevel ? `Lv.${job.unlockCondition.hunterLevel} 해금` : '잠김'}
+                        </div>
+                      )}
+                    </div>
+                  </motion.div>
                 )
               })}
             </div>

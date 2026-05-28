@@ -226,7 +226,7 @@ export function ShadowExpeditionBattlefield({
       {actor && (
         <div className="relative z-10 mt-2 flex items-center gap-2 rounded-md border border-amber-300/20 bg-amber-300/10 px-2 py-1.5">
           <div className="h-8 w-8 shrink-0">
-            <ShadowPortrait shadow={actor} definition={getShadowDefinition(actor.definitionId)} size="xs" active highlighted />
+            <ShadowPortrait shadow={actor} definition={getShadowDefinition(actor.definitionId)} size="xs" active highlighted innateGrade={actor.innateGrade} />
           </div>
           <div className="min-w-0">
             <div className="system-text text-[9px] text-amber-100/60">ACTIVE ACTOR</div>
@@ -284,11 +284,13 @@ export function ShadowExpeditionBattlefield({
                     isActor && 'expedition-unit-acting z-20',
                   )}
                 >
-                  <div className={clsx('absolute inset-x-1 bottom-1 h-12 rounded-full bg-gradient-to-t blur-xl', roleAura[shadow.role], (commandMatch || isActor || isHighGrade || isNamed) && 'opacity-100', !(commandMatch || isActor || isHighGrade || isNamed) && 'opacity-55')} />
+                  <div className={clsx('absolute inset-x-1 bottom-1 h-12 rounded-full bg-gradient-to-t blur-xl shadow-deployed-glow', roleAura[shadow.role], (commandMatch || isActor || isHighGrade || isNamed) && 'opacity-100', !(commandMatch || isActor || isHighGrade || isNamed) && 'opacity-55')} />
                   {(isHighGrade || isNamed || isEvolved) && (
                     <div className={clsx(
-                      'pointer-events-none absolute -inset-2 rounded-full border shadow-[0_0_22px_currentColor]',
-                      isNamed ? 'border-amber-200/35 text-amber-200/30' : isEvolved ? 'border-emerald-200/30 text-emerald-200/25' : 'border-cyan-200/30 text-cyan-200/25',
+                      'pointer-events-none absolute -inset-2 rounded-full border shadow-[0_0_22px_currentColor] transition-all duration-300',
+                      isNamed ? 'border-amber-200/45 text-amber-200/30 named-pulse' : isEvolved ? 'border-emerald-200/40 text-emerald-200/25 shadow-evolved-card' : 'border-cyan-200/40 text-cyan-200/25',
+                      shadow.innateGrade === 'S' && 'grade-aura-s ring-1 ring-amber-300/30',
+                      shadow.innateGrade === 'A' && 'grade-aura-a ring-1 ring-slate-300/30',
                     )} />
                   )}
                   {isActor && (

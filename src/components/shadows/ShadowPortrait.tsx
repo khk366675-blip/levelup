@@ -530,10 +530,8 @@ export function ShadowPortrait({
   return (
     <div
       className={clsx(
-        'relative isolate overflow-hidden rounded-md border bg-ink-950/80',
+        'relative isolate',
         sizeClass[size],
-        hidden ? 'border-slate-400/30' : def?.isAchievementNamed || shadow?.isAchievementNamed ? 'border-cyan-200/50' : displayNamed ? 'border-amber-300/50' : 'border-white/10',
-        active && 'ring-2 ring-cyan-300/35',
         highlighted && 'shadow-glow-purple',
         evolutionReady && 'shadow-glow',
         isGradeS && !displayNamed && !hidden && 'grade-aura-s',
@@ -546,89 +544,105 @@ export function ShadowPortrait({
       )}
       style={{
         ...style,
-        borderColor: active || displayNamed ? accent : undefined,
         boxShadow: highlighted || active || displayNamed
-          ? `0 0 ${Math.round(24 + profile.intensity * 8)}px ${palette.glow}, inset 0 0 30px rgba(2, 6, 23, 0.85)`
-          : `inset 0 0 24px rgba(2, 6, 23, 0.9)`,
+          ? `0 0 ${Math.round(24 + profile.intensity * 8)}px ${palette.glow}`
+          : undefined,
       }}
       aria-label={label}
     >
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_20%,var(--shadow-mist),transparent_35%),linear-gradient(180deg,rgba(15,23,42,0.1),rgba(2,6,23,0.95))]" />
+      {/* 1. Masked Background Container (Rounded + Overflow Hidden) */}
       <div
-        className="absolute inset-0 opacity-80"
+        className={clsx(
+          'absolute inset-0 overflow-hidden rounded-md border bg-ink-950/80 transition-all duration-300',
+          hidden ? 'border-slate-400/30' : def?.isAchievementNamed || shadow?.isAchievementNamed ? 'border-cyan-200/50' : displayNamed ? 'border-amber-300/50' : 'border-white/10',
+          active && 'ring-2 ring-cyan-300/35',
+        )}
         style={{
-          background: `radial-gradient(circle at 50% 34%, ${accent}22, transparent ${displayNamed ? 44 : 34}%), radial-gradient(circle at 50% 88%, ${accent}16, transparent 42%)`,
+          borderColor: active || displayNamed ? accent : undefined,
+          boxShadow: `inset 0 0 30px rgba(2, 6, 23, 0.85)`,
         }}
-      />
-      <div
-        className={clsx('absolute inset-x-6 bottom-3 h-9 rounded-full blur-xl', (active || highlighted) && 'animate-pulse')}
-        style={{ background: `radial-gradient(circle, ${palette.glow}, transparent 70%)`, transform: `translateX(${mistShift}px)` }}
-      />
-      <svg className={clsx('absolute inset-0 h-full w-full', !hidden && 'animate-float')} viewBox="0 0 116 128" role="img">
-        <defs>
-          <linearGradient id="body" x1="0" y1="0" x2="1" y2="1">
-            <stop offset="0%" stopColor="#172033" />
-            <stop offset="45%" stopColor="#050816" />
-            <stop offset="100%" stopColor="#02030a" />
-          </linearGradient>
-          <linearGradient id="cloak" x1="0" y1="0" x2="1" y2="1">
-            <stop offset="0%" stopColor={accent} stopOpacity="0.34" />
-            <stop offset="55%" stopColor="#111827" stopOpacity="0.84" />
-            <stop offset="100%" stopColor="#02030a" />
-          </linearGradient>
-          <linearGradient id="shield" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor={accent} stopOpacity="0.42" />
-            <stop offset="45%" stopColor="#111827" />
-            <stop offset="100%" stopColor="#02030a" />
-          </linearGradient>
-          <linearGradient id="steel" x1="0" y1="0" x2="1" y2="1">
-            <stop offset="0%" stopColor="#e5e7eb" stopOpacity="0.8" />
-            <stop offset="100%" stopColor={accent} stopOpacity="0.55" />
-          </linearGradient>
-          <linearGradient id="book" x1="0" y1="0" x2="1" y2="1">
-            <stop offset="0%" stopColor={accent} stopOpacity="0.45" />
-            <stop offset="100%" stopColor="#0f172a" />
-          </linearGradient>
-          <linearGradient id="banner" x1="0" y1="0" x2="1" y2="1">
-            <stop offset="0%" stopColor={accent} stopOpacity="0.58" />
-            <stop offset="100%" stopColor="#111827" />
-          </linearGradient>
-          <linearGradient id="bodyStroke" x1="0" y1="0" x2="1" y2="1">
-            <stop offset="0%" stopColor="#02030a" />
-            <stop offset="100%" stopColor={accent} stopOpacity="0.65" />
-          </linearGradient>
-        </defs>
-        <g opacity={hidden ? 0.28 : 1}>
-          {renderAura(profile, accent, displayNamed, displayEvolved)}
-          {renderBackgroundMotif(profile, accent, seed, displayNamed, displayEvolved)}
-          <path d="M58 10 L103 35 L103 91 L58 119 L13 91 L13 35 Z" fill="none" stroke={accent} strokeWidth={displayNamed ? 2.8 : displayEvolved ? 2 : 1.4} opacity={displayNamed ? 0.82 : 0.42 + profile.intensity * 0.06} />
-          {displayEvolved && (
-            <path d="M58 26 L82 39 L82 89 L58 103 L34 89 L34 39 Z" fill="none" stroke={accent} strokeWidth="1.4" strokeDasharray="5 3" opacity="0.55" />
-          )}
-          <path d="M58 22 L89 40 L89 85 L58 104 L27 85 L27 40 Z" fill="none" stroke={accent} strokeDasharray={profile.rune === 'ornate' ? '2 4 8 4' : '5 7'} strokeWidth={displayNamed ? 1.25 : 1} opacity={displayNamed || displayEvolved ? 0.38 : 0.25} transform={`rotate(${runeRotation} 58 64)`} />
-          {renderSilhouette(assetFamily, silhouette, displayRole, accent, seed, displayEvolved)}
-          {renderAdvancedProps(profile, displayRole, accent, seed, displayEvolved, displayNamed)}
-          {isGateNamed && renderNamedGateDecor(accent, seed)}
-          {isAchievementNamed && renderAchievementDecor(accent)}
-        </g>
-      </svg>
+      >
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_20%,var(--shadow-mist),transparent_35%),linear-gradient(180deg,rgba(15,23,42,0.1),rgba(2,6,23,0.95))]" />
+        <div
+          className="absolute inset-0 opacity-80"
+          style={{
+            background: `radial-gradient(circle at 50% 34%, ${accent}22, transparent ${displayNamed ? 44 : 34}%), radial-gradient(circle at 50% 88%, ${accent}16, transparent 42%)`,
+          }}
+        />
+        <div
+          className={clsx('absolute inset-x-6 bottom-3 h-9 rounded-full blur-xl', (active || highlighted) && 'animate-pulse')}
+          style={{ background: `radial-gradient(circle, ${palette.glow}, transparent 70%)`, transform: `translateX(${mistShift}px)` }}
+        />
+        <svg className={clsx('absolute inset-0 h-full w-full', !hidden && 'animate-float')} viewBox="0 0 116 128" role="img">
+          <defs>
+            <linearGradient id="body" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0%" stopColor="#172033" />
+              <stop offset="45%" stopColor="#050816" />
+              <stop offset="100%" stopColor="#02030a" />
+            </linearGradient>
+            <linearGradient id="cloak" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0%" stopColor={accent} stopOpacity="0.34" />
+              <stop offset="55%" stopColor="#111827" stopOpacity="0.84" />
+              <stop offset="100%" stopColor="#02030a" />
+            </linearGradient>
+            <linearGradient id="shield" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor={accent} stopOpacity="0.42" />
+              <stop offset="45%" stopColor="#111827" />
+              <stop offset="100%" stopColor="#02030a" />
+            </linearGradient>
+            <linearGradient id="steel" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0%" stopColor="#e5e7eb" stopOpacity="0.8" />
+              <stop offset="100%" stopColor={accent} stopOpacity="0.55" />
+            </linearGradient>
+            <linearGradient id="book" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0%" stopColor={accent} stopOpacity="0.45" />
+              <stop offset="100%" stopColor="#0f172a" />
+            </linearGradient>
+            <linearGradient id="banner" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0%" stopColor={accent} stopOpacity="0.58" />
+              <stop offset="100%" stopColor="#111827" />
+            </linearGradient>
+            <linearGradient id="bodyStroke" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0%" stopColor="#02030a" />
+              <stop offset="100%" stopColor={accent} stopOpacity="0.65" />
+            </linearGradient>
+          </defs>
+          <g opacity={hidden ? 0.28 : 1}>
+            {renderAura(profile, accent, displayNamed, displayEvolved)}
+            {renderBackgroundMotif(profile, accent, seed, displayNamed, displayEvolved)}
+            <path d="M58 10 L103 35 L103 91 L58 119 L13 91 L13 35 Z" fill="none" stroke={accent} strokeWidth={displayNamed ? 2.8 : displayEvolved ? 2 : 1.4} opacity={displayNamed ? 0.82 : 0.42 + profile.intensity * 0.06} />
+            {displayEvolved && (
+              <path d="M58 26 L82 39 L82 89 L58 103 L34 89 L34 39 Z" fill="none" stroke={accent} strokeWidth="1.4" strokeDasharray="5 3" opacity="0.55" />
+            )}
+            <path d="M58 22 L89 40 L89 85 L58 104 L27 85 L27 40 Z" fill="none" stroke={accent} strokeDasharray={profile.rune === 'ornate' ? '2 4 8 4' : '5 7'} strokeWidth={displayNamed ? 1.25 : 1} opacity={displayNamed || displayEvolved ? 0.38 : 0.25} transform={`rotate(${runeRotation} 58 64)`} />
+            {renderSilhouette(assetFamily, silhouette, displayRole, accent, seed, displayEvolved)}
+            {renderAdvancedProps(profile, displayRole, accent, seed, displayEvolved, displayNamed)}
+            {isGateNamed && renderNamedGateDecor(accent, seed)}
+            {isAchievementNamed && renderAchievementDecor(accent)}
+          </g>
+        </svg>
+        {hidden && (
+          <div className="absolute inset-0 flex items-center justify-center bg-ink-950/45 backdrop-blur-[1px]">
+            <div className="system-text text-lg text-white/35">???</div>
+          </div>
+        )}
+      </div>
+
+      {/* 2. Free Floating PNG Image Asset (Overflow Visible on top of background) */}
       {assetUrl && !hidden && (
         <img
           src={assetUrl}
           alt={label}
-          className="portrait-asset-loaded absolute inset-0 h-full w-full object-contain scale-[1.05]"
-          style={{ filter: `drop-shadow(0 0 7px var(--shadow-glow)) drop-shadow(0 0 14px var(--shadow-glow))` }}
+          className="portrait-asset-loaded absolute inset-0 h-full w-full object-contain scale-[1.26] translate-y-[2%] origin-bottom object-bottom transition-all duration-300 group-hover:scale-[1.36] z-10"
+          style={{ filter: `drop-shadow(0 -3px 12px var(--shadow-glow)) drop-shadow(0 0 20px var(--shadow-glow))` }}
           loading="lazy"
           draggable={false}
           onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }}
         />
       )}
-      {hidden && (
-        <div className="absolute inset-0 flex items-center justify-center bg-ink-950/45 backdrop-blur-[1px]">
-          <div className="system-text text-lg text-white/35">???</div>
-        </div>
-      )}
-      <div className="absolute left-2 top-2 flex items-center gap-1">
+
+      {/* 3. Floating Overlay Chips (z-20 on top of the image) */}
+      <div className="absolute left-2 top-2 flex items-center gap-1 z-20">
         <span className={clsx('rounded border px-1.5 py-0.5 text-[8px] system-text', palette.text)} style={{ borderColor: palette.frame, background: 'rgba(2,6,23,0.58)' }}>
           {hidden ? 'SIGNAL' : roleLabel[role]}
         </span>
@@ -643,15 +657,17 @@ export function ShadowPortrait({
           </span>
         )}
       </div>
+
       {(active || highlighted || evolutionReady) && (
         <div
-          className={clsx('pointer-events-none absolute inset-0 rounded-md', evolutionReady ? 'animate-shimmer' : 'animate-pulse')}
+          className={clsx('pointer-events-none absolute inset-0 rounded-md z-20', evolutionReady ? 'animate-shimmer' : 'animate-pulse')}
           style={{ boxShadow: `inset 0 0 22px ${active ? palette.glow : 'rgba(52, 211, 153, 0.4)'}` }}
         />
       )}
+
       {(isGradeS || isGradeA) && !hidden && (
         <div className={clsx(
-          'absolute right-2 top-2 rounded border px-1.5 py-0.5 text-[8px] system-text font-bold',
+          'absolute right-2 top-2 rounded border px-1.5 py-0.5 text-[8px] system-text font-bold z-20',
           isGradeS
             ? 'border-amber-300/55 bg-amber-300/20 text-amber-100'
             : 'border-amber-400/40 bg-amber-400/12 text-amber-200/80',
@@ -659,8 +675,9 @@ export function ShadowPortrait({
           {grade}
         </div>
       )}
+
       {displayEvolved && (
-        <div className="absolute bottom-2 right-2 rounded border border-emerald-300/35 bg-emerald-300/10 px-1.5 py-0.5 text-[8px] system-text text-emerald-100">
+        <div className="absolute bottom-2 right-2 rounded border border-emerald-300/35 bg-emerald-300/10 px-1.5 py-0.5 text-[8px] system-text text-emerald-100 z-20">
           EVO
         </div>
       )}

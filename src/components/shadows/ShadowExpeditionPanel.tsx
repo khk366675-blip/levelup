@@ -14,6 +14,7 @@ import {
   Zap,
 } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { motion } from 'framer-motion'
 import { useGame } from '../../lib/store'
 import { todayKey } from '../../lib/game'
 import { type CinematicLogData, type CinematicLogTone } from '../CinematicLogOverlay'
@@ -354,29 +355,42 @@ function MiniShadow({
   onClick?: () => void
 }) {
   const tone = command ? commandTone[command] : undefined
+  const isNamed = Boolean(shadow.isNamed || shadow.isGateNamed || shadow.isAchievementNamed)
+  const isSGrade = shadow.innateGrade === 'S'
+  const isAGrade = shadow.innateGrade === 'A'
+  const isEvolved = (shadow.evolutionStage ?? 0) > 0
+
   return (
-    <button
+    <motion.button
       type="button"
       onClick={onClick}
+      whileHover={{ y: -3, scale: 1.02 }}
+      transition={{ duration: 0.18, ease: 'easeOut' }}
       className={clsx(
-        'relative min-w-[118px] overflow-hidden rounded-md border p-2 text-left transition',
-        selected ? 'border-cyan-300/45 bg-cyan-400/10 ring-1 ring-cyan-300/30' : 'border-white/10 bg-ink-900/45 hover:border-purple-300/35 hover:bg-purple-400/10',
-        recommended && !selected && 'border-emerald-300/25',
+        'relative min-w-[124px] overflow-hidden rounded-md border p-2 text-left transition-all duration-300 card-premium-shine group',
+        selected ? 'border-cyan-300/60 bg-cyan-400/12 ring-1 ring-cyan-300/40 shadow-deployed-glow' : 'border-white/10 bg-ink-900/45 hover:border-purple-300/35 hover:bg-purple-400/10',
+        recommended && !selected && 'border-emerald-300/30',
         commandMatch && tone && `${tone.border} ${tone.bg}`,
         active && tone ? `ring-2 ${tone.glow}` : active && 'animate-pulse border-amber-300/60 ring-2 ring-amber-300/35',
+        isSGrade && 'grade-aura-s',
+        isAGrade && 'grade-aura-a',
+        isEvolved && 'shadow-evolved-card',
+        isNamed && 'named-pulse',
       )}
     >
       {commandMatch && tone && <div className={clsx('absolute inset-x-0 top-0 h-0.5 bg-gradient-to-r', tone.effect)} />}
-      <ShadowPortrait
-        shadow={shadow}
-        size="xs"
-        active={active}
-        highlighted={selected || active || commandMatch || Boolean(shadow.isNamed)}
-        innateGrade={shadow.innateGrade}
-      />
-      <div className="mt-1 truncate text-[11px] font-semibold text-white/85">{shadow.name}</div>
+      <div className="flex justify-center mb-1">
+        <ShadowPortrait
+          shadow={shadow}
+          size="sm"
+          active={active}
+          highlighted={selected || active || commandMatch || isNamed}
+          innateGrade={shadow.innateGrade}
+        />
+      </div>
+      <div className="mt-1 truncate text-[11px] font-semibold text-white/90">{shadow.name}</div>
       <div className="text-[9px] system-text text-white/45">
-        Lv {shadow.level ?? 1} / {SHADOW_ROLE_LABEL[shadow.role]} / {SHADOW_INNATE_GRADE_LABEL[shadow.innateGrade ?? 'B']}
+        Lv {shadow.level ?? 1} / {SHADOW_ROLE_LABEL[shadow.role]}
       </div>
       <div className="mt-1 flex flex-wrap gap-1">
         {recommended && (
@@ -389,8 +403,13 @@ function MiniShadow({
             반응
           </span>
         )}
+        {isSGrade && (
+          <span className="rounded border border-amber-300/40 bg-amber-300/10 px-1 py-0.5 text-[8px] system-text font-bold text-amber-200">
+            S
+          </span>
+        )}
       </div>
-    </button>
+    </motion.button>
   )
 }
 

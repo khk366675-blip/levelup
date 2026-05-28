@@ -440,17 +440,150 @@ body::before {
   box-shadow: 0 0 0 1px rgba(245, 158, 11, 0.45), 0 0 34px rgba(245, 158, 11, 0.2), inset 0 0 26px rgba(245, 158, 11, 0.04);
 }
 
-/* innate grade aura */
+/* innate grade aura & premium rpg card styles */
 .grade-aura-s {
-  animation: grade-aura-s-pulse 2.8s ease-in-out infinite;
+  animation: grade-aura-s-pulse 2.2s ease-in-out infinite;
+  border-color: rgba(251, 191, 36, 0.72) !important;
+  box-shadow: 0 0 16px rgba(251, 191, 36, 0.35), inset 0 0 24px rgba(251, 191, 36, 0.16) !important;
+}
+.grade-aura-s::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border: 1px solid rgba(251, 191, 36, 0.38);
+  box-shadow: inset 0 0 12px rgba(251, 191, 36, 0.2);
+  pointer-events: none;
+  animation: grade-aura-s-flare 4.4s ease-in-out infinite;
 }
 .grade-aura-a {
-  box-shadow: 0 0 0 1px rgba(245, 158, 11, 0.22), 0 0 12px rgba(245, 158, 11, 0.09);
+  border-color: rgba(245, 158, 11, 0.44) !important;
+  box-shadow: 0 0 12px rgba(245, 158, 11, 0.22), inset 0 0 16px rgba(245, 158, 11, 0.09) !important;
 }
 
-/* named shadow subtle pulse */
+/* named shadow mythical glow */
 .named-pulse {
-  animation: named-pulse 3.4s ease-in-out infinite;
+  animation: named-pulse-glow 2.8s ease-in-out infinite;
+  border-color: rgba(167, 139, 250, 0.76) !important;
+}
+.named-pulse::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border: 1.5px solid rgba(167, 139, 250, 0.35);
+  box-shadow: inset 0 0 18px rgba(167, 139, 250, 0.18);
+  pointer-events: none;
+  animation: named-aura-flow 5.2s linear infinite;
+}
+
+/* deployed premium army border */
+.shadow-deployed-glow {
+  border-color: rgba(34, 211, 238, 0.78) !important;
+  box-shadow: 0 0 22px rgba(34, 211, 238, 0.34), inset 0 0 26px rgba(34, 211, 238, 0.15) !important;
+  animation: deployed-subtle-breathing 3s ease-in-out infinite;
+}
+
+/* 12-37B Job / Advancement Premium VFX */
+.tier-aura-novice {
+  border-color: rgba(161, 161, 170, 0.3) !important;
+  box-shadow: inset 0 0 10px rgba(161, 161, 170, 0.05) !important;
+}
+
+.tier-aura-first {
+  animation: tier-first-pulse 2.5s ease-in-out infinite;
+  border-color: rgba(34, 211, 238, 0.58) !important;
+}
+
+.tier-aura-second {
+  animation: tier-second-pulse 2.8s ease-in-out infinite;
+  border-color: rgba(192, 132, 252, 0.65) !important;
+}
+
+.tier-aura-third {
+  position: relative;
+  animation: tier-third-pulse 2.2s ease-in-out infinite;
+  border-color: rgba(251, 191, 36, 0.8) !important;
+}
+.tier-aura-third::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border: 1.5px solid rgba(251, 191, 36, 0.28);
+  box-shadow: inset 0 0 16px rgba(251, 191, 36, 0.14);
+  pointer-events: none;
+  animation: grade-aura-s-flare 4.4s ease-in-out infinite;
+}
+
+.tier-aura-hidden-shadow {
+  position: relative;
+  animation: hidden-shadow-pulse 3s ease-in-out infinite;
+  border-color: rgba(167, 139, 250, 0.8) !important;
+}
+.tier-aura-hidden-shadow::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border: 1.5px solid rgba(167, 139, 250, 0.3);
+  box-shadow: inset 0 0 20px rgba(167, 139, 250, 0.15), 0 0 10px rgba(0, 0, 0, 0.5);
+  pointer-events: none;
+  animation: named-aura-flow 6s linear infinite;
+}
+
+.tier-aura-hidden-curse {
+  position: relative;
+  animation: hidden-curse-pulse 2.4s ease-in-out infinite;
+  border-color: rgba(244, 63, 94, 0.85) !important;
+}
+.tier-aura-hidden-curse::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border: 1.5px solid rgba(244, 63, 94, 0.35);
+  box-shadow: inset 0 0 22px rgba(244, 63, 94, 0.18);
+  pointer-events: none;
+  animation: grade-aura-s-flare 3.6s ease-in-out infinite;
+}
+
+.tier-aura-hidden-rift {
+  position: relative;
+  animation: hidden-rift-pulse 2.6s ease-in-out infinite;
+  border-color: rgba(99, 102, 241, 0.8) !important;
+}
+.tier-aura-hidden-rift::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border: 1.5px solid rgba(99, 102, 241, 0.3);
+  box-shadow: inset 0 0 20px rgba(99, 102, 241, 0.16);
+  pointer-events: none;
+  animation: named-aura-flow 4.8s linear infinite;
+}
+
+/* evolved premium edge */
+.shadow-evolved-card {
+  border-color: rgba(52, 211, 153, 0.65) !important;
+  box-shadow: 0 0 18px rgba(52, 211, 153, 0.25), inset 0 0 20px rgba(52, 211, 153, 0.12) !important;
+}
+
+/* card interactive shine */
+.card-premium-shine {
+  position: relative;
+  overflow: hidden;
+}
+.card-premium-shine::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -75%;
+  width: 50%;
+  height: 100%;
+  background: linear-gradient(to right, transparent, rgba(255, 255, 255, 0.12), transparent);
+  transform: skewX(-25deg);
+  transition: 0.75s;
+  pointer-events: none;
+  z-index: 5;
+}
+.card-premium-shine:hover::before {
+  left: 125%;
 }
 
 /* high enhancement glow */
@@ -983,21 +1116,50 @@ body::before {
 
 @keyframes grade-aura-s-pulse {
   0%, 100% {
-    box-shadow: 0 0 0 1px rgba(251, 191, 36, 0.38), 0 0 18px rgba(251, 191, 36, 0.14);
+    box-shadow: 0 0 16px rgba(251, 191, 36, 0.35), inset 0 0 24px rgba(251, 191, 36, 0.16);
+    filter: drop-shadow(0 0 3px rgba(251, 191, 36, 0.25));
   }
   50% {
-    box-shadow: 0 0 0 2px rgba(251, 191, 36, 0.58), 0 0 30px rgba(251, 191, 36, 0.26);
+    box-shadow: 0 0 28px rgba(251, 191, 36, 0.65), inset 0 0 36px rgba(251, 191, 36, 0.3);
+    filter: drop-shadow(0 0 8px rgba(251, 191, 36, 0.45));
   }
 }
 
-@keyframes named-pulse {
-  0%, 100% { box-shadow: 0 0 10px rgba(167, 139, 250, 0.16); }
-  50%       { box-shadow: 0 0 24px rgba(167, 139, 250, 0.38); }
+@keyframes grade-aura-s-flare {
+  0%, 100% { opacity: 0.42; transform: scale(1); }
+  50% { opacity: 0.88; transform: scale(1.015); }
+}
+
+@keyframes named-pulse-glow {
+  0%, 100% {
+    box-shadow: 0 0 18px rgba(167, 139, 250, 0.32), inset 0 0 22px rgba(167, 139, 250, 0.16);
+    filter: drop-shadow(0 0 4px rgba(167, 139, 250, 0.22));
+  }
+  50% {
+    box-shadow: 0 0 34px rgba(167, 139, 250, 0.68), inset 0 0 38px rgba(167, 139, 250, 0.34);
+    filter: drop-shadow(0 0 10px rgba(167, 139, 250, 0.48));
+  }
+}
+
+@keyframes named-aura-flow {
+  0% { border-color: rgba(167, 139, 250, 0.72); }
+  33% { border-color: rgba(245, 158, 11, 0.65); }
+  66% { border-color: rgba(34, 211, 238, 0.68); }
+  100% { border-color: rgba(167, 139, 250, 0.72); }
+}
+
+@keyframes deployed-subtle-breathing {
+  0%, 100% {
+    box-shadow: 0 0 20px rgba(34, 211, 238, 0.3), inset 0 0 24px rgba(34, 211, 238, 0.14);
+  }
+  50% {
+    box-shadow: 0 0 28px rgba(34, 211, 238, 0.52), inset 0 0 32px rgba(34, 211, 238, 0.25);
+  }
 }
 
 @keyframes enhancement-glow {
-  0%, 100% { box-shadow: 0 0 6px rgba(245, 158, 11, 0.14); }
-  50%       { box-shadow: 0 0 16px rgba(245, 158, 11, 0.32); }
+  0%, 100% { box-shadow: 0 0 8px rgba(245, 158, 11, 0.18); }
+  50%       { box-shadow: 0 0 20px rgba(245, 158, 11, 0.45); }
 }
 
 @keyframes hp-flash-damage {
@@ -1399,7 +1561,47 @@ body::before {
   .locked-seal-mist,
   .locked-seal-gate,
   .locked-seal-achievement,
-  .locked-seal-rune-rotate {
-    animation: none;
+  .locked-seal-rune-rotate,
+  .tier-aura-first,
+  .tier-aura-second,
+  .tier-aura-third,
+  .tier-aura-third::after,
+  .tier-aura-hidden-shadow,
+  .tier-aura-hidden-shadow::after,
+  .tier-aura-hidden-curse,
+  .tier-aura-hidden-curse::after,
+  .tier-aura-hidden-rift,
+  .tier-aura-hidden-rift::after {
+    animation: none !important;
   }
+}
+
+@keyframes tier-first-pulse {
+  0%, 100% { box-shadow: 0 0 12px rgba(34, 211, 238, 0.2), inset 0 0 14px rgba(34, 211, 238, 0.08); }
+  50% { box-shadow: 0 0 20px rgba(34, 211, 238, 0.45), inset 0 0 20px rgba(34, 211, 238, 0.18); }
+}
+
+@keyframes tier-second-pulse {
+  0%, 100% { box-shadow: 0 0 14px rgba(192, 132, 252, 0.25), inset 0 0 16px rgba(192, 132, 252, 0.1); }
+  50% { box-shadow: 0 0 24px rgba(192, 132, 252, 0.55), inset 0 0 22px rgba(192, 132, 252, 0.22); }
+}
+
+@keyframes tier-third-pulse {
+  0%, 100% { box-shadow: 0 0 18px rgba(251, 191, 36, 0.35), inset 0 0 20px rgba(251, 191, 36, 0.14); }
+  50% { box-shadow: 0 0 32px rgba(251, 191, 36, 0.72), inset 0 0 26px rgba(251, 191, 36, 0.26); }
+}
+
+@keyframes hidden-shadow-pulse {
+  0%, 100% { box-shadow: 0 0 18px rgba(167, 139, 250, 0.3), inset 0 0 20px rgba(167, 139, 250, 0.15); filter: brightness(0.9); }
+  50% { box-shadow: 0 0 34px rgba(167, 139, 250, 0.65), inset 0 0 28px rgba(167, 139, 250, 0.28); filter: brightness(1.1); }
+}
+
+@keyframes hidden-curse-pulse {
+  0%, 100% { box-shadow: 0 0 18px rgba(244, 63, 94, 0.3), inset 0 0 20px rgba(244, 63, 94, 0.15); filter: saturate(0.9); }
+  50% { box-shadow: 0 0 34px rgba(244, 63, 94, 0.7), inset 0 0 28px rgba(244, 63, 94, 0.28); filter: saturate(1.2) brightness(1.05); }
+}
+
+@keyframes hidden-rift-pulse {
+  0%, 100% { box-shadow: 0 0 18px rgba(99, 102, 241, 0.3), inset 0 0 20px rgba(99, 102, 241, 0.15); }
+  50% { box-shadow: 0 0 32px rgba(99, 102, 241, 0.65), inset 0 0 28px rgba(99, 102, 241, 0.26); }
 }

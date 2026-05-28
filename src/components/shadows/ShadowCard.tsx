@@ -104,14 +104,19 @@ export function ShadowCard({
     <motion.div
       initial={{ opacity: 0, y: 6 }}
       animate={{ opacity: 1, y: 0 }}
+      whileHover={onSelect ? { y: -4, scale: 1.015 } : undefined}
+      transition={{ duration: 0.22, ease: 'easeOut' }}
       className={clsx(
-        'panel corner-bracket overflow-hidden border p-3',
+        'panel corner-bracket overflow-hidden border p-3 card-premium-shine group transition-all duration-300',
         rarityFrame[shadow.rarity],
-        equipped && 'ring-2 ring-cyan-300/35 shadow-glow',
-        selected && 'ring-2 ring-amber-200/70 shadow-glow-lg',
-        named && shadow.isAchievementNamed ? 'ring-1 ring-cyan-200/40' : named ? 'named-pulse' : '',
-        evolutionCheck.canEvolve && 'ring-1 ring-emerald-300/35',
-        onSelect && 'cursor-pointer transition hover:border-cyan-200/55 hover:bg-white/[0.03]',
+        equipped ? 'shadow-deployed-glow ring-2 ring-cyan-300/40' : 'hover:border-cyan-400/40 hover:bg-white/[0.015]',
+        selected && 'ring-2 ring-amber-300/80 shadow-glow-lg',
+        shadow.innateGrade === 'S' && 'grade-aura-s',
+        shadow.innateGrade === 'A' && 'grade-aura-a',
+        (shadow.evolutionStage ?? 0) > 0 && 'shadow-evolved-card',
+        named ? 'named-pulse' : '',
+        evolutionCheck.canEvolve && 'ring-1 ring-emerald-300/45',
+        onSelect && 'cursor-pointer',
         featured ? 'sm:p-4' : 'sm:p-3',
       )}
       onClick={onSelect}

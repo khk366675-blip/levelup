@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import { motion } from 'framer-motion'
+import clsx from 'clsx'
 import { Crown, Eclipse, Eye, Gem, Lock, Search, Shield, Sparkles, Star, Swords, Ticket, X, ChevronDown, ChevronUp, Dumbbell, FlaskConical } from 'lucide-react'
 import { useGame } from '../lib/store'
 import { ShadowCard as VisualShadowCard } from './shadows/ShadowCard'
@@ -524,11 +525,18 @@ function ShadowCard({
   const xpNeeded = getShadowXpForNextLevel(level)
   const xpPct = level >= maxLevel ? 100 : Math.min(100, Math.round((xp / xpNeeded) * 100))
   const evolutionCheck = canEvolveShadow(shadow, shadowEssence)
+  const named = Boolean(shadow.isNamed || shadow.isGateNamed || shadow.isAchievementNamed)
   return (
     <motion.div
       initial={{ opacity: 0, y: 4 }}
       animate={{ opacity: 1, y: 0 }}
-      className={`panel corner-bracket p-4 ${rarityStyle[shadow.rarity]} ${equipped ? 'ring-2 ring-amber-300/40' : ''}`}
+      whileHover={{ y: -4, scale: 1.015 }}
+      transition={{ duration: 0.22, ease: 'easeOut' }}
+      className={`panel corner-bracket p-4 card-premium-shine group transition-all duration-300 ${rarityStyle[shadow.rarity]} ${
+        equipped ? 'shadow-deployed-glow ring-2 ring-cyan-300/40' : 'hover:border-cyan-400/40 hover:bg-white/[0.015]'
+      } ${shadow.innateGrade === 'S' ? 'grade-aura-s' : shadow.innateGrade === 'A' ? 'grade-aura-a' : ''} ${
+        (shadow.evolutionStage ?? 0) > 0 ? 'shadow-evolved-card' : ''
+      } ${named ? 'named-pulse' : ''}`}
     >
       <div className="br" />
       <div className="flex items-start justify-between gap-3">
@@ -693,7 +701,11 @@ function CodexCard({ definition, owned, ownedCount, maxEnhancement, isEquipped }
       : ''
   const cardRarityStyle = hidden ? 'text-slate-200 border-slate-500/35 bg-slate-500/10' : rarityStyle[definition.rarity]
   return (
-    <div className={`panel corner-bracket p-4 ${cardRarityStyle} ${owned ? '' : 'opacity-80'} ${sealCardClass}`}>
+    <motion.div
+      whileHover={{ y: -4, scale: 1.015 }}
+      transition={{ duration: 0.22, ease: 'easeOut' }}
+      className={`panel corner-bracket p-4 card-premium-shine group transition-all duration-300 ${cardRarityStyle} ${owned ? '' : 'opacity-70'} ${sealCardClass}`}
+    >
       <div className="br" />
       {lockedSourceType ? (
         <LockedShadowPortrait
@@ -755,7 +767,7 @@ function CodexCard({ definition, owned, ownedCount, maxEnhancement, isEquipped }
       <div className="mt-2 text-[10px] text-white/40 system-text">
         조건: {unlockConditionLabel}
       </div>
-    </div>
+    </motion.div>
   )
 }
 
@@ -776,6 +788,29 @@ export function ShadowPanel() {
   const [query, setQuery] = useState('')
   const [selectedShadowId, setSelectedShadowId] = useState<string | undefined>()
   const [shadowReveal, setShadowReveal] = useState<ShadowRevealPayload | undefined>()
+
+  // Premium Grow / Reveal Upgrade Results States
+  const [reawakenedResult, setReawakenedResult] = useState<{
+    shadowName: string
+    beforeGrade: string
+    afterGrade: string
+    success: boolean
+    shadow: OwnedShadow
+  } | undefined>()
+
+  const [traitRerollResult, setTraitRerollResult] = useState<{
+    shadow: OwnedShadow
+    slotIdx: number
+    beforeTraitId?: string
+    afterTraitId: string
+    cost: number
+  } | undefined>()
+
+  const [slotUnlockResult, setSlotUnlockResult] = useState<{
+    shadow: OwnedShadow
+    type: 'skill' | 'passive'
+    cost: number
+  } | undefined>()
 
   const slotCount = getShadowSlotCount(hunter)
   const equippedShadows = getEquippedShadows(ownedShadows, equippedShadowIds, hunter)
@@ -803,6 +838,91 @@ export function ShadowPanel() {
   const craftHiddenEvolutionMaterial = useGame(s => s.craftHiddenEvolutionMaterial)
   const shadowLegionNodes = useGame(s => s.shadowLegionNodes ?? {})
   const [labOpen, setLabOpen] = useState(true)
+
+  const handleReawaken = (shadowId: string) => {
+    const beforeState = useGame.getState()
+    const shadowBefore = beforeState.ownedShadows?.find(s => s.instanceId === shadowId)
+    if (!shadowBefore) return
+
+    const beforeGrade = shadowBefore.innateGrade ?? 'B'
+    reawakenShadowInnateGrade(shadowId)
+
+    const afterState = useGame.getState()
+    const shadowAfter = afterState.ownedShadows?.find(s => s.instanceId === shadowId)
+    if (!shadowAfter) return
+
+    const afterGrade = shadowAfter.innateGrade ?? 'B'
+    const success = afterGrade !== beforeGrade
+
+    setReawakenedResult({
+      shadowName: shadowBefore.name,
+      beforeGrade,
+      afterGrade,
+      success,
+      shadow: shadowAfter
+    })
+  }
+
+  const handleRerollTrait = (shadowId: string, slotIdx: number, cost: number) => {
+    const beforeState = useGame.getState()
+    const shadowBefore = beforeState.ownedShadows?.find(s => s.instanceId === shadowId)
+    if (!shadowBefore) return
+
+    const beforeTraitId = shadowBefore.traitIds?.[slotIdx]
+    rerollShadowTrait(shadowId, slotIdx)
+
+    const afterState = useGame.getState()
+    const shadowAfter = afterState.ownedShadows?.find(s => s.instanceId === shadowId)
+    if (!shadowAfter) return
+
+    const afterTraitId = shadowAfter.traitIds?.[slotIdx]
+    if (!afterTraitId) return
+
+    setTraitRerollResult({
+      shadow: shadowAfter,
+      slotIdx,
+      beforeTraitId,
+      afterTraitId,
+      cost
+    })
+  }
+
+  const handleUnlockSlot = (shadowId: string, slotType: 'skill' | 'passive', cost: number) => {
+    const beforeState = useGame.getState()
+    const shadowBefore = beforeState.ownedShadows?.find(s => s.instanceId === shadowId)
+    if (!shadowBefore) return
+
+    const currentSlotsBefore = slotType === 'skill' 
+      ? (shadowBefore.unlockedSkillSlots ?? 0) 
+      : (shadowBefore.unlockedPassiveSlots ?? 0)
+
+    unlockShadowSlot(shadowId, slotType)
+
+    const afterState = useGame.getState()
+    const shadowAfter = afterState.ownedShadows?.find(s => s.instanceId === shadowId)
+    if (!shadowAfter) return
+
+    const currentSlotsAfter = slotType === 'skill'
+      ? (shadowAfter.unlockedSkillSlots ?? 0)
+      : (shadowAfter.unlockedPassiveSlots ?? 0)
+
+    if (currentSlotsAfter > currentSlotsBefore) {
+      setSlotUnlockResult({
+        shadow: shadowAfter,
+        type: slotType,
+        cost
+      })
+    }
+  }
+
+  // Premium Legion Summary Stats
+  const sGradeCount = useMemo(() => ownedShadows.filter(s => s.innateGrade === 'S').length, [ownedShadows])
+  const aGradeCount = useMemo(() => ownedShadows.filter(s => s.innateGrade === 'A').length, [ownedShadows])
+  const namedCount = useMemo(() => ownedShadows.filter(s => s.isNamed || s.isGateNamed || s.isAchievementNamed).length, [ownedShadows])
+  const maxLevelVal = useMemo(() => ownedShadows.length > 0 ? Math.max(...ownedShadows.map(s => s.level ?? 1)) : 1, [ownedShadows])
+  const avgLevelVal = useMemo(() => ownedShadows.length > 0 ? Math.round(ownedShadows.reduce((sum, s) => sum + (s.level ?? 1), 0) / ownedShadows.length) : 1, [ownedShadows])
+  const maxScp = useMemo(() => ownedShadows.length > 0 ? Math.max(...ownedShadows.map(s => getShadowCombatProfile(s).totalPower)) : 0, [ownedShadows])
+
   const [pendingEvolution, setPendingEvolution] = useState<{
     shadow: OwnedShadow
     targetName: string
@@ -979,50 +1099,284 @@ export function ShadowPanel() {
       ]
     : []
 
+  const reawakenedSteps: RevealStep[] = reawakenedResult
+    ? [
+        {
+          title: 'INNATE REAWAKENING',
+          text: `${reawakenedResult.shadowName}의 한계 회로가 공명한다.`,
+          subtext: '태생 잠재력을 일깨워 한 단계 높은 마력을 확보합니다.',
+          durationMs: 850,
+          tone: 'shadow',
+        },
+        {
+          title: 'RESONATE',
+          text: reawakenedResult.success ? '영혼의 한계가 마침내 돌파되었다!' : '마력 회로의 공명이 안정적으로 흡수되었습니다.',
+          subtext: '그림자 정수 100개 소모',
+          durationMs: 950,
+          tone: reawakenedResult.success ? 'success' : 'failure',
+          emphasis: true,
+        },
+      ]
+    : []
+
+  const traitSteps: RevealStep[] = traitRerollResult
+    ? [
+        {
+          title: 'TRAIT RESEARCH',
+          text: `${traitRerollResult.shadow.name}의 영혼 성좌에 영적 가공을 수행합니다.`,
+          subtext: '무작위 특성을 획득하여 새로운 결속 보정을 부여합니다.',
+          durationMs: 850,
+          tone: 'shadow',
+        },
+        {
+          title: 'SOUL BIND',
+          text: '성좌의 결에 따라 그림자 특성이 세겨집니다.',
+          subtext: `그림자 정수 ${traitRerollResult.cost}개 소모`,
+          durationMs: 950,
+          tone: 'success',
+          emphasis: true,
+        },
+      ]
+    : []
+
+  const slotSteps: RevealStep[] = slotUnlockResult
+    ? [
+        {
+          title: 'CIRCUIT EXPANSION',
+          text: `${slotUnlockResult.shadow.name}의 심장에 추가 마력의 길이 개방됩니다.`,
+          subtext: '마력 결속 한계를 늘려 특별한 기운을 수용할 장치를 확장합니다.',
+          durationMs: 800,
+          tone: 'shadow',
+        },
+        {
+          title: 'UNLOCK COMPLETE',
+          text: `${slotUnlockResult.type === 'skill' ? '액티브 보조 스킬' : '패시브 능력'} 슬롯 개방 성공!`,
+          subtext: `그림자 정수 ${slotUnlockResult.cost}개 소모`,
+          durationMs: 900,
+          tone: 'success',
+          emphasis: true,
+        },
+      ]
+    : []
+
   return (
     <div className="space-y-4">
+      {/* Evolution Reveal Modal */}
       <DramaticReveal
         isOpen={Boolean(pendingEvolution)}
         steps={evolutionSteps}
         tone="shadow"
         position="modal"
+        result={pendingEvolution && (() => {
+          const targetDef = SHADOW_DEFINITIONS.find(d => d.name === pendingEvolution.targetName)
+          const currentGrade = pendingEvolution.shadow.innateGrade ?? 'B'
+          
+          return (
+            <div className="text-center py-2">
+              <div className="relative mx-auto mb-3 max-w-[220px]">
+                <div className="pointer-events-none absolute inset-0 rounded-full border border-purple-300/20 shadow-[0_0_52px_rgba(168,85,247,0.35)] animate-pulse" />
+                <ShadowPortrait
+                  definition={targetDef}
+                  size="xl"
+                  active={true}
+                  highlighted={true}
+                  innateGrade={currentGrade}
+                  className="mx-auto"
+                />
+              </div>
+              <div className="system-text text-[10px] text-cyan-300">EVOLUTION SUCCESS</div>
+              <h3 className="mt-1 text-2xl font-black text-white">{pendingEvolution.targetName}</h3>
+              <p className="mt-2 text-xs text-white/65">
+                레벨 1로 환원되었으나 기본 스탯 한계 돌파 및 새로운 군주급 외형과 기운을 각성하였습니다!
+              </p>
+            </div>
+          )
+        })()}
         onComplete={() => {
           if (pendingEvolution) evolveShadow(pendingEvolution.shadow.instanceId)
           setPendingEvolution(undefined)
         }}
       />
+
+      {/* Innate Reawakening Reveal Modal */}
+      <DramaticReveal
+        isOpen={Boolean(reawakenedResult)}
+        steps={reawakenedSteps}
+        tone={reawakenedResult?.success ? 'success' : 'failure'}
+        position="modal"
+        result={reawakenedResult && (
+          <div className="text-center py-2">
+            <div className="relative mx-auto mb-3 max-w-[200px]">
+              {reawakenedResult.success ? (
+                <div className="pointer-events-none absolute inset-0 rounded-full border border-amber-300/35 shadow-[0_0_60px_rgba(245,158,11,0.4)] animate-pulse" />
+              ) : (
+                <div className="pointer-events-none absolute inset-0 rounded-full border border-white/10 shadow-[0_0_20px_rgba(255,255,255,0.05)]" />
+              )}
+              <ShadowPortrait
+                shadow={reawakenedResult.shadow}
+                size="lg"
+                active={true}
+                highlighted={reawakenedResult.success}
+                innateGrade={reawakenedResult.afterGrade}
+                className="mx-auto"
+              />
+            </div>
+            {reawakenedResult.success ? (
+              <>
+                <div className="system-text text-[10px] text-amber-300 animate-bounce">GRADE BREAKTHROUGH!</div>
+                <h3 className="mt-1 text-2xl font-black text-amber-100">{reawakenedResult.shadowName} 재각성 성공</h3>
+                <div className="mt-3 flex items-center justify-center gap-3 text-lg font-black">
+                  <span className="text-slate-400 border border-white/10 bg-black/30 px-2.5 py-0.5 rounded text-sm">{reawakenedResult.beforeGrade}</span>
+                  <span className="text-amber-400">➔</span>
+                  <span className="text-amber-300 border border-amber-300/30 bg-amber-400/10 px-3 py-0.5 rounded shadow-glow text-sm">{reawakenedResult.afterGrade}</span>
+                </div>
+                <p className="mt-3 text-xs text-white/70">태생 스탯 보정치 및 고유 군단 전투력이 상승하였습니다.</p>
+              </>
+            ) : (
+              <>
+                <div className="system-text text-[10px] text-slate-400">RESEARCH HELD</div>
+                <h3 className="mt-1 text-xl font-bold text-white/90">태생 등급 재각성 실패</h3>
+                <div className="mt-2 text-xs text-white/60">
+                  각성 시그널이 도달했으나 한계는 깨어지지 않았습니다.<br />
+                  <span className="text-emerald-400 font-bold">안전 장치로 인해 태생 등급 {reawakenedResult.beforeGrade}이(가) 유지되었습니다.</span>
+                </div>
+              </>
+            )}
+          </div>
+        )}
+        onComplete={() => setReawakenedResult(undefined)}
+        onSkip={() => setReawakenedResult(undefined)}
+      />
+
+      {/* Trait Reroll Reveal Modal */}
+      <DramaticReveal
+        isOpen={Boolean(traitRerollResult)}
+        steps={traitSteps}
+        tone="success"
+        position="modal"
+        result={traitRerollResult && (() => {
+          const beforeTrait = SHADOW_TRAIT_DEFINITIONS.find(t => t.id === traitRerollResult.beforeTraitId)
+          const afterTrait = SHADOW_TRAIT_DEFINITIONS.find(t => t.id === traitRerollResult.afterTraitId)
+          if (!afterTrait) return null
+          
+          return (
+            <div className="text-center py-2">
+              <div className="system-text text-[10px] text-purple-300">TRAIT AWAKENED</div>
+              <h3 className="mt-1 text-2xl font-black text-white">{traitRerollResult.shadow.name}</h3>
+              
+              <div className="mt-4 max-w-sm mx-auto space-y-3">
+                {beforeTrait && (
+                  <div className="opacity-45 scale-90 border border-white/5 bg-ink-950/40 p-2 rounded text-left text-xs">
+                    <div className="text-[9px] text-white/30">이전 특성</div>
+                    <div className="font-bold text-white/60">{beforeTrait.name}</div>
+                    <div className="text-[9px] text-white/40">{beforeTrait.description}</div>
+                  </div>
+                )}
+                
+                {beforeTrait && <div className="text-purple-400 text-xs">▼ 새로운 성좌가 각인되었습니다 ▼</div>}
+                
+                <div className={clsx(
+                  'border p-3 rounded-lg text-left shadow-glow animate-pulse',
+                  afterTrait.rarity === 'legendary' ? 'border-amber-400/35 bg-amber-400/10' :
+                  afterTrait.rarity === 'epic' ? 'border-purple-400/35 bg-purple-400/10' :
+                  afterTrait.rarity === 'rare' ? 'border-cyan-400/30 bg-cyan-400/10' : 'border-slate-500/20 bg-slate-400/8'
+                )}>
+                  <div className="flex justify-between items-center">
+                    <span className="text-[9px] text-white/50">획득한 특성</span>
+                    <span className={clsx(
+                      'text-[9px] uppercase font-black px-1.5 py-0.5 rounded border',
+                      afterTrait.rarity === 'legendary' ? 'border-amber-300/30 bg-amber-400/20 text-amber-200' :
+                      afterTrait.rarity === 'epic' ? 'border-purple-300/30 bg-purple-400/20 text-purple-200' :
+                      afterTrait.rarity === 'rare' ? 'border-cyan-300/30 bg-cyan-400/20 text-cyan-200' : 'border-slate-400/20 bg-slate-400/10 text-slate-300'
+                    )}>{afterTrait.rarity}</span>
+                  </div>
+                  <div className="mt-1 font-bold text-base text-white">{afterTrait.name}</div>
+                  <div className="mt-1 text-xs text-white/80 font-medium">{afterTrait.description}</div>
+                </div>
+              </div>
+            </div>
+          )
+        })()}
+        onComplete={() => setTraitRerollResult(undefined)}
+        onSkip={() => setTraitRerollResult(undefined)}
+      />
+
+      {/* Slot Unlock Reveal Modal */}
+      <DramaticReveal
+        isOpen={Boolean(slotUnlockResult)}
+        steps={slotSteps}
+        tone="success"
+        position="modal"
+        result={slotUnlockResult && (
+          <div className="text-center py-2">
+            <div className="relative mx-auto mb-3 max-w-[180px]">
+              <div className="pointer-events-none absolute inset-0 rounded-full border border-cyan-300/35 shadow-[0_0_48px_rgba(34,211,238,0.35)] animate-pulse" />
+              <ShadowPortrait
+                shadow={slotUnlockResult.shadow}
+                size="lg"
+                active={true}
+                highlighted={true}
+                className="mx-auto"
+              />
+            </div>
+            <div className="system-text text-[10px] text-cyan-300">MAGIC CORE EXPANDED</div>
+            <h3 className="mt-1 text-xl font-black text-white">{slotUnlockResult.shadow.name} 회로 개방</h3>
+            
+            <div className="mt-3 inline-flex items-center gap-2 rounded border border-cyan-400/30 bg-cyan-400/10 px-4 py-2 font-bold text-cyan-100 shadow-glow">
+              <Sparkles className="h-4 w-4 animate-spin text-cyan-200" />
+              <span>새로운 {slotUnlockResult.type === 'skill' ? '액티브 보조 스킬' : '패시브'} 슬롯 활성화!</span>
+            </div>
+            <p className="mt-3 text-xs text-white/60">
+              상단의 마력 회로 탭에서 강력한 패시브 또는 액티브 기운을 직접 장착하세요.
+            </p>
+          </div>
+        )}
+        onComplete={() => setSlotUnlockResult(undefined)}
+        onSkip={() => setSlotUnlockResult(undefined)}
+      />
+
       <ShadowRevealModal reveal={shadowReveal} onClose={() => setShadowReveal(undefined)} />
       <div className="panel corner-bracket overflow-hidden p-5 border-purple-400/25 bg-[radial-gradient(circle_at_50%_0%,rgba(124,58,237,0.2),transparent_36%),linear-gradient(135deg,rgba(15,23,42,0.75),rgba(2,6,23,0.94))]">
         <div className="br" />
-        <div className="flex items-center justify-between gap-3 mb-4">
-          <div className="flex items-center gap-2">
-            <Eclipse className="w-5 h-5 text-cyan-300" />
+        <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 mb-5 border-b border-purple-500/15 pb-4">
+          <div className="flex items-center gap-2.5">
+            <Eclipse className="w-6 h-6 text-cyan-300 animate-pulse" />
             <div>
-              <div className="system-text text-[11px] text-cyan-300/70">SHADOW ARMY</div>
-              <div className="text-sm text-white/55">보유 {ownedShadows.length} · 출전 {equippedShadows.length} / {slotCount} · 정수 {shadowEssence}</div>
+              <div className="system-text text-[11px] text-cyan-300/80 font-bold tracking-wider">SHADOW LEGION HQ</div>
+              <div className="text-sm font-black text-white/95">그림자 군단 사령부</div>
             </div>
           </div>
-          <div className="hidden lg:grid grid-cols-4 gap-2 min-w-[420px]">
-            <div className="rounded-md border border-cyan-400/20 bg-cyan-400/10 px-3 py-2">
-              <div className="system-text text-[9px] text-cyan-200/60">ESSENCE</div>
-              <div className="text-lg font-bold text-cyan-100">{shadowEssence}</div>
+          
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 w-full lg:w-auto lg:min-w-[720px] text-xs">
+            <div className="rounded-md border border-cyan-400/20 bg-cyan-400/8 px-3 py-1.5 shadow-sm">
+              <div className="system-text text-[8px] text-cyan-200/50 uppercase tracking-wider font-bold">Essence</div>
+              <div className="text-sm font-black text-cyan-100 tabular-nums">{shadowEssence.toLocaleString()}</div>
             </div>
-            <div className="rounded-md border border-purple-400/20 bg-purple-400/10 px-3 py-2">
-              <div className="system-text text-[9px] text-purple-200/60">OWNED</div>
-              <div className="text-lg font-bold text-purple-100">{ownedShadows.length}</div>
+            <div className="rounded-md border border-purple-400/20 bg-purple-400/8 px-3 py-1.5 shadow-sm">
+              <div className="system-text text-[8px] text-purple-200/50 uppercase tracking-wider font-bold">Legion Size</div>
+              <div className="text-sm font-black text-purple-100 tabular-nums">{ownedShadows.length}</div>
             </div>
-            <div className="rounded-md border border-amber-400/20 bg-amber-400/10 px-3 py-2">
-              <div className="system-text text-[9px] text-amber-200/60">DEPLOYED</div>
-              <div className="text-lg font-bold text-amber-100">{equippedShadows.length}/{slotCount}</div>
+            <div className="rounded-md border border-amber-400/20 bg-amber-400/8 px-3 py-1.5 shadow-sm">
+              <div className="system-text text-[8px] text-amber-200/50 uppercase tracking-wider font-bold">Deployed</div>
+              <div className="text-sm font-black text-amber-100 tabular-nums">{equippedShadows.length}/{slotCount}</div>
             </div>
-            <div className="rounded-md border border-emerald-400/20 bg-emerald-400/10 px-3 py-2">
-              <div className="system-text text-[9px] text-emerald-200/60">POWER</div>
-              <div className="text-lg font-bold text-emerald-100">{legionPower}</div>
+            <div className="rounded-md border border-indigo-400/20 bg-indigo-400/8 px-3 py-1.5 shadow-sm">
+              <div className="system-text text-[8px] text-indigo-200/50 uppercase tracking-wider font-bold">Named Heroes</div>
+              <div className="text-sm font-black text-indigo-100 tabular-nums">{namedCount}</div>
+            </div>
+            <div className="rounded-md border border-yellow-400/20 bg-yellow-400/8 px-3 py-1.5 shadow-sm">
+              <div className="system-text text-[8px] text-yellow-200/50 uppercase tracking-wider font-bold">S / A Grade</div>
+              <div className="text-sm font-black text-yellow-100 tabular-nums">{sGradeCount}S / {aGradeCount}A</div>
+            </div>
+            <div className="rounded-md border border-emerald-400/20 bg-emerald-400/8 px-3 py-1.5 shadow-sm col-span-2 sm:col-span-1">
+              <div className="system-text text-[8px] text-emerald-200/50 uppercase tracking-wider font-bold">Legion Power</div>
+              <div className="text-sm font-black text-emerald-100 tabular-nums" title={`Max SCP: ${maxScp}`}>{legionPower.toLocaleString()}</div>
             </div>
           </div>
+
           {equippedShadowIds.length > slotCount && (
-            <div className="text-[10px] text-amber-200 border border-amber-400/30 bg-amber-400/10 rounded px-2 py-1">
-              슬롯 초과: 앞 {slotCount}명만 적용
+            <div className="text-[10px] text-rose-300 border border-rose-500/30 bg-rose-500/10 rounded px-2.5 py-1 animate-pulse">
+              슬롯 초과 감지! 앞 {slotCount}명만 출전합니다.
             </div>
           )}
         </div>
@@ -1091,8 +1445,11 @@ export function ShadowPanel() {
             const isNamed = shadow && Boolean(shadow.isNamed || shadow.isGateNamed || shadow.isAchievementNamed)
             const isLegendary = shadow?.rarity === 'legendary'
             const isEpic = shadow?.rarity === 'epic'
+            const isSGrade = shadow?.innateGrade === 'S'
+            const isAGrade = shadow?.innateGrade === 'A'
+            const isEvolved = shadow && (shadow.evolutionStage ?? 0) > 0
             return (
-              <div
+              <motion.div
                 key={index}
                 role={shadow ? 'button' : undefined}
                 tabIndex={shadow ? 0 : undefined}
@@ -1103,19 +1460,21 @@ export function ShadowPanel() {
                     setSelectedShadowId(shadow.instanceId)
                   }
                 }}
+                whileHover={shadow ? { y: -4, scale: 1.02 } : undefined}
+                transition={{ duration: 0.22, ease: 'easeOut' }}
                 className={[
-                  'relative overflow-hidden rounded-lg border p-3 min-h-56 transition-all',
+                  'relative overflow-hidden rounded-lg border p-3 min-h-[300px] transition-all card-premium-shine group',
                   shadow
-                    ? isNamed
-                      ? 'border-amber-300/40 bg-[radial-gradient(circle_at_50%_0%,rgba(251,191,36,0.14),transparent_50%),linear-gradient(180deg,rgba(124,58,237,0.1),rgba(2,6,23,0.95))] named-pulse'
-                      : isLegendary
-                        ? 'border-amber-400/32 bg-[radial-gradient(circle_at_50%_0%,rgba(245,158,11,0.1),transparent_50%)] rarity-frame-legendary'
-                        : isEpic
-                          ? 'border-purple-400/28 bg-purple-400/5 rarity-frame-epic'
-                          : 'border-cyan-400/22 bg-cyan-400/5 shadow-glow'
-                    : 'border-white/8 bg-ink-950/60',
-                  shadow ? 'cursor-pointer hover:border-cyan-200/55' : '',
-                  selectedShadow?.instanceId === shadow?.instanceId ? 'ring-2 ring-amber-200/60' : '',
+                    ? [
+                        isNamed ? 'named-pulse' : '',
+                        isSGrade ? 'grade-aura-s' : isAGrade ? 'grade-aura-a' : '',
+                        isEvolved ? 'shadow-evolved-card' : '',
+                        isLegendary ? 'rarity-frame-legendary border-amber-400/40' : isEpic ? 'rarity-frame-epic border-purple-400/30' : 'rarity-frame-rare border-cyan-400/30',
+                        'shadow-deployed-glow ring-2 ring-cyan-300/40'
+                      ].filter(Boolean).join(' ')
+                    : 'border-white/5 bg-ink-950/60 border-dashed opacity-45',
+                  shadow ? 'cursor-pointer' : '',
+                  selectedShadow?.instanceId === shadow?.instanceId ? 'ring-2 ring-amber-300/80 shadow-glow-lg' : '',
                 ].join(' ')}
               >
                 {shadow && (
@@ -1128,7 +1487,7 @@ export function ShadowPanel() {
                 </div>
                 {shadow ? (
                   <div className="relative z-10 space-y-2">
-                    <ShadowPortrait shadow={shadow} size="md" active highlighted={isNamed} innateGrade={shadow.innateGrade} />
+                    <ShadowPortrait shadow={shadow} size="lg" active highlighted={isNamed} innateGrade={shadow.innateGrade} />
                     <div className="space-y-0.5">
                       <div className={`text-xs font-semibold truncate ${rarityStyle[shadow.rarity].split(' ')[0]}`}>
                         {shadow.name}
@@ -1148,7 +1507,7 @@ export function ShadowPanel() {
                 ) : (
                   <div className="flex h-full items-center justify-center py-10 text-xs text-white/20 system-text">EMPTY</div>
                 )}
-              </div>
+              </motion.div>
             )
           })}
         </div>
@@ -1456,7 +1815,7 @@ export function ShadowPanel() {
                           <button
                             type="button"
                             disabled={!isValid || shadowEssence < 100}
-                            onClick={() => reawakenShadowInnateGrade(selectedShadow.instanceId)}
+                            onClick={() => handleReawaken(selectedShadow.instanceId)}
                             className="btn btn-secondary py-1 px-3 text-[10px] disabled:opacity-40 disabled:cursor-not-allowed"
                           >
                             연구 개시
@@ -1523,7 +1882,7 @@ export function ShadowPanel() {
                                       disabled={shadowEssence < cost}
                                       onClick={() => {
                                         if (window.confirm(`[${selectedShadow.name}]의 ${idx + 1}번째 특성을 재굴림(혹은 신규 부여)하시겠습니까?\n소모 정수: ${cost}`)) {
-                                          rerollShadowTrait(selectedShadow.instanceId, idx)
+                                          handleRerollTrait(selectedShadow.instanceId, idx, cost)
                                         }
                                       }}
                                       className="btn btn-secondary py-0.5 px-2 text-[9px] disabled:opacity-40"
@@ -1597,7 +1956,7 @@ export function ShadowPanel() {
                                   <button
                                     type="button"
                                     disabled={shadowEssence < passiveCost}
-                                    onClick={() => unlockShadowSlot(selectedShadow.instanceId, 'passive')}
+                                    onClick={() => handleUnlockSlot(selectedShadow.instanceId, 'passive', passiveCost)}
                                     className="btn btn-primary py-0.5 px-2 text-[9px]"
                                   >
                                     개방 ({passiveCost}정수)
@@ -1633,7 +1992,7 @@ export function ShadowPanel() {
                                   <button
                                     type="button"
                                     disabled={shadowEssence < skillCost}
-                                    onClick={() => unlockShadowSlot(selectedShadow.instanceId, 'skill')}
+                                    onClick={() => handleUnlockSlot(selectedShadow.instanceId, 'skill', skillCost)}
                                     className="btn btn-primary py-0.5 px-2 text-[9px]"
                                   >
                                     개방 ({skillCost}정수)

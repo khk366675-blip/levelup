@@ -210,35 +210,63 @@ export function RewardBoxPanel() {
         position="modal"
         result={revealingBox && (
           <div>
-            <div className="mb-3 text-center">
-              <div className="system-text text-[10px] text-white/45">BOX CONTENTS</div>
-              <div className="mt-1 text-lg font-black text-white">{revealingBox.label}</div>
+            <div className="mb-4 text-center">
+              <div className="system-text text-[10px] text-cyan-300 font-black tracking-widest animate-pulse">SUPPLY RECEIVED</div>
+              <div className="mt-1 text-xl font-black text-white">{revealingBox.label}</div>
             </div>
-            <div className="grid gap-2">
-              {revealGrowth.rank && (
-                <div className="rounded-md border border-amber-300/35 bg-amber-400/12 px-3 py-2 text-sm font-black text-amber-100 shadow-glow">
-                  {revealGrowth.rank}
-                </div>
-              )}
-              {revealGrowth.level && (
-                <div className="rounded-md border border-cyan-300/25 bg-cyan-400/10 px-3 py-2 text-sm font-bold text-cyan-100">
-                  {revealGrowth.level}
-                </div>
-              )}
-              {revealRewardLines.map(line => (
-                <div
-                  key={line}
-                  className={clsx(
-                    'flex items-center gap-2 rounded-md border px-3 py-2 text-sm font-semibold',
-                    hasHighValueDrop(revealingBox.reward) && !hasShadowSignalDrop(revealingBox.reward)
-                      ? 'border-amber-300/30 bg-amber-400/10 text-amber-100'
-                      : rewardLineClass(line),
+            
+            <div className="space-y-3">
+              {(revealGrowth.rank || revealGrowth.level) && (
+                <div className="grid grid-cols-2 gap-2">
+                  {revealGrowth.rank && (
+                    <div className="rounded-md border border-amber-300/35 bg-[radial-gradient(circle_at_50%_0%,rgba(245,158,11,0.15),transparent_60%)] bg-amber-400/10 px-3 py-2 text-xs font-black text-amber-100 text-center shadow-glow animate-bounce">
+                      👑 {revealGrowth.rank}
+                    </div>
                   )}
-                >
-                  <RewardLineIcon line={line} />
-                  <span>{line}</span>
+                  {revealGrowth.level && (
+                    <div className="rounded-md border border-cyan-300/25 bg-[radial-gradient(circle_at_50%_0%,rgba(34,211,238,0.15),transparent_60%)] bg-cyan-400/10 px-3 py-2 text-xs font-bold text-cyan-100 text-center animate-pulse">
+                      ⚡ {revealGrowth.level}
+                    </div>
+                  )}
                 </div>
-              ))}
+              )}
+              
+              <div className="grid grid-cols-2 gap-2">
+                {revealRewardLines.map(line => {
+                  const isHigh = line.includes('레전더리') || line.includes('Legendary') || line.includes('에픽') || line.includes('Epic')
+                  const isShard = line.startsWith('소환 조각:') || line.startsWith('조각:')
+                  const isTicket = line.startsWith('소환권:')
+                  
+                  return (
+                    <motion.div
+                      key={line}
+                      whileHover={{ scale: 1.02, y: -1 }}
+                      className={clsx(
+                        'flex flex-col justify-between rounded-lg border p-3 text-left relative overflow-hidden transition-shadow min-h-16',
+                        isHigh
+                          ? 'border-amber-400/40 bg-amber-400/8 text-amber-100 shadow-[0_0_15px_rgba(245,158,11,0.2)]'
+                          : isTicket
+                            ? 'border-cyan-400/35 bg-cyan-400/8 text-cyan-100'
+                            : isShard
+                              ? 'border-purple-400/35 bg-purple-400/8 text-purple-100'
+                              : 'border-slate-500/18 bg-slate-900/60 text-white/80'
+                      )}
+                    >
+                      <div className="absolute -right-4 -bottom-4 h-12 w-12 rounded-full bg-white/5 blur-xl" />
+                      
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-[9px] system-text text-white/40 font-bold">
+                          {isHigh ? 'PREMIUM DROP' : isTicket ? 'TICKET' : isShard ? 'FRAGMENT' : 'SUPPLY'}
+                        </span>
+                        <RewardLineIcon line={line} />
+                      </div>
+                      <div className="text-xs font-black truncate leading-tight mt-1" title={line}>
+                        {line}
+                      </div>
+                    </motion.div>
+                  )
+                })}
+              </div>
             </div>
           </div>
         )}
