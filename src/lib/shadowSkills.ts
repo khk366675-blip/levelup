@@ -2526,20 +2526,341 @@ const getShadowActionProfile = (
   }
 }
 
-export const formatShadowTriggerSummary = (trigger?: ShadowTriggerCondition): string =>
-  trigger?.summary ?? 'Always available candidate'
+const SHADOW_ABILITY_DISPLAY_NAMES: Record<string, string> = {
+  // Actives
+  'Rift Cleave': '균열 절단',
+  'Quick Slash': '신속한 베기',
+  'Execution Mark': '처형의 표식',
+  'Burst Drive': '폭발 질주',
+  'Shadow Barrier': '그림자 장벽',
+  'Intercept Step': '차단 스텝',
+  'Counter Stance': '반격 자세',
+  'Last Line': '최후의 방어선',
+  'Wounded Chase': '부상자 추격',
+  'Prey Mark': '먹잇감 표식',
+  'Chain Hit': '연쇄 타격',
+  'Prey Lock': '먹잇감 고정',
+  'Opening Mark': '약점 개시 표식',
+  'Quick Scan': '신속한 분석',
+  'Evasion Down': '회피력 감소',
+  'Intent Read': '의도 간파',
+  'Mending Pulse': '치유의 파동',
+  'Stabilizing Aura': '안정화 오라',
+  'Cooldown Thread': '재사용 조율',
+  'Legion Buff': '군단 강화',
+  'Weakness Expose': '약점 노출',
+  'Defense Index': '방어 지표 분석',
+  'Boss Suppression': '보스 제압',
+  'Defense Debuff': '방어력 약화',
+  // Passives
+  'Follow Through': '추격 연계',
+  'Low HP Pressure': '위기 압박',
+  'Finisher Instinct': '처형의 본능',
+  'Protective Posture': '보호 태세',
+  'Durability Stance': '내구력 유지',
+  'Low HP Priority': '체력 저하 타겟팅',
+  'Kill Momentum': '처치 가속',
+  'Search Sense': '수색 감각',
+  'Relentless Chase': '끈질긴 추격',
+  'First Read': '선제 분석',
+  'Route Reading': '경로 판독',
+  'Formation Signal': '대형 신호',
+  'Long Fight Efficiency': '장기전 효율',
+  'Support Rhythm': '지원 리듬',
+  'Legion Link': '군단 연결',
+  'Boss Priority': '보스 일점사',
+  'Analysis Tempo': '분석 템포',
+  'Pattern Lock': '패턴 봉쇄',
+  'Command Imprint': '지시 각인',
+  'Memory Core': '기억의 핵',
 
-export const formatShadowSkillSummary = (skill: ShadowSkillDefinition): string =>
-  `${skill.shortLabel} · ${skill.qualityTier.toUpperCase()} · ${formatShadowTriggerSummary(skill.trigger)}`
+  // Named / Unique Skill & Passives
+  'Silence Shot': '침묵 사격',
+  'Silent Distance': '침묵의 거리',
+  'Shadow Rend': '그림자 절단',
+  'Guard Memory': '수호의 기억',
+  'Weakness Note': '약점 기록',
+  'Void Pulse': '공허 파동',
+  'Shadow Execute': '그림자 처형',
+  'Mend Pulse': '치유 파동',
+  'Dark Guard': '암흑 수호',
+  'First Rift Signal': '최초의 균열 신호',
+  'Alley Wall': '골목 방벽',
+  'Nest Rend': '둥지 절단',
+  'Sloth Bulwark': '나태의 보루',
+  'Sloth Chorus': '나태의 합창',
+  'Balance Wave': '균형의 파동',
+  'Rift Cartography': '균열 지도학',
+  'Rift Wayfinding': '균열 개척',
+  'Rift Instruction': '균열 교범',
+  'Steel Fortitude': '강철의 의지',
+  'Challenger Blade': '도전자의 검',
+  'Habit Shield': '습관의 방패',
+  'Nest Vanguard': '둥지 선봉장',
+  'Drowsy Healing': '나른한 치유',
+  'Black Settlement': '검은 청산',
+  'Mind Anchor': '정신 고정',
+  'Mire Bastion': '진흙 보루',
+  'Restraint Feast': '구속의 만찬',
+  'Market Watch': '시장 감시',
+  'Duet Harmony': '2중주 화음',
+  'Registrar Log': '기록관의 로그',
+  'Rift Recovery': '균열 복구',
+  'Forgetting Ink': '망각의 잉크',
+  'Forgetting Scribe': '망각의 필사',
+  'Forgetting Watch': '망각의 감시',
+  'Expedition Ledger': '원정 장부',
+  'Backstreet Wall': '뒷골목 방벽',
+  'Cutting Watch': '참격 감시',
+  'Training Order': '훈련 명령',
+  'Career Audit': '경력 감사',
+  'Rift Tactics': '균열 전술',
+  'Analytical Sovereignty': '분석의 권위',
+  'Capital Link': '자본 연결',
+  'Archive Lock': '아카이브 봉쇄',
+}
 
-export const formatShadowPassiveSummary = (passive: ShadowPassiveDefinition): string =>
-  `${passive.shortLabel} · ${passive.qualityTier.toUpperCase()} · ${formatShadowTriggerSummary(passive.condition)}`
+const SHADOW_TRIGGER_SUMMARIES: Record<string, string> = {
+  'Always available candidate': '상시 사용 가능',
+  'Target HP below 35%': '적 체력 35% 이하 시',
+  'Target HP below 40%': '적 체력 40% 이하 시',
+  'Target HP below 42%': '적 체력 42% 이하 시',
+  'Target HP below 45%': '적 체력 45% 이하 시',
+  'Target HP below 50%': '적 체력 50% 이하 시',
+  'Hunter HP below 40%': '헌터 체력 40% 이하 시',
+  'Hunter HP below 45%': '헌터 체력 45% 이하 시',
+  'Hunter HP below 50%': '헌터 체력 50% 이하 시',
+  'Hunter HP below 55%': '헌터 체력 55% 이하 시',
+  'Boss or elite target present': '보스 또는 엘리트 존재 시',
+  'After an enemy is defeated': '적 처치 시',
+  'At wave start': '웨이브 시작 시',
+  'Before an enemy action resolves': '적 행동 직전',
+  'Before heavy enemy pressure': '적 강한 공격 직전',
+  'After a burst or critical window': '치명타 발생 후',
+  'After a critical or burst window': '치명타 발생 후'
+}
+
+export function getShadowSkillDisplayName(nameOrLabel: string): string {
+  const clean = nameOrLabel.trim()
+  if (SHADOW_ABILITY_DISPLAY_NAMES[clean]) {
+    return SHADOW_ABILITY_DISPLAY_NAMES[clean]
+  }
+  for (const [enName, koName] of Object.entries(SHADOW_ABILITY_DISPLAY_NAMES)) {
+    if (enName.toLowerCase() === clean.toLowerCase()) {
+      return koName
+    }
+  }
+
+  const words = clean.split(/\s+/)
+  const translatedWords = words.map(w => {
+    const wClean = w.replace(/[^a-zA-Z]/g, '')
+    const lower = wClean.toLowerCase()
+    const wordMap: Record<string, string> = {
+      'rift': '균열',
+      'cleave': '절단',
+      'quick': '신속',
+      'slash': '베기',
+      'execution': '처형',
+      'mark': '표식',
+      'burst': '폭발',
+      'drive': '질주',
+      'shadow': '그림자',
+      'barrier': '장벽',
+      'intercept': '차단',
+      'step': '스텝',
+      'counter': '반격',
+      'stance': '자세',
+      'last': '최후의',
+      'line': '방어선',
+      'wounded': '부상자',
+      'chase': '추격',
+      'prey': '먹잇감',
+      'lock': '고정',
+      'opening': '약점',
+      'scan': '분석',
+      'evasion': '회피',
+      'down': '감소',
+      'intent': '의도',
+      'read': '간파',
+      'mending': '치유',
+      'mend': '치유',
+      'pulse': '파동',
+      'stabilizing': '안정화',
+      'aura': '오라',
+      'cooldown': '재사용대기시간',
+      'thread': '조율',
+      'legion': '군단',
+      'buff': '강화',
+      'weakness': '약점',
+      'expose': '노출',
+      'defense': '방어',
+      'index': '지표',
+      'boss': '보스',
+      'suppression': '제압',
+      'debuff': '약화',
+      'follow': '연계',
+      'through': '추격',
+      'low': '낮은',
+      'hp': '체력',
+      'pressure': '압박',
+      'finisher': '처형자',
+      'instinct': '본능',
+      'protective': '보호',
+      'posture': '태세',
+      'durability': '내구',
+      'priority': '우선',
+      'kill': '처치',
+      'momentum': '가속',
+      'search': '수색',
+      'sense': '감각',
+      'relentless': '끈질긴',
+      'first': '최초의',
+      'route': '경로',
+      'reading': '판독',
+      'formation': '대형',
+      'signal': '신호',
+      'long': '장기전',
+      'fight': '전투',
+      'efficiency': '효율',
+      'support': '지원',
+      'rhythm': '리듬',
+      'link': '연결',
+      'analysis': '분석',
+      'tempo': '템포',
+      'pattern': '패턴',
+      'silence': '침묵',
+      'shot': '사격',
+      'silent': '침묵의',
+      'distance': '거리',
+      'rend': '절단',
+      'guard': '수호',
+      'memory': '기억',
+      'note': '기록',
+      'execute': '처형',
+      'dark': '암흑',
+      'vanguard': '선봉',
+      'drowsy': '나른한',
+      'healing': '치유',
+      'black': '검은',
+      'settlement': '청산',
+      'mind': '정신',
+      'anchor': '고정',
+      'mire': '진흙',
+      'bastion': '보루',
+      'restraint': '구속',
+      'feast': '만찬',
+      'market': '시장',
+      'watch': '감시',
+      'duet': '2중주',
+      'harmony': '화음',
+      'registrar': '기록관',
+      'log': '로그',
+      'recovery': '복구',
+      'forgetting': '망각',
+      'ink': '잉크',
+      'scribe': '필사',
+      'expedition': '원정',
+      'ledger': '장부',
+      'backstreet': '뒷골목',
+      'wall': '장벽',
+      'cutting': '참격',
+      'training': '훈련',
+      'order': '명령',
+      'career': '경력',
+      'audit': '감사',
+      'tactics': '전술',
+      'sovereignty': '권위',
+      'capital': '자본',
+      'archive': '보관소',
+      'decision': '결정',
+      'grid': '격자',
+      'sovereign': '지배자'
+    }
+    const translated = wordMap[lower]
+    if (translated) {
+      const nonAlpha = w.replace(/[a-zA-Z]/g, '')
+      return translated + nonAlpha
+    }
+    return w
+  })
+
+  return translatedWords.join(' ')
+}
+
+export function getShadowSkillTagLabel(tag: string): string {
+  const map: Record<string, string> = {
+    'SILENCE': '침묵',
+    'RANGE': '원거리',
+    'SHADOW': '그림자',
+    'GUARD': '수호',
+    'HEAL': '회복',
+    'MEND': '치유',
+    'MARK': '표식',
+    'SCAN': '분석',
+    'VOID': '공허',
+    'RIFT': '균열',
+    'ASSAULT': '강습',
+    'SUPPORT': '지원',
+    'ANALYST': '분석',
+    'HUNTER': '추적',
+    'SCOUT': '정찰',
+    'silence': '침묵',
+    'range': '원거리',
+    'shadow': '그림자',
+    'guard': '수호',
+    'heal': '회복',
+    'mend': '치유',
+    'mark': '표식',
+    'scan': '분석',
+    'void': '공허',
+    'rift': '균열',
+    'assault': '강습',
+    'support': '지원',
+    'analyst': '분석',
+    'hunter': '추적',
+    'scout': '정찰'
+  }
+  const clean = tag.trim().toUpperCase()
+  return map[clean] || map[tag.trim().toLowerCase()] || tag
+}
+
+export const translateQualityTier = (quality: string): string => {
+  const map: Record<string, string> = {
+    'basic': '기본',
+    'prototype': '실험형',
+    'refined': '정제형',
+    'elite': '정예',
+    'legendary': '전설',
+    'unique': '고유'
+  }
+  const clean = quality.toLowerCase()
+  return map[clean] || quality
+}
+
+export const formatShadowTriggerSummary = (trigger?: ShadowTriggerCondition): string => {
+  const sum = trigger?.summary ?? 'Always available candidate'
+  return SHADOW_TRIGGER_SUMMARIES[sum] || sum
+}
+
+export const formatShadowSkillSummary = (skill: ShadowSkillDefinition): string => {
+  const shortLabelKo = getShadowSkillDisplayName(skill.shortLabel)
+  const qualityTierKo = translateQualityTier(skill.qualityTier)
+  const triggerKo = formatShadowTriggerSummary(skill.trigger)
+  return `${shortLabelKo} · ${qualityTierKo} · ${triggerKo}`
+}
+
+export const formatShadowPassiveSummary = (passive: ShadowPassiveDefinition): string => {
+  const shortLabelKo = getShadowSkillDisplayName(passive.shortLabel)
+  const qualityTierKo = translateQualityTier(passive.qualityTier)
+  const triggerKo = formatShadowTriggerSummary(passive.condition)
+  return `${shortLabelKo} · ${qualityTierKo} · ${triggerKo}`
+}
 
 export const getShadowAbilitySourceLabel = (ability: { source?: ShadowAbilitySource; qualityTier: ShadowSkillQuality }): string => {
-  if (ability.source === 'unique' || ability.qualityTier === 'unique') return 'UNIQUE'
-  if (ability.source === 'prototype') return 'PROTOTYPE'
-  if (ability.source === 'template') return 'TEMPLATE'
-  return 'GENERIC'
+  if (ability.source === 'unique' || ability.qualityTier === 'unique') return '고유형'
+  if (ability.source === 'prototype') return '실험형'
+  if (ability.source === 'template') return '표준형'
+  return '일반형'
 }
 
 export const getShadowCombatUnitProfile = (

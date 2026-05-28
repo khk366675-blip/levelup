@@ -48,6 +48,9 @@ import {
   formatShadowTriggerSummary,
   getShadowAbilitySourceLabel,
   getShadowCombatUnitProfile,
+  getShadowSkillDisplayName,
+  getShadowSkillTagLabel,
+  translateQualityTier,
 } from '../lib/shadowSkills'
 import type { OwnedShadow, ShadowInnateGrade, ShadowRarity, ShadowRole } from '../lib/types'
 
@@ -257,11 +260,11 @@ function ShadowDetailPanel({
   const combatProfile = getShadowCombatProfile(shadow)
   const unitProfile = getShadowCombatUnitProfile(shadow)
   const breakdownItems = [
-    { label: 'Assist', value: combatProfile.assistPower },
-    { label: 'Guard', value: combatProfile.guardPower },
-    { label: 'Control', value: combatProfile.controlPower },
-    { label: 'Boss', value: combatProfile.bossPower },
-    { label: 'Expedition', value: combatProfile.expeditionPower },
+    { label: '지원', value: combatProfile.assistPower },
+    { label: '수호', value: combatProfile.guardPower },
+    { label: '제압', value: combatProfile.controlPower },
+    { label: '보스 특화', value: combatProfile.bossPower },
+    { label: '원정 전투', value: combatProfile.expeditionPower },
   ]
 
   return (
@@ -269,7 +272,7 @@ function ShadowDetailPanel({
       <div className="br" />
       <div className="mb-3 flex items-center justify-between gap-3">
         <div>
-          <div className="system-text text-[10px] text-cyan-200/60">SELECTED SHADOW</div>
+          <div className="system-text text-[10px] text-cyan-200/60">선택된 그림자</div>
           <h3 className="mt-1 text-lg font-black text-white/95">
             {shadow.name}
             {(shadow.enhancementLevel ?? 0) > 0 && <span className="ml-2 text-sm text-amber-200">+{shadow.enhancementLevel}</span>}
@@ -282,19 +285,19 @@ function ShadowDetailPanel({
 
       <div className="mt-4 grid grid-cols-2 gap-2 text-[11px]">
         <div className="rounded border border-white/10 bg-ink-900/55 px-3 py-2">
-          <div className="system-text text-[9px] text-white/35">RARITY</div>
+          <div className="system-text text-[9px] text-white/35">등급</div>
           <div className="font-semibold text-white/85">{SHADOW_RARITY_LABEL[shadow.rarity]}</div>
         </div>
         <div className="rounded border border-white/10 bg-ink-900/55 px-3 py-2">
-          <div className="system-text text-[9px] text-white/35">INNATE</div>
+          <div className="system-text text-[9px] text-white/35">태생</div>
           <div className="font-semibold text-white/85">{SHADOW_INNATE_GRADE_LABEL[shadow.innateGrade ?? 'B']}</div>
         </div>
         <div className="rounded border border-white/10 bg-ink-900/55 px-3 py-2">
-          <div className="system-text text-[9px] text-white/35">ROLE</div>
+          <div className="system-text text-[9px] text-white/35">역할</div>
           <div className="font-semibold text-white/85">{SHADOW_ROLE_LABEL[shadow.role]}</div>
         </div>
         <div className="rounded border border-white/10 bg-ink-900/55 px-3 py-2">
-          <div className="system-text text-[9px] text-white/35">RANK</div>
+          <div className="system-text text-[9px] text-white/35">계급</div>
           <div className="font-semibold text-white/85">{SHADOW_RANK_LABEL[shadow.rank]}</div>
         </div>
       </div>
@@ -302,7 +305,7 @@ function ShadowDetailPanel({
       <div className="mt-3 rounded border border-cyan-400/15 bg-cyan-400/5 px-3 py-2">
         <div className="mb-1 flex items-center justify-between text-[10px] text-white/55">
           <span>Lv {level}/{maxLevel}</span>
-          <span className="system-text">{level >= maxLevel ? 'MAX' : `${xp}/${xpNeeded} XP`}</span>
+          <span className="system-text">{level >= maxLevel ? '최대' : `${xp}/${xpNeeded} XP`}</span>
         </div>
         <div className="h-2 overflow-hidden rounded-full bg-white/10">
           <div className="h-full rounded-full bg-gradient-to-r from-cyan-300 via-purple-300 to-emerald-300" style={{ width: `${xpPct}%` }} />
@@ -330,34 +333,34 @@ function ShadowDetailPanel({
       <div className="mt-3 rounded-lg border border-purple-300/18 bg-purple-300/8 p-3">
         <div className="flex items-start justify-between gap-3">
           <div>
-            <div className="system-text text-[9px] text-purple-100/60">SHADOW UNIT PROFILE</div>
+            <div className="system-text text-[9px] text-purple-100/60">그림자 유닛 요약</div>
             <div className="mt-0.5 text-sm font-black text-white/90">
-              {unitProfile.qualityCap.toUpperCase()} SKILL MODEL
+              {translateQualityTier(unitProfile.qualityCap)} 등급 스킬 모델
             </div>
           </div>
           <div className="text-right">
-            <div className="system-text text-[9px] text-cyan-100/50">2.5D LANE</div>
+            <div className="system-text text-[9px] text-cyan-100/50">2.5D 배치</div>
             <div className="mt-0.5 text-[11px] font-semibold uppercase text-cyan-100/75">
-              {unitProfile.actionProfile.boardLane}
+              {unitProfile.actionProfile.boardLane === 'front' ? '전열 (FRONT)' : '후열 (REAR)'}
             </div>
           </div>
         </div>
         <div className="mt-2 flex flex-wrap gap-1.5">
           {unitProfile.summaryBadges.map(badge => (
             <span key={badge} className="rounded border border-purple-300/25 bg-purple-300/10 px-2 py-1 text-[10px] system-text text-purple-100/75">
-              {badge}
+              {getShadowSkillDisplayName(badge)}
             </span>
           ))}
         </div>
         <div className="mt-3 grid gap-2 md:grid-cols-2">
           <div className="rounded border border-white/10 bg-ink-950/45 p-2">
-            <div className="mb-1 system-text text-[9px] text-white/40">ACTIVE CANDIDATES</div>
+            <div className="mb-1 system-text text-[9px] text-white/40">액티브 후보</div>
             {unitProfile.activeSkills.length > 0 ? (
               <div className="space-y-1.5">
                 {unitProfile.activeSkills.map(skill => (
                   <div key={skill.id} className="rounded border border-cyan-300/15 bg-cyan-300/8 px-2 py-1.5">
                     <div className="flex items-center justify-between gap-2">
-                      <span className="text-[11px] font-bold text-cyan-100/85">{skill.name}</span>
+                      <span className="text-[11px] font-bold text-cyan-100/85">{getShadowSkillDisplayName(skill.name)}</span>
                       <span className="system-text text-[9px] text-cyan-100/50">{getShadowAbilitySourceLabel(skill)}</span>
                     </div>
                     <div className="mt-0.5 text-[10px] leading-relaxed text-white/45">
@@ -367,17 +370,17 @@ function ShadowDetailPanel({
                 ))}
               </div>
             ) : (
-              <div className="text-[10px] text-white/35">No active candidate assigned yet.</div>
+              <div className="text-[10px] text-white/35">지정된 액티브 후보가 없습니다.</div>
             )}
           </div>
           <div className="rounded border border-white/10 bg-ink-950/45 p-2">
-            <div className="mb-1 system-text text-[9px] text-white/40">PASSIVE CANDIDATES</div>
+            <div className="mb-1 system-text text-[9px] text-white/40">패시브 후보</div>
             {unitProfile.passives.length > 0 ? (
               <div className="space-y-1.5">
                 {unitProfile.passives.map(passive => (
                   <div key={passive.id} className="rounded border border-emerald-300/15 bg-emerald-300/8 px-2 py-1.5">
                     <div className="flex items-center justify-between gap-2">
-                      <span className="text-[11px] font-bold text-emerald-100/85">{passive.name}</span>
+                      <span className="text-[11px] font-bold text-emerald-100/85">{getShadowSkillDisplayName(passive.name)}</span>
                       <span className="system-text text-[9px] text-emerald-100/50">{getShadowAbilitySourceLabel(passive)}</span>
                     </div>
                     <div className="mt-0.5 text-[10px] leading-relaxed text-white/45">
@@ -387,31 +390,31 @@ function ShadowDetailPanel({
                 ))}
               </div>
             ) : (
-              <div className="text-[10px] text-white/35">No passive candidate assigned yet.</div>
+              <div className="text-[10px] text-white/35">지정된 패시브 후보가 없습니다.</div>
             )}
           </div>
         </div>
         <details className="mt-2 rounded border border-white/10 bg-ink-950/50">
           <summary className="cursor-pointer px-3 py-2 text-[10px] system-text text-white/55 hover:text-purple-100">
-            Unit behavior / trigger profile
+            그림자 개체 행동 / 발동 특성
           </summary>
           <div className="grid gap-2 border-t border-white/10 p-3 text-[10px] text-white/50 sm:grid-cols-2">
             <div>
-              <div className="system-text text-[9px] text-white/35">PREFERRED ACTIONS</div>
-              <div className="mt-1 text-white/70">{unitProfile.behavior.preferredActions.join(' / ')}</div>
+              <div className="system-text text-[9px] text-white/35">우선 행동 유형</div>
+              <div className="mt-1 text-white/70">{unitProfile.behavior.preferredActions.map(act => getShadowSkillTagLabel(act)).join(' / ')}</div>
             </div>
             <div>
-              <div className="system-text text-[9px] text-white/35">ACTION CUE</div>
+              <div className="system-text text-[9px] text-white/35">동작 식별자</div>
               <div className="mt-1 text-white/70">{unitProfile.actionProfile.actionCue}</div>
             </div>
             <div>
-              <div className="system-text text-[9px] text-white/35">GRADE TUNING</div>
+              <div className="system-text text-[9px] text-white/35">태생 성장 보정</div>
               <div className="mt-1 text-white/70">
-                Proc x{unitProfile.gradeTuning.procStability.toFixed(2)} · Scale x{unitProfile.gradeTuning.effectScaling.toFixed(2)}
+                발동 보정 x{unitProfile.gradeTuning.procStability.toFixed(2)} · 수치 보정 x{unitProfile.gradeTuning.effectScaling.toFixed(2)}
               </div>
             </div>
             <div>
-              <div className="system-text text-[9px] text-white/35">PRIMARY TRIGGER</div>
+              <div className="system-text text-[9px] text-white/35">주요 발동 조건</div>
               <div className="mt-1 text-white/70">
                 {formatShadowTriggerSummary(unitProfile.activeSkills[0]?.trigger ?? unitProfile.passives[0]?.condition)}
               </div>
@@ -419,25 +422,25 @@ function ShadowDetailPanel({
           </div>
         </details>
         <div className="mt-2 text-[9px] leading-relaxed text-white/35">
-          Skill/passive entries are derived v2 candidates for future ShadowActionEvent runtime. Current Gate/Tower runtime remains on the existing bridge layer.
+          액티브/패시브 스킬 후보는 2.5D 직접 전투 시 아군에게 버프를 부여하거나 적에게 군중제어 및 약화를 적용합니다.
         </div>
       </div>
       <div className="mt-3 rounded-lg border border-amber-300/20 bg-amber-300/8 p-3">
         <div className="flex items-start justify-between gap-3">
           <div>
-            <div className="system-text text-[9px] text-amber-100/60">SHADOW COMBAT POWER</div>
+            <div className="system-text text-[9px] text-amber-100/60">그림자 총 전투력</div>
             <div className="mt-0.5 text-2xl font-black tabular-nums text-amber-100">
               {combatProfile.totalPower.toLocaleString()}
             </div>
           </div>
           <div className="text-right">
-            <div className="system-text text-[9px] text-cyan-100/55">ROLE IDENTITY</div>
+            <div className="system-text text-[9px] text-cyan-100/55">역할 아이덴티티</div>
             <div className="mt-0.5 max-w-40 text-[11px] font-semibold text-cyan-100/80">
               {combatProfile.roleIdentity}
             </div>
           </div>
         </div>
-        <div className="mt-2 system-text text-[9px] text-white/35">TOP STRENGTHS</div>
+        <div className="mt-2 system-text text-[9px] text-white/35">핵심 전투 성향</div>
         <div className="mt-1 flex flex-wrap gap-1.5">
           {combatProfile.topStats.map(stat => (
             <span key={stat.key} className="rounded border border-cyan-300/25 bg-cyan-300/10 px-2 py-1 text-[10px] system-text text-cyan-100/75">
@@ -455,7 +458,7 @@ function ShadowDetailPanel({
         </div>
         <details className="mt-3 rounded border border-white/10 bg-ink-950/50">
           <summary className="cursor-pointer px-3 py-2 text-[10px] system-text text-white/55 hover:text-cyan-100">
-            Detailed shadow stats
+            그림자 세부 스탯 정보
           </summary>
           <div className="space-y-3 border-t border-white/10 p-3">
             {SHADOW_STAT_GROUPS.map(group => (
@@ -481,7 +484,7 @@ function ShadowDetailPanel({
           </div>
         </details>
         <div className="mt-2 text-[9px] leading-relaxed text-white/35">
-          Rarity is base potential, innate grade is born talent, level is bond growth, enhancement is investment, evolution is role expansion, named status is unique potential.
+          희귀도는 기초 잠재력, 태생 등급은 기본 재능, 레벨은 유대 성장, 강화는 투자 효율, 진화는 역할 확장, 네임드 상태는 고유한 잠재력을 나타냅니다.
         </div>
       </div>
       <div className="mt-2 text-[10px] text-white/35 system-text">

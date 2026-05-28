@@ -27,12 +27,12 @@ const rarityPalette: Record<ShadowRarity, { frame: string; glow: string; mist: s
 }
 
 const roleLabel: Record<ShadowRole, string> = {
-  assault: 'ASSAULT',
-  guard: 'GUARD',
-  scout: 'SCOUT',
-  analyst: 'ANALYST',
-  support: 'SUPPORT',
-  hunter: 'HUNTER',
+  assault: '강습',
+  guard: '수호',
+  scout: '정찰',
+  analyst: '분석',
+  support: '지원',
+  hunter: '추적',
 }
 
 const sizeClass: Record<PortraitSize, string> = {
@@ -511,8 +511,8 @@ export function ShadowPortrait({
   const silhouette = profile.silhouette
   const runeRotation = (seed % 28) - 14
   const mistShift = (seed % 18) - 9
-  const label = hidden ? 'Unknown shadow' : (def?.name ?? shadow?.name ?? 'Shadow')
-  const sourceTone = hidden ? 'SIGNAL' : def?.isAchievementNamed || shadow?.isAchievementNamed ? 'ACHIEVEMENT' : def?.isGateNamed || shadow?.isGateNamed ? 'GATE NAMED' : 'NAMED'
+  const label = hidden ? '미확인 그림자' : (def?.name ?? shadow?.name ?? '그림자')
+  const sourceTone = hidden ? '신호' : def?.isAchievementNamed || shadow?.isAchievementNamed ? '성취 네임드' : def?.isGateNamed || shadow?.isGateNamed ? '게이트 네임드' : '네임드'
   const grade = innateGrade ?? shadow?.innateGrade ?? undefined
   const isGradeS = grade === 'S'
   const isGradeA = grade === 'A'
@@ -645,7 +645,7 @@ export function ShadowPortrait({
       {/* 3. Floating Overlay Chips (z-20 on top of the image) */}
       <div className="absolute left-2 top-2 flex items-center gap-1 z-20">
         <span className={clsx('rounded border px-1.5 py-0.5 text-[8px] system-text', palette.text)} style={{ borderColor: palette.frame, background: 'rgba(2,6,23,0.58)' }}>
-          {hidden ? 'SIGNAL' : roleLabel[role]}
+          {hidden ? '신호' : roleLabel[role]}
         </span>
         {displayNamed && (
           <span className={clsx(
@@ -679,7 +679,7 @@ export function ShadowPortrait({
 
       {displayEvolved && (
         <div className="absolute bottom-2 right-2 rounded border border-emerald-300/35 bg-emerald-300/10 px-1.5 py-0.5 text-[8px] system-text text-emerald-100 z-20">
-          EVO
+          진화체
         </div>
       )}
     </div>

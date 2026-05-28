@@ -16,7 +16,7 @@ import {
   getShadowXpForNextLevel,
 } from '../../lib/shadows'
 import { getShadowCombatProfile } from '../../lib/shadowStats'
-import { getShadowCombatUnitProfile } from '../../lib/shadowSkills'
+import { getShadowCombatUnitProfile, getShadowSkillDisplayName } from '../../lib/shadowSkills'
 import type { OwnedShadow } from '../../lib/types'
 import { ShadowPortrait } from './ShadowPortrait'
 
@@ -56,13 +56,13 @@ const rarityText: Record<OwnedShadow['rarity'], string> = {
 
 const sourceText = (shadow: OwnedShadow): string => {
   const def = getShadowDefinition(shadow.definitionId)
-  if (shadow.isAchievementNamed) return def?.unlockConditionText ?? 'Achievement named'
-  if (shadow.isGateNamed) return def?.sourceGateId ?? 'Gate named'
-  return def?.sourceGateRank ? `${def.sourceGateRank}-Rank gate extraction` : 'Gate extraction'
+  if (shadow.isAchievementNamed) return def?.unlockConditionText ?? '성취 달성 네임드'
+  if (shadow.isGateNamed) return def?.sourceGateId ?? '게이트 네임드'
+  return def?.sourceGateRank ? `${def.sourceGateRank}급 게이트 추출` : '게이트 추출'
 }
 
 const xpPercent = (level: number, maxLevel: number, xp: number): { pct: number; label: string } => {
-  if (level >= maxLevel) return { pct: 100, label: 'MAX' }
+  if (level >= maxLevel) return { pct: 100, label: '최대' }
   const needed = getShadowXpForNextLevel(level)
   return { pct: Math.min(100, Math.round((xp / needed) * 100)), label: `${xp}/${needed}` }
 }
@@ -95,10 +95,10 @@ export function ShadowCard({
   const combatProfile = getShadowCombatProfile(shadow)
   const unitProfile = getShadowCombatUnitProfile(shadow)
   const combatBadges = [
-    combatProfile.roleTag,
-    unitProfile.activeSkills[0]?.shortLabel,
-    ...combatProfile.topStats.map(stat => stat.shortLabel),
-  ].filter((badge): badge is string => Boolean(badge)).slice(0, 4)
+    getShadowSkillDisplayName(combatProfile.roleTag),
+    getShadowSkillDisplayName(unitProfile.activeSkills[0]?.shortLabel || ''),
+    ...combatProfile.topStats.map(stat => getShadowSkillDisplayName(stat.shortLabel)),
+  ].filter((badge): badge is string => Boolean(badge) && badge !== '').slice(0, 4)
 
   return (
     <motion.div
@@ -137,7 +137,7 @@ export function ShadowCard({
             <div className="min-w-0">
               <div className={clsx('text-[10px] system-text', rarityText[shadow.rarity])}>
                 [{SHADOW_RARITY_LABEL[shadow.rarity]}]
-                {(shadow.birthRarity ?? shadow.rarity) !== shadow.rarity ? ` / BIRTH ${SHADOW_RARITY_LABEL[shadow.birthRarity ?? shadow.rarity]}` : ''}
+                {(shadow.birthRarity ?? shadow.rarity) !== shadow.rarity ? ` / 태생 ${SHADOW_RARITY_LABEL[shadow.birthRarity ?? shadow.rarity]}` : ''}
               </div>
               <h3 className="mt-0.5 truncate text-sm font-bold text-white/90 sm:text-base">
                 {shadow.name}
@@ -153,7 +153,7 @@ export function ShadowCard({
               </h3>
               <div className="mt-1 flex flex-wrap gap-1.5 text-[10px] system-text">
                 <span className="rounded border border-amber-300/25 bg-amber-300/10 px-1.5 py-0.5 text-amber-100">
-                  SCP {combatProfile.totalPower.toLocaleString()}
+                  전투력 {combatProfile.totalPower.toLocaleString()}
                 </span>
                 <span className="rounded border border-white/10 bg-ink-900/55 px-1.5 py-0.5 text-white/55">
                   {SHADOW_RANK_LABEL[shadow.rank]}
@@ -163,7 +163,7 @@ export function ShadowCard({
                 </span>
                 {named && (
                   <span className="rounded border border-amber-400/30 bg-amber-400/10 px-1.5 py-0.5 text-amber-100">
-                    {shadow.isAchievementNamed ? 'ACHIEVEMENT' : shadow.isGateNamed ? 'GATE NAMED' : 'NAMED'}
+                    {shadow.isAchievementNamed ? '성취 네임드' : shadow.isGateNamed ? '게이트 네임드' : '네임드'}
                   </span>
                 )}
               </div>
@@ -178,22 +178,22 @@ export function ShadowCard({
             <div className="flex shrink-0 flex-col items-end gap-1">
               {equipped && (
                 <span className="inline-flex items-center gap-1 rounded border border-cyan-400/35 bg-cyan-400/10 px-2 py-0.5 text-[10px] system-text text-cyan-100">
-                  <Swords className="h-2.5 w-2.5" /> DEPLOYED
+                  <Swords className="h-2.5 w-2.5" /> 출전 중
                 </span>
               )}
               {shadow.isLocked && (
                 <span className="inline-flex items-center gap-1 rounded border border-rose-400/35 bg-rose-400/10 px-2 py-0.5 text-[10px] system-text text-rose-100">
-                  <Lock className="h-2.5 w-2.5" /> LOCK
+                  <Lock className="h-2.5 w-2.5" /> 잠금
                 </span>
               )}
               {shadow.isFavorite && (
                 <span className="inline-flex items-center gap-1 rounded border border-yellow-400/35 bg-yellow-400/10 px-2 py-0.5 text-[10px] system-text text-yellow-100">
-                  <Star className="h-2.5 w-2.5" /> STAR
+                  <Star className="h-2.5 w-2.5" /> 즐겨찾기
                 </span>
               )}
               {evolutionCheck.canEvolve && (
                 <span className="inline-flex items-center gap-1 rounded border border-emerald-400/35 bg-emerald-400/10 px-2 py-0.5 text-[10px] system-text text-emerald-100">
-                  <Sparkles className="h-2.5 w-2.5" /> EVOLVE
+                  <Sparkles className="h-2.5 w-2.5" /> 진화 가능
                 </span>
               )}
             </div>
@@ -211,25 +211,25 @@ export function ShadowCard({
 
           {shadow.traits.length > 0 && (
             <div className="mt-2 text-[11px] text-purple-100/80">
-              Trait: {shadow.traits.map(trait => trait.name).join(' / ')}
+              특성: {shadow.traits.map(trait => trait.name).join(' / ')}
             </div>
           )}
           <div className={clsx('mt-2 text-[11px] leading-relaxed text-cyan-100/70', featured ? '' : 'line-clamp-2')}>
             {effects.join(' / ')}
           </div>
           <div className="mt-2 text-[10px] text-white/35 system-text">
-            Source: {sourceText(shadow)}
+            출처: {sourceText(shadow)}
           </div>
           <div className="mt-1 flex flex-wrap gap-2 text-[10px] text-white/40">
-            <span>Enhance {enhancement}/{MAX_SHADOW_ENHANCEMENT_LEVEL}</span>
-            <span>Absorbed {shadow.absorbedCount ?? 0}</span>
-            <span>Birth {SHADOW_RARITY_LABEL[shadow.birthRarity ?? shadow.rarity]}</span>
-            <span>{SHADOW_INNATE_GRADE_LABEL[shadow.innateGrade ?? 'B']}</span>
-            {(shadow.evolutionStage ?? 0) > 0 && <span className="text-emerald-200/70">Evolution Stage {shadow.evolutionStage}</span>}
+            <span>강화 {enhancement}/{MAX_SHADOW_ENHANCEMENT_LEVEL}</span>
+            <span>흡수 {shadow.absorbedCount ?? 0}회</span>
+            <span>태생 희귀도 {SHADOW_RARITY_LABEL[shadow.birthRarity ?? shadow.rarity]}</span>
+            <span>{SHADOW_INNATE_GRADE_LABEL[shadow.innateGrade ?? 'B']} 태생</span>
+            {(shadow.evolutionStage ?? 0) > 0 && <span className="text-emerald-200/70">진화 {shadow.evolutionStage}단계</span>}
           </div>
           {evolutionCheck.targetDefinition && (
             <div className="mt-1 text-[10px] text-white/40">
-              Evolution: {shadow.name} -&gt; {evolutionCheck.targetDefinition.name} ({evolutionCheck.cost} essence)
+              진화: {shadow.name} → {evolutionCheck.targetDefinition.name} (정수 {evolutionCheck.cost}개)
               {!evolutionCheck.canEvolve && evolutionCheck.reason && (
                 <span className="ml-1 text-white/30">/ {evolutionCheck.reason}</span>
               )}
@@ -242,11 +242,11 @@ export function ShadowCard({
         {equipped ? (
           <button type="button" onClick={(event) => { event.stopPropagation(); onUnequip() }} className="btn w-full border-rose-400/25 bg-rose-400/10 text-xs text-rose-100">
             <X className="h-3 w-3" />
-            Undeploy
+            해제
           </button>
         ) : (
           <button type="button" onClick={(event) => { event.stopPropagation(); onEquip() }} disabled={!canEquip} className="btn btn-primary w-full text-xs disabled:cursor-not-allowed disabled:opacity-50">
-            Deploy
+            출전
           </button>
         )}
         <div className="grid grid-cols-2 gap-2">
@@ -255,18 +255,18 @@ export function ShadowCard({
             onClick={(event) => { event.stopPropagation(); onAbsorb() }}
             disabled={materialCount === 0 || enhancement >= MAX_SHADOW_ENHANCEMENT_LEVEL || shadow.isAchievementNamed}
             className="btn border-amber-400/25 bg-amber-400/10 px-2 text-[10px] text-amber-100 disabled:cursor-not-allowed disabled:opacity-40"
-            title={shadow.isAchievementNamed ? 'Achievement named shadows cannot be absorbed.' : materialCount === 0 ? 'No material shadows.' : enhancement >= MAX_SHADOW_ENHANCEMENT_LEVEL ? 'Max enhancement.' : `Materials: ${materialCount}`}
+            title={shadow.isAchievementNamed ? '성취 네임드는 재료로 사용할 수 없습니다.' : materialCount === 0 ? '재료 그림자가 없습니다.' : enhancement >= MAX_SHADOW_ENHANCEMENT_LEVEL ? '최대 강화 수치에 도달했습니다.' : `보유 재료: ${materialCount}개`}
           >
-            Absorb ({materialCount})
+            흡수 ({materialCount})
           </button>
           <button
             type="button"
             onClick={(event) => { event.stopPropagation(); onDecompose() }}
             disabled={equipped || shadow.isAchievementNamed || shadow.isLocked}
             className="btn border-rose-400/25 bg-rose-400/10 px-2 text-[10px] text-rose-100 disabled:cursor-not-allowed disabled:opacity-40"
-            title={shadow.isAchievementNamed ? 'Achievement named shadows cannot be decomposed.' : shadow.isLocked ? 'Locked.' : equipped ? 'Deployed.' : `Essence +${SHADOW_DECOMPOSE_ESSENCE[shadow.rarity] ?? 1}`}
+            title={shadow.isAchievementNamed ? '성취 네임드는 분해할 수 없습니다.' : shadow.isLocked ? '잠금 상태입니다.' : equipped ? '출전 중입니다.' : `그림자 정수 +${SHADOW_DECOMPOSE_ESSENCE[shadow.rarity] ?? 1} 획득`}
           >
-            Decompose +{SHADOW_DECOMPOSE_ESSENCE[shadow.rarity] ?? 1}
+            분해 +{SHADOW_DECOMPOSE_ESSENCE[shadow.rarity] ?? 1}
           </button>
         </div>
         <div className="grid grid-cols-2 gap-2">
@@ -274,19 +274,19 @@ export function ShadowCard({
             type="button"
             onClick={(event) => { event.stopPropagation(); onToggleLock() }}
             className={clsx('btn px-2 text-[10px]', shadow.isLocked ? 'border-rose-400/35 bg-rose-400/15 text-rose-100' : 'border-white/10 bg-ink-900/45 text-white/55')}
-            title={shadow.isLocked ? 'Unlock' : 'Lock'}
+            title={shadow.isLocked ? '잠금 해제' : '잠금 설정 (분해 및 재료 사용 방지)'}
           >
             <Lock className="h-2.5 w-2.5" />
-            {shadow.isLocked ? 'Unlock' : 'Lock'}
+            {shadow.isLocked ? '잠금 해제' : '잠금'}
           </button>
           <button
             type="button"
             onClick={(event) => { event.stopPropagation(); onToggleFavorite() }}
             className={clsx('btn px-2 text-[10px]', shadow.isFavorite ? 'border-yellow-400/35 bg-yellow-400/15 text-yellow-100' : 'border-white/10 bg-ink-900/45 text-white/55')}
-            title={shadow.isFavorite ? 'Unfavorite' : 'Favorite'}
+            title={shadow.isFavorite ? '즐겨찾기 해제' : '즐겨찾기 등록'}
           >
             <Star className="h-2.5 w-2.5" />
-            {shadow.isFavorite ? 'Starred' : 'Star'}
+            {shadow.isFavorite ? '즐겨찾기 해제' : '즐겨찾기'}
           </button>
         </div>
         {evolutionCheck.targetDefinition && (
@@ -298,9 +298,9 @@ export function ShadowCard({
               'btn w-full text-[10px] disabled:cursor-not-allowed disabled:opacity-40',
               evolutionCheck.canEvolve ? 'border-emerald-400/35 bg-emerald-400/15 text-emerald-100' : 'border-white/10 bg-ink-900/45 text-white/40',
             )}
-            title={evolutionCheck.reason ?? `Evolve to ${evolutionCheck.targetDefinition.name}`}
+            title={evolutionCheck.reason ?? `${evolutionCheck.targetDefinition.name}(으)로 진화`}
           >
-            {evolutionCheck.canEvolve ? `Evolve -> ${evolutionCheck.targetDefinition.name}` : `Evolution locked / ${evolutionCheck.reason}`}
+            {evolutionCheck.canEvolve ? `진화 → ${evolutionCheck.targetDefinition.name}` : `진화 대기 중 · ${evolutionCheck.reason}`}
           </button>
         )}
       </div>
