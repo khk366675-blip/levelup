@@ -48,24 +48,24 @@ type ExtractionIntensity = 'quick' | 'high' | 'apex'
 
 const QUICK_STAGES: Array<{ id: ExtractionStage; ms: number }> = [
   { id: 'detect', ms: 1600 },
-  { id: 'resonance', ms: 1600 },
-  { id: 'resistance', ms: 1600 },
+  { id: 'resonance', ms: 2200 },
+  { id: 'resistance', ms: 2200 },
   { id: 'command', ms: 1200 },
   { id: 'threshold', ms: 2000 },
 ]
 
 const HIGH_STAGES: Array<{ id: ExtractionStage; ms: number }> = [
   { id: 'detect', ms: 2200 },
-  { id: 'resonance', ms: 2400 },
-  { id: 'resistance', ms: 2600 },
+  { id: 'resonance', ms: 3200 },
+  { id: 'resistance', ms: 3500 },
   { id: 'command', ms: 1600 },
   { id: 'threshold', ms: 3200 },
 ]
 
 const APEX_STAGES: Array<{ id: ExtractionStage; ms: number }> = [
   { id: 'detect', ms: 2800 },
-  { id: 'resonance', ms: 3200 },
-  { id: 'resistance', ms: 3800 },
+  { id: 'resonance', ms: 4200 },
+  { id: 'resistance', ms: 5000 },
   { id: 'command', ms: 2000 },
   { id: 'threshold', ms: 4800 },
 ]
