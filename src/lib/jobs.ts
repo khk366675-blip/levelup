@@ -11,6 +11,7 @@ export const JOB_DEFINITIONS_V2: JobDefinitionV2[] = [
     combatStyle: '기본 무기를 사용하는 밸런스형 전투 스타일.',
     archetype: 'special',
     branch: 'none',
+    nextJobIds: ['swordsman', 'warrior', 'mage', 'guardian', 'scout', 'tactician'],
     primaryStats: ['STR', 'VIT', 'AGI', 'INT', 'PER', 'SEN'],
     statModifiers: {},
     growthAffinity: {
