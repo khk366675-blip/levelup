@@ -58,12 +58,13 @@ interface AxisBarProps {
   label: string
   icon: string
   value: number
-  color: string
-  bgColor: string
+  textColor: string
+  bgTrackColor: string
+  barColor: string   // explicit bg-* class (static, Tailwind-safe)
   detail?: string
 }
 
-function AxisBar({ label, icon, value, color, bgColor, detail }: AxisBarProps) {
+function AxisBar({ label, icon, value, textColor, bgTrackColor, barColor, detail }: AxisBarProps) {
   const pct = Math.min(100, value)
   return (
     <div className="flex flex-col gap-1">
@@ -73,11 +74,11 @@ function AxisBar({ label, icon, value, color, bgColor, detail }: AxisBarProps) {
           <span>{label}</span>
           {detail && <span className="text-zinc-500 ml-1">{detail}</span>}
         </span>
-        <span className={`font-bold tabular-nums ${color}`}>{value}</span>
+        <span className={`font-bold tabular-nums ${textColor}`}>{value}</span>
       </div>
-      <div className={`h-2 w-full rounded-full ${bgColor} overflow-hidden`}>
+      <div className={`h-2 w-full rounded-full ${bgTrackColor} overflow-hidden`}>
         <div
-          className={`h-full rounded-full transition-all duration-700 ease-out ${color.replace('text-', 'bg-')}`}
+          className={`h-full rounded-full transition-all duration-700 ease-out ${barColor}`}
           style={{ width: `${pct}%`, opacity: pct > 0 ? 1 : 0 }}
         />
       </div>
@@ -85,30 +86,45 @@ function AxisBar({ label, icon, value, color, bgColor, detail }: AxisBarProps) {
   )
 }
 
+// BonusBadge: 색상별 static class 맵핑 (Tailwind 퍼지 안전)
+const BADGE_ACTIVE_CLASSES: Record<string, string> = {
+  amber:  'bg-zinc-800/80 border border-amber-500/40',
+  red:    'bg-zinc-800/80 border border-red-500/40',
+  purple: 'bg-zinc-800/80 border border-purple-500/40',
+  cyan:   'bg-zinc-800/80 border border-cyan-500/40',
+}
+const BADGE_VALUE_CLASSES: Record<string, string> = {
+  amber:  'text-amber-300',
+  red:    'text-red-300',
+  purple: 'text-purple-300',
+  cyan:   'text-cyan-300',
+}
+
 interface BonusBadgeProps {
   label: string
   value: number
   icon: string
-  color: string
+  color: 'amber' | 'red' | 'purple' | 'cyan'
   active: boolean
 }
 
 function BonusBadge({ label, value, icon, color, active }: BonusBadgeProps) {
   const pct = Math.round(value * 100)
+  const containerClass = active
+    ? BADGE_ACTIVE_CLASSES[color]
+    : 'bg-zinc-900/50 border border-zinc-700/30 opacity-40'
+  const valueClass = active ? BADGE_VALUE_CLASSES[color] : 'text-zinc-500'
   return (
-    <div className={`flex flex-col items-center gap-0.5 rounded-lg px-2 py-1.5 transition-all duration-500 ${
-      active
-        ? `bg-zinc-800/80 border border-${color}-500/40`
-        : 'bg-zinc-900/50 border border-zinc-700/30 opacity-40'
-    }`}>
+    <div className={`flex flex-col items-center gap-0.5 rounded-lg px-2 py-1.5 transition-all duration-500 ${containerClass}`}>
       <span className="text-base">{icon}</span>
-      <span className={`text-xs font-bold tabular-nums ${active ? `text-${color}-300` : 'text-zinc-500'}`}>
+      <span className={`text-xs font-bold tabular-nums ${valueClass}`}>
         {pct > 0 ? `+${pct}%` : '—'}
       </span>
       <span className="text-[10px] text-zinc-500 leading-tight text-center">{label}</span>
     </div>
   )
 }
+
 
 // ── Main Component ─────────────────────────────────────────────────────
 
@@ -195,35 +211,40 @@ export function DailyProgressionPanel() {
           label="집중 공명"
           icon="📚"
           value={state.focusResonance}
-          color="text-cyan-400"
-          bgColor="bg-cyan-950/50"
+          textColor="text-cyan-400"
+          bgTrackColor="bg-cyan-950/50"
+          barColor="bg-cyan-400"
           detail={`학습·커리어·재정 ${state.todayCompletionsByCategory?.study ?? 0}+${state.todayCompletionsByCategory?.career ?? 0}+${state.todayCompletionsByCategory?.finance ?? 0}회`}
         />
         <AxisBar
           label="신체 준비도"
           icon="🏋️"
           value={state.bodyReadiness}
-          color="text-emerald-400"
-          bgColor="bg-emerald-950/50"
+          textColor="text-emerald-400"
+          bgTrackColor="bg-emerald-950/50"
+          barColor="bg-emerald-400"
           detail={`운동·건강 ${state.todayCompletionsByCategory?.workout ?? 0}+${state.todayCompletionsByCategory?.health ?? 0}회`}
         />
         <AxisBar
           label="정신 균형"
           icon="🧘"
           value={state.mindBalance}
-          color="text-purple-400"
-          bgColor="bg-purple-950/50"
+          textColor="text-purple-400"
+          bgTrackColor="bg-purple-950/50"
+          barColor="bg-purple-400"
           detail={`정신·습관 ${state.todayCompletionsByCategory?.mind ?? 0}+${state.todayCompletionsByCategory?.habit ?? 0}회`}
         />
         <AxisBar
           label="루틴 점수"
           icon="🔁"
           value={state.routineScore}
-          color="text-amber-400"
-          bgColor="bg-amber-950/50"
+          textColor="text-amber-400"
+          bgTrackColor="bg-amber-950/50"
+          barColor="bg-amber-400"
           detail={`오늘 완료 ${state.todayTotalCompletions}개`}
         />
       </div>
+
 
       {/* 게임 보너스 뱃지 */}
       <div>
