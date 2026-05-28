@@ -719,6 +719,8 @@ export function DirectBattlePreviewPanel({
       amount: val > 0 ? Math.round(val) : undefined,
       text: log.message,
       isCrit: Boolean((log as any).isCrit),
+      actionId: log.actionId,
+      actionType: log.eventType,
     }
   }, [currentRevealStep])
 

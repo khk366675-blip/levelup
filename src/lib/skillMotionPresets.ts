@@ -57,6 +57,7 @@ export interface SkillMotionPreset {
   damagePopupStyle: DamagePopupStyle
   vfxTone?: string
   durationMs?: number
+  intensity?: 'basic' | 'skill' | 'signature'
 }
 
 // 9-Way Class Lineage & Special Actor Preset Definitions
@@ -177,98 +178,113 @@ export const SKILL_MOTION_PRESETS: Record<string, SkillMotionPreset> = {
 export function getSkillMotionPreset(
   role?: string,
   isBoss?: boolean,
-  kind?: string
-): SkillMotionPreset {
+  kind?: string,
+  actionId?: string
+): SkillMotionPreset & { intensity: 'basic' | 'skill' | 'signature' } {
+  // 0. Determine presentation intensity (Default to basic for normal attacks)
+  let intensity: 'basic' | 'skill' | 'signature' = 'signature'
+  if (actionId === 'basic-attack') {
+    intensity = 'basic'
+  } else if (actionId === 'basic-focus-slash') {
+    intensity = 'skill'
+  } else if (kind === 'attack' && !actionId) {
+    intensity = 'basic' // fallback for normal flat attacks
+  }
+
+  let basePreset: SkillMotionPreset
+
   // 1. Check Special Boss Actions
   if (isBoss) {
-    return SKILL_MOTION_PRESETS['boss-action']
+    basePreset = SKILL_MOTION_PRESETS['boss-action']
   }
-
   // 2. Check Action Kind exceptions (Heal & Guard have special profiles)
-  if (kind === 'heal') {
-    return SKILL_MOTION_PRESETS['tactician'] // Healing actions map strategically
+  else if (kind === 'heal') {
+    basePreset = SKILL_MOTION_PRESETS['tactician'] // Healing actions map strategically
   }
-  if (kind === 'guard') {
-    return SKILL_MOTION_PRESETS['guardian']  // Blocking actions map defensively
+  else if (kind === 'guard') {
+    basePreset = SKILL_MOTION_PRESETS['guardian']  // Blocking actions map defensively
   }
-
   // 3. Resolve role-based preset IDs
-  if (!role) {
+  else if (!role) {
     // If enemy monster unit has no explicit role
-    return SKILL_MOTION_PRESETS['monster-action']
-  }
-  
-  const id = role.toLowerCase()
+    basePreset = SKILL_MOTION_PRESETS['monster-action']
+  } else {
+    const id = role.toLowerCase()
 
-  if (id.includes('shadow') || id.includes('abyss-summoner') || id.includes('phantom-general') || id.includes('disciple') || id.includes('lord')) {
-    return SKILL_MOTION_PRESETS['hidden-shadow']
-  }
-  if (id.includes('curse')) {
-    return SKILL_MOTION_PRESETS['hidden-curse']
-  }
-  if (id.includes('rift') || id.includes('dimension')) {
-    return SKILL_MOTION_PRESETS['hidden-rift']
-  }
-  if (
-    id.includes('swordsman') ||
-    id.includes('swordsmaster') ||
-    id.includes('sword-saint') ||
-    id.includes('illusory-swordmaster') ||
-    id.includes('speed-striker') ||
-    id.includes('spellsword') ||
-    id.includes('blade') ||
-    id.includes('sword')
-  ) {
-    return SKILL_MOTION_PRESETS['swordsman']
-  }
-  if (
-    id === 'warrior' ||
-    id.includes('berserker') ||
-    id.includes('slayer') ||
-    id.includes('dragon-knight') ||
-    id.includes('immortal')
-  ) {
-    return SKILL_MOTION_PRESETS['warrior']
-  }
-  if (
-    id.includes('mage') ||
-    id.includes('chronomancer') ||
-    id.includes('time-governor') ||
-    id.includes('entropy') ||
-    id.includes('wizard')
-  ) {
-    return SKILL_MOTION_PRESETS['mage']
-  }
-  if (
-    id.includes('guardian') ||
-    id.includes('paladin') ||
-    id.includes('shield') ||
-    id.includes('holy-redeemer') ||
-    id.includes('judgment-knight')
-  ) {
-    return SKILL_MOTION_PRESETS['guardian']
-  }
-  if (
-    id.includes('scout') ||
-    id.includes('stalker') ||
-    id.includes('tracker') ||
-    id.includes('assassin') ||
-    id.includes('phantom-stalker') ||
-    id.includes('abyss-emperor')
-  ) {
-    return SKILL_MOTION_PRESETS['tracker']
-  }
-  if (
-    id.includes('tactician') ||
-    id.includes('strategist') ||
-    id.includes('alchemist') ||
-    id.includes('chimera') ||
-    id.includes('weaver') ||
-    id.includes('orchestrator')
-  ) {
-    return SKILL_MOTION_PRESETS['tactician']
+    if (id.includes('shadow') || id.includes('abyss-summoner') || id.includes('phantom-general') || id.includes('disciple') || id.includes('lord')) {
+      basePreset = SKILL_MOTION_PRESETS['hidden-shadow']
+    }
+    else if (id.includes('curse')) {
+      basePreset = SKILL_MOTION_PRESETS['hidden-curse']
+    }
+    else if (id.includes('rift') || id.includes('dimension')) {
+      basePreset = SKILL_MOTION_PRESETS['hidden-rift']
+    }
+    else if (
+      id.includes('swordsman') ||
+      id.includes('swordsmaster') ||
+      id.includes('sword-saint') ||
+      id.includes('illusory-swordmaster') ||
+      id.includes('speed-striker') ||
+      id.includes('spellsword') ||
+      id.includes('blade') ||
+      id.includes('sword')
+    ) {
+      basePreset = SKILL_MOTION_PRESETS['swordsman']
+    }
+    else if (
+      id === 'warrior' ||
+      id.includes('berserker') ||
+      id.includes('slayer') ||
+      id.includes('dragon-knight') ||
+      id.includes('immortal')
+    ) {
+      basePreset = SKILL_MOTION_PRESETS['warrior']
+    }
+    else if (
+      id.includes('mage') ||
+      id.includes('chronomancer') ||
+      id.includes('time-governor') ||
+      id.includes('entropy') ||
+      id.includes('wizard')
+    ) {
+      basePreset = SKILL_MOTION_PRESETS['mage']
+    }
+    else if (
+      id.includes('guardian') ||
+      id.includes('paladin') ||
+      id.includes('shield') ||
+      id.includes('holy-redeemer') ||
+      id.includes('judgment-knight')
+    ) {
+      basePreset = SKILL_MOTION_PRESETS['guardian']
+    }
+    else if (
+      id.includes('scout') ||
+      id.includes('stalker') ||
+      id.includes('tracker') ||
+      id.includes('assassin') ||
+      id.includes('phantom-stalker') ||
+      id.includes('abyss-emperor')
+    ) {
+      basePreset = SKILL_MOTION_PRESETS['tracker']
+    }
+    else if (
+      id.includes('tactician') ||
+      id.includes('strategist') ||
+      id.includes('alchemist') ||
+      id.includes('chimera') ||
+      id.includes('weaver') ||
+      id.includes('orchestrator')
+    ) {
+      basePreset = SKILL_MOTION_PRESETS['tactician']
+    } else {
+      basePreset = SKILL_MOTION_PRESETS['default']
+    }
   }
 
-  // Fallback default
-  return SKILL_MOTION_PRESETS['default']
+  return {
+    ...basePreset,
+    intensity,
+  }
 }

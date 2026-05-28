@@ -14,6 +14,7 @@ type Props = {
   compact?: boolean
   activeMotion?: ActorMotionType
   hitReaction?: TargetReactionType
+  intensity?: 'basic' | 'skill' | 'signature'
 }
 
 /**
@@ -35,6 +36,7 @@ export function BattleActorSprite({
   compact = false,
   activeMotion = 'default',
   hitReaction = 'none',
+  intensity = 'signature',
 }: Props) {
   const isShadow = actor.kind === 'shadow'
   const isHunter = actor.kind === 'hunter'
@@ -200,6 +202,25 @@ export function BattleActorSprite({
     reactDuration = 0.56
   }
 
+  // Attenuate flat attacks (basic intensity) for compact execution
+  if (intensity === 'basic') {
+    activeDuration = 0.28
+    reactDuration = 0.28
+    
+    // Attenuate horizontal recoil/rotate by 70% (remain 30%)
+    activeX = activeX.map(v => v * 0.3)
+    activeY = activeY.map(v => v * 0.3)
+    activeRotate = activeRotate.map(v => v * 0.3)
+    activeScale = activeScale.map(v => 1 + (v - 1) * 0.3)
+    activeTimes = [0, 0.2, 0.8, 1]
+
+    reactX = reactX.map(v => v * 0.3)
+    reactY = reactY.map(v => v * 0.3)
+    reactRotate = reactRotate.map(v => v * 0.3)
+    reactScale = reactScale.map(v => 1 + (v - 1) * 0.3)
+    reactTimes = [0, 0.2, 0.4, 0.6, 0.8, 1]
+  }
+
   // Motion variants for 2.5D effects with cinematic staging
   const variants = {
     idle: {
@@ -271,6 +292,7 @@ export function BattleActorSprite({
   // Signature Skill Presentation Pack 01: Prepare Overlay
   const renderPrepareEffect = () => {
     if (!activeMotion || activeMotion === 'default') return null
+    if (intensity === 'basic') return null // Basic attack bypasses prepare signature VFX
 
     let element: React.ReactNode = null
 
@@ -393,6 +415,20 @@ export function BattleActorSprite({
   // Signature Skill Presentation Pack 01: Impact & Reaction Overlay
   const renderImpactEffect = () => {
     if (hitReaction === 'none') return null
+
+    if (intensity === 'basic') {
+      // Basic attack triggers a very light and quick white spark on targets
+      return (
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+          <motion.div
+            initial={{ scale: 0.2, opacity: 1 }}
+            animate={{ scale: 0.8, opacity: 0 }}
+            transition={{ duration: 0.22 }}
+            className="absolute w-12 h-12 rounded-full border border-white/40 bg-white/10 filter blur-xs"
+          />
+        </div>
+      )
+    }
 
     let element: React.ReactNode = null
 

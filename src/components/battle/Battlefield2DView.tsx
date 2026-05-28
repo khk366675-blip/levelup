@@ -20,6 +20,7 @@ type Battlefield2DViewProps = {
     amount?: number
     text?: string
     isCrit?: boolean
+    actionId?: string
   }
   compact?: boolean
   mode?: 'compact' | 'overlay'
@@ -277,8 +278,9 @@ export function Battlefield2DView({
     }
 
     // 2. Trigger Damage/Heal numbers on targets
-    const preset = getSkillMotionPreset(actor.role, actor.isBoss, latestAction.kind)
+    const preset = getSkillMotionPreset(actor.role, actor.isBoss, latestAction.kind, latestAction.actionId)
     const popupStyle = preset.damagePopupStyle
+    const intensity = preset.intensity
 
     const newPopups = targets.map((t, idx) => {
       const coords = actorCoords[t.id] ?? { x: 50, y: 50 }
@@ -305,6 +307,7 @@ export function Battlefield2DView({
         targetX: coords.x,
         targetY: coords.y,
         style: popupStyle,
+        intensity,
       }
     })
 
@@ -470,16 +473,19 @@ export function Battlefield2DView({
           
           let activeMotion: ActorMotionType | undefined
           let hitReaction: TargetReactionType | undefined
+          let intensity: 'basic' | 'skill' | 'signature' | undefined
  
           if (latestAction && latestAction.actorId === actor.id) {
-            const preset = getSkillMotionPreset(actor.role, actor.isBoss, latestAction.kind)
+            const preset = getSkillMotionPreset(actor.role, actor.isBoss, latestAction.kind, latestAction.actionId)
             activeMotion = preset.actorMotion
+            intensity = preset.intensity
           }
  
           if (latestAction && latestAction.targetIds?.includes(actor.id)) {
             const attacker = overriddenActors.find(a => a.id === latestAction.actorId)
-            const preset = getSkillMotionPreset(attacker?.role, attacker?.isBoss, latestAction.kind)
+            const preset = getSkillMotionPreset(attacker?.role, attacker?.isBoss, latestAction.kind, latestAction.actionId)
             hitReaction = preset.targetReaction
+            if (!intensity) intensity = preset.intensity
           }
  
           return (
@@ -497,6 +503,7 @@ export function Battlefield2DView({
                 compact={isCompact} 
                 activeMotion={activeMotion}
                 hitReaction={hitReaction}
+                intensity={intensity}
               />
             </div>
           )
