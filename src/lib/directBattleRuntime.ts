@@ -271,10 +271,26 @@ const resolveTargets = (
   action: BattleActionDefinition,
   preferredTargetIds: string[] = [],
 ): string[] => {
-  const preferred = preferredTargetIds
+  let preferred = preferredTargetIds
     .map(id => findUnit(state, id))
     .filter((unit): unit is BattleUnit => Boolean(unit && isAlive(unit)))
-  if (preferred.length > 0) return preferred.map(unit => unit.unitId)
+
+  // [HOTFIX] Runtime Target Validation
+  // 공격/디버프 등 적군 대상 스킬인데 preferred 타겟에 아군이 섞여있거나,
+  // 버프/힐 등 아군 대상 스킬인데 preferred 타겟에 적군이 섞여있는 경우 정화/격리합니다.
+  const isEnemyTargetType = !allyTargetTypes.has(action.targetType) && action.targetType !== 'self'
+  if (isEnemyTargetType) {
+    preferred = preferred.filter(unit => unit.team !== actor.team)
+  } else {
+    preferred = preferred.filter(unit => unit.team === actor.team)
+  }
+
+  if (preferred.length > 0) {
+    if (action.targetType !== 'all_allies' && action.targetType !== 'all_enemies') {
+      return [preferred[0].unitId]
+    }
+    return preferred.map(unit => unit.unitId)
+  }
 
   const allies = livingUnits(state, actor.team)
   const enemies = livingUnits(state, getOpposingTeam(actor.team))
@@ -630,6 +646,12 @@ const applyDynamicEffects = (
   const effects = (action as any).effects as any[] | undefined
   if (!effects || effects.length === 0) return
 
+  // [HOTFIX] 광역 공격 시 self 타겟 버프가 다수의 피격 대상 수에 비례하여 중복 중첩되지 않도록 제한
+  const selfEffectsApplied = (action as any)._selfEffectsAppliedRound === state.round
+  if (!selfEffectsApplied) {
+    (action as any)._selfEffectsAppliedRound = state.round
+  }
+
   for (const eff of effects) {
     let statusType: any | undefined
     let effectValue = Math.abs(eff.value)
@@ -650,13 +672,23 @@ const applyDynamicEffects = (
     }
 
     if (statusType) {
-      const targetUnit = eff.target === 'self' ? actor : target
-      addStatus(targetUnit, {
-        type: statusType,
-        sourceUnitId: actor.unitId,
-        durationRounds: eff.durationTurns ?? 1,
-        effectValue: effectValue,
-      })
+      if (eff.target === 'self') {
+        if (!selfEffectsApplied) {
+          addStatus(actor, {
+            type: statusType,
+            sourceUnitId: actor.unitId,
+            durationRounds: eff.durationTurns ?? 1,
+            effectValue: effectValue,
+          })
+        }
+      } else {
+        addStatus(target, {
+          type: statusType,
+          sourceUnitId: actor.unitId,
+          durationRounds: eff.durationTurns ?? 1,
+          effectValue: effectValue,
+        })
+      }
     }
   }
 }

@@ -306,10 +306,12 @@ const getTargetCandidates = (
   action: BattleActionDefinition,
 ): BattleUnit[] => {
   if (action.targetType === 'self') return [actor]
-  if (allyTargetTypes.has(action.targetType)) return livingUnits(state, actor.team)
-  if (action.targetType === 'all_allies') return livingUnits(state, actor.team)
-  if (action.targetType === 'all_enemies') return livingUnits(state, actor.team === 'player' ? 'enemy' : 'player')
-  if (enemyTargetTypes.has(action.targetType)) return livingUnits(state, actor.team === 'player' ? 'enemy' : 'player')
+  if (action.targetType === 'all_allies' || allyTargetTypes.has(action.targetType)) {
+    return livingUnits(state, actor.team)
+  }
+  if (action.targetType === 'all_enemies' || enemyTargetTypes.has(action.targetType)) {
+    return livingUnits(state, actor.team === 'player' ? 'enemy' : 'player')
+  }
   return livingUnits(state, actor.team === 'player' ? 'enemy' : 'player')
 }
 
