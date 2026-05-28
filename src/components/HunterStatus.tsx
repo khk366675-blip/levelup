@@ -257,18 +257,18 @@ export function HunterStatus() {
           </div>
 
           {/* Center Column: Beautiful Player Portrait (No Card Border, No Texts) */}
-          <div className="flex flex-col justify-center items-center min-h-[240px] relative group overflow-visible">
+          <div className="flex flex-col justify-center items-center min-h-[260px] relative group overflow-visible">
             {/* Aura glow background behind the avatar */}
             <div 
-              className="absolute w-44 h-44 rounded-full blur-2xl opacity-40 pointer-events-none transition-all duration-500 group-hover:opacity-60" 
+              className="absolute w-52 h-52 rounded-full blur-3xl opacity-40 pointer-events-none transition-all duration-500 group-hover:opacity-60" 
               style={{ background: `radial-gradient(circle, ${rankGlowStyle} 0%, transparent 70%)` }}
             />
             {/* Avatar Image (Large and standalone) */}
             <img
               src={avatarUrl}
               alt={hunter.name}
-              className="h-48 md:h-52 object-contain scale-[1.15] transition-all duration-300 group-hover:scale-[1.22] origin-bottom object-bottom z-10"
-              style={{ filter: `drop-shadow(0 -5px 15px ${rankGlowStyle}80) drop-shadow(0 0 25px ${rankGlowStyle}40)` }}
+              className="h-56 md:h-64 object-contain scale-[1.2] transition-all duration-300 group-hover:scale-[1.28] origin-bottom object-bottom z-10"
+              style={{ filter: `drop-shadow(0 -5px 20px ${rankGlowStyle}90) drop-shadow(0 0 30px ${rankGlowStyle}50)` }}
               draggable={false}
             />
           </div>
