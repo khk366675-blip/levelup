@@ -80,7 +80,7 @@ import { computeRollingSummary } from './aiCoachSummary'
 
 import { TITLE_DEFINITIONS, CATEGORY_META, JOB_DEFINITIONS, EQUIPMENT_SLOT_LABEL } from './types'
 import { JOB_DEFINITIONS_V2 } from './jobs'
-import { recalcHunterGradeState, createInitialHunterGradeState, evaluateTitleUnlocks, GRADE_LABELS, HUNTER_TITLE_DEFINITIONS } from './hunterGrade'
+import { recalcHunterGradeState, createInitialHunterGradeState, evaluateTitleUnlocks, GRADE_LABELS, HUNTER_TITLE_DEFINITIONS, clampMigratedGradeByEvidence } from './hunterGrade'
 import { getMockDirectBattleMonster } from './directBattleMonsters'
 import {
   GATE_DEFINITIONS,
@@ -11129,6 +11129,51 @@ export const useGame = create<GameState>()(
               seen.add(entry.grade)
               return true
             })
+          }
+
+          // 4. Force clamp currentGrade using clampMigratedGradeByEvidence to prevent legacy bug (e.g. level 9 being C-rank)
+          if (hg.currentGrade && persistedState.hunter) {
+            const correctGrade = clampMigratedGradeByEvidence(hg.currentGrade, persistedState)
+            if (correctGrade !== hg.currentGrade) {
+              hg.currentGrade = correctGrade
+              hg.cosmeticTier = correctGrade === 'NATIONAL' ? 6 : correctGrade === 'S' ? 5 : correctGrade === 'A' ? 4 : correctGrade === 'B' ? 3 : correctGrade === 'C' ? 2 : correctGrade === 'D' ? 1 : 0
+              
+              if (Array.isArray(hg.history)) {
+                hg.history = hg.history.map((entry: any) => {
+                  if (entry.grade === 'C' && correctGrade === 'D') {
+                    return { ...entry, grade: 'D' }
+                  }
+                  const GRADE_ORDER = ['E', 'D', 'C', 'B', 'A', 'S', 'NATIONAL']
+                  const entryIdx = GRADE_ORDER.indexOf(entry.grade)
+                  const correctIdx = GRADE_ORDER.indexOf(correctGrade)
+                  if (entryIdx > correctIdx) {
+                    return { ...entry, grade: correctGrade }
+                  }
+                  return entry
+                })
+                
+                const seen = new Set<string>()
+                hg.history = hg.history.filter((entry: any) => {
+                  if (!entry || !entry.grade) return false
+                  if (seen.has(entry.grade)) return false
+                  seen.add(entry.grade)
+                  return true
+                })
+              }
+              
+              if (Array.isArray(hg.unlockedTitles)) {
+                hg.unlockedTitles = hg.unlockedTitles.filter((titleId: string) => {
+                  const GRADE_ORDER = ['E', 'D', 'C', 'B', 'A', 'S', 'NATIONAL']
+                  const correctIdx = GRADE_ORDER.indexOf(correctGrade)
+                  if (titleId === 'title_c' && correctIdx < 2) return false
+                  if (titleId === 'title_b' && correctIdx < 3) return false
+                  if (titleId === 'title_a' && correctIdx < 4) return false
+                  if (titleId === 'title_s' && correctIdx < 5) return false
+                  if (titleId === 'title_national' && correctIdx < 6) return false
+                  return true
+                })
+              }
+            }
           }
         }
 
