@@ -2251,7 +2251,7 @@ export interface HunterGradeState {
 }
 
 // ── Rift World System (Phase 0-A) ──────────────────────────────────
-export type RiftNodeStatus = 'undiscovered' | 'active' | 'cleared' | 'locked'
+export type RiftNodeStatus = 'undiscovered' | 'active' | 'cleared' | 'locked' | 'exploded'
 
 export interface RiftRegion {
   id: string              // 예: 'us', 'cn', 'ru', 'uk'
@@ -2272,6 +2272,10 @@ export interface RiftNode {
   difficultyRank?: Rank   // 표시용 랭크 (기존 Rank 재사용)
   requiresNodeIds?: string[] // 잠김 해제 조건 노드 id들
   adjacentNodeIds?: string[] // 인접 노드 (후속 오염 전파용)
+  difficulty: number      // 권장 전투력 (개인 스케일: 300 ~ 10,000+)
+  deadline: number        // 총 시한 (일)
+  daysRemaining: number   // 남은 시한 (일)
+  isSGrade?: boolean      // S급 게이트 여부
 }
 
 // ── Living Rift World MVP-1 ──────────────────────────────────────────
@@ -2283,6 +2287,7 @@ export interface NamedHunter {
   power: number         // 현재 전투력
   growthRate: number    // 일일 성장 계수 (회차 랜덤)
   status: 'active' | 'injured' | 'dead'
+  injuredTurns?: number // 부상 완치까지 남은 일수
   // 후속 자리: 보유 장비 등 (MVP-1에선 정의만, 로직 없음)
 }
 
@@ -2306,14 +2311,21 @@ export interface RegionState {
   // 헌터
   namedHunterIds: string[]
   pool: HunterPool
+  corruption: number        // 지역 오염도 (0~100)
+  activeGateIds: string[]   // 활성 게이트 ID 리스트 (RiftNode.id 매핑)
 }
 
 export interface LivingWorldState {
   seed: number              // 이 회차의 시드 (재현용)
-  day: number               // 경과 일수 (MVP-1에선 0/1로 초기화만)
+  day: number               // 경과 일수
   homeRegionId: string      // 'kr'
   regions: Record<string, RegionState>
   namedHunters: Record<string, NamedHunter>
+  worldCorruption: number   // 전역 오염도 (0~100)
+  monarchsAppeared: number  // 등장한 군주 수
+  lastTickDate?: string     // 마지막으로 틱이 돌아간 날짜 (YYYY-MM-DD)
+  eventLogs: string[]       // 최근 사건 로그 리스트
+  riftNodes: Record<string, RiftNode> // 시뮬레이션용 게이트 노드 상태
 }
 
 // 시드용 Base 데이터 타입

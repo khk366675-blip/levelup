@@ -73,6 +73,7 @@ import type {
 } from './types'
 
 import { initLivingWorld } from './livingWorld'
+import { advanceWorldDay } from './livingWorldTick'
 
 import {
   AiCoachMemoryState,
@@ -167,6 +168,7 @@ import {
   resolveShadowSupportActions,
   isShadowCombatLog,
   tickRoundEffects,
+  createSeededRng,
 } from './game'
 import {
   getSkillCooldownTurns,
@@ -404,6 +406,7 @@ export interface GameState {
   completeQuest: (id: string) => void
   uncompleteDaily: (id: string) => void
   resetDailiesIfNewDay: () => void
+  debugAdvanceLivingWorldDay: () => void
   
   // Main Quest v2용 액션들
   addMainQuest: (input: { title: string; description?: string; category: Category; finalGoal: string; milestones?: Omit<MainQuestMilestone, 'id' | 'status'>[]; source?: 'user' | 'aiCoach'; coachReason?: string }) => void
@@ -9171,10 +9174,36 @@ export const useGame = create<GameState>()(
           get().rebuildAiCoachRollingSummary()
         }, 0)
 
+        // 12-45A: 일일 세계 틱 시뮬레이션 감지 및 실행 (MVP-2)
+        let nextLivingWorld = s.livingWorld
+        const nextRiftNodes = { ...s.riftNodes }
+        if (s.livingWorld) {
+          const today = targetDate // 'YYYY-MM-DD'
+          if (s.livingWorld.lastTickDate !== today) {
+            const rng = createSeededRng(s.livingWorld.seed + s.livingWorld.day)
+            nextLivingWorld = advanceWorldDay(s.livingWorld, rng)
+            nextLivingWorld.lastTickDate = today
+
+            // 틱에서 변화된 게이트 클리어 상태를 기존 store.riftNodes와 동기화
+            if (nextLivingWorld.riftNodes) {
+              for (const nodeId in nextLivingWorld.riftNodes) {
+                const node = nextLivingWorld.riftNodes[nodeId]
+                if (node.status === 'cleared') {
+                  nextRiftNodes[nodeId] = 'cleared'
+                } else if (node.status === 'exploded') {
+                  nextRiftNodes[nodeId] = 'undiscovered'
+                }
+              }
+            }
+          }
+        }
+
         return {
           quests: [...remainingQuests, ...newQuests],
           aiCoachMemory: updatedMemory,
-          hardcoreState: nextHardcoreState
+          hardcoreState: nextHardcoreState,
+          livingWorld: nextLivingWorld,
+          riftNodes: nextRiftNodes
         }
       }),
 
@@ -10123,6 +10152,29 @@ export const useGame = create<GameState>()(
             return q
           })
 
+        // 12-45A: 일일 세계 틱 시뮬레이션 감지 및 실행 (MVP-2)
+        let nextLivingWorld = s.livingWorld
+        const nextRiftNodes = { ...s.riftNodes }
+        if (s.livingWorld) {
+          if (s.livingWorld.lastTickDate !== today) {
+            const rng = createSeededRng(s.livingWorld.seed + s.livingWorld.day)
+            nextLivingWorld = advanceWorldDay(s.livingWorld, rng)
+            nextLivingWorld.lastTickDate = today
+
+            // 틱에서 변화된 게이트 클리어 상태를 기존 store.riftNodes와 동기화
+            if (nextLivingWorld.riftNodes) {
+              for (const nodeId in nextLivingWorld.riftNodes) {
+                const node = nextLivingWorld.riftNodes[nodeId]
+                if (node.status === 'cleared') {
+                  nextRiftNodes[nodeId] = 'cleared'
+                } else if (node.status === 'exploded') {
+                  nextRiftNodes[nodeId] = 'undiscovered'
+                }
+              }
+            }
+          }
+        }
+
         return {
           hunter: { ...s.hunter, streak, streakProtectionLastUsed, lastActiveDate: today },
           quests,
@@ -10130,6 +10182,29 @@ export const useGame = create<GameState>()(
           achievementStats: stats,
           aiCoachMemory: updatedMemory,
           initialized: true,
+          livingWorld: nextLivingWorld,
+          riftNodes: nextRiftNodes
+        }
+      }),
+
+      debugAdvanceLivingWorldDay: () => set((s) => {
+        if (!s.livingWorld) return {}
+        const rng = createSeededRng(s.livingWorld.seed + s.livingWorld.day)
+        const nextLivingWorld = advanceWorldDay(s.livingWorld, rng)
+        const nextRiftNodes = { ...s.riftNodes }
+        if (nextLivingWorld.riftNodes) {
+          for (const nodeId in nextLivingWorld.riftNodes) {
+            const node = nextLivingWorld.riftNodes[nodeId]
+            if (node.status === 'cleared') {
+              nextRiftNodes[nodeId] = 'cleared'
+            } else if (node.status === 'exploded') {
+              nextRiftNodes[nodeId] = 'undiscovered'
+            }
+          }
+        }
+        return {
+          livingWorld: nextLivingWorld,
+          riftNodes: nextRiftNodes
         }
       }),
 
@@ -11281,7 +11356,7 @@ export const useGame = create<GameState>()(
     }),
     {
       name: 'levelup-save',
-      version: 16,
+      version: 17,
       partialize: (state) => ({
         ...state,
         manualBattleSession: undefined,
@@ -11770,6 +11845,56 @@ export const useGame = create<GameState>()(
           if (!persistedState.livingWorld) {
             const randomSeed = Math.floor(Math.random() * 99999999) + 1
             persistedState.livingWorld = initLivingWorld(randomSeed)
+          }
+        }
+
+        // ── Living Rift World System MVP-2 (v17) 마이그레이션 ──
+        if (persistedState && persistedState.livingWorld) {
+          const lw = persistedState.livingWorld
+          lw.worldCorruption ??= 0
+          lw.monarchsAppeared ??= 0
+          lw.eventLogs ??= ['[Day 0] 균열 대각성이 시작되었습니다.']
+          
+          if (!lw.riftNodes) {
+            const rng = createSeededRng(lw.seed || 12345)
+            const riftNodes: Record<string, any> = {}
+            for (const node of RIFT_NODES) {
+              let difficulty = 300
+              if (node.difficultyRank === 'E') {
+                difficulty = Math.round(300 + rng() * 300)
+              } else if (node.difficultyRank === 'D') {
+                difficulty = Math.round(700 + rng() * 350)
+              } else if (node.difficultyRank === 'C') {
+                difficulty = Math.round(1400 + rng() * 450)
+              } else if (node.difficultyRank === 'S') {
+                difficulty = Math.round(5000 + rng() * 5000)
+              } else {
+                difficulty = Math.round(300 + rng() * 1500)
+              }
+              const deadline = Math.round(10 + rng() * 6)
+              const legacyStatus = persistedState.riftNodes?.[node.id] || node.status
+              riftNodes[node.id] = {
+                ...node,
+                difficulty,
+                deadline,
+                daysRemaining: deadline,
+                status: legacyStatus,
+                isSGrade: node.difficultyRank === 'S' || node.difficultyRank === 'National'
+              }
+            }
+            lw.riftNodes = riftNodes
+          }
+
+          if (lw.regions) {
+            for (const regionId in lw.regions) {
+              const reg = lw.regions[regionId]
+              reg.corruption ??= 0
+              if (!reg.activeGateIds) {
+                reg.activeGateIds = Object.keys(lw.riftNodes).filter(
+                  id => lw.riftNodes[id].regionId === regionId && lw.riftNodes[id].status === 'active'
+                )
+              }
+            }
           }
         }
 

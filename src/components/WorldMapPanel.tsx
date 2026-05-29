@@ -37,7 +37,7 @@ export function WorldMapPanel() {
     }, 3000)
   }
 
-  const handleNodeClick = (node: RiftNode) => {
+  const handleNodeClick = (node: any) => {
     const status = riftNodesState[node.id] ?? node.status
 
     if (status === 'undiscovered') {
@@ -47,7 +47,7 @@ export function WorldMapPanel() {
     } else if (status === 'locked') {
       // 선행 조건 설명 취합
       const reqNames = (node.requiresNodeIds ?? [])
-        .map((reqId) => RIFT_NODES.find((rn: RiftNode) => rn.id === reqId)?.name ?? reqId)
+        .map((reqId: string) => RIFT_NODES.find((rn: any) => rn.id === reqId)?.name ?? reqId)
         .join(', ')
       triggerToast(`🔒 이 구역은 잠겨있습니다. 선행 정화 필요: [${reqNames}]`)
     } else {
@@ -66,7 +66,7 @@ export function WorldMapPanel() {
     activeGate &&
     activeGate.status === 'active' &&
     activeRiftNodeId &&
-    RIFT_NODES.some((rn: RiftNode) => rn.id === activeRiftNodeId)
+    RIFT_NODES.some((rn: any) => rn.id === activeRiftNodeId)
 
   return (
     <div className="space-y-6">
@@ -90,6 +90,84 @@ export function WorldMapPanel() {
           </p>
         </div>
       </div>
+
+      {/* MVP-2 World Status Dashboard */}
+      {livingWorld && (
+        <div className="grid gap-4 md:grid-cols-3 animate-fade-in">
+          {/* Box 1: World Corruption and Monarchs */}
+          <div className="panel corner-bracket border-purple-500/20 bg-ink-950/40 p-4 flex flex-col justify-between">
+            <div className="br" />
+            <div>
+              <div className="flex items-center justify-between text-xs font-bold text-white/70">
+                <span className="flex items-center gap-1.5 text-purple-300">
+                  <AlertCircle className="h-4 w-4" /> 전역 오염도 및 침공
+                </span>
+                <span className="text-[10px] text-white/40">Day {livingWorld.day}</span>
+              </div>
+              <div className="mt-3 flex items-end justify-between">
+                <div className="text-2xl font-black text-red-400 tracking-tight">
+                  {livingWorld.worldCorruption}%
+                </div>
+                {livingWorld.monarchsAppeared > 0 ? (
+                  <span className="rounded bg-red-500/20 border border-red-500/40 px-2 py-0.5 text-[9px] font-black text-red-300 tracking-wider animate-pulse">
+                    🔥 군주 {livingWorld.monarchsAppeared}명 침공 중
+                  </span>
+                ) : (
+                  <span className="rounded bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 text-[9px] font-bold text-emerald-400">
+                    평화로움 (군주 0)
+                  </span>
+                )}
+              </div>
+              <div className="mt-2.5 h-2 w-full rounded-full bg-white/5 overflow-hidden">
+                <div
+                  className={`h-full transition-all duration-500 bg-gradient-to-r ${
+                    livingWorld.worldCorruption >= 70 ? 'from-orange-500 to-red-500' :
+                    livingWorld.worldCorruption >= 30 ? 'from-yellow-400 to-orange-500' :
+                    'from-cyan-400 to-emerald-400'
+                  }`}
+                  style={{ width: `${livingWorld.worldCorruption}%` }}
+                />
+              </div>
+            </div>
+            <p className="mt-3 text-[10px] text-white/40 leading-normal">
+              오염도가 30%, 50%, 70%, 85%, 95%를 초과할 때마다 더 강력한 군주가 강림합니다.
+            </p>
+          </div>
+
+          {/* Box 2: Incident Logs Terminal */}
+          <div className="panel corner-bracket border-white/10 bg-ink-950/40 p-4 md:col-span-2 flex flex-col justify-between">
+            <div className="br" />
+            <div className="flex items-center justify-between text-xs font-bold text-white/70 mb-2">
+              <span className="text-cyan-300 flex items-center gap-1.5 font-bold">
+                <Swords className="h-4 w-4" /> 세계 동적 사건 로그
+              </span>
+              <button
+                onClick={() => {
+                  useGame.getState().debugAdvanceLivingWorldDay()
+                  triggerToast("🔮 차원의 시간이 하루 흘렀습니다. 세계가 스스로 1틱 시뮬레이션되었습니다.")
+                }}
+                className="rounded-md border border-purple-500/30 bg-purple-500/10 hover:bg-purple-500/25 px-2 py-0.5 text-[9px] font-black text-purple-200 transition-all cursor-pointer"
+              >
+                ⏩ 하루 강제 진행 (디버그)
+              </button>
+            </div>
+            
+            <div className="h-28 overflow-y-auto rounded bg-black/45 border border-white/5 p-2 font-mono text-[9px] text-white/75 space-y-1 scrollbar-thin scrollbar-thumb-purple-500/20">
+              {livingWorld.eventLogs.slice().reverse().map((log, idx) => (
+                <div key={idx} className={`${
+                  log.includes('전사') || log.includes('폭주') || log.includes('위험') ? 'text-red-400' :
+                  log.includes('부상') || log.includes('퇴각') || log.includes('실패') ? 'text-yellow-400' :
+                  log.includes('성공') || log.includes('완치') ? 'text-emerald-400' :
+                  log.includes('군주') ? 'text-purple-300 font-bold' :
+                  'text-white/70'
+                }`}>
+                  {log}
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="grid gap-6 lg:grid-cols-3">
         {/* 국가 진행도 목록 */}
@@ -133,7 +211,8 @@ export function WorldMapPanel() {
 
                     <div className="mt-1.5 flex items-center justify-between text-[10px] text-white/45">
                       <span>총 전력: <span className="font-bold text-cyan-300">{totalPower > 0 ? `${(totalPower / 1000).toFixed(0)}k` : '계산 중'}</span></span>
-                      <span>네임드: <span className="font-bold text-purple-300">{namedCount}명</span></span>
+                      <span>오염도: <span className={`font-bold ${regionState && regionState.corruption >= 50 ? 'text-red-400 animate-pulse' : regionState && regionState.corruption >= 20 ? 'text-yellow-300' : 'text-emerald-400'}`}>{regionState ? `${regionState.corruption}%` : '0%'}</span></span>
+                      <span>활성 게이트: <span className="font-bold text-purple-300">{regionState ? regionState.activeGateIds.length : 0}개</span></span>
                     </div>
 
                     {/* 5축 프로파일 디버그 및 네임드 상세 펼치기 */}
@@ -217,15 +296,15 @@ export function WorldMapPanel() {
                   <span className="text-white/45">정화 상태</span>
                   <span
                     className={
-                      RIFT_NODE_STATUS_META[
-                        (riftNodesState[selectedNode.id] ?? selectedNode.status)
-                      ].textClass
+                      (riftNodesState[selectedNode.id] ?? selectedNode.status) === 'cleared' ? 'text-emerald-400 font-bold' :
+                      (riftNodesState[selectedNode.id] ?? selectedNode.status) === 'active' ? 'text-cyan-400 font-bold' :
+                      (riftNodesState[selectedNode.id] ?? selectedNode.status) === 'undiscovered' ? 'text-white/55' : 'text-white/30'
                     }
                   >
                     {
-                      RIFT_NODE_STATUS_META[
-                        (riftNodesState[selectedNode.id] ?? selectedNode.status)
-                      ].label
+                      (riftNodesState[selectedNode.id] ?? selectedNode.status) === 'cleared' ? '완전 정화' :
+                      (riftNodesState[selectedNode.id] ?? selectedNode.status) === 'active' ? '공략 진행 중' :
+                      (riftNodesState[selectedNode.id] ?? selectedNode.status) === 'undiscovered' ? '탐사 대기' : '잠금'
                     }
                   </span>
                 </div>
@@ -235,6 +314,23 @@ export function WorldMapPanel() {
                     {selectedNode.difficultyRank ?? 'E'}-RANK
                   </span>
                 </div>
+                {/* MVP-2 구역 권장 전력 및 시한 */}
+                {(selectedNode.difficulty ?? 0) > 0 && (
+                  <div className="flex justify-between border-b border-white/5 pb-2 text-xs">
+                    <span className="text-white/45">권장 전투력</span>
+                    <span className="font-bold text-pink-300">
+                      {(selectedNode.difficulty ?? 0).toLocaleString()} CP
+                    </span>
+                  </div>
+                )}
+                {selectedNode.daysRemaining !== undefined && (
+                  <div className="flex justify-between border-b border-white/5 pb-2 text-xs">
+                    <span className="text-white/45">소멸/폭주 시한</span>
+                    <span className={`font-bold ${(selectedNode.daysRemaining ?? 0) <= 3 ? 'text-red-400 animate-pulse' : 'text-yellow-300'}`}>
+                      {selectedNode.daysRemaining}일 남음 / 총 {selectedNode.deadline}일
+                    </span>
+                  </div>
+                )}
                 <div className="flex justify-between border-b border-white/5 pb-2 text-xs">
                   <span className="text-white/45">매핑 게이트 ID</span>
                   <span className="text-white/70 font-mono text-[10px]">
@@ -308,7 +404,7 @@ export function WorldMapPanel() {
             })}
 
             {/* 노드(Node) 마커 렌더링 */}
-            {RIFT_NODES.map((node: RiftNode) => {
+            {RIFT_NODES.map((node: any) => {
               const status = riftNodesState[node.id] ?? node.status
               const meta = RIFT_NODE_STATUS_META[status]
 
@@ -363,7 +459,7 @@ export function WorldMapPanel() {
           <div className="mb-4">
             <h3 className="text-lg font-black text-white flex items-center gap-2">
               <Swords className="h-5 w-5 text-purple-400" />
-              진입한 구역: {RIFT_NODES.find((rn: RiftNode) => rn.id === activeRiftNodeId)?.name}
+              진입한 구역: {RIFT_NODES.find((rn: any) => rn.id === activeRiftNodeId)?.name}
             </h3>
             <p className="text-xs text-white/45 mt-1">
               게이트를 클리어하면 해당 월드맵 노드의 정화도가 올라가고 후속 노드가 해제됩니다.

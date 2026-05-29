@@ -71,4 +71,10 @@ export const RIFT_NODE_STATUS_META: Record<
     textClass: 'text-emerald-300',
     borderClass: 'border-emerald-500/40',
   },
+  exploded: {
+    label: '폭주',
+    bgClass: 'bg-red-950/40 shadow-glow-red/10',
+    textClass: 'text-red-300',
+    borderClass: 'border-red-500/50 animate-pulse',
+  },
 }

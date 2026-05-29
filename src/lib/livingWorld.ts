@@ -1,10 +1,11 @@
 import { createSeededRng } from './game'
-import { RIFT_REGIONS, REGION_HUNTER_BASES } from './seed'
+import { RIFT_REGIONS, REGION_HUNTER_BASES, RIFT_NODES } from './seed'
 import type {
   LivingWorldState,
   RegionState,
   NamedHunter,
-  HunterPool
+  HunterPool,
+  RiftNode
 } from './types'
 
 /**
@@ -23,12 +24,13 @@ export function getRegionTotalPower(
   }
 
   const pool = regionState.pool
+  // 국가 총전력 산출 시 익명 풀의 기여도를 실효 기여분인 8%로 보정하여 1만~3만 대역으로 조정
   const poolPower =
-    pool.countA * pool.avgPowerA +
-    pool.countB * pool.avgPowerB +
-    pool.countC * pool.avgPowerC
+    (pool.countA * pool.avgPowerA +
+     pool.countB * pool.avgPowerB +
+     pool.countC * pool.avgPowerC) * 0.08
 
-  return namedPower + poolPower
+  return Math.round(namedPower + poolPower)
 }
 
 /**
@@ -51,6 +53,35 @@ export function initLivingWorld(seed: number): LivingWorldState {
   const rng = createSeededRng(seed)
   const regions: Record<string, RegionState> = {}
   const namedHunters: Record<string, NamedHunter> = {}
+  const riftNodes: Record<string, RiftNode> = {}
+
+  // 1. RIFT_NODES (게이트) 초기 상태 구축
+  for (const node of RIFT_NODES) {
+    // 난이도에 따른 권장 전투력 롤링 (개인 스케일 적용)
+    let difficulty = 300
+    if (node.difficultyRank === 'E') {
+      difficulty = Math.round(300 + rng() * 300) // 300~600
+    } else if (node.difficultyRank === 'D') {
+      difficulty = Math.round(700 + rng() * 350) // 700~1050
+    } else if (node.difficultyRank === 'C') {
+      difficulty = Math.round(1400 + rng() * 450) // 1400~1850
+    } else if (node.difficultyRank === 'S') {
+      difficulty = Math.round(5000 + rng() * 5000) // 5000~10000
+    } else {
+      difficulty = Math.round(300 + rng() * 1500)
+    }
+
+    const deadline = Math.round(10 + rng() * 6) // 10~15일 시한
+    
+    riftNodes[node.id] = {
+      ...node,
+      difficulty,
+      deadline,
+      daysRemaining: deadline,
+      status: node.status,
+      isSGrade: node.difficultyRank === 'S' || node.difficultyRank === 'National'
+    }
+  }
 
   // 15개국 각각에 대해 상태 초기화
   for (const region of RIFT_REGIONS) {
@@ -82,11 +113,10 @@ export function initLivingWorld(seed: number): LivingWorldState {
         const hunterId = `hunter-${regionId}-${idx + 1}`
         namedHunterIds.push(hunterId)
 
-        // 베이스 전투력 롤링
+        // 베이스 전투력 롤링 (하향된 수치 적용)
         const basePower = hBase.powerRange[0] + rng() * (hBase.powerRange[1] - hBase.powerRange[0])
         
-        // 정예형 (populationStyle이 0에 가까울수록)일 때 네임드 헌터 전투력 강화 보너스
-        // populationStyle이 0이면 1.25배, 1이면 0.75배
+        // 정예형일 때 네임드 헌터 전투력 강화 보너스
         const eliteFactor = 1.25 - populationStyle * 0.5
         const power = Math.round(basePower * eliteFactor)
 
@@ -110,8 +140,6 @@ export function initLivingWorld(seed: number): LivingWorldState {
       const baseCountB = pBase.countBRange[0] + rng() * (pBase.countBRange[1] - pBase.countBRange[0])
       const baseCountC = pBase.countCRange[0] + rng() * (pBase.countCRange[1] - pBase.countCRange[0])
 
-      // 머릿수형 (populationStyle이 1에 가까울수록)일 때 익명 풀 인원수 증가 보너스
-      // populationStyle이 1이면 1.3배, 0이면 0.7배
       const swarmFactor = 0.7 + populationStyle * 0.6
       const countA = Math.round(baseCountA * swarmFactor)
       const countB = Math.round(baseCountB * swarmFactor)
@@ -131,6 +159,11 @@ export function initLivingWorld(seed: number): LivingWorldState {
       }
     }
 
+    // 해당 국가 소속의 활성 게이트 ID 리스트 필터링
+    const activeGateIds = Object.keys(riftNodes).filter(
+      nodeId => riftNodes[nodeId].regionId === regionId && riftNodes[nodeId].status === 'active'
+    )
+
     regions[regionId] = {
       regionId,
       riskAppetite,
@@ -139,7 +172,9 @@ export function initLivingWorld(seed: number): LivingWorldState {
       cohesion,
       wealth,
       namedHunterIds,
-      pool
+      pool,
+      corruption: 0, // 초기 지역 오염도 0
+      activeGateIds
     }
   }
 
@@ -148,6 +183,10 @@ export function initLivingWorld(seed: number): LivingWorldState {
     day: 0,
     homeRegionId: 'kr',
     regions,
-    namedHunters
+    namedHunters,
+    worldCorruption: 0,
+    monarchsAppeared: 0,
+    eventLogs: ['[Day 0] 균열 대각성이 시작되었습니다.'],
+    riftNodes
   }
 }
