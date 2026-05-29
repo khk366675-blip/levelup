@@ -15,6 +15,7 @@ import {
   RotateCcw,
   Brain,
   AlertTriangle,
+  Globe,
 } from 'lucide-react'
 import { useGame } from './lib/store'
 import { todayKey, getDateKey, addDays } from './lib/game'
@@ -35,8 +36,9 @@ import { ChallengeCardsPanel } from './components/ChallengeCardsPanel'
 import { ShopPanel } from './components/ShopPanel'
 import { AiCoachPanel } from './components/AiCoachPanel'
 import { FocusSessionOverlay } from './components/FocusSessionOverlay'
+import { WorldMapPanel } from './components/WorldMapPanel'
 
-type Tab = 'rewards' | 'shop' | 'daily' | 'main' | 'gate' | 'shadows' | 'inventory' | 'grade' | 'tower' | 'coach'
+type Tab = 'rewards' | 'shop' | 'daily' | 'main' | 'gate' | 'shadows' | 'inventory' | 'grade' | 'tower' | 'coach' | 'worldmap'
 
 const TABS: { key: Tab; label: string; icon: typeof Calendar }[] = [
   { key: 'rewards',   label: '보상',           icon: Gift },
@@ -44,6 +46,7 @@ const TABS: { key: Tab; label: string; icon: typeof Calendar }[] = [
   { key: 'shadows',   label: '군단',         icon: Eclipse },
   { key: 'daily',     label: '일일 퀘스트', icon: Calendar },
   { key: 'main',      label: '메인 퀘스트', icon: Compass },
+  { key: 'worldmap',  label: '월드맵',      icon: Globe },
   { key: 'gate',      label: '게이트',      icon: Swords },
   { key: 'tower',     label: '무한의 탑',   icon: Swords },
   { key: 'inventory', label: '인벤토리',    icon: Package },
@@ -54,6 +57,7 @@ const TABS: { key: Tab; label: string; icon: typeof Calendar }[] = [
 const MOBILE_TABS: { key: Tab; label: string; icon: typeof Calendar }[] = [
   { key: 'rewards',   label: '보상',           icon: Gift },
   { key: 'daily',     label: '일일',           icon: Calendar },
+  { key: 'worldmap',  label: '월드맵',         icon: Globe },
   { key: 'gate',      label: '게이트',         icon: Swords },
   { key: 'grade',     label: '등급',           icon: Award },
   { key: 'shadows',   label: '군단',           icon: Eclipse },
@@ -486,6 +490,15 @@ export default function App() {
                 subtitle="자유 기록 기반 분석 및 내일의 퀘스트 설계 제안"
               >
                 <AiCoachPanel />
+              </Section>
+            )}
+
+            {tab === 'worldmap' && (
+              <Section
+                title="살아있는 균열 세계"
+                subtitle="세계 각지에 발생한 균열 노드를 실시간 정찰 및 정화"
+              >
+                <WorldMapPanel />
               </Section>
             )}
           </motion.div>

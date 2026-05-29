@@ -7,6 +7,9 @@ import type {
   Quest,
   RandomQuestTemplate,
   SkillDefinition,
+  RiftNode,
+  RiftRegion,
+  RegionSeedBase,
 } from './types'
 const todayISO = () => new Date().toISOString()
 
@@ -3549,3 +3552,311 @@ export const RANDOM_QUEST_POOL: RandomQuestTemplate[] = [
     weight: 3,
   },
 ]
+
+export const RIFT_REGIONS: RiftRegion[] = [
+  { id: 'us', name: '미국', labelX: 22, labelY: 42, learningTags: ['economy', 'industry'] },
+  { id: 'ca', name: '캐나다', labelX: 20, labelY: 25, learningTags: ['energy', 'geography'] },
+  { id: 'mx', name: '멕시코', labelX: 18, labelY: 58, learningTags: ['trade', 'culture'] },
+  { id: 'uk', name: '영국', labelX: 44, labelY: 28, learningTags: ['history', 'culture'] },
+  { id: 'de', name: '독일', labelX: 49, labelY: 28, learningTags: ['machinery', 'philosophy'] },
+  { id: 'fr', name: '프랑스', labelX: 45, labelY: 34, learningTags: ['arts', 'fashion'] },
+  { id: 'it', name: '이탈리아', labelX: 50, labelY: 38, learningTags: ['food', 'history'] },
+  { id: 'cn', name: '중국', labelX: 79, labelY: 43, learningTags: ['trade', 'population'] },
+  { id: 'jp', name: '일본', labelX: 89, labelY: 42, learningTags: ['technology', 'contents'] },
+  { id: 'kr', name: '한국', labelX: 84, labelY: 42, learningTags: ['it', 'gaming'] },
+  { id: 'ru', name: '러시아', labelX: 68, labelY: 22, learningTags: ['geography', 'energy'] },
+  { id: 'in', name: '인도', labelX: 73, labelY: 52, learningTags: ['software', 'math'] },
+  { id: 'br', name: '브라질', labelX: 32, labelY: 72, learningTags: ['nature', 'agriculture'] },
+  { id: 'au', name: '호주', labelX: 88, labelY: 78, learningTags: ['nature', 'resources'] },
+  { id: 'eg', name: '이집트', labelX: 54, labelY: 48, learningTags: ['history', 'archaeology'] },
+]
+
+export const RIFT_NODES: RiftNode[] = [
+  // 미국
+  { id: 'node-us-manhattan', regionId: 'us', name: '맨해튼 균열', x: 14, y: 40, status: 'active', gateDefId: 'gate-rift-alley', difficultyRank: 'E', adjacentNodeIds: ['node-us-brooklyn'] },
+  { id: 'node-us-brooklyn', regionId: 'us', name: '브루클린 지하도로', x: 22, y: 48, status: 'locked', gateDefId: 'gate-rift-backstreet', difficultyRank: 'E', requiresNodeIds: ['node-us-manhattan'], adjacentNodeIds: ['node-us-manhattan', 'node-us-statue'] },
+  { id: 'node-us-statue', regionId: 'us', name: '자유의 여신상 심연', x: 18, y: 55, status: 'undiscovered', gateDefId: 'gate-rift-nest', difficultyRank: 'E', requiresNodeIds: ['node-us-brooklyn'], adjacentNodeIds: ['node-us-brooklyn'] },
+  // 중국
+  { id: 'node-cn-shanghai', regionId: 'cn', name: '상하이 밤거리', x: 78, y: 48, status: 'active', gateDefId: 'gate-lair-of-sloth', difficultyRank: 'D', adjacentNodeIds: ['node-cn-wall'] },
+  { id: 'node-cn-wall', regionId: 'cn', name: '만리장성의 그림자', x: 84, y: 54, status: 'locked', gateDefId: 'gate-sloth-patrol', difficultyRank: 'D', requiresNodeIds: ['node-cn-shanghai'], adjacentNodeIds: ['node-cn-shanghai'] },
+  // 러시아
+  { id: 'node-ru-moscow', regionId: 'ru', name: '모스크바 서고', x: 72, y: 18, status: 'locked', gateDefId: 'gate-archive-of-forgetting', difficultyRank: 'C', requiresNodeIds: ['node-cn-shanghai'], adjacentNodeIds: ['node-ru-siberia'] },
+  { id: 'node-ru-siberia', regionId: 'ru', name: '시베리아 설원 균열', x: 80, y: 24, status: 'undiscovered', gateDefId: 'gate-corridor-of-fatigue', difficultyRank: 'C', requiresNodeIds: ['node-ru-moscow'], adjacentNodeIds: ['node-ru-moscow'] },
+  // 영국
+  { id: 'node-uk-london', regionId: 'uk', name: '런던 안개 회랑', x: 45, y: 22, status: 'undiscovered', gateDefId: 'gate-rift-training-grounds', difficultyRank: 'C', requiresNodeIds: ['node-us-brooklyn'], adjacentNodeIds: ['node-uk-thames'] },
+  { id: 'node-uk-thames', regionId: 'uk', name: '템스강 금고', x: 50, y: 28, status: 'locked', gateDefId: 'gate-greed-vault', difficultyRank: 'C', requiresNodeIds: ['node-uk-london'], adjacentNodeIds: ['node-uk-london'] },
+]
+
+export const REGION_ADJACENCY: Record<string, string[]> = {
+  kr: ['jp', 'cn'],
+  jp: ['kr'],
+  cn: ['ru', 'in', 'kr'],
+  ru: ['cn', 'de', 'ca'],
+  ca: ['us', 'ru'],
+  us: ['ca', 'mx'],
+  mx: ['us', 'br'],
+  br: ['mx'],
+  uk: ['fr', 'de'],
+  fr: ['uk', 'de', 'it'],
+  de: ['fr', 'it', 'uk', 'ru'],
+  it: ['de', 'fr', 'eg'],
+  eg: ['it', 'in'],
+  in: ['cn', 'eg'],
+  au: [],
+}
+
+export const REGION_HUNTER_BASES: RegionSeedBase[] = [
+  {
+    regionId: 'us',
+    namedHunters: [
+      { name: '토마스 안드레', rank: 'National', powerRange: [110000, 130000], growthRange: [1.02, 1.05] },
+      { name: '데이비드 브라운', rank: 'S', powerRange: [65000, 75000], growthRange: [1.015, 1.035] },
+      { name: '마이클 코너', rank: 'S', powerRange: [60000, 70000], growthRange: [1.015, 1.04] },
+      { name: '엘리자베스 리드', rank: 'S', powerRange: [55000, 68000], growthRange: [1.01, 1.03] },
+      { name: '조나단 켄트', rank: 'S', powerRange: [50000, 62000], growthRange: [1.02, 1.045] }
+    ],
+    pool: {
+      countARange: [12, 18],
+      countBRange: [35, 45],
+      countCRange: [80, 110],
+      avgPowerARange: [24000, 28000],
+      avgPowerBRange: [11000, 13500],
+      avgPowerCRange: [4500, 5800]
+    }
+  },
+  {
+    regionId: 'ca',
+    namedHunters: [
+      { name: '알렉산더 로건', rank: 'S', powerRange: [50000, 62000], growthRange: [1.01, 1.03] },
+      { name: '윌리엄 클라크', rank: 'S', powerRange: [42000, 52000], growthRange: [1.01, 1.025] },
+      { name: '에밀리 파크', rank: 'S', powerRange: [35000, 45000], growthRange: [1.015, 1.035] }
+    ],
+    pool: {
+      countARange: [5, 8],
+      countBRange: [15, 22],
+      countCRange: [40, 55],
+      avgPowerARange: [21000, 24000],
+      avgPowerBRange: [9500, 11500],
+      avgPowerCRange: [4200, 5000]
+    }
+  },
+  {
+    regionId: 'mx',
+    namedHunters: [
+      { name: '카를로스 산체스', rank: 'S', powerRange: [40000, 50000], growthRange: [1.01, 1.025] },
+      { name: '산티아고 고메즈', rank: 'S', powerRange: [32000, 42000], growthRange: [1.01, 1.03] },
+      { name: '마리아 헤르난데스', rank: 'S', powerRange: [28000, 36000], growthRange: [1.01, 1.02] }
+    ],
+    pool: {
+      countARange: [3, 6],
+      countBRange: [10, 16],
+      countCRange: [25, 38],
+      avgPowerARange: [20000, 23000],
+      avgPowerBRange: [9000, 10800],
+      avgPowerCRange: [4000, 4800]
+    }
+  },
+  {
+    regionId: 'uk',
+    namedHunters: [
+      { name: '크리스토퍼 리드', rank: 'National', powerRange: [100000, 120000], growthRange: [1.02, 1.045] },
+      { name: '조지 해리스', rank: 'S', powerRange: [58000, 68000], growthRange: [1.015, 1.03] },
+      { name: '아서 펜드래건', rank: 'S', powerRange: [52000, 64000], growthRange: [1.015, 1.04] },
+      { name: '리처드 하트', rank: 'S', powerRange: [45000, 55000], growthRange: [1.01, 1.03] }
+    ],
+    pool: {
+      countARange: [8, 12],
+      countBRange: [22, 32],
+      countCRange: [55, 75],
+      avgPowerARange: [23000, 26000],
+      avgPowerBRange: [10500, 12500],
+      avgPowerCRange: [4300, 5400]
+    }
+  },
+  {
+    regionId: 'de',
+    namedHunters: [
+      { name: '레너트 니어만', rank: 'S', powerRange: [60000, 72000], growthRange: [1.015, 1.035] },
+      { name: '한스 뮐러', rank: 'S', powerRange: [48000, 58000], growthRange: [1.01, 1.03] },
+      { name: '디터 슈미트', rank: 'S', powerRange: [42000, 50000], growthRange: [1.01, 1.025] },
+      { name: '프란츠 바그너', rank: 'S', powerRange: [36000, 46000], growthRange: [1.015, 1.03] }
+    ],
+    pool: {
+      countARange: [6, 10],
+      countBRange: [18, 26],
+      countCRange: [45, 65],
+      avgPowerARange: [22000, 25000],
+      avgPowerBRange: [10000, 12000],
+      avgPowerCRange: [4200, 5200]
+    }
+  },
+  {
+    regionId: 'fr',
+    namedHunters: [
+      { name: '장 로랑', rank: 'S', powerRange: [58000, 70000], growthRange: [1.015, 1.04] },
+      { name: '피에르 뒤퐁', rank: 'S', powerRange: [46000, 56000], growthRange: [1.01, 1.03] },
+      { name: '루카스 모로', rank: 'S', powerRange: [40000, 48000], growthRange: [1.01, 1.025] },
+      { name: '샤를로트 뒤부아', rank: 'S', powerRange: [35000, 44000], growthRange: [1.015, 1.03] }
+    ],
+    pool: {
+      countARange: [6, 9],
+      countBRange: [18, 25],
+      countCRange: [45, 60],
+      avgPowerARange: [22000, 25000],
+      avgPowerBRange: [10000, 11800],
+      avgPowerCRange: [4200, 5100]
+    }
+  },
+  {
+    regionId: 'it',
+    namedHunters: [
+      { name: '페데리코 로시', rank: 'S', powerRange: [48000, 58000], growthRange: [1.01, 1.03] },
+      { name: '조반니 비안키', rank: 'S', powerRange: [38000, 46000], growthRange: [1.01, 1.025] },
+      { name: '소피아 리치', rank: 'S', powerRange: [32000, 40000], growthRange: [1.015, 1.03] }
+    ],
+    pool: {
+      countARange: [4, 7],
+      countBRange: [12, 18],
+      countCRange: [30, 45],
+      avgPowerARange: [21000, 23500],
+      avgPowerBRange: [9500, 11200],
+      avgPowerCRange: [4100, 4900]
+    }
+  },
+  {
+    regionId: 'cn',
+    namedHunters: [
+      { name: '류지강', rank: 'National', powerRange: [115000, 135000], growthRange: [1.02, 1.05] },
+      { name: '장웨이', rank: 'S', powerRange: [62000, 74000], growthRange: [1.015, 1.035] },
+      { name: '리밍', rank: 'S', powerRange: [56000, 66000], growthRange: [1.015, 1.04] },
+      { name: '왕판', rank: 'S', powerRange: [50000, 60000], growthRange: [1.01, 1.03] },
+      { name: '첸 시우', rank: 'S', powerRange: [45000, 55000], growthRange: [1.02, 1.04] }
+    ],
+    pool: {
+      countARange: [10, 16],
+      countBRange: [30, 42],
+      countCRange: [75, 105],
+      avgPowerARange: [24000, 27500],
+      avgPowerBRange: [11000, 13000],
+      avgPowerCRange: [4500, 5600]
+    }
+  },
+  {
+    regionId: 'jp',
+    namedHunters: [
+      { name: '고토 류지', rank: 'S', powerRange: [75000, 85000], growthRange: [1.015, 1.035] },
+      { name: '스기모토 켄', rank: 'S', powerRange: [45000, 54000], growthRange: [1.01, 1.025] },
+      { name: '마츠우라 시게오', rank: 'S', powerRange: [40000, 48000], growthRange: [1.01, 1.03] },
+      { name: '미나구치 마사코', rank: 'S', powerRange: [32000, 42000], growthRange: [1.015, 1.03] }
+    ],
+    pool: {
+      countARange: [5, 8],
+      countBRange: [15, 22],
+      countCRange: [40, 55],
+      avgPowerARange: [22000, 24500],
+      avgPowerBRange: [9800, 11500],
+      avgPowerCRange: [4200, 5000]
+    }
+  },
+  {
+    regionId: 'kr',
+    namedHunters: [
+      { name: '강태풍', rank: 'National', powerRange: [90000, 105000], growthRange: [1.02, 1.04] },
+      { name: '이진성', rank: 'S', powerRange: [55000, 68000], growthRange: [1.015, 1.035] },
+      { name: '백호민', rank: 'S', powerRange: [48000, 58000], growthRange: [1.015, 1.04] },
+      { name: '정재희', rank: 'S', powerRange: [40000, 50000], growthRange: [1.01, 1.03] }
+    ],
+    pool: {
+      countARange: [6, 10],
+      countBRange: [18, 25],
+      countCRange: [45, 65],
+      avgPowerARange: [23000, 25500],
+      avgPowerBRange: [10000, 12000],
+      avgPowerCRange: [4300, 5200]
+    }
+  },
+  {
+    regionId: 'ru',
+    namedHunters: [
+      { name: '유리 오를로프', rank: 'S', powerRange: [78000, 92000], growthRange: [1.02, 1.04] },
+      { name: '미하일 이바노프', rank: 'S', powerRange: [58000, 68000], growthRange: [1.015, 1.03] },
+      { name: '드미트리 소콜로프', rank: 'S', powerRange: [50000, 60000], growthRange: [1.015, 1.035] },
+      { name: '타티아나 볼코바', rank: 'S', powerRange: [42000, 52000], growthRange: [1.01, 1.03] }
+    ],
+    pool: {
+      countARange: [8, 14],
+      countBRange: [25, 38],
+      countCRange: [65, 95],
+      avgPowerARange: [23500, 27000],
+      avgPowerBRange: [10800, 12800],
+      avgPowerCRange: [4400, 5500]
+    }
+  },
+  {
+    regionId: 'in',
+    namedHunters: [
+      { name: '싯다르트 바찬', rank: 'National', powerRange: [95000, 115000], growthRange: [1.02, 1.045] },
+      { name: '라지 코타파리', rank: 'S', powerRange: [52000, 62000], growthRange: [1.015, 1.03] },
+      { name: '아르준 싱', rank: 'S', powerRange: [46000, 55000], growthRange: [1.01, 1.03] },
+      { name: '프리야 샤르마', rank: 'S', powerRange: [38000, 48000], growthRange: [1.015, 1.035] }
+    ],
+    pool: {
+      countARange: [7, 11],
+      countBRange: [20, 28],
+      countCRange: [50, 70],
+      avgPowerARange: [22500, 25500],
+      avgPowerBRange: [10200, 12200],
+      avgPowerCRange: [4300, 5200]
+    }
+  },
+  {
+    regionId: 'br',
+    namedHunters: [
+      { name: '티아고 실바', rank: 'S', powerRange: [48000, 58000], growthRange: [1.01, 1.025] },
+      { name: '루카스 산토스', rank: 'S', powerRange: [38000, 48000], growthRange: [1.01, 1.03] },
+      { name: '이사벨라 소우자', rank: 'S', powerRange: [32000, 42000], growthRange: [1.015, 1.03] }
+    ],
+    pool: {
+      countARange: [4, 7],
+      countBRange: [12, 18],
+      countCRange: [30, 45],
+      avgPowerARange: [21000, 23500],
+      avgPowerBRange: [9500, 11000],
+      avgPowerCRange: [4100, 4800]
+    }
+  },
+  {
+    regionId: 'au',
+    namedHunters: [
+      { name: '잭슨 킹', rank: 'S', powerRange: [52000, 64000], growthRange: [1.015, 1.03] },
+      { name: '올리비아 스미스', rank: 'S', powerRange: [42000, 52000], growthRange: [1.01, 1.025] },
+      { name: '레녹스 테일러', rank: 'S', powerRange: [35000, 44000], growthRange: [1.01, 1.03] }
+    ],
+    pool: {
+      countARange: [4, 7],
+      countBRange: [12, 18],
+      countCRange: [30, 45],
+      avgPowerARange: [21500, 24000],
+      avgPowerBRange: [9600, 11200],
+      avgPowerCRange: [4150, 4900]
+    }
+  },
+  {
+    regionId: 'eg',
+    namedHunters: [
+      { name: '하산 알리', rank: 'S', powerRange: [45000, 55000], growthRange: [1.01, 1.025] },
+      { name: '아미나 만수르', rank: 'S', powerRange: [36000, 45000], growthRange: [1.01, 1.03] },
+      { name: '오마르 샤리프', rank: 'S', powerRange: [30000, 38000], growthRange: [1.01, 1.02] }
+    ],
+    pool: {
+      countARange: [3, 6],
+      countBRange: [10, 16],
+      countCRange: [25, 38],
+      avgPowerARange: [20500, 23000],
+      avgPowerBRange: [9200, 10800],
+      avgPowerCRange: [4050, 4800]
+    }
+  }
+]
+
+

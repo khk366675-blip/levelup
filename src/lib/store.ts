@@ -68,7 +68,11 @@ import type {
   HardcoreState,
   GateEchoState,
   HardcoreBackupMeta,
+  RiftNodeStatus,
+  LivingWorldState,
 } from './types'
+
+import { initLivingWorld } from './livingWorld'
 
 import {
   AiCoachMemoryState,
@@ -96,6 +100,8 @@ import {
   MONSTER_DEFINITIONS,
   RANDOM_QUEST_POOL,
   SKILL_DEFINITIONS,
+  RIFT_REGIONS,
+  RIFT_NODES,
 } from './seed'
 import { generateGateRunState, hydrateGateRunEncounterChoices } from './gateRunEvents'
 import { PROMOTION_EXAM_DEFINITIONS } from './promotionExams'
@@ -344,6 +350,10 @@ export interface GameState {
   activeConsumableEffects: ActiveConsumableEffect[]
   gateStatus: GateStatus
   activeGate?: ActiveGate
+  riftNodes: Record<string, RiftNodeStatus>
+  activeRiftNodeId?: string
+  livingWorld?: LivingWorldState
+  initOrResetLivingWorld: (seed?: number) => void
   combatLogs: CombatLog[]
   manualBattleSession?: ManualBattleSession
   ownedShadows: OwnedShadow[]
@@ -439,7 +449,7 @@ export interface GameState {
   setActiveGate: (gate: ActiveGate | undefined) => void
   clearExpiredGate: () => void
   rollGateSpawn: (source: 'daily_open' | 'daily_completion' | 'random_completion' | 'dungeon_clear' | 'hard_dungeon_clear' | 'main_completion') => void
-  spawnGate: (gateId: string, source: 'random' | 'dungeon_clear' | 'event') => void
+  spawnGate: (gateId: string, source: 'random' | 'dungeon_clear' | 'event' | 'worldmap') => void
   recoverGateStamina: () => void
   recoverGateInjuryByQuest: () => void
   clearGateInjuryIfExpired: () => void
@@ -447,6 +457,9 @@ export interface GameState {
   clearCombatLogs: () => void
   startGateBattle: () => void
   resolveDirectGateBattle: (combatLog: CombatLog) => void
+  discoverRiftNode: (nodeId: string) => void
+  enterRiftNode: (nodeId: string) => void
+  markRiftNodeCleared: (nodeId: string) => void
   startManualGateBattle: (gateId?: string) => void
   performManualBattleAction: (action: ManualBattleAction) => void
   cancelManualGateBattle: () => void
@@ -3438,6 +3451,14 @@ export const useGame = create<GameState>()(
       activeConsumableEffects: [],
       gateStatus: createInitialGateStatus(),
       activeGate: undefined,
+      riftNodes: (() => {
+        const nodes: Record<string, RiftNodeStatus> = {}
+        RIFT_NODES.forEach((n) => {
+          nodes[n.id] = n.status
+        })
+        return nodes
+      })(),
+      activeRiftNodeId: undefined,
       combatLogs: [],
       manualBattleSession: undefined,
       ownedShadows: [],
@@ -4661,7 +4682,103 @@ export const useGame = create<GameState>()(
         return { activeConsumableEffects: activeEffects }
       }),
 
-      setActiveGate: (gate) => set({ activeGate: gate }),
+      initOrResetLivingWorld: (seed) => {
+        const targetSeed = seed != null ? seed : Math.floor(Math.random() * 99999999) + 1
+        set({
+          livingWorld: initLivingWorld(targetSeed)
+        })
+      },
+
+      discoverRiftNode: (nodeId) => {
+        const s = get()
+        const node = RIFT_NODES.find((n) => n.id === nodeId)
+        if (!node) return
+
+        const currentStatus = s.riftNodes[nodeId] ?? node.status
+        if (currentStatus !== 'undiscovered') return
+
+        const updatedNodes = { ...s.riftNodes, [nodeId]: 'active' as RiftNodeStatus }
+        set({
+          riftNodes: updatedNodes,
+          messages: [
+            ...s.messages,
+            {
+              id: uid(),
+              kind: 'info',
+              title: '구역 탐사 완료',
+              lines: [`새로운 균열 구역 [${node.name}]을(를) 발견했습니다!`],
+              createdAt: todayISO(),
+            },
+          ],
+        })
+      },
+
+      enterRiftNode: (nodeId) => {
+        const node = RIFT_NODES.find(n => n.id === nodeId)
+        if (!node) return
+        const s = get()
+
+        // 보완 2: 이미 활성 게이트가 있으면 막고 안내
+        if (s.activeGate && s.activeGate.status === 'active') {
+          set({
+            messages: [
+              ...s.messages,
+              {
+                id: uid(),
+                kind: 'info',
+                title: '진입 불가',
+                lines: ['이미 공략 중인 활성 게이트가 있습니다. 기존 게이트를 완료하거나 포기하십시오.'],
+                createdAt: todayISO(),
+              }
+            ]
+          })
+          return
+        }
+
+        set({ activeRiftNodeId: nodeId })
+        get().spawnGate(node.gateDefId, 'worldmap')
+      },
+
+      markRiftNodeCleared: (nodeId) => {
+        const s = get()
+        const node = RIFT_NODES.find((n) => n.id === nodeId)
+        if (!node) return
+
+        const currentStatus = s.riftNodes[nodeId] ?? node.status
+        if (currentStatus === 'cleared') return
+
+        const updatedNodes = { ...s.riftNodes, [nodeId]: 'cleared' as RiftNodeStatus }
+
+        // locked 노드 중 선행 노드로 이 노드를 요구하던 노드 해제 검증
+        RIFT_NODES.forEach((n) => {
+          const nStatus = updatedNodes[n.id] ?? n.status
+          if (nStatus === 'locked' && n.requiresNodeIds?.includes(nodeId)) {
+            // 이 노드의 모든 선행조건이 cleared인지 판정
+            const allReqsCleared = n.requiresNodeIds.every(
+              (reqId) => updatedNodes[reqId] === 'cleared'
+            )
+            if (allReqsCleared) {
+              updatedNodes[n.id] = 'active'
+            }
+          }
+        })
+
+        set({
+          riftNodes: updatedNodes,
+          messages: [
+            ...s.messages,
+            {
+              id: uid(),
+              kind: 'info',
+              title: '구역 정화 완료',
+              lines: [`균열 구역 [${node.name}] 정화에 성공했습니다!`],
+              createdAt: todayISO(),
+            },
+          ],
+        })
+      },
+
+      setActiveGate: (gate) => set({ activeGate: gate, activeRiftNodeId: gate ? get().activeRiftNodeId : undefined }),
 
       clearExpiredGate: () => set((s) => {
         const activeGate = s.activeGate
@@ -4676,6 +4793,7 @@ export const useGame = create<GameState>()(
               ...activeGate,
               status: 'expired',
             },
+            activeRiftNodeId: undefined,
             messages: [...s.messages, {
               id: uid(),
               kind: 'info',
@@ -6211,6 +6329,7 @@ export const useGame = create<GameState>()(
             status: 'failed',
             runState: run
           },
+          activeRiftNodeId: undefined,
           hunterGrade: nextHunterGrade,
           messages: [...s.messages, {
             id: uid(),
@@ -10129,6 +10248,14 @@ export const useGame = create<GameState>()(
         activeConsumableEffects: [],
         gateStatus: createInitialGateStatus(),
         activeGate: undefined,
+        activeRiftNodeId: undefined,
+        riftNodes: (() => {
+          const nodes: Record<string, RiftNodeStatus> = {}
+          RIFT_NODES.forEach((n) => {
+            nodes[n.id] = n.status
+          })
+          return nodes
+        })(),
         combatLogs: [],
         manualBattleSession: undefined,
         ownedShadows: [],
@@ -10185,6 +10312,14 @@ export const useGame = create<GameState>()(
         activeConsumableEffects: [],
         gateStatus: createInitialGateStatus(),
         activeGate: undefined,
+        activeRiftNodeId: undefined,
+        riftNodes: (() => {
+          const nodes: Record<string, RiftNodeStatus> = {}
+          RIFT_NODES.forEach((n) => {
+            nodes[n.id] = n.status
+          })
+          return nodes
+        })(),
         combatLogs: [],
         manualBattleSession: undefined,
         ownedShadows: [],
@@ -10299,6 +10434,14 @@ export const useGame = create<GameState>()(
           activeConsumableEffects: [],
           gateStatus: createInitialGateStatus(),
           activeGate: undefined,
+          activeRiftNodeId: undefined,
+          riftNodes: (() => {
+            const nodes: Record<string, RiftNodeStatus> = {}
+            RIFT_NODES.forEach((n) => {
+              nodes[n.id] = n.status
+            })
+            return nodes
+          })(),
           combatLogs: [],
           manualBattleSession: undefined,
           ownedShadows: [],
@@ -11125,13 +11268,20 @@ export const useGame = create<GameState>()(
           }
 
           get().recalculateHunterGrade('게이트 공략 성공')
+          
+          const activeGate2 = get().activeGate
+          const riftNodeId = get().activeRiftNodeId
+          if (activeGate2?.source === 'worldmap' && riftNodeId) {
+            get().markRiftNodeCleared(riftNodeId)
+            set({ activeRiftNodeId: undefined })   // 반드시 리셋
+          }
         }
       },
 
     }),
     {
       name: 'levelup-save',
-      version: 14,
+      version: 16,
       partialize: (state) => ({
         ...state,
         manualBattleSession: undefined,
@@ -11598,6 +11748,28 @@ export const useGame = create<GameState>()(
                 })
               }
             }
+          }
+        }
+
+        // ── Rift World System (v15) 마이그레이션 ──
+        if (persistedState) {
+          if (!persistedState.riftNodes) {
+            const initialNodes: Record<string, RiftNodeStatus> = {}
+            RIFT_NODES.forEach((n) => {
+              initialNodes[n.id] = n.status
+            })
+            persistedState.riftNodes = initialNodes
+          }
+          if (!('activeRiftNodeId' in persistedState)) {
+            persistedState.activeRiftNodeId = undefined
+          }
+        }
+
+        // ── Living Rift World System (v16) 마이그레이션 ──
+        if (persistedState) {
+          if (!persistedState.livingWorld) {
+            const randomSeed = Math.floor(Math.random() * 99999999) + 1
+            persistedState.livingWorld = initLivingWorld(randomSeed)
           }
         }
 

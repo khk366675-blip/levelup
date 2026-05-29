@@ -953,7 +953,7 @@ export interface ActiveGate {
   spawnedAt: string
   expiresAt: string
   status: 'active' | 'cleared' | 'failed' | 'expired'
-  source: 'random' | 'dungeon_clear' | 'event'
+  source: 'random' | 'dungeon_clear' | 'event' | 'worldmap'
   runState?: GateRunState
 }
 
@@ -2249,3 +2249,94 @@ export interface HunterGradeState {
   history: HunterGradeHistoryEntry[]
   lastEvaluatedAt?: number
 }
+
+// ── Rift World System (Phase 0-A) ──────────────────────────────────
+export type RiftNodeStatus = 'undiscovered' | 'active' | 'cleared' | 'locked'
+
+export interface RiftRegion {
+  id: string              // 예: 'us', 'cn', 'ru', 'uk'
+  name: string            // 한국어 표시명 (예: '미국', '중국', '러시아', '영국')
+  labelX: number          // 지도 기준 x 백분율 좌표 (0 ~ 100)
+  labelY: number          // 지도 기준 y 백분율 좌표 (0 ~ 100)
+  learningTags?: string[] // 후속 Phase용 자리 (예: ['economy', 'industry'])
+}
+
+export interface RiftNode {
+  id: string
+  regionId: string        // 소속 국가 (RiftRegion.id)
+  name: string            // 한국어 표시명 (예: '맨해튼 균열')
+  x: number               // 지도 기준 x 백분율 좌표 (0 ~ 100)
+  y: number               // 지도 기준 y 백분율 좌표 (0 ~ 100)
+  status: RiftNodeStatus
+  gateDefId: string       // 기존 게이트 정의 id (GATE_DEFINITIONS에 존재)
+  difficultyRank?: Rank   // 표시용 랭크 (기존 Rank 재사용)
+  requiresNodeIds?: string[] // 잠김 해제 조건 노드 id들
+  adjacentNodeIds?: string[] // 인접 노드 (후속 오염 전파용)
+}
+
+// ── Living Rift World MVP-1 ──────────────────────────────────────────
+export interface NamedHunter {
+  id: string
+  regionId: string
+  name: string          // 한국어 또는 현지풍 이름
+  rank: Rank            // 보통 'S' 또는 'National'
+  power: number         // 현재 전투력
+  growthRate: number    // 일일 성장 계수 (회차 랜덤)
+  status: 'active' | 'injured' | 'dead'
+  // 후속 자리: 보유 장비 등 (MVP-1에선 정의만, 로직 없음)
+}
+
+export interface HunterPool {
+  countA: number
+  countB: number
+  countC: number
+  avgPowerA: number
+  avgPowerB: number
+  avgPowerC: number
+}
+
+export interface RegionState {
+  regionId: string
+  // 5축 프로파일 (회차 시작 시 시드 RNG로 범위 내 랜덤)
+  riskAppetite: number      // 위험감수성향 0~1 (무모↔신중)
+  populationStyle: number   // 정예형↔머릿수형 (네임드 비중 vs 풀 비중)
+  growthBias: number        // 성장 속도/천장 성향
+  cohesion: number          // 결속도 (협력·러브콜 성향) - 후속용 자리만 롤
+  wealth: number            // 부유함 (장비 획득률) - 후속용 자리만 롤
+  // 헌터
+  namedHunterIds: string[]
+  pool: HunterPool
+}
+
+export interface LivingWorldState {
+  seed: number              // 이 회차의 시드 (재현용)
+  day: number               // 경과 일수 (MVP-1에선 0/1로 초기화만)
+  homeRegionId: string      // 'kr'
+  regions: Record<string, RegionState>
+  namedHunters: Record<string, NamedHunter>
+}
+
+// 시드용 Base 데이터 타입
+export interface NamedHunterBase {
+  name: string
+  rank: Rank
+  powerRange: [number, number]
+  growthRange: [number, number]
+}
+
+export interface HunterPoolBase {
+  countARange: [number, number]
+  countBRange: [number, number]
+  countCRange: [number, number]
+  avgPowerARange: [number, number]
+  avgPowerBRange: [number, number]
+  avgPowerCRange: [number, number]
+}
+
+export interface RegionSeedBase {
+  regionId: string
+  namedHunters: NamedHunterBase[]
+  pool: HunterPoolBase
+}
+
+
