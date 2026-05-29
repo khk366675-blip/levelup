@@ -310,10 +310,7 @@ export default function App() {
                 title="보상"
                 subtitle="일일 박스와 오늘의 도전 카드"
               >
-                <div className="space-y-4">
-                  <RewardBoxPanel />
-                  <ChallengeCardsPanel />
-                </div>
+                <RewardBoxPanel />
               </Section>
             )}
 

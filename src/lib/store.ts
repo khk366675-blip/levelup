@@ -65,6 +65,9 @@ import type {
   FocusSessionInterruption,
   FocusSessionRecord,
   FocusSessionRewardSummary,
+  HardcoreState,
+  GateEchoState,
+  HardcoreBackupMeta,
 } from './types'
 
 import {
@@ -203,6 +206,7 @@ import {
   SHADOW_LEGION_NODES,
   getShadowMaxTraitSlots,
   rollShadowTraitDefinition,
+  getValidEquippedShadowIds,
 } from './shadows'
 import {
   createInitialTowerState,
@@ -236,6 +240,22 @@ import {
   type EquipmentQualitySource,
   type ShopReward,
 } from './shop'
+
+import {
+  HARDCORE_BACKUP_KEY,
+  createInitialHardcoreState,
+  ensureHardcoreState,
+  getActiveGateEchoes,
+  hasActiveGateEchoes,
+  canUseMajorAction,
+  generateGateEchoesForDate,
+  compactGateEchoHistory,
+} from './gateEchoes'
+import {
+  shouldTriggerHardcoreDeathFromSession,
+  shouldApplyHardcoreDeathReset,
+  shouldApplyShadowCollapse,
+} from './manualBattleSessionGuards'
 
 import { registerLegionNodeLevelResolver } from './shadowStats'
 
@@ -526,6 +546,13 @@ export interface GameState {
   completePromotionExam: (targetGrade: HunterGradeTier) => void
   checkGateClearHooks: (gateId: string, isVictory: boolean) => void
   emitWorldSignal: (templateId: WorldSignalTemplateId) => void
+
+  // 12-44A: Hardcore / Gate Echo Actions
+  hardcoreState?: HardcoreState
+  resolveGateEchoBattle: (echoId: string, combatLog: CombatLog) => void
+  finalizeHardcoreDeathFromSession: () => void
+  restoreShadowFromCollapse: (shadowId: string) => void
+  crystallizeCollapsedShadow: (shadowId: string) => void
 }
 
 const initialHunter: HunterState = {
@@ -1845,6 +1872,29 @@ const buildMainQuestCompletionBonus = (
   return { tickets, shards, messages }
 }
 
+export const shadowRestoreCost = (shadow: OwnedShadow): number => {
+  const baseByRarity: Record<string, number> = {
+    Common: 50,
+    Normal: 100,
+    Elite: 250,
+    Knight: 500,
+    'Elite Knight': 1000,
+    Commander: 2000,
+    General: 5000,
+    Monarch: 10000,
+  }
+  const base = baseByRarity[shadow.rarity] ?? 100
+  const gradeMult: Record<string, number> = {
+    S: 1.5,
+    A: 1.2,
+    B: 1.0,
+    C: 0.8,
+  }
+  const mult = gradeMult[shadow.innateGrade ?? 'B'] ?? 1.0
+  const lvlExtra = (shadow.level ?? 1) * 15
+  return Math.round(base * mult + lvlExtra)
+}
+
 const createGateBattleOutcomeUpdate = (
   s: GameState,
   activeGate: ActiveGate,
@@ -1869,6 +1919,30 @@ const createGateBattleOutcomeUpdate = (
   const xpAmount = getShadowXpReward(gate.rank, combatLog.result as 'victory' | 'defeat' | 'draw')
   let nextOwnedShadows = s.ownedShadows ?? []
   const shadowLevelUps: string[] = []
+
+  // 12-44Z-FINAL: 일반 게이트 및 레드 게이트 아군 그림자 붕괴 정산 처리
+  const isExam = activeGate.runState?.isPromotionExam
+  const shouldCollapse = shouldApplyShadowCollapse(combatLog.source || 'gate') && !isExam
+  let nextEquippedShadowIds = s.equippedShadowIds ?? []
+  
+  if (shouldCollapse && combatLog.shadowCasualtyIds && combatLog.shadowCasualtyIds.length > 0) {
+    const casualtySet = new Set(combatLog.shadowCasualtyIds)
+    nextOwnedShadows = nextOwnedShadows.map(shadow => {
+      if (casualtySet.has(shadow.instanceId)) {
+        return {
+          ...shadow,
+          collapsed: true,
+          status: 'collapsed' as const,
+          collapsedAt: Date.now(),
+          collapseReason: 'gate_battle',
+          restoreCost: shadowRestoreCost(shadow),
+        }
+      }
+      return shadow
+    })
+    // 붕괴된 그림자는 출전 소대 편성에서 unequip 처리
+    nextEquippedShadowIds = nextEquippedShadowIds.filter(id => !casualtySet.has(id))
+  }
 
   const distributeShadowXp = (xp: number) => {
     if (xp > 0 && equippedShadows.length > 0) {
@@ -1955,7 +2029,7 @@ const createGateBattleOutcomeUpdate = (
         const finalLog: CombatLog = {
           ...combatLog,
           rewards: gateRewards,
-          source: 'gate',
+          source: combatLog.source || 'gate',
         }
 
         return {
@@ -1966,6 +2040,7 @@ const createGateBattleOutcomeUpdate = (
             gold: s.gold,
             items: nextItems,
             ownedShadows: nextOwnedShadows,
+            equippedShadowIds: nextEquippedShadowIds,
             activeGate: nextActiveGate,
             combatLogs: [finalLog, ...s.combatLogs].slice(0, 20),
             messages: [...s.messages, ...newMessages],
@@ -2044,7 +2119,7 @@ const createGateBattleOutcomeUpdate = (
         const finalLog: CombatLog = {
           ...combatLog,
           rewards: gateRewards,
-          source: 'gate',
+          source: combatLog.source || 'gate',
         }
 
         const baseState: Partial<GameState> = {
@@ -2055,6 +2130,7 @@ const createGateBattleOutcomeUpdate = (
           shadowSummonTickets: nextShadowSummonTickets,
           shadowSummonShards: nextShadowSummonShards,
           ownedShadows: nextOwnedShadows,
+          equippedShadowIds: nextEquippedShadowIds,
           gateStatus: nextGateStatus,
           activeGate: nextActiveGate,
           activeConsumableEffects: nextConsumables,
@@ -2151,7 +2227,7 @@ const createGateBattleOutcomeUpdate = (
         ...combatLog,
         rewards: [],
         penaltyApplied,
-        source: 'gate',
+        source: combatLog.source || 'gate',
       }
 
       const nextHunterGrade = (isExam && examTarget && s.hunterGrade?.pendingExam) 
@@ -2173,6 +2249,7 @@ const createGateBattleOutcomeUpdate = (
           shadowEssence: nextEssenceVal,
           items: nextItems,
           ownedShadows: nextOwnedShadows,
+          equippedShadowIds: nextEquippedShadowIds,
           gateStatus: nextGateStatus,
           activeGate: nextActiveGate,
           activeConsumableEffects: nextConsumables,
@@ -2257,7 +2334,7 @@ const createGateBattleOutcomeUpdate = (
     ...combatLog,
     rewards: gateRewards,
     penaltyApplied,
-    source: 'gate',
+    source: combatLog.source || 'gate',
   }
   const isVictory = combatLog.result === 'victory'
   const isBoss = gate.monsterIds.some(mId => {
@@ -2286,6 +2363,7 @@ const createGateBattleOutcomeUpdate = (
     shadowSummonTickets: nextShadowSummonTickets,
     shadowSummonShards: nextShadowSummonShards,
     ownedShadows: nextOwnedShadows,
+    equippedShadowIds: nextEquippedShadowIds,
     gateStatus: nextGateStatus,
     activeGate: nextActiveGate,
     activeConsumableEffects: nextConsumables,
@@ -3189,10 +3267,166 @@ function backfillMainQuestFromDefaultTemplate(quest: Quest, template: Quest): Qu
   }
 }
 
+
+const createHardcoreDeathResetState = (
+  s: GameState,
+  reason: string,
+  battleContext: string,
+): Partial<GameState> => {
+  const hardcore = ensureHardcoreState(s.hardcoreState)
+  const timestamp = Date.now()
+  const backupMeta: HardcoreBackupMeta = {
+    timestamp,
+    reason,
+    playerLevel: s.hunter.level,
+    battleContext,
+    backupKey: HARDCORE_BACKUP_KEY,
+  }
+
+  try {
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem(HARDCORE_BACKUP_KEY, JSON.stringify({ meta: backupMeta, state: s }))
+    }
+  } catch (error) {
+    if (import.meta.env.DEV) console.warn('[Hardcore] backup failed', error)
+  }
+
+  return {
+    hunter: initialHunter,
+    quests: s.quests,
+    items: [],
+    titles: [],
+    messages: [{
+      id: uid(),
+      kind: 'info',
+      title: '하드코어 사망 리셋',
+      lines: ['헌터가 전투에서 쓰러져 진행이 초기화되었습니다.', '리셋 전 복구용 백업이 저장되었습니다.'],
+      createdAt: todayISO(),
+    }],
+    achievementStats: s.achievementStats ? {
+      ...s.achievementStats,
+      gateClearedCount: 0,
+      redGateClearedCount: 0,
+      bossKillsCount: 0,
+      dungeonClears: {
+        total: 0,
+        byQuestId: {},
+      },
+    } : createInitialAchievementStats(),
+    activeRandomQuest: undefined,
+    randomQuestHistory: {},
+    equipment: {},
+    activeConsumableEffects: [],
+    gateStatus: createInitialGateStatus(),
+    activeGate: undefined,
+    combatLogs: [],
+    manualBattleSession: undefined,
+    ownedShadows: [],
+    equippedShadowIds: [],
+    shadowExtractHistory: [],
+    shadowExtractFailCount: {},
+    lastShadowExtractResult: undefined,
+    gold: 0,
+    shadowEssence: 0,
+    shadowSummonTickets: [],
+    shadowSummonShards: {},
+    shadowFragments: {},
+    shadowAchievementTicketClaims: {},
+    shadowExpeditions: [],
+    lastShadowExpeditionDate: undefined,
+    activeShadowExpeditionId: undefined,
+    shadowLegionNodes: {},
+    infiniteTower: createInitialTowerState(),
+    rewardBoxes: [],
+    lastDailyBoxDate: undefined,
+    lastWeeklyBoxWeek: undefined,
+    todayChallengeCards: [],
+    selectedChallengeCardIds: [],
+    lastChallengeCardDate: undefined,
+    challengeCardHistory: {},
+    shopPurchases: {},
+    skillStates: {},
+    secretProgress: undefined,
+    aiCoachCoreContext: s.aiCoachCoreContext,
+    aiCoachMemory: s.aiCoachMemory,
+    dailyProgression: s.dailyProgression,
+    focusSession: s.focusSession,
+    hunterGrade: createInitialHunterGradeState({
+      hunter: initialHunter,
+      focusSession: s.focusSession,
+      achievementStats: createInitialAchievementStats(),
+    }),
+    hardcoreState: {
+      ...createInitialHardcoreState(timestamp),
+      deathCount: hardcore.deathCount + 1,
+      lastHardcoreBackup: backupMeta,
+      worldThreat: 0,
+    },
+    initialized: true,
+  }
+}
+
+const shouldHardcoreResetForCombat = (s: GameState, combatLog: CombatLog): boolean => {
+  const source = combatLog.source
+  if (source && !shouldApplyHardcoreDeathReset(source)) {
+    return false
+  }
+
+  const progressed =
+    combatLog.battleStarted === true ||
+    ((combatLog.actionCount ?? 0) > 0 && combatLog.totalTurns > 0) ||
+    (combatLog.battleStarted == null && combatLog.actionCount == null && combatLog.totalTurns > 0 && combatLog.turns.length > 0)
+  const structuredPlayerDeath =
+    combatLog.playerDeathDetected === true &&
+    combatLog.defeatReason === 'player_dead'
+  const legacyFinalPlayerDeath =
+    combatLog.playerDeathDetected == null &&
+    combatLog.defeatReason == null &&
+    combatLog.playerHpRemaining <= 0
+
+  const enabled = ensureHardcoreState(s.hardcoreState).enabled
+  const resetPending = ensureHardcoreState(s.hardcoreState).resetPending
+
+  return enabled &&
+    !resetPending &&
+    combatLog.result === 'defeat' &&
+    combatLog.finalized !== false &&
+    (combatLog.finalOutcome === undefined || combatLog.finalOutcome === 'defeat') &&
+    progressed &&
+    (structuredPlayerDeath || legacyFinalPlayerDeath)
+}
+
+const shouldHardcoreResetForManualSession = (s: GameState, session?: ManualBattleSession): boolean =>
+  shouldTriggerHardcoreDeathFromSession(s, session)
+
+const createManualSessionDeathResetState = (
+  s: GameState,
+  session: ManualBattleSession,
+  reason: string,
+  battleContext: string,
+): Partial<GameState> =>
+  createHardcoreDeathResetState(
+    {
+      ...s,
+      manualBattleSession: {
+        ...session,
+        result: 'defeat',
+        finalOutcome: 'defeat',
+        playerDeathDetected: true,
+        hardcoreDeathHandled: true,
+        finalized: true,
+        defeatReason: 'player_dead',
+      },
+    },
+    reason,
+    battleContext,
+  )
+
 export const useGame = create<GameState>()(
   persist(
     (set, get) => ({
       hunter: initialHunter,
+      hardcoreState: createInitialHardcoreState(),
       quests: initialQuests,
       items: [],
       titles: [],
@@ -4927,6 +5161,19 @@ export const useGame = create<GameState>()(
         const gate = GATE_DEFINITIONS.find(g => g.id === activeGate.gateId)
         if (!gate) return
 
+        const isExam = activeGate.runState?.isPromotionExam
+        const finalSourceLog: CombatLog = {
+          ...combatLog,
+          result: combatLog.result === 'victory' ? 'victory' : (combatLog.result === 'defeat' ? 'defeat' : 'draw'),
+          source: isExam ? 'promotion_exam' : (activeGate.runState?.redGateState ? 'red_gate' : 'gate'),
+        }
+
+        // 하드코어 사망 감지 시 즉시 리셋 처리 후 반환 (이중 set 방지)
+        if (shouldHardcoreResetForCombat(s, finalSourceLog)) {
+          set(createHardcoreDeathResetState(s, 'player_death', gate.name))
+          return
+        }
+
         let addedSignals: string[] = []
         if (combatLog.result === 'victory') {
           const equippedItems = getEquippedItems(s.items, s.equipment)
@@ -5007,6 +5254,142 @@ export const useGame = create<GameState>()(
             get().checkJobAwakening()
           }, 0)
         }
+      },
+
+      resolveGateEchoBattle: (echoId, combatLog) => {
+        const s = get()
+        const hardcore = ensureHardcoreState(s.hardcoreState)
+        const echo = getActiveGateEchoes(hardcore).find(item => item.id === echoId)
+        if (!echo) return
+        const echoLog: CombatLog = { ...combatLog, source: 'echo' }
+        if (shouldHardcoreResetForCombat(s, echoLog)) {
+          set(createHardcoreDeathResetState(s, 'gate_echo_player_death', echo.name))
+          return
+        }
+        
+        let nextShadows = s.ownedShadows ?? []
+        const collapsed: OwnedShadow[] = []
+        if (shouldApplyShadowCollapse(echoLog.source) && echoLog.shadowCasualtyIds && echoLog.shadowCasualtyIds.length > 0) {
+          const casualtySet = new Set(echoLog.shadowCasualtyIds)
+          nextShadows = nextShadows.map(shadow => {
+            if (casualtySet.has(shadow.instanceId)) {
+              const updated = {
+                ...shadow,
+                collapsed: true,
+                status: 'collapsed' as const,
+                collapsedAt: Date.now(),
+                collapseReason: 'echo_battle',
+                restoreCost: shadowRestoreCost(shadow),
+              }
+              collapsed.push(updated)
+              return updated
+            }
+            return shadow
+          })
+        }
+
+        const isVictory = echoLog.result === 'victory'
+        const nextEchoes = hardcore.gateEchoes.map(item =>
+          item.id === echoId && isVictory
+            ? { ...item, status: 'cleared' as const, clearedAt: Date.now() }
+            : item
+        )
+        const nextThreat = isVictory
+          ? Math.max(0, hardcore.worldThreat - 8 - echo.strengthLevel * 3)
+          : Math.min(100, hardcore.worldThreat + 5)
+        const stillActive = nextEchoes.some(item => item.status === 'active')
+        const messages: SystemMessage[] = [{
+          id: uid(),
+          kind: isVictory ? 'quest' : 'info',
+          title: isVictory ? 'Gate Echo cleared' : 'Gate Echo remains',
+          lines: isVictory
+            ? [stillActive ? '남은 Echo를 먼저 정화해야 합니다.' : '주요 행동 제한이 해제되었습니다.']
+            : ['정비 후 Echo 정화에 다시 도전할 수 있습니다.'],
+          createdAt: todayISO(),
+        }]
+        if (collapsed.length > 0) {
+          messages.push({
+            id: uid(),
+            kind: 'shadow',
+            title: '그림자 붕괴',
+            lines: collapsed.map(shadow => `${shadow.name}: 복원 비용 정수 ${shadow.restoreCost}`),
+            createdAt: todayISO(),
+          })
+        }
+
+        set(applySecretProgressEvent(s, { context: 'gate', outcome: isVictory ? 'victory' : 'defeat' }, {
+          hardcoreState: {
+            ...hardcore,
+            gateEchoes: compactGateEchoHistory(nextEchoes),
+            worldThreat: nextThreat,
+          },
+          ownedShadows: nextShadows,
+          equippedShadowIds: getValidEquippedShadowIds(nextShadows, s.equippedShadowIds, s.hunter),
+          combatLogs: [echoLog, ...s.combatLogs].slice(0, 20),
+          messages: [...s.messages, ...messages],
+          manualBattleSession: undefined,
+        }))
+      },
+
+      finalizeHardcoreDeathFromSession: () => {
+        const s = get()
+        const session = s.manualBattleSession
+        if (session && shouldTriggerHardcoreDeathFromSession(s, session)) {
+          set(createManualSessionDeathResetState(s, session, 'player_death', session.gateName))
+        }
+      },
+
+      restoreShadowFromCollapse: (shadowId) => {
+        const s = get()
+        const shadow = (s.ownedShadows ?? []).find(sh => sh.instanceId === shadowId)
+        if (!shadow || !shadow.collapsed) return
+        const cost = shadow.restoreCost ?? shadowRestoreCost(shadow)
+        if ((s.shadowEssence ?? 0) < cost) {
+          set({
+            messages: [...s.messages, {
+              id: uid(),
+              kind: 'info',
+              title: '그림자 복원 실패',
+              lines: ['그림자 정수가 부족합니다.'],
+              createdAt: todayISO(),
+            }]
+          })
+          return
+        }
+        set({
+          shadowEssence: (s.shadowEssence ?? 0) - cost,
+          ownedShadows: (s.ownedShadows ?? []).map(sh =>
+            sh.instanceId === shadowId
+              ? { ...sh, collapsed: false, status: 'active' as const, collapsedAt: undefined, restoreCost: undefined }
+              : sh
+          ),
+          messages: [...s.messages, {
+            id: uid(),
+            kind: 'info',
+            title: '그림자 복원',
+            lines: [`[${shadow.name}] 그림자를 복원했습니다.`],
+            createdAt: todayISO(),
+          }]
+        })
+      },
+
+      crystallizeCollapsedShadow: (shadowId) => {
+        const s = get()
+        const shadow = (s.ownedShadows ?? []).find(sh => sh.instanceId === shadowId)
+        if (!shadow) return
+        const refund = Math.max(10, Math.floor((shadow.restoreCost ?? shadowRestoreCost(shadow)) * 0.25))
+        set({
+          shadowEssence: (s.shadowEssence ?? 0) + refund,
+          ownedShadows: (s.ownedShadows ?? []).filter(sh => sh.instanceId !== shadowId),
+          equippedShadowIds: (s.equippedShadowIds ?? []).filter(id => id !== shadowId),
+          messages: [...s.messages, {
+            id: uid(),
+            kind: 'info',
+            title: '그림자 정수화',
+            lines: [`[${shadow.name}] 그림자를 정수화하여 그림자 정수 +${refund}를 획득했습니다.`],
+            createdAt: todayISO(),
+          }]
+        })
       },
 
       startManualGateBattle: (gateId) => {
@@ -5113,6 +5496,9 @@ export const useGame = create<GameState>()(
             consumableUseCount: 0,
             logs: [],
             startedAt: todayISO(),
+            source: activeGate.runState?.isPromotionExam
+              ? 'promotion_exam'
+              : (activeGate.runState?.redGateState ? 'red_gate' : 'gate'),
           },
         })
       },
@@ -6425,7 +6811,7 @@ export const useGame = create<GameState>()(
             items: nextItems,
             infiniteTower: {
               ...tower,
-              currentFloor: 1,
+              currentFloor: floor,
               lastAttemptedFloor: floor,
               activeTowerBattle: {
                 id: `tower-manual-auto-${floor}-${Date.now()}`,
@@ -6568,7 +6954,8 @@ export const useGame = create<GameState>()(
 
       equipShadow: (shadowId) => set((s) => {
         const ownedShadows = s.ownedShadows ?? []
-        if (!ownedShadows.some(shadow => shadow.instanceId === shadowId)) return {}
+        const targetShadow = ownedShadows.find(shadow => shadow.instanceId === shadowId)
+        if (!targetShadow || targetShadow.collapsed) return {} // 붕괴된 그림자는 출전 불가 (12-44Z-FINAL)
         const equippedShadowIds = s.equippedShadowIds ?? []
         if (equippedShadowIds.includes(shadowId)) return {}
         const slotCount = getShadowSlotCount(s.hunter)
@@ -7770,7 +8157,7 @@ export const useGame = create<GameState>()(
           }, {
             infiniteTower: {
               ...tower,
-              currentFloor: 1,
+              currentFloor: floor,
               activeTowerBattle: {
                 ...activeBattle,
                 status: 'resolved',
@@ -8370,7 +8757,7 @@ export const useGame = create<GameState>()(
               items: nextItems,
               infiniteTower: {
                 ...tower,
-                currentFloor: 1,
+                currentFloor: floor,
                 lastAttemptedFloor: floor,
                 activeTowerBattle: {
                   id: `tower-manual-${floor}-${Date.now()}`,
@@ -8431,7 +8818,7 @@ export const useGame = create<GameState>()(
           manualBattleSession: undefined,
           infiniteTower: {
             ...tower,
-            currentFloor: 1,
+            currentFloor: session.towerFloor ?? tower.currentFloor ?? 1,
           },
         }
       }),
@@ -8517,6 +8904,15 @@ export const useGame = create<GameState>()(
 
       replaceAiCoachDailyPlan: (questsInput, targetDate) => set((s) => {
         // 1. 현재 quests에서 AI Coach가 생성한 1회성 daily plan 전체를 정리 (날짜 무관)
+        const oldAiDailies = s.quests.filter(q => {
+          const isAiOneTimeDaily = q.type === 'daily' && 
+                                   !q.recurring && 
+                                   (q.coachGenerated === true || 
+                                    q.coachPlanId !== undefined || 
+                                    q.coachReason !== undefined)
+          return isAiOneTimeDaily
+        })
+
         const remainingQuests = s.quests.filter(q => {
           const isAiOneTimeDaily = q.type === 'daily' && 
                                    !q.recurring && 
@@ -8525,6 +8921,23 @@ export const useGame = create<GameState>()(
                                     q.coachReason !== undefined)
           return !isAiOneTimeDaily
         })
+
+        // 1.5. 하드코어 모드일 때 미완료된 이전 AI 퀘스트들로부터 Gate Echo 생성 (12-44A)
+        let nextHardcoreState = s.hardcoreState
+        if (s.hardcoreState?.enabled) {
+          const uncompletedOldDailies = oldAiDailies.filter(q => getCooldownRemaining(q) === 0)
+          if (uncompletedOldDailies.length > 0) {
+            const yesterdayStr = s.dailyProgression?.dateKey || getDateKey(addDays(new Date(), -1))
+            const { hardcore: updatedHardcore } = generateGateEchoesForDate({
+              hardcore: s.hardcoreState,
+              quests: uncompletedOldDailies,
+              sourceDate: yesterdayStr,
+              targetDate,
+              now: Date.now()
+            })
+            nextHardcoreState = updatedHardcore
+          }
+        }
 
         // 2. 새 퀘스트들을 정규화하여 생성
         const CATEGORY_STAT_SUGGESTIONS: Record<Category, [StatKey, StatKey]> = {
@@ -8641,7 +9054,8 @@ export const useGame = create<GameState>()(
 
         return {
           quests: [...remainingQuests, ...newQuests],
-          aiCoachMemory: updatedMemory
+          aiCoachMemory: updatedMemory,
+          hardcoreState: nextHardcoreState
         }
       }),
 
@@ -9743,6 +10157,7 @@ export const useGame = create<GameState>()(
         skillStates: {},
         secretProgress: undefined,
         aiCoachCoreContext: undefined,
+        hardcoreState: createInitialHardcoreState(),
         initialized: true,
       }),
 
@@ -9813,6 +10228,7 @@ export const useGame = create<GameState>()(
             coachNotes: ['학습 데이터 부족 (며칠 더 사용하면 코치가 패턴을 학습합니다)']
           }
         },
+        hardcoreState: createInitialHardcoreState(),
         initialized: true,
       }),
 
@@ -9914,6 +10330,11 @@ export const useGame = create<GameState>()(
           // 보존 데이터 다시 주입
           aiCoachCoreContext: preservedAiCoachCoreContext,
           aiCoachMemory: preservedAiCoachMemory,
+          hardcoreState: s.hardcoreState ? {
+            ...s.hardcoreState,
+            gateEchoes: [],
+            worldThreat: 0,
+          } : createInitialHardcoreState(),
           initialized: true,
         })
       },
@@ -11086,6 +11507,9 @@ export const useGame = create<GameState>()(
         if (!persistedState.focusSession) {
           persistedState.focusSession = { history: [], totalFocusedMs: 0 }
         }
+
+        // Ensure hardcoreState exists and is structured properly (12-44Z-FINAL)
+        persistedState.hardcoreState = ensureHardcoreState(persistedState.hardcoreState)
 
         // 12-40F: dailyProgression 마이그레이션 가드 (기존 세이브 호환)
         if (!persistedState.dailyProgression) {

@@ -96,10 +96,17 @@ export type DirectBattlePanelOutcome = 'victory' | 'defeat' | 'cancelled'
 
 export interface DirectBattlePanelCompletePayload {
   outcome: DirectBattlePanelOutcome
+  finalOutcome?: DirectBattlePanelOutcome
+  defeatReason?: 'player_dead' | 'party_wipe' | 'abandon' | 'unknown'
+  playerDeathDetected?: boolean
+  battleStarted?: boolean
+  actionCount?: number
+  finalized?: boolean
   encounterKey: string
   state: DirectBattleState
   logs: DirectBattleLogEntry[]
   rounds: number
+  source?: string
 }
 
 export interface DirectBattlePreviewPanelProps {
@@ -121,6 +128,10 @@ export interface DirectBattlePreviewPanelProps {
   onBattleComplete?: (payload: DirectBattlePanelCompletePayload) => void
   pressureSnapshot?: any
   isRedGate?: boolean
+  customEnemyUnits?: BattleUnit[]
+  customBattleId?: string
+  maxRoundsOverride?: number
+  source?: string
 }
 
 const enemyTargetTypes = new Set<BattleTargetType>([
@@ -165,6 +176,53 @@ const isAlive = (unit: BattleUnit): boolean =>
 
 const livingUnits = (state: DirectBattleState, team?: BattleUnit['team']): BattleUnit[] =>
   state.units.filter(unit => isAlive(unit) && (!team || unit.team === team))
+
+const didHunterDieInDirectBattleState = (state: DirectBattleState): boolean =>
+  state.units.some(unit => unit.team === 'player' && unit.unitType === 'hunter' && unit.stats.currentHp <= 0)
+
+const countDirectBattleActions = (state: DirectBattleState): number =>
+  state.logs.filter(log =>
+    log.eventType === 'action' ||
+    log.eventType === 'damage' ||
+    log.eventType === 'heal' ||
+    log.eventType === 'status' ||
+    log.eventType === 'reaction' ||
+    log.eventType === 'fizzle'
+  ).length
+
+const hasDirectBattleProgressed = (state: DirectBattleState): boolean =>
+  state.round > 0 && countDirectBattleActions(state) > 0
+
+const createBattleCompletePayload = (
+  encounterKey: string,
+  state: DirectBattleState,
+  logs: DirectBattleLogEntry[],
+  rounds: number,
+  outcome: DirectBattlePanelOutcome = getPanelOutcome(state),
+): DirectBattlePanelCompletePayload => {
+  const actionCount = countDirectBattleActions(state)
+  const battleStarted = state.round > 0 && actionCount > 0
+  const playerDeathDetected = battleStarted && outcome === 'defeat' && didHunterDieInDirectBattleState(state)
+  return {
+    outcome,
+    finalOutcome: outcome,
+    defeatReason: outcome === 'cancelled'
+      ? 'abandon'
+      : playerDeathDetected
+        ? 'player_dead'
+        : outcome === 'defeat'
+          ? 'unknown'
+          : undefined,
+    playerDeathDetected,
+    battleStarted,
+    actionCount,
+    finalized: outcome !== 'cancelled',
+    encounterKey,
+    state,
+    logs,
+    rounds,
+  }
+}
 
 const findUnit = (state: DirectBattleState, unitId?: string): BattleUnit | undefined =>
   unitId ? state.units.find(unit => unit.unitId === unitId) : undefined
@@ -686,8 +744,13 @@ export function DirectBattlePreviewPanel({
   onBattleComplete,
   pressureSnapshot,
   isRedGate,
+  customEnemyUnits,
+  customBattleId,
+  maxRoundsOverride,
+  source,
 }: DirectBattlePreviewPanelProps) {
   const autoStartedRef = useRef(false)
+  const completionSentRef = useRef(false)
   const revealApplyTimersRef = useRef<number[]>([])
   const safeRecommendedKey = DIRECT_BATTLE_MOCK_ENCOUNTERS.some(encounter => encounter.encounterKey === recommendedEncounterKey)
     ? recommendedEncounterKey
@@ -701,8 +764,10 @@ export function DirectBattlePreviewPanel({
   const selectedEncounter = DIRECT_BATTLE_MOCK_ENCOUNTERS.find(encounter => encounter.encounterKey === encounterKey)
     ?? DIRECT_BATTLE_MOCK_ENCOUNTERS[0]
   const previewShadows = equippedShadows.slice(0, 3)
-  const canStartBattle = previewShadows.length > 0
+  const canStartBattle = true
   const isRevealingRound = Boolean(roundReveal)
+  const previewIsPlayerDeath = preview ? didHunterDieInDirectBattleState(preview.state) : false
+  const previewIsTerminal = preview ? preview.state.isFinished || previewIsPlayerDeath : false
 
   // Memoized 2.5D visual action steps mapping
   const currentRevealStep = roundReveal && roundReveal.steps[roundReveal.index - 1]
@@ -757,6 +822,7 @@ export function DirectBattlePreviewPanel({
     setPreview(undefined)
     setRoundReveal(undefined)
     autoStartedRef.current = false
+    completionSentRef.current = false
   }, [safeRecommendedKey])
 
   useEffect(() => () => {
@@ -766,6 +832,7 @@ export function DirectBattlePreviewPanel({
 
   const startBattle = () => {
     setRoundReveal(undefined)
+    completionSentRef.current = false
     if (!canStartBattle) {
       setPreview(undefined)
       return
@@ -783,11 +850,13 @@ export function DirectBattlePreviewPanel({
     const shadowBuilds = buildShadowBattleUnits(previewShadows, shadowDefinitions, {
       unitIdPrefix: 'direct-preview-shadow',
     })
-    const enemyBuild = buildDirectBattleEncounterParty(encounterKey, enemyBaseLevel, pressureSnapshot, isRedGate)
+    const enemyBuild = customEnemyUnits
+      ? { units: customEnemyUnits, warnings: [] as string[] }
+      : buildDirectBattleEncounterParty(encounterKey, enemyBaseLevel, pressureSnapshot, isRedGate)
     const units = [hunterBuild.unit, ...shadowBuilds.map(build => build.unit), ...enemyBuild.units]
     const state = createDirectBattleState(units, {
-      battleId: `direct-manual-preview-${encounterKey}`,
-      maxRounds: Math.max(6, selectedEncounter.maxRounds),
+      battleId: customBattleId ?? `direct-manual-preview-${encounterKey}`,
+      maxRounds: maxRoundsOverride ?? Math.max(6, selectedEncounter.maxRounds),
     })
     const buildWarnings = [
       ...hunterBuild.warnings,
@@ -803,6 +872,23 @@ export function DirectBattlePreviewPanel({
       logs: state.logs.slice(-10),
     })
     setOverlayOpen(true)
+  }
+
+  const emitBattleCompleteOnce = (payload: DirectBattlePanelCompletePayload) => {
+    if (completionSentRef.current) return
+    completionSentRef.current = true
+    const normalized = createBattleCompletePayload(
+      payload.encounterKey,
+      payload.state,
+      payload.logs,
+      payload.rounds,
+      payload.outcome,
+    )
+    onBattleComplete?.({
+      ...normalized,
+      source: source || normalized.source,
+      logs: formatBattleLogsKo(normalized.logs, normalized.state),
+    })
   }
 
   useEffect(() => {
@@ -825,10 +911,15 @@ export function DirectBattlePreviewPanel({
       : current)
     setRoundReveal(undefined)
     if (reveal.pendingCompletion) {
-      onBattleComplete?.({
-        ...reveal.pendingCompletion,
-        logs: formatBattleLogsKo(reveal.pendingCompletion.logs, reveal.pendingCompletion.state),
-      })
+      setPreview(current => current
+        ? {
+            ...current,
+            state: reveal.pendingState,
+            selections: reveal.pendingSelections,
+            issues: reveal.pendingIssues,
+            logs: formatBattleLogsKo(reveal.pendingState.logs.slice(-10), reveal.pendingState),
+          }
+        : current)
     }
   }
 
@@ -930,19 +1021,18 @@ export function DirectBattlePreviewPanel({
     const pendingSelections = normalizeSelections(nextState, usedSelectionMap)
     const pendingIssues = validatePreviewState(nextState)
     const pendingCompletion = !preview.state.isFinished && nextState.isFinished
-      ? {
-          outcome: getPanelOutcome(nextState),
-          encounterKey: preview.encounterKey,
-          state: nextState,
-          logs: nextState.logs,
-          rounds: nextState.round,
-        } satisfies DirectBattlePanelCompletePayload
+      ? createBattleCompletePayload(
+          preview.encounterKey,
+          nextState,
+          nextState.logs,
+          nextState.round,
+          getPanelOutcome(nextState),
+        )
       : undefined
     const revealLogs = result.logs.length > 0
       ? result.logs
       : nextState.logs.slice(preview.state.logs.length)
     const revealSteps = buildRevealSteps(revealLogs, nextState)
-
     setPreview({
       ...preview,
       state: prepareRevealDisplayState(preview.state, nextState),
@@ -962,15 +1052,30 @@ export function DirectBattlePreviewPanel({
   const cancelBattle = () => {
     if (isRevealingRound) return
     if (preview) {
-      onBattleComplete?.({
-        outcome: 'cancelled',
-        encounterKey: preview.encounterKey,
-        state: preview.state,
-        logs: preview.state.logs,
-        rounds: preview.state.round,
-      })
+      const shouldFinalize = preview.state.isFinished && hasDirectBattleProgressed(preview.state)
+      emitBattleCompleteOnce(createBattleCompletePayload(
+        preview.encounterKey,
+        preview.state,
+        preview.state.logs,
+        preview.state.round,
+        shouldFinalize ? getPanelOutcome(preview.state) : 'cancelled',
+      ))
     }
     setPreview(undefined)
+    setOverlayOpen(false)
+  }
+
+  const closeOverlay = () => {
+    if (preview?.state.isFinished && hasDirectBattleProgressed(preview.state)) {
+      emitBattleCompleteOnce(createBattleCompletePayload(
+        preview.encounterKey,
+        preview.state,
+        preview.state.logs,
+        preview.state.round,
+        getPanelOutcome(preview.state),
+      ))
+      setPreview(undefined)
+    }
     setOverlayOpen(false)
   }
 
@@ -1232,7 +1337,28 @@ export function DirectBattlePreviewPanel({
         )}
 
         {/* 2. 전투 진행 중 최소화 요약 카드 */}
-        {preview && (
+        {preview && previewIsTerminal && !overlayOpen && (
+          <div className="space-y-3">
+            <div className="rounded border border-rose-400/25 bg-rose-400/10 px-3 py-3 text-xs text-rose-100">
+              <div className="font-bold">
+                {previewIsPlayerDeath ? '헌터 사망이 확정되었습니다.' : '전투 기록이 종료되었습니다.'}
+              </div>
+              <div className="mt-1 text-rose-100/75">
+                {previewIsPlayerDeath
+                  ? '하드코어 정산이 진행 중입니다. 사망 전 백업을 저장한 뒤 진행 기록이 초기화됩니다.'
+                  : '종료된 전투는 다시 진행하거나 포기할 수 없습니다.'}
+              </div>
+            </div>
+            {preview.logs.length > 0 && (
+              <div className="rounded border border-white/5 bg-black/25 px-2.5 py-1.5 text-[10px] sm:text-[11px] text-white/55 truncate">
+                <span className="font-bold text-cyan-300 shrink-0 mr-1.5">LATEST FEED:</span>
+                {preview.logs[preview.logs.length - 1].message}
+              </div>
+            )}
+          </div>
+        )}
+
+        {preview && !previewIsTerminal && (
           <div className="space-y-3">
             <div className="flex flex-col gap-2.5 sm:flex-row sm:items-center sm:justify-between border-b border-cyan-400/15 pb-2">
               <div>
@@ -1341,7 +1467,7 @@ export function DirectBattlePreviewPanel({
           executeRound={executeRound}
           renderActionControls={renderActionControls}
           cancelBattle={cancelBattle}
-          onClose={() => setOverlayOpen(false)}
+          onClose={closeOverlay}
           showDetailed={showDetailed}
           setShowDetailed={setShowDetailed}
           renderUnit={renderUnit}

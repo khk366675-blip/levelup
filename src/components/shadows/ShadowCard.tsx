@@ -2,9 +2,6 @@ import clsx from 'clsx'
 import { Lock, Sparkles, Star, Swords, X } from 'lucide-react'
 import { motion } from 'framer-motion'
 import {
-  MAX_SHADOW_ENHANCEMENT_LEVEL,
-  SHADOW_DECOMPOSE_ESSENCE,
-  SHADOW_INNATE_GRADE_LABEL,
   SHADOW_RANK_LABEL,
   SHADOW_RARITY_LABEL,
   SHADOW_ROLE_LABEL,
@@ -24,18 +21,13 @@ type ShadowCardProps = {
   shadow: OwnedShadow
   equipped: boolean
   canEquip: boolean
-  materialCount: number
   shadowEssence: number
   featured?: boolean
   selected?: boolean
   onSelect?: () => void
   onEquip: () => void
   onUnequip: () => void
-  onAbsorb: () => void
-  onDecompose: () => void
-  onToggleLock: () => void
-  onToggleFavorite: () => void
-  onEvolve: () => void
+  onRestoreCollapsed?: () => void
 }
 
 const rarityFrame: Record<OwnedShadow['rarity'], string> = {
@@ -71,18 +63,13 @@ export function ShadowCard({
   shadow,
   equipped,
   canEquip,
-  materialCount,
   shadowEssence,
   featured = false,
   selected = false,
   onSelect,
   onEquip,
   onUnequip,
-  onAbsorb,
-  onDecompose,
-  onToggleLock,
-  onToggleFavorite,
-  onEvolve,
+  onRestoreCollapsed,
 }: ShadowCardProps) {
   const effects = getShadowEffects(shadow).map(formatShadowEffect)
   const level = shadow.level ?? 1
@@ -92,6 +79,8 @@ export function ShadowCard({
   const evolutionCheck = canEvolveShadow(shadow, shadowEssence)
   const enhancement = shadow.enhancementLevel ?? 0
   const named = Boolean(shadow.isNamed || shadow.isGateNamed || shadow.isAchievementNamed)
+  const collapsed = Boolean(shadow.collapsed || shadow.status === 'collapsed')
+  const restoreCost = shadow.restoreCost ?? 0
   const combatProfile = getShadowCombatProfile(shadow)
   const unitProfile = getShadowCombatUnitProfile(shadow)
   const combatBadges = [
@@ -106,10 +95,11 @@ export function ShadowCard({
       animate={{ opacity: 1, y: 0 }}
       whileHover={onSelect ? { y: -4, scale: 1.015 } : undefined}
       transition={{ duration: 0.22, ease: 'easeOut' }}
+      style={collapsed ? { filter: 'grayscale(0.85) brightness(0.7) sepia(0.15)' } : undefined}
       className={clsx(
         'panel corner-bracket overflow-hidden border p-3 card-premium-shine group transition-all duration-300',
         rarityFrame[shadow.rarity],
-        equipped ? 'shadow-deployed-glow ring-2 ring-cyan-300/40' : 'hover:border-cyan-400/40 hover:bg-white/[0.015]',
+        collapsed ? 'border-rose-500/40 bg-rose-950/20' : equipped ? 'shadow-deployed-glow ring-2 ring-cyan-300/40' : 'hover:border-cyan-400/40 hover:bg-white/[0.015]',
         selected && 'ring-2 ring-amber-300/80 shadow-glow-lg',
         shadow.innateGrade === 'S' && 'grade-aura-s',
         shadow.innateGrade === 'A' && 'grade-aura-a',
@@ -122,6 +112,18 @@ export function ShadowCard({
       onClick={onSelect}
     >
       <div className="br" />
+      {collapsed && (
+        <div className="mb-2 rounded border border-rose-300/30 bg-rose-400/10 px-2 py-1.5 text-xs text-rose-100 flex items-center justify-between">
+          <div>
+            <div className="font-black text-rose-300 flex items-center gap-1">
+              <span>⚠️ 붕괴 상태 (Fractured)</span>
+            </div>
+            <div className="mt-0.5 text-[10px] text-rose-200/80">복원 비용: 정수 {restoreCost}개</div>
+          </div>
+          <span className="text-[9px] border border-rose-400/40 bg-rose-950/50 px-1.5 py-0.5 rounded text-rose-200">출전 불가</span>
+        </div>
+      )}
+      
       <div className={clsx('grid gap-3', featured ? 'md:grid-cols-[190px_1fr]' : 'grid-cols-1')}>
         <ShadowPortrait
           shadow={shadow}
@@ -209,98 +211,37 @@ export function ShadowCard({
             </div>
           </div>
 
-          {shadow.traits.length > 0 && (
-            <div className="mt-2 text-[11px] text-purple-100/80">
-              특성: {shadow.traits.map(trait => trait.name).join(' / ')}
-            </div>
-          )}
-          <div className={clsx('mt-2 text-[11px] leading-relaxed text-cyan-100/70', featured ? '' : 'line-clamp-2')}>
+          <div className="mt-2 text-[11px] leading-relaxed text-cyan-100/70 line-clamp-2">
             {effects.join(' / ')}
           </div>
-          <div className="mt-2 text-[10px] text-white/35 system-text">
-            출처: {sourceText(shadow)}
-          </div>
-          <div className="mt-1 flex flex-wrap gap-2 text-[10px] text-white/40">
-            <span>강화 {enhancement}/{MAX_SHADOW_ENHANCEMENT_LEVEL}</span>
-            <span>흡수 {shadow.absorbedCount ?? 0}회</span>
+          
+          <div className="mt-1.5 flex flex-wrap gap-2 text-[9px] text-white/45">
             <span>태생 희귀도 {SHADOW_RARITY_LABEL[shadow.birthRarity ?? shadow.rarity]}</span>
-            <span>{SHADOW_INNATE_GRADE_LABEL[shadow.innateGrade ?? 'B']} 태생</span>
-            {(shadow.evolutionStage ?? 0) > 0 && <span className="text-emerald-200/70">진화 {shadow.evolutionStage}단계</span>}
+            <span>강화 {enhancement}단계</span>
+            <span>흡수 {shadow.absorbedCount ?? 0}회</span>
+            {(shadow.evolutionStage ?? 0) > 0 && <span className="text-emerald-300">진화 {shadow.evolutionStage}단계</span>}
           </div>
-          {evolutionCheck.targetDefinition && (
-            <div className="mt-1 text-[10px] text-white/40">
-              진화: {shadow.name} → {evolutionCheck.targetDefinition.name} (정수 {evolutionCheck.cost}개)
-              {!evolutionCheck.canEvolve && evolutionCheck.reason && (
-                <span className="ml-1 text-white/30">/ {evolutionCheck.reason}</span>
-              )}
-            </div>
-          )}
         </div>
       </div>
 
-      <div className="mt-3 flex flex-col gap-2">
-        {equipped ? (
-          <button type="button" onClick={(event) => { event.stopPropagation(); onUnequip() }} className="btn w-full border-rose-400/25 bg-rose-400/10 text-xs text-rose-100">
+      <div className="mt-3">
+        {collapsed ? (
+          <button
+            type="button"
+            onClick={(event) => { event.stopPropagation(); onRestoreCollapsed?.() }}
+            disabled={!onRestoreCollapsed || shadowEssence < restoreCost}
+            className="btn btn-primary w-full text-xs disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            복원하기 (정수 {restoreCost} 소모)
+          </button>
+        ) : equipped ? (
+          <button type="button" onClick={(event) => { event.stopPropagation(); onUnequip() }} className="btn w-full border-rose-400/25 bg-rose-400/10 text-xs text-rose-100 hover:bg-rose-400/20">
             <X className="h-3 w-3" />
             해제
           </button>
         ) : (
           <button type="button" onClick={(event) => { event.stopPropagation(); onEquip() }} disabled={!canEquip} className="btn btn-primary w-full text-xs disabled:cursor-not-allowed disabled:opacity-50">
             출전
-          </button>
-        )}
-        <div className="grid grid-cols-2 gap-2">
-          <button
-            type="button"
-            onClick={(event) => { event.stopPropagation(); onAbsorb() }}
-            disabled={materialCount === 0 || enhancement >= MAX_SHADOW_ENHANCEMENT_LEVEL || shadow.isAchievementNamed}
-            className="btn border-amber-400/25 bg-amber-400/10 px-2 text-[10px] text-amber-100 disabled:cursor-not-allowed disabled:opacity-40"
-            title={shadow.isAchievementNamed ? '성취 네임드는 재료로 사용할 수 없습니다.' : materialCount === 0 ? '재료 그림자가 없습니다.' : enhancement >= MAX_SHADOW_ENHANCEMENT_LEVEL ? '최대 강화 수치에 도달했습니다.' : `보유 재료: ${materialCount}개`}
-          >
-            흡수 ({materialCount})
-          </button>
-          <button
-            type="button"
-            onClick={(event) => { event.stopPropagation(); onDecompose() }}
-            disabled={equipped || shadow.isAchievementNamed || shadow.isLocked}
-            className="btn border-rose-400/25 bg-rose-400/10 px-2 text-[10px] text-rose-100 disabled:cursor-not-allowed disabled:opacity-40"
-            title={shadow.isAchievementNamed ? '성취 네임드는 분해할 수 없습니다.' : shadow.isLocked ? '잠금 상태입니다.' : equipped ? '출전 중입니다.' : `그림자 정수 +${SHADOW_DECOMPOSE_ESSENCE[shadow.rarity] ?? 1} 획득`}
-          >
-            분해 +{SHADOW_DECOMPOSE_ESSENCE[shadow.rarity] ?? 1}
-          </button>
-        </div>
-        <div className="grid grid-cols-2 gap-2">
-          <button
-            type="button"
-            onClick={(event) => { event.stopPropagation(); onToggleLock() }}
-            className={clsx('btn px-2 text-[10px]', shadow.isLocked ? 'border-rose-400/35 bg-rose-400/15 text-rose-100' : 'border-white/10 bg-ink-900/45 text-white/55')}
-            title={shadow.isLocked ? '잠금 해제' : '잠금 설정 (분해 및 재료 사용 방지)'}
-          >
-            <Lock className="h-2.5 w-2.5" />
-            {shadow.isLocked ? '잠금 해제' : '잠금'}
-          </button>
-          <button
-            type="button"
-            onClick={(event) => { event.stopPropagation(); onToggleFavorite() }}
-            className={clsx('btn px-2 text-[10px]', shadow.isFavorite ? 'border-yellow-400/35 bg-yellow-400/15 text-yellow-100' : 'border-white/10 bg-ink-900/45 text-white/55')}
-            title={shadow.isFavorite ? '즐겨찾기 해제' : '즐겨찾기 등록'}
-          >
-            <Star className="h-2.5 w-2.5" />
-            {shadow.isFavorite ? '즐겨찾기 해제' : '즐겨찾기'}
-          </button>
-        </div>
-        {evolutionCheck.targetDefinition && (
-          <button
-            type="button"
-            onClick={(event) => { event.stopPropagation(); onEvolve() }}
-            disabled={!evolutionCheck.canEvolve}
-            className={clsx(
-              'btn w-full text-[10px] disabled:cursor-not-allowed disabled:opacity-40',
-              evolutionCheck.canEvolve ? 'border-emerald-400/35 bg-emerald-400/15 text-emerald-100' : 'border-white/10 bg-ink-900/45 text-white/40',
-            )}
-            title={evolutionCheck.reason ?? `${evolutionCheck.targetDefinition.name}(으)로 진화`}
-          >
-            {evolutionCheck.canEvolve ? `진화 → ${evolutionCheck.targetDefinition.name}` : `진화 대기 중 · ${evolutionCheck.reason}`}
           </button>
         )}
       </div>

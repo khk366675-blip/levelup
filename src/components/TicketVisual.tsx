@@ -14,32 +14,37 @@ export function TicketVisual({ visual }: TicketVisualProps) {
   return (
     <div
       className={clsx(
-        'relative mx-auto aspect-[3/4] w-full max-w-[116px] overflow-hidden rounded-md border bg-slate-950/[0.92]',
-        'border-cyan-100/14 shadow-[inset_0_0_24px_rgba(0,0,0,0.58),0_12px_26px_rgba(0,0,0,0.28)]',
-        isExchange && 'border-emerald-200/18',
+        'relative mx-auto aspect-[3/4] w-full max-w-[108px] flex items-center justify-center',
       )}
     >
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_40%,rgba(34,211,238,0.22),rgba(88,28,135,0.12)_42%,rgba(2,6,23,0.94)_78%)]" />
-      <div className={clsx('absolute inset-2 rounded bg-black/28 blur-md', isExchange ? 'shadow-[0_0_36px_rgba(16,185,129,0.2)]' : 'shadow-[0_0_34px_rgba(34,211,238,0.18)]')} />
       {asset && !failed ? (
-        <div className="absolute inset-0 grid place-items-center overflow-hidden rounded-[5px] [mask-image:linear-gradient(to_bottom,transparent_0%,black_7%,black_93%,transparent_100%)]">
+        <div className="relative w-full h-full flex items-center justify-center">
+          {/* 뒷배경 소프트 네온 오라 */}
+          <div className={clsx(
+            'absolute inset-0 rounded-full blur-2xl opacity-40 mix-blend-screen scale-[1.2] pointer-events-none transition-all duration-300 group-hover:opacity-60 group-hover:scale-[1.3]',
+            isExchange ? 'bg-emerald-500/50 shadow-[0_0_40px_rgba(16,185,129,0.3)]' : 'bg-cyan-500/50 shadow-[0_0_40px_rgba(34,211,238,0.3)]'
+          )} />
           <img
             src={asset}
             alt=""
             className={clsx(
-              'relative z-10 h-full w-full scale-[1.08] object-contain p-0.5 opacity-[0.96]',
-              '[filter:brightness(0.9)_contrast(1.12)_saturate(1.08)_drop-shadow(0_0_14px_rgba(34,211,238,0.18))]',
-              isExchange && 'scale-[1.12] [filter:brightness(0.88)_contrast(1.14)_saturate(1.08)_drop-shadow(0_0_16px_rgba(16,185,129,0.2))]',
+              'relative z-10 w-full h-full object-contain select-none transition-transform duration-300 group-hover:scale-110 drop-shadow-[0_12px_20px_rgba(0,0,0,0.85)]',
+              '[filter:brightness(1.05)_contrast(1.05)_saturate(1.05)]',
+              isExchange && '[filter:brightness(1.05)_contrast(1.05)_saturate(1.05)]',
             )}
             onError={() => setFailed(true)}
           />
         </div>
       ) : (
-        <FallbackTicketArt visual={visual} />
+        <div className="relative mx-auto aspect-[3/4] w-full max-w-[116px] overflow-hidden rounded-md border bg-slate-950/[0.92] border-cyan-100/14 shadow-[inset_0_0_24px_rgba(0,0,0,0.58),0_12px_26px_rgba(0,0,0,0.28)]">
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_40%,rgba(34,211,238,0.22),rgba(88,28,135,0.12)_42%,rgba(2,6,23,0.94)_78%)]" />
+          <div className={clsx('absolute inset-2 rounded bg-black/28 blur-md', isExchange ? 'shadow-[0_0_36px_rgba(16,185,129,0.2)]' : 'shadow-[0_0_34px_rgba(34,211,238,0.18)]')} />
+          <FallbackTicketArt visual={visual} />
+          <div className="pointer-events-none absolute inset-0 rounded-md shadow-[inset_0_0_30px_rgba(2,6,23,0.72),inset_0_0_0_1px_rgba(255,255,255,0.04)]" />
+          <div className="pointer-events-none absolute inset-x-3 top-2 h-px bg-gradient-to-r from-transparent via-cyan-100/24 to-transparent" />
+          <div className="pointer-events-none absolute inset-x-3 bottom-2 h-px bg-gradient-to-r from-transparent via-slate-200/16 to-transparent" />
+        </div>
       )}
-      <div className="pointer-events-none absolute inset-0 rounded-md shadow-[inset_0_0_30px_rgba(2,6,23,0.72),inset_0_0_0_1px_rgba(255,255,255,0.04)]" />
-      <div className="pointer-events-none absolute inset-x-3 top-2 h-px bg-gradient-to-r from-transparent via-cyan-100/24 to-transparent" />
-      <div className="pointer-events-none absolute inset-x-3 bottom-2 h-px bg-gradient-to-r from-transparent via-slate-200/16 to-transparent" />
     </div>
   )
 }

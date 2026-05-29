@@ -68,6 +68,19 @@ import {
 import { getSecretVisibleFragments } from '../lib/secrets'
 import { pickDirectGateEncounterKey } from '../lib/directBattleEncounters'
 import { DailyProgressionPanel } from './DailyProgressionPanel'
+import {
+  buildGateEchoEnemyUnits,
+  canUseMajorAction,
+  gateEchoCategoryLabel,
+  getActiveGateEchoes,
+  getGateEchoDangerLabel,
+} from '../lib/gateEchoes'
+import {
+  isManualBattleSessionPlayerDeath,
+  isManualBattleSessionTerminal,
+  shouldHideBattleContinueControls,
+} from '../lib/manualBattleSessionGuards'
+import type { GateEchoState } from '../lib/types'
 
 const GATE_ENTRY_COST = 20
 
@@ -166,6 +179,12 @@ const buildDirectGateCombatLog = (
 ): CombatLog => {
   const playerUnits = payload.state.units.filter(unit => unit.team === 'player')
   const hunterUnit = playerUnits.find(unit => unit.unitType === 'hunter') ?? playerUnits[0]
+  const hunterDied = didDirectBattleHunterDie(payload)
+  const resolvedOutcome = hunterDied ? 'defeat' : payload.outcome
+  const resolvedDefeatReason = hunterDied ? 'player_dead' : payload.defeatReason
+  const resolvedPlayerDeathDetected = hunterDied || payload.playerDeathDetected
+  const resolvedFinalOutcome = hunterDied ? 'defeat' : payload.finalOutcome
+
   const turns: BattleTurn[] = payload.logs.length > 0
     ? payload.logs.map((_, index) => directLogToGateTurn(payload, index))
     : [{
@@ -177,21 +196,85 @@ const buildDirectGateCombatLog = (
         targetId: 'direct-battle-result',
         targetName: gate.name,
         outcome: 'hit',
-        message: payload.outcome === 'victory' ? '직접 조작 게이트 전투에서 승리했습니다.' : '직접 조작 게이트 전투에서 패배했습니다.',
+        message: resolvedOutcome === 'victory' ? '직접 조작 게이트 전투에서 승리했습니다.' : '직접 조작 게이트 전투에서 패배했습니다.',
       }]
 
   return {
     battleId: `direct-gate-${activeGate.instanceId}-${Date.now()}`,
     gateInstanceId: activeGate.instanceId,
-    result: payload.outcome === 'victory' ? 'victory' : 'defeat',
+    result: resolvedOutcome === 'victory' ? 'victory' : 'defeat',
     turns,
     totalTurns: Math.max(1, payload.rounds),
     playerHpRemaining: Math.max(0, Math.round(hunterUnit?.stats.currentHp ?? 0)),
     rewards: [],
     penaltyApplied: undefined,
     totalWaves: gate.monsterIds.length,
-    clearedWaves: payload.outcome === 'victory' ? gate.monsterIds.length : 0,
+    clearedWaves: resolvedOutcome === 'victory' ? gate.monsterIds.length : 0,
     source: 'gate',
+    finalOutcome: resolvedFinalOutcome,
+    defeatReason: resolvedDefeatReason,
+    playerDeathDetected: resolvedPlayerDeathDetected,
+    battleStarted: payload.battleStarted,
+    actionCount: payload.actionCount,
+    finalized: payload.finalized || hunterDied,
+    shadowCasualtyIds: playerUnits
+      .filter(unit => unit.unitType === 'shadow' && unit.stats.currentHp <= 0)
+      .map(unit => unit.sourceId),
+  }
+}
+
+const didDirectBattleHunterDie = (payload: DirectBattlePanelCompletePayload): boolean =>
+  payload.state.units.some(unit => unit.team === 'player' && unit.unitType === 'hunter' && unit.stats.currentHp <= 0)
+
+const buildDirectEchoCombatLog = (
+  payload: DirectBattlePanelCompletePayload,
+  echo: GateEchoState,
+): CombatLog => {
+  const playerUnits = payload.state.units.filter(unit => unit.team === 'player')
+  const hunterUnit = playerUnits.find(unit => unit.unitType === 'hunter') ?? playerUnits[0]
+  const hunterDied = didDirectBattleHunterDie(payload)
+  const resolvedOutcome = hunterDied ? 'defeat' : payload.outcome
+  const resolvedDefeatReason = hunterDied ? 'player_dead' : payload.defeatReason
+  const resolvedPlayerDeathDetected = hunterDied || payload.playerDeathDetected
+  const resolvedFinalOutcome = hunterDied ? 'defeat' : payload.finalOutcome
+
+  const turns: BattleTurn[] = payload.logs.length > 0
+    ? payload.logs.map((_, index) => directLogToGateTurn(payload, index))
+    : [{
+        turnNumber: 1,
+        actorType: 'player',
+        actorId: hunterUnit?.unitId ?? 'gate-echo-battle',
+        actorName: hunterUnit?.displayName ?? 'Hunter',
+        targetType: 'monster',
+        targetId: 'gate-echo-result',
+        targetName: echo.name,
+        outcome: 'hit',
+        message: resolvedOutcome === 'victory'
+          ? 'Gate Echo 전투에서 잔향을 정화했습니다.'
+          : 'Gate Echo 전투에서 쓰러졌습니다.',
+      }]
+
+  return {
+    battleId: `direct-echo-${echo.id}-${Date.now()}`,
+    gateInstanceId: echo.id,
+    result: resolvedOutcome === 'victory' ? 'victory' : 'defeat',
+    turns,
+    totalTurns: Math.max(1, payload.rounds),
+    playerHpRemaining: Math.max(0, Math.round(hunterUnit?.stats.currentHp ?? 0)),
+    rewards: [],
+    penaltyApplied: undefined,
+    totalWaves: 1,
+    clearedWaves: resolvedOutcome === 'victory' ? 1 : 0,
+    source: 'echo',
+    finalOutcome: resolvedFinalOutcome,
+    defeatReason: resolvedDefeatReason,
+    playerDeathDetected: resolvedPlayerDeathDetected,
+    battleStarted: payload.battleStarted,
+    actionCount: payload.actionCount,
+    finalized: payload.finalized || hunterDied,
+    shadowCasualtyIds: playerUnits
+      .filter(unit => unit.unitType === 'shadow' && unit.stats.currentHp <= 0)
+      .map(unit => unit.sourceId),
   }
 }
 
@@ -243,6 +326,67 @@ function StatPill({ label, value }: { label: string; value: string | number }) {
     <div className="bg-ink-900/50 border border-white/10 rounded-md px-1 py-1.5 sm:px-2.5 sm:py-2 text-center sm:text-left min-w-0">
       <div className="text-[8px] sm:text-[9px] system-text text-white/35 truncate">{label}</div>
       <div className="text-xs sm:text-sm font-bold text-white/80 truncate">{value}</div>
+    </div>
+  )
+}
+
+function GateEchoPanel({ echoes, onStart }: { echoes: GateEchoState[]; onStart: (echoId: string) => void }) {
+  if (echoes.length === 0) {
+    return (
+      <div className="rounded-md border border-emerald-400/20 bg-emerald-400/10 px-3 py-2 text-xs text-emerald-100">
+        하드코어 규칙 활성: 사망 시 진행 리셋, 그림자 붕괴 활성.
+      </div>
+    )
+  }
+
+  return (
+    <div className="panel corner-bracket border-rose-400/35 bg-rose-950/25 p-4">
+      <div className="br" />
+      <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <div className="flex items-center gap-2 text-rose-200">
+            <Skull className="h-5 w-5" />
+            <h3 className="text-lg font-black">Gate Echo 발생</h3>
+          </div>
+          <p className="mt-1 text-xs leading-relaxed text-white/65">
+            미완료 퀘스트의 잔향이 오늘의 게이트를 막고 있습니다. 먼저 Echo를 정화해야 합니다.
+          </p>
+        </div>
+        <span className="rounded border border-amber-300/30 bg-amber-300/10 px-2 py-1 text-[10px] font-bold text-amber-100">
+          하드코어 규칙 활성
+        </span>
+      </div>
+      <div className="grid gap-2 md:grid-cols-2">
+        {echoes.map(echo => (
+          <div key={echo.id} className="rounded-md border border-white/10 bg-ink-950/45 p-3">
+            <div className="mb-2 flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-sm font-black text-white">{echo.name}</span>
+                  <span className="rounded border border-cyan-300/25 bg-cyan-300/10 px-1.5 py-0.5 text-[10px] text-cyan-100">
+                    {gateEchoCategoryLabel[echo.category]}
+                  </span>
+                </div>
+                <p className="mt-1 text-[11px] leading-relaxed text-white/55">{echo.description}</p>
+              </div>
+              <div className="shrink-0 text-right">
+                <div className="text-xs font-black text-amber-200">{getGateEchoDangerLabel(echo)}</div>
+                <div className="text-[10px] text-white/45">강화 {echo.strengthLevel}단계</div>
+              </div>
+            </div>
+            <div className="mb-3 rounded border border-rose-300/15 bg-rose-300/10 px-2 py-1 text-[11px] text-rose-100/85">
+              미완료 {gateEchoCategoryLabel[echo.category]} 목표 {echo.missedCount}개에서 발생
+            </div>
+            <button
+              type="button"
+              onClick={() => onStart(echo.id)}
+              className="btn btn-primary w-full min-h-10 text-sm"
+            >
+              Gate Echo 정화
+            </button>
+          </div>
+        ))}
+      </div>
     </div>
   )
 }
@@ -1121,6 +1265,8 @@ function ManualBattlePanelV2({
   const equippedShadows = getEquippedShadows(ownedShadows, equippedShadowIds, hunter)
   const activeShadowId = [...visibleLogs].reverse().map(turn => getShadowActorInstanceId(turn.actorId)).find(Boolean)
   const battleLocked = isRevealing || Boolean(session.result)
+  const playerDeathDetected = Boolean(session.playerDeathDetected || session.player.hp <= 0)
+  const hideContinueControls = shouldHideBattleContinueControls(session)
   const monsterIntent = monsterDefinition ? getMonsterIntent(session, monsterDefinition, SKILL_DEFINITIONS) : undefined
 
   const isBoss = monsterDefinition?.rank === 'S'
@@ -1512,9 +1658,16 @@ function ManualBattlePanelV2({
           <button type="button" disabled={battleLocked} onClick={() => onAction({ type: 'auto_finish' })} className="btn text-sm min-h-12 border-amber-400/25 bg-amber-400/10 text-amber-100 disabled:opacity-50 disabled:cursor-not-allowed">
             자동 마무리
           </button>
-          <button type="button" onClick={onCancel} className="btn text-sm min-h-12 border-rose-400/25 bg-rose-400/10 text-rose-100">
-            전투 포기/닫기
-          </button>
+          {!hideContinueControls && (
+            <button type="button" onClick={onCancel} className="btn text-sm min-h-12 border-rose-400/25 bg-rose-400/10 text-rose-100">
+              전투 포기/닫기
+            </button>
+          )}
+          {hideContinueControls && (
+            <div className="rounded border border-rose-400/25 bg-rose-400/10 px-3 py-2 text-center text-xs text-rose-100">
+              {playerDeathDetected ? '하드코어 사망 정산 중' : '전투 기록 종료'}
+            </div>
+          )}
         </div>
       </div>
 
@@ -1590,6 +1743,7 @@ function ManualBattlePanelV2({
 export function GatePanel() {
   const [isBattleRevealing, setIsBattleRevealing] = useState(false)
   const [isDirectGateBattleOpen, setIsDirectGateBattleOpen] = useState(false)
+  const [selectedEchoId, setSelectedEchoId] = useState<string | undefined>()
   const directGateResultIdsRef = useRef(new Set<string>())
   const hunter = useGame(s => s.hunter)
   const items = useGame(s => s.items)
@@ -1599,12 +1753,15 @@ export function GatePanel() {
   const ownedShadows = useGame(s => s.ownedShadows ?? [])
   const equippedShadowIds = useGame(s => s.equippedShadowIds ?? [])
   const gateStatus = useGame(s => s.gateStatus)
+  const quests = useGame(s => s.quests)
   const dailyProgression = useGame(s => s.dailyProgression)
   const focusSession = useGame(s => s.focusSession)
+  const hardcoreState = useGame(s => s.hardcoreState)
+  const resolveGateEchoBattle = useGame(s => s.resolveGateEchoBattle)
   const currentPressure = useMemo(() => {
     if (!activeGate) return undefined
-    return calculateRealityPressure(dailyProgression, focusSession, activeGate)
-  }, [dailyProgression, focusSession, activeGate])
+    return calculateRealityPressure(dailyProgression, focusSession, activeGate, quests)
+  }, [dailyProgression, focusSession, activeGate, quests])
   const combatLogs = useGame(s => s.combatLogs)
   const latestGateCombatLog = combatLogs.find(
     log => log.source === 'gate' || (!log.source && !log.gateInstanceId?.startsWith('tower-'))
@@ -1615,11 +1772,15 @@ export function GatePanel() {
   const startManualGateBattle = useGame(s => s.startManualGateBattle)
   const performManualBattleAction = useGame(s => s.performManualBattleAction)
   const cancelManualGateBattle = useGame(s => s.cancelManualGateBattle)
+  const finalizeHardcoreDeathFromSession = useGame(s => s.finalizeHardcoreDeathFromSession)
   const visibleTraces = useGame(s => getSecretVisibleFragments(s.secretProgress))
   const traceCount = visibleTraces.length
 
   const equippedItems = getEquippedItems(items, equipment)
   const equippedShadows = getEquippedShadows(ownedShadows, equippedShadowIds, hunter)
+  const activeEchoes = getActiveGateEchoes(hardcoreState)
+  const selectedEcho = activeEchoes.find(echo => echo.id === selectedEchoId)
+  const gateLock = canUseMajorAction(hardcoreState, 'gate')
   const shadowStatBonuses = getEquippedShadowStatBonuses(equippedShadows)
   const combatStatsInput = { ...hunter.stats }
   for (const [stat, value] of Object.entries(shadowStatBonuses)) {
@@ -1675,11 +1836,103 @@ export function GatePanel() {
     manualBattleSession && (!manualBattleSession.source || manualBattleSession.source === 'gate')
       ? GATE_DEFINITIONS.find(g => g.id === manualBattleSession.gateId)
       : undefined
+  const terminalGateSession =
+    manualBattleSession &&
+    (!manualBattleSession.source || manualBattleSession.source === 'gate') &&
+    isManualBattleSessionTerminal(manualBattleSession)
+  const terminalGateSessionKey = terminalGateSession ? `${manualBattleSession.gateInstanceId}:${manualBattleSession.startedAt}` : undefined
+  const finalizedTerminalSessionsRef = useRef(new Set<string>())
+
+  useEffect(() => {
+    if (!terminalGateSession || !terminalGateSessionKey) return
+    if (finalizedTerminalSessionsRef.current.has(terminalGateSessionKey)) return
+    finalizedTerminalSessionsRef.current.add(terminalGateSessionKey)
+    finalizeHardcoreDeathFromSession()
+  }, [finalizeHardcoreDeathFromSession, terminalGateSession, terminalGateSessionKey])
+
+  const handleDirectEchoBattleComplete = (payload: DirectBattlePanelCompletePayload) => {
+    if (!selectedEcho) return
+    const hunterDied = Boolean(payload.battleStarted && (payload.actionCount ?? 0) > 0 && didDirectBattleHunterDie(payload))
+    if (payload.outcome === 'cancelled' && !hunterDied) {
+      setSelectedEchoId(undefined)
+      return
+    }
+    const resolvedOutcome = hunterDied ? 'defeat' : payload.outcome
+    const resultKey = `${selectedEcho.id}:${payload.state.battleId}:${resolvedOutcome}`
+    if (directGateResultIdsRef.current.has(resultKey)) return
+    directGateResultIdsRef.current.add(resultKey)
+    const updatedPayload = {
+      ...payload,
+      outcome: resolvedOutcome,
+      ...(hunterDied ? {
+        playerDeathDetected: true,
+        defeatReason: 'player_dead' as const,
+        finalOutcome: 'defeat' as const,
+        finalized: true,
+      } : {})
+    }
+    resolveGateEchoBattle(selectedEcho.id, buildDirectEchoCombatLog(updatedPayload, selectedEcho))
+    setSelectedEchoId(undefined)
+    setIsBattleRevealing(true)
+  }
+
+  if (selectedEcho) {
+    return (
+      <div className="space-y-4">
+        <GateEchoPanel echoes={activeEchoes} onStart={setSelectedEchoId} />
+        <DirectBattlePreviewPanel
+          source="gate_echo"
+          title="Gate Echo 정화 전투"
+          note="미완료 일일퀘스트의 잔향을 먼저 정화해야 주요 행동이 재개됩니다."
+          hunter={hunter}
+          items={items}
+          equipment={equipment}
+          activeConsumableEffects={activeConsumableEffects}
+          equippedShadows={equippedShadows}
+          contextStats={[
+            { label: 'Echo', value: selectedEcho.name },
+            { label: '위험도', value: getGateEchoDangerLabel(selectedEcho) },
+            { label: '강화', value: `${selectedEcho.strengthLevel}단계` },
+          ]}
+          customEnemyUnits={buildGateEchoEnemyUnits(selectedEcho, hunter)}
+          customBattleId={`direct-echo-${selectedEcho.id}`}
+          maxRoundsOverride={10 + Math.min(6, selectedEcho.strengthLevel)}
+          autoStart
+          allowEncounterSelection={false}
+          startButtonLabel="정화 시작"
+          restartButtonLabel="다시 준비"
+          cancelButtonLabel="정비로 돌아가기"
+          onBattleComplete={handleDirectEchoBattleComplete}
+        />
+      </div>
+    )
+  }
+
+  if (terminalGateSession) {
+    const deathTerminal = isManualBattleSessionPlayerDeath(manualBattleSession)
+    return (
+      <div className="space-y-4">
+        <GateStatusPanel />
+        <div className="panel corner-bracket border-rose-400/35 bg-rose-950/20 p-4">
+          <div className="br" />
+          <div className="text-sm font-black text-rose-100">
+            {deathTerminal ? '헌터 사망이 확정되었습니다.' : '전투 기록이 종료되었습니다.'}
+          </div>
+          <p className="mt-2 text-xs leading-relaxed text-white/65">
+            {deathTerminal
+              ? '하드코어 정산이 진행 중입니다. 사망 전 백업을 저장한 뒤 진행 기록이 초기화됩니다.'
+              : '종료된 전투는 다시 진행하거나 포기할 수 없습니다. 정산 상태를 정리하고 있습니다.'}
+          </p>
+        </div>
+      </div>
+    )
+  }
 
   if (
     manualBattleSession &&
     manualGateDefinition &&
     (!manualBattleSession.source || manualBattleSession.source === 'gate') &&
+    !isManualBattleSessionTerminal(manualBattleSession) &&
     activeGate?.instanceId === manualBattleSession.gateInstanceId
   ) {
     return (
@@ -1710,6 +1963,7 @@ export function GatePanel() {
     return (
       <div className="space-y-4">
         <FocusSessionPanel />
+        <GateEchoPanel echoes={activeEchoes} onStart={setSelectedEchoId} />
         <GateStatusPanel />
         <ArchiveTraceChip count={traceCount} />
         <EmptyGateState />
@@ -1727,6 +1981,7 @@ export function GatePanel() {
     return (
       <div className="space-y-4">
         <FocusSessionPanel />
+        <GateEchoPanel echoes={activeEchoes} onStart={setSelectedEchoId} />
         <GateStatusPanel />
         <ArchiveTraceChip count={traceCount} />
         <div className="panel corner-bracket p-8 text-center border-rose-400/30">
@@ -1756,7 +2011,7 @@ export function GatePanel() {
         : 'border-rose-400/25 bg-rose-400/10 text-rose-100'
   const isInjured = Boolean(gateStatus.injuredUntil)
   const hasStamina = gateStatus.stamina >= GATE_ENTRY_COST
-  const canStart = hasStamina && !isInjured && !isBattleRevealing
+  const canStart = hasStamina && !isInjured && !isBattleRevealing && gateLock.allowed
   const latestCombatLog = latestGateCombatLog
   const canRetry =
     latestCombatLog?.gateInstanceId === activeGate.instanceId &&
@@ -1795,15 +2050,28 @@ export function GatePanel() {
   // owns the existing Gate reward / clear / penalty / progression logic.
   const handleDirectGateBattleComplete = (payload: DirectBattlePanelCompletePayload) => {
     if (!activeGate || !gate) return
-    if (payload.outcome === 'cancelled') {
+    const hunterDied = Boolean(payload.battleStarted && (payload.actionCount ?? 0) > 0 && didDirectBattleHunterDie(payload))
+
+    if (payload.outcome === 'cancelled' && !hunterDied) {
       setIsDirectGateBattleOpen(false)
       return
     }
 
-    const resultKey = `${activeGate.instanceId}:${payload.state.battleId}:${payload.outcome}`
+    const resolvedOutcome = hunterDied ? 'defeat' : payload.outcome
+    const resultKey = `${activeGate.instanceId}:${payload.state.battleId}:${resolvedOutcome}`
     if (directGateResultIdsRef.current.has(resultKey)) return
     directGateResultIdsRef.current.add(resultKey)
-    resolveDirectGateBattle(buildDirectGateCombatLog(payload, activeGate, gate))
+    const updatedPayload = {
+      ...payload,
+      outcome: resolvedOutcome,
+      ...(hunterDied ? {
+        playerDeathDetected: true,
+        defeatReason: 'player_dead' as const,
+        finalOutcome: 'defeat' as const,
+        finalized: true,
+      } : {})
+    }
+    resolveDirectGateBattle(buildDirectGateCombatLog(updatedPayload, activeGate, gate))
     setIsDirectGateBattleOpen(false)
     setIsBattleRevealing(true)
   }
@@ -1826,6 +2094,7 @@ export function GatePanel() {
         <GateStatusPanel />
         <ArchiveTraceChip count={traceCount} />
         <DirectBattlePreviewPanel
+          source={activeGate?.runState?.isPromotionExam ? 'promotion_exam' : (activeGate?.runState?.redGateState ? 'red_gate' : 'gate')}
           title="직접 조작 게이트 전투"
           note="실제 게이트 전투 후보입니다. 승리/패배 결과는 기존 게이트 보상/패널티 처리로 한 번만 연결됩니다."
           hunter={hunter}
@@ -1853,7 +2122,10 @@ export function GatePanel() {
     )
   }
 
-  if (manualBattleSession?.gateInstanceId === activeGate.instanceId) {
+  if (
+    manualBattleSession?.gateInstanceId === activeGate.instanceId &&
+    !isManualBattleSessionTerminal(manualBattleSession)
+  ) {
     return (
       <div className="space-y-4">
         <GateStatusPanel />
@@ -1866,6 +2138,24 @@ export function GatePanel() {
           onAction={performManualBattleAction}
           onCancel={cancelManualGateBattle}
         />
+        <RecentBattleResult
+          log={latestGateCombatLog}
+          shouldReveal={isBattleRevealing}
+          onRevealStateChange={setIsBattleRevealing}
+        />
+      </div>
+    )
+  }
+
+  if (activeEchoes.length > 0) {
+    return (
+      <div className="space-y-4">
+        <FocusSessionPanel />
+        <GateEchoPanel echoes={activeEchoes} onStart={setSelectedEchoId} />
+        <GateStatusPanel />
+        <div className="rounded-md border border-amber-400/30 bg-amber-400/10 p-3 text-xs text-amber-100">
+          Echo 정화 후 게이트 진입이 재개됩니다.
+        </div>
         <RecentBattleResult
           log={latestGateCombatLog}
           shouldReveal={isBattleRevealing}
@@ -1903,6 +2193,7 @@ export function GatePanel() {
   return (
     <div className="space-y-4">
       <FocusSessionPanel />
+      <GateEchoPanel echoes={activeEchoes} onStart={setSelectedEchoId} />
       <GateStatusPanel />
       <ArchiveTraceChip count={traceCount} />
 
@@ -2686,4 +2977,3 @@ function GateRunPanel({
     </div>
   )
 }
-

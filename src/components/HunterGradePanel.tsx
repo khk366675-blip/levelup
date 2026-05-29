@@ -2,6 +2,7 @@ import React, { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Award, Lock, Sparkles, Shield, ChevronRight, Zap, Target, Flame, Users, BookOpen, Clock } from 'lucide-react'
 import { useGame } from '../lib/store'
+import { canUseMajorAction } from '../lib/gateEchoes'
 import { HUNTER_TITLE_DEFINITIONS, GRADE_CUTS, GRADE_LABELS } from '../lib/hunterGrade'
 import { PROMOTION_EXAM_DEFINITIONS } from '../lib/promotionExams'
 import type { HunterGradeTier, AssociationRatingBreakdown } from '../lib/types'
@@ -71,6 +72,8 @@ export function HunterGradePanel() {
   const hunter = s.hunter
   const startPromotionExam = s.startPromotionExam
   const equipHunterTitle = s.equipHunterTitle
+  const hardcoreState = s.hardcoreState
+  const examLock = canUseMajorAction(hardcoreState, 'promotion_exam')
 
   const [activeTab, setActiveTab] = useState<'status' | 'titles' | 'history'>('status')
 
@@ -277,13 +280,25 @@ export function HunterGradePanel() {
                   </div>
                   
                   {pendingExam.status === 'available' ? (
-                    <button
-                      onClick={() => startPromotionExam(pendingExam.targetGrade)}
-                      className="w-full sm:w-auto btn border-amber-500/60 text-amber-300 bg-amber-500/15 hover:bg-amber-500/35 hover:scale-[1.02] active:scale-95 transition-all text-xs py-2 px-5 font-bold shadow-lg shadow-amber-500/10 flex items-center gap-1.5 justify-center"
-                    >
-                      <Sparkles className="w-3.5 h-3.5 animate-spin" />
-                      심사 게이트 개방
-                    </button>
+                    <div className="flex flex-col items-end gap-1.5 w-full sm:w-auto">
+                      <button
+                        onClick={() => startPromotionExam(pendingExam.targetGrade)}
+                        disabled={!examLock.allowed}
+                        className={`w-full sm:w-auto btn text-xs py-2 px-5 font-bold shadow-lg flex items-center gap-1.5 justify-center ${
+                          !examLock.allowed
+                            ? 'border-red-500/40 text-red-400 bg-red-950/15 cursor-not-allowed opacity-60'
+                            : 'border-amber-500/60 text-amber-300 bg-amber-500/15 hover:bg-amber-500/35 hover:scale-[1.02] active:scale-95 shadow-amber-500/10'
+                        }`}
+                      >
+                        <Sparkles className="w-3.5 h-3.5 animate-spin" />
+                        {!examLock.allowed ? '심사령 개방 잠김' : '심사 게이트 개방'}
+                      </button>
+                      {!examLock.allowed && (
+                        <span className="text-[9px] text-red-400 font-semibold max-w-[240px] text-right leading-tight">
+                          ⚠️ {examLock.reason}
+                        </span>
+                      )}
+                    </div>
                   ) : (
                     <div className="w-full sm:w-auto text-center text-xs font-bold text-cyan-300/90 bg-cyan-950/30 border border-cyan-500/30 px-4 py-2 rounded system-text animate-pulse">
                       게이트 탭에서 심사 진행 중

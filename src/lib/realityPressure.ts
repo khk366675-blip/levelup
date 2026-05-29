@@ -1,4 +1,4 @@
-import type { DailyProgressionState, FocusSessionState, ActiveGate, RealityPressureSnapshot, HunterGradeTier } from './types'
+import type { DailyProgressionState, FocusSessionState, ActiveGate, RealityPressureSnapshot, HunterGradeTier, Quest } from './types'
 import { PROMOTION_EXAM_DEFINITIONS } from './promotionExams'
 
 
@@ -8,7 +8,8 @@ import { PROMOTION_EXAM_DEFINITIONS } from './promotionExams'
 export const calculateRealityPressure = (
   dailyProgression?: DailyProgressionState,
   focusSession?: FocusSessionState,
-  activeGate?: ActiveGate
+  activeGate?: ActiveGate,
+  quests?: Quest[]
 ): RealityPressureSnapshot => {
   let readinessTier = 'dormant'
   let focusResonanceTier = 'none'
@@ -52,9 +53,24 @@ export const calculateRealityPressure = (
     const dateKey = new Date().toISOString().slice(0, 10)
     const activeGateId = activeGate.gateId
     
+    let planTimestamp = 0
+    if (quests) {
+      const aiDailies = quests.filter(q => q.type === 'daily' && !q.recurring && (q.coachGenerated === true || q.coachPlanId !== undefined || q.coachReason !== undefined))
+      if (aiDailies.length > 0) {
+        const times = aiDailies.map(q => q.createdAt ? new Date(q.createdAt).getTime() : 0).filter(t => t > 0 && !isNaN(t))
+        if (times.length > 0) {
+          planTimestamp = Math.min(...times) // 가장 오래된(플랜 생성 시점) 퀘스트 생성 시각을 기준으로 삼음
+        }
+      }
+    }
+    
     // 오늘 완료된 성공 세션 중 해당 게이트에 연결된 세션 필터링
     const matchedRecords = focusSession.history.filter(r => {
       if (!r.completed || r.linkedGateId !== activeGateId) return false
+      if (planTimestamp > 0) {
+        // 일일 퀘스트 플랜이 생성된 시점(밀리초) 이후에 끝난 성공 집중 세션만 선택!
+        return r.endedAt >= planTimestamp
+      }
       const recordDate = new Date(r.endedAt).toISOString().slice(0, 10)
       return recordDate === dateKey
     })

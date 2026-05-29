@@ -381,7 +381,9 @@ export const getShadowSlotCount = (hunter: HunterState): number => {
 }
 
 export const getValidEquippedShadowIds = (ownedShadows: OwnedShadow[] | undefined, equippedShadowIds: string[] | undefined, hunter: HunterState): string[] => {
-  const ownedIds = new Set((ownedShadows ?? []).map(shadow => shadow.instanceId))
+  const ownedIds = new Set((ownedShadows ?? [])
+    .filter(shadow => !shadow.collapsed && shadow.status !== 'collapsed')
+    .map(shadow => shadow.instanceId))
   return (equippedShadowIds ?? []).filter(id => ownedIds.has(id)).slice(0, getShadowSlotCount(hunter))
 }
 
@@ -1194,4 +1196,3 @@ export const SHADOW_LEGION_NODES: ShadowLegionNode[] = [
     effect: { essenceGainPct: 0.03 }
   }
 ]
-

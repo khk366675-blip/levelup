@@ -29,7 +29,7 @@ import {
 import { useGame } from '../lib/store'
 import { buildAiCoachPrompt } from '../lib/aiCoachPrompt'
 import { generateAiCoachSaveSummary, generateAiCoachMemorySummary } from '../lib/aiCoachSummary'
-import { callAiCoachApi, AiCoachApiResult } from '../lib/aiCoachClient'
+import { callAiCoachApi, AiCoachApiResult, extractJsonObjectFromText, validateAiCoachResponse } from '../lib/aiCoachClient'
 import { CATEGORY_META, DIFFICULTY_META, type Category, type Difficulty } from '../lib/types'
 import { AiCoachRecommendation, NormalizedCalendarEvent } from '../lib/aiCoachTypes'
 import { requestCalendarAccess, fetchCalendarEvents } from '../lib/googleCalendarClient'
@@ -77,6 +77,8 @@ export function AiCoachPanel() {
   const [showRawJson, setShowRawJson] = useState(false)
   const [copied, setCopied] = useState(false)
   const [promptCopied, setPromptCopied] = useState(false)
+  const [showJsonPaste, setShowJsonPaste] = useState(false)
+  const [fallbackJsonText, setFallbackJsonText] = useState('')
 
   const [showDetailedData, setShowDetailedData] = useState(false)
   const [detailedQuests, setDetailedQuests] = useState<Record<string, boolean>>({})
@@ -478,6 +480,102 @@ export function AiCoachPanel() {
     })
 
     copyToClipboard(prompt, setPromptCopied)
+    setShowJsonPaste(true)
+  }
+
+  // 수동 복사 JSON 적용 핸들러
+  const handleApplyFallbackJson = () => {
+    if (!fallbackJsonText.trim()) return
+    try {
+      const parsedJson = extractJsonObjectFromText(fallbackJsonText)
+      const validatedResponse = validateAiCoachResponse(parsedJson)
+
+      if (!validatedResponse) {
+        alert('올바른 AI 응답 JSON 스키마 규격이 아닙니다. 복사한 JSON 전체를 정확히 붙여넣어 주세요.')
+        return
+      }
+
+      const plan = validatedResponse.dailyPlan
+      if (!plan || !plan.quests || !Array.isArray(plan.quests)) {
+        alert('AI Daily Plan 구조가 올바르지 않습니다.')
+        return
+      }
+
+      let rawQuests = plan.quests
+      
+      // 중복 title 제거
+      const seenTitles = new Set<string>()
+      const uniqueQuests: any[] = []
+      for (const q of rawQuests) {
+        if (!q.title) continue
+        const trimTitle = q.title.trim()
+        if (!seenTitles.has(trimTitle)) {
+          seenTitles.add(trimTitle)
+          uniqueQuests.push(q)
+        }
+      }
+      rawQuests = uniqueQuests
+
+      if (rawQuests.length < 5) {
+        alert(`중복 제거 후 생성된 퀘스트가 너무 적습니다 (최소 5개 필요, 현재 ${rawQuests.length}개).`)
+        return
+      }
+
+      if (rawQuests.length > 20) {
+        rawQuests = rawQuests.slice(0, 18)
+      }
+
+      // 12-31F: AI 세션 요약 기록
+      try {
+        const parsed = validatedResponse.parsedToday
+        recordAiCoachSession({
+          date: parsed.date || new Date().toISOString().split('T')[0],
+          rawJournalPreview: journalText ? journalText.slice(0, 150) : undefined,
+          parsedSummary: {
+            workoutDone: parsed.workout && parsed.workout.length > 0,
+            studyMinutes: parsed.study?.reduce((acc: number, cur: any) => acc + (cur.durationMinutes ?? 0), 0),
+            sleepDurationHours: parsed.sleep?.durationHours,
+            sleepQuality: parsed.sleep?.quality,
+            moodLevel: parsed.mood?.energyLevel,
+            mainNotes: parsed.freeNotes,
+            uncertainCount: parsed.uncertain?.length || validatedResponse.uncertain?.length
+          },
+          dailyPlanSummary: {
+            strategyTitle: plan.strategyTitle,
+            loadRecommendation: plan.loadRecommendation,
+            estimatedTotalMinutes: plan.estimatedTotalMinutes,
+            questCount: rawQuests.length,
+            focusAreas: plan.focusAreas
+          },
+          recommendedQuestIds: rawQuests.map((q: any) => q.id),
+        })
+      } catch (err) {
+        console.error('AI 세션 요약 기록 실패:', err)
+      }
+
+      // 정규화 (category, difficulty)
+      const sanitizedQuests = rawQuests.map(q => ({
+        ...q,
+        category: sanitizeCategory(q.category),
+        difficulty: sanitizeDifficulty(q.difficulty || 'normal')
+      }))
+      setDailyPlanQuests(sanitizedQuests)
+      setDailyPlanData(plan)
+      setApiResult({ ok: true, response: validatedResponse, rawText: fallbackJsonText })
+
+      try {
+        const todayStr = getDateKey()
+        replaceAiCoachDailyPlan(sanitizedQuests, todayStr)
+        alert('수동 JSON 분석 결과가 현재 일일퀘스트로 정상 적용되었습니다!')
+        setShowJsonPaste(false)
+      } catch (err) {
+        console.error('AI Daily Plan 자동 적용 실패:', err)
+        alert('스토어 적용 중 에러가 발생했습니다.')
+      }
+
+    } catch (e: any) {
+      alert(`JSON 파싱 실패: ${e?.message || e}`)
+    }
   }
 
   // 3. 추천 카드 상태 조작 핸들러
@@ -1085,6 +1183,44 @@ export function AiCoachPanel() {
             )}
           </button>
         </div>
+
+        {/* 외부 AI 결과 JSON 붙여넣기 패널 */}
+        {showJsonPaste && (
+          <div className="panel corner-bracket p-4 bg-indigo-950/20 border border-cyan-400/20 space-y-3 animate-fadeIn mt-4">
+            <div className="tl" /> <div className="tr" /> <div className="bl" /> <div className="br" />
+            <div className="flex justify-between items-center">
+              <label className="text-xs font-bold text-cyan-200">
+                📥 외부 AI 분석 결과 JSON 붙여넣기
+              </label>
+              <button 
+                onClick={() => setShowJsonPaste(false)}
+                className="text-[10px] text-cyan-400/50 hover:text-cyan-300"
+              >
+                닫기
+              </button>
+            </div>
+            <p className="text-[11px] text-cyan-300/60 leading-relaxed">
+              ChatGPT, Claude 등에 복사한 프롬프트를 입력해 나온 <strong>JSON 응답 전체</strong>를 아래에 붙여넣고 [분석 결과 적용] 버튼을 눌러주세요.
+            </p>
+            <textarea
+              value={fallbackJsonText}
+              onChange={(e) => setFallbackJsonText(e.target.value)}
+              placeholder={`{ "parsedToday": ..., "coachSummary": ..., "dailyPlan": ... }`}
+              rows={6}
+              className="w-full bg-ink-950/60 border border-cyan-400/20 rounded p-2.5 text-xs text-cyan-100 placeholder-cyan-300/20 focus:outline-none focus:border-cyan-400 font-mono leading-relaxed resize-none"
+            />
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={handleApplyFallbackJson}
+                disabled={!fallbackJsonText.trim()}
+                className="px-3.5 py-1.5 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-white rounded text-xs font-bold transition-all disabled:opacity-40 shadow-md shadow-emerald-950/20"
+              >
+                분석 결과 적용
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* ── 분석 결과 화면 ── */}

@@ -2226,38 +2226,6 @@ export function ShadowPanel() {
                 canEquip={equipped || equippedShadowIds.length < slotCount}
                 onEquip={() => equipShadow(shadow.instanceId)}
                 onUnequip={() => unequipShadow(shadow.instanceId)}
-                materialCount={getShadowAbsorbMaterialCount(shadow, ownedShadows, equippedShadowIds)}
-                onAbsorb={() => {
-                  if (window.confirm(`[${shadow.name}] +${(shadow.enhancementLevel ?? 0) + 1} 강화합니다.\n재료로 같은 그림자 1개를 소모합니다. 계속할까요?`)) {
-                    absorbShadow(shadow.instanceId)
-                  }
-                }}
-                onDecompose={() => {
-                  const isRare = ['rare', 'epic', 'legendary'].includes(shadow.rarity)
-                  const isLocked = shadow.isLocked
-                  const msg = isLocked
-                    ? `[${shadow.name}]은(는) 잠금 상태입니다.\n분해하려면 먼저 잠금을 해제하세요.`
-                    : isRare
-                      ? `[${SHADOW_RARITY_LABEL[shadow.rarity]}] ${shadow.name}을(를) 분해합니다.\n그림자 정수 +${SHADOW_DECOMPOSE_ESSENCE[shadow.rarity] ?? 1} 획득.\n이 작업은 되돌릴 수 없습니다. 계속할까요?`
-                      : `[${shadow.name}]을(를) 분해하여 그림자 정수 ${SHADOW_DECOMPOSE_ESSENCE[shadow.rarity] ?? 1} 획득합니다. 계속할까요?`
-                  if (!isLocked && window.confirm(msg)) {
-                    decomposeShadow(shadow.instanceId)
-                  }
-                }}
-                onToggleLock={() => toggleShadowLock(shadow.instanceId)}
-                onToggleFavorite={() => toggleShadowFavorite(shadow.instanceId)}
-                onEvolve={() => {
-                  const check = canEvolveShadow(shadow, shadowEssence)
-                  if (check.canEvolve && check.targetDefinition) {
-                    if (window.confirm(`[${shadow.name}]을(를) [${check.targetDefinition.name}](으)로 진화합니다.\n그림자 정수 ${check.cost} 소모.\n레벨이 1로 초기화되고 강화는 유지됩니다. 계속할까요?`)) {
-                      setPendingEvolution({
-                        shadow,
-                        targetName: check.targetDefinition.name,
-                        cost: check.cost ?? 0,
-                      })
-                    }
-                  }
-                }}
                 shadowEssence={shadowEssence}
               />
             )

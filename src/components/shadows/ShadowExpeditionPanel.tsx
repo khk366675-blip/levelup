@@ -16,6 +16,7 @@ import {
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { motion } from 'framer-motion'
 import { useGame } from '../../lib/store'
+import { canUseMajorAction } from '../../lib/gateEchoes'
 import { todayKey } from '../../lib/game'
 import { type CinematicLogData, type CinematicLogTone } from '../CinematicLogOverlay'
 import { CombatLogPanel, type CombatLogEntry, type CombatLogEntryTone } from '../CombatLogPanel'
@@ -359,23 +360,26 @@ function MiniShadow({
   const isSGrade = shadow.innateGrade === 'S'
   const isAGrade = shadow.innateGrade === 'A'
   const isEvolved = (shadow.evolutionStage ?? 0) > 0
+  const collapsed = Boolean(shadow.collapsed || shadow.status === 'collapsed')
 
   return (
     <motion.button
       type="button"
-      onClick={onClick}
-      whileHover={{ y: -3, scale: 1.02 }}
+      onClick={collapsed ? undefined : onClick}
+      disabled={collapsed}
+      whileHover={collapsed ? {} : { y: -3, scale: 1.02 }}
       transition={{ duration: 0.18, ease: 'easeOut' }}
       className={clsx(
         'relative min-w-[124px] overflow-hidden rounded-md border p-2 text-left transition-all duration-300 card-premium-shine group',
+        collapsed ? 'border-red-900 bg-red-950/10 opacity-50 grayscale cursor-not-allowed' :
         selected ? 'border-cyan-300/60 bg-cyan-400/12 ring-1 ring-cyan-300/40 shadow-deployed-glow' : 'border-white/10 bg-ink-900/45 hover:border-purple-300/35 hover:bg-purple-400/10',
-        recommended && !selected && 'border-emerald-300/30',
-        commandMatch && tone && `${tone.border} ${tone.bg}`,
-        active && tone ? `ring-2 ${tone.glow}` : active && 'animate-pulse border-amber-300/60 ring-2 ring-amber-300/35',
-        isSGrade && 'grade-aura-s',
-        isAGrade && 'grade-aura-a',
-        isEvolved && 'shadow-evolved-card',
-        isNamed && 'named-pulse',
+        recommended && !selected && !collapsed && 'border-emerald-300/30',
+        commandMatch && tone && !collapsed && `${tone.border} ${tone.bg}`,
+        active && tone && !collapsed ? `ring-2 ${tone.glow}` : active && !collapsed && 'animate-pulse border-amber-300/60 ring-2 ring-amber-300/35',
+        isSGrade && !collapsed && 'grade-aura-s',
+        isAGrade && !collapsed && 'grade-aura-a',
+        isEvolved && !collapsed && 'shadow-evolved-card',
+        isNamed && !collapsed && 'named-pulse',
       )}
     >
       {commandMatch && tone && <div className={clsx('absolute inset-x-0 top-0 h-0.5 bg-gradient-to-r', tone.effect)} />}
@@ -393,20 +397,28 @@ function MiniShadow({
         Lv {shadow.level ?? 1} / {SHADOW_ROLE_LABEL[shadow.role]}
       </div>
       <div className="mt-1 flex flex-wrap gap-1">
-        {recommended && (
-          <span className="rounded border border-emerald-300/25 bg-emerald-400/10 px-1 py-0.5 text-[8px] system-text text-emerald-100">
-            추천
+        {collapsed ? (
+          <span className="rounded border border-red-500/35 bg-red-500/10 px-1.5 py-0.5 text-[8px] system-text font-bold text-red-300 animate-pulse">
+            FRACTURED
           </span>
-        )}
-        {commandMatch && (
-          <span className={clsx('rounded border px-1 py-0.5 text-[8px] system-text', tone?.chip)}>
-            반응
-          </span>
-        )}
-        {isSGrade && (
-          <span className="rounded border border-amber-300/40 bg-amber-300/10 px-1 py-0.5 text-[8px] system-text font-bold text-amber-200">
-            S
-          </span>
+        ) : (
+          <>
+            {recommended && (
+              <span className="rounded border border-emerald-300/25 bg-emerald-400/10 px-1 py-0.5 text-[8px] system-text text-emerald-100">
+                추천
+              </span>
+            )}
+            {commandMatch && (
+              <span className={clsx('rounded border px-1 py-0.5 text-[8px] system-text', tone?.chip)}>
+                반응
+              </span>
+            )}
+            {isSGrade && (
+              <span className="rounded border border-amber-300/40 bg-amber-300/10 px-1 py-0.5 text-[8px] system-text font-bold text-amber-200">
+                S
+              </span>
+            )}
+          </>
         )}
       </div>
     </motion.button>
@@ -462,6 +474,8 @@ export function ShadowExpeditionPanel() {
   const visibleTraces = useGame(s => getSecretVisibleFragments(s.secretProgress))
   const traceCount = visibleTraces.length
   const [expanded, setExpanded] = useState(false)
+  const hardcoreState = useGame(s => s.hardcoreState)
+  const expeditionLock = canUseMajorAction(hardcoreState, 'expedition')
   const [expeditionCinematicLogs, setExpeditionCinematicLogs] = useState<CinematicLogData[]>([])
   const [expeditionSkipSignal, setExpeditionSkipSignal] = useState(0)
   const previousExpeditionLogRef = useRef<{ expeditionId?: string; count: number }>({ count: 0 })
@@ -822,10 +836,27 @@ export function ShadowExpeditionPanel() {
 
             <div className="flex flex-wrap gap-2">
               {canStart && (
-                <button type="button" onClick={() => startExpedition(expedition.id)} className="btn btn-primary text-xs">
-                  <Zap className="h-3.5 w-3.5" />
-                  원정 시작
-                </button>
+                <div className="flex flex-col items-start gap-1.5 w-full sm:w-auto">
+                  <button
+                    type="button"
+                    onClick={() => startExpedition(expedition.id)}
+                    disabled={!expeditionLock.allowed}
+                    className={clsx(
+                      "btn text-xs font-bold flex items-center gap-1.5 justify-center",
+                      !expeditionLock.allowed
+                        ? "border-red-500/40 text-red-400 bg-red-950/15 cursor-not-allowed opacity-60"
+                        : "btn-primary"
+                    )}
+                  >
+                    <Zap className="h-3.5 w-3.5" />
+                    {!expeditionLock.allowed ? '원정 시작 잠김' : '원정 시작'}
+                  </button>
+                  {!expeditionLock.allowed && (
+                    <span className="text-[9px] text-red-400 font-semibold max-w-[280px] leading-tight">
+                      ⚠️ {expeditionLock.reason}
+                    </span>
+                  )}
+                </div>
               )}
               {isLocked && (
                 <div className="rounded border border-white/10 bg-white/5 px-3 py-2 text-xs text-white/45">

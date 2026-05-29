@@ -7,6 +7,7 @@ import type { BoxReward, BoxTier, RewardBox } from '../lib/types'
 import { formatStatReward, todayKey } from '../lib/game'
 import { getShadowDefinition } from '../lib/shadows'
 import { DramaticReveal, type DramaticRevealTone, type RevealStep } from './DramaticReveal'
+import { ChallengeCardsPanel } from './ChallengeCardsPanel'
 
 const TIER_LABEL: Record<BoxTier, string> = {
   normal: 'Normal',
@@ -16,10 +17,10 @@ const TIER_LABEL: Record<BoxTier, string> = {
 }
 
 const TIER_CLASS: Record<BoxTier, string> = {
-  normal:   'border-cyan-300/28  bg-cyan-400/8   text-cyan-100 rarity-frame-rare',
-  enhanced: 'border-emerald-300/32 bg-emerald-400/9  text-emerald-100 rarity-frame-uncommon',
-  superior: 'border-violet-300/40 bg-violet-400/10 text-violet-100 rarity-frame-epic',
-  epic:     'border-amber-300/50  bg-amber-400/12  text-amber-100 boss-glow',
+  normal:   'border-cyan-500/28  bg-cyan-500/8   text-cyan-100 rarity-frame-rare',
+  enhanced: 'border-emerald-500/32 bg-emerald-500/9  text-emerald-100 rarity-frame-uncommon',
+  superior: 'border-violet-500/40 bg-violet-500/10 text-violet-100 rarity-frame-epic',
+  epic:     'border-amber-500/50  bg-amber-500/12  text-amber-100 boss-glow',
 }
 
 const BOX_TYPE_META: Record<RewardBox['type'], { label: string; short: string; description: string; chip: string }> = {
@@ -27,19 +28,19 @@ const BOX_TYPE_META: Record<RewardBox['type'], { label: string; short: string; d
     label: '오늘의 보급',
     short: 'DAILY',
     description: '오늘 카드 완료분으로 열기 전 등급이 상승합니다.',
-    chip: 'border-cyan-300/25 bg-cyan-400/10 text-cyan-100',
+    chip: 'border-cyan-500/25 bg-cyan-500/10 text-cyan-100',
   },
   weekly: {
     label: '주간 보급',
     short: 'WEEKLY',
     description: '이번 주 도전 누적 보급입니다.',
-    chip: 'border-amber-300/25 bg-amber-400/10 text-amber-100',
+    chip: 'border-amber-500/25 bg-amber-500/10 text-amber-100',
   },
   boss: {
     label: '보스 보급',
     short: 'BOSS',
     description: '탑 보스층 돌파 기록에서 회수한 상자입니다.',
-    chip: 'border-violet-300/25 bg-violet-400/10 text-violet-100',
+    chip: 'border-violet-500/25 bg-violet-500/10 text-violet-100',
   },
 }
 
@@ -127,6 +128,8 @@ function previewRewardHints(box: RewardBox, tier: BoxTier): string[] {
 export function RewardBoxPanel() {
   const [revealingBox, setRevealingBox] = useState<RewardBox | undefined>()
   const [revealGrowth, setRevealGrowth] = useState<{ level?: string; rank?: string }>({})
+  const [historyExpanded, setHistoryExpanded] = useState(false)
+
   const boxes = useGame(s => s.rewardBoxes ?? [])
   const cards = useGame(s => s.todayChallengeCards ?? [])
   const selectedIds = useGame(s => s.selectedChallengeCardIds ?? [])
@@ -137,10 +140,13 @@ export function RewardBoxPanel() {
     .filter(card => selectedSet.has(card.id) && card.status === 'completed')
     .reduce((sum, card) => sum + card.reward.boxUpgradePoints, 0)
   const available = boxes.filter(box => box.status === 'available')
-  const recentOpened = boxes.filter(box => box.status === 'opened').slice(0, 4)
-  const todayDailyAvailable = available.some(box => box.type === 'daily' && box.label.startsWith(todayKey()))
+  const recentOpened = boxes.filter(box => box.status === 'opened').slice(0, 10)
+  const todayDailyBox = available.find(box => box.type === 'daily' && box.label.startsWith(todayKey()))
+  const otherBoxes = available.filter(box => box.id !== todayDailyBox?.id)
+  const todayDailyAvailable = Boolean(todayDailyBox)
   const completedCardCount = cards.filter(card => selectedSet.has(card.id) && card.status === 'completed').length
   const selectedCardCount = selectedIds.length
+
   const nextLoopText = selectedCardCount === 0
     ? '카드 3장을 먼저 고르면 오늘 박스 강화 루프가 시작됩니다.'
     : completedCardCount < selectedCardCount
@@ -150,6 +156,7 @@ export function RewardBoxPanel() {
         : available.length > 0
           ? '대기 중인 보급을 열어 보상을 정리하세요.'
           : '오늘 보급 루프가 정리되었습니다.'
+
   const revealTone = getRevealTone(revealingBox)
   const revealRewardLines = formatReward(revealingBox?.reward)
   const revealSteps: RevealStep[] = revealingBox
@@ -202,7 +209,7 @@ export function RewardBoxPanel() {
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-5">
       <DramaticReveal
         isOpen={Boolean(revealingBox)}
         steps={revealSteps}
@@ -279,130 +286,392 @@ export function RewardBoxPanel() {
           setRevealGrowth({})
         }}
       />
-      <div className="panel corner-bracket border-cyan-300/15 bg-ink-950/60 p-3">
+
+      {/* 1. 오늘의 보상 루프 (Progress Stepper) */}
+      <div className="panel corner-bracket border-cyan-300/20 bg-ink-950/75 p-4 sm:p-5 relative overflow-hidden">
         <div className="br" />
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div className="min-w-0">
-            <div className="mb-0.5 flex items-center gap-1.5 system-text text-[10px] text-cyan-100/65">
-              <CalendarCheck className="h-3.5 w-3.5" />
+        <div className="absolute top-0 right-0 left-0 h-px bg-gradient-to-r from-transparent via-cyan-400/20 to-transparent" />
+        
+        <div className="mb-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 border-b border-white/5 pb-3">
+          <div>
+            <div className="flex items-center gap-1.5 system-text text-[10px] text-cyan-400 font-extrabold tracking-wider">
+              <CalendarCheck className="h-3.5 w-3.5 text-cyan-400 animate-pulse" />
               오늘의 보상 루프
             </div>
-            <div className="text-sm font-semibold leading-snug text-white/85">{nextLoopText}</div>
+            <div className="mt-1 text-xs sm:text-sm font-bold text-white/90 leading-snug">{nextLoopText}</div>
           </div>
-          <div className="flex shrink-0 gap-2 text-center">
-            <div className="rounded-md border border-violet-300/22 bg-violet-400/8 px-2.5 py-1.5">
-              <div className="text-[9px] system-text text-white/45">카드</div>
-              <div className="text-sm font-black text-violet-100">{selectedCardCount || selectedSet.size}/3</div>
+          
+          <div className="text-right">
+            {completedCardCount === 3 && upgradePoints >= 6 ? (
+              <span className="inline-flex items-center gap-1 rounded border border-emerald-400/30 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-black text-emerald-300 animate-pulse shadow-[0_0_8px_rgba(16,185,129,0.3)]">
+                <Sparkles className="h-3 w-3" /> 최대 강화 완료 (Epic)
+              </span>
+            ) : (
+              <span className="text-[10px] font-bold text-white/50">
+                {upgradePoints < 2
+                  ? `다음 강화(Enhanced)까지 강화 포인트 ${2 - upgradePoints}점 필요`
+                  : upgradePoints < 4
+                    ? `다음 강화(Superior)까지 강화 포인트 ${4 - upgradePoints}점 필요`
+                    : `다음 강화(Epic)까지 강화 포인트 ${6 - upgradePoints}점 필요`}
+              </span>
+            )}
+          </div>
+        </div>
+
+        {/* Stepper Flow Layout */}
+        <div className="relative flex flex-col md:flex-row md:items-center justify-between gap-4 md:gap-2">
+          {/* Connector Line for PC */}
+          <div className="absolute left-6 right-6 top-[22px] hidden h-[2px] bg-slate-800 md:block z-0">
+            <div 
+              className="h-full bg-gradient-to-r from-violet-500 via-amber-500 to-cyan-500 transition-all duration-500"
+              style={{
+                width: completedCardCount >= 3
+                  ? '100%'
+                  : selectedCardCount === 3
+                    ? '66%'
+                    : selectedCardCount > 0
+                      ? '33%'
+                      : '0%'
+              }}
+            />
+          </div>
+
+          {/* Step 1 */}
+          <div className="relative z-10 flex flex-row md:flex-col items-center gap-3 md:gap-2 md:w-1/3">
+            <div className={clsx(
+              "flex h-11 w-11 shrink-0 items-center justify-center rounded-full border transition-all duration-300 font-mono text-xs font-bold",
+              selectedCardCount === 3
+                ? "border-violet-400 bg-violet-950 text-violet-200 shadow-[0_0_10px_rgba(139,92,246,0.3)]"
+                : selectedCardCount > 0
+                  ? "border-violet-500/50 bg-violet-950/50 text-violet-300/80"
+                  : "border-slate-700 bg-slate-900 text-white/40"
+            )}>
+              {selectedCardCount === 3 ? "✓" : "01"}
             </div>
-            <div className="rounded-md border border-amber-300/22 bg-amber-400/8 px-2.5 py-1.5">
-              <div className="text-[9px] system-text text-white/45">강화</div>
-              <div className="text-sm font-black text-amber-100">+{upgradePoints}</div>
+            <div className="text-left md:text-center">
+              <div className="text-xs font-bold text-white">도전 카드 선택</div>
+              <div className="mt-0.5 text-[10px] text-white/45">{selectedCardCount}/3 카드 선택됨</div>
             </div>
-            <div className="rounded-md border border-cyan-300/22 bg-cyan-400/8 px-2.5 py-1.5">
-              <div className="text-[9px] system-text text-white/45">박스</div>
-              <div className="text-sm font-black text-cyan-100">{available.length}</div>
+          </div>
+
+          {/* Step 2 */}
+          <div className="relative z-10 flex flex-row md:flex-col items-center gap-3 md:gap-2 md:w-1/3">
+            <div className={clsx(
+              "flex h-11 w-11 shrink-0 items-center justify-center rounded-full border transition-all duration-300 font-mono text-xs font-bold",
+              completedCardCount === 3
+                ? "border-amber-400 bg-amber-950 text-amber-200 shadow-[0_0_10px_rgba(245,158,11,0.3)]"
+                : completedCardCount > 0
+                  ? "border-amber-500/50 bg-amber-950/50 text-amber-300/80"
+                  : "border-slate-700 bg-slate-900 text-white/40"
+            )}>
+              {completedCardCount === 3 ? "✓" : "02"}
+            </div>
+            <div className="text-left md:text-center">
+              <div className="text-xs font-bold text-white">도전 과제 달성</div>
+              <div className="mt-0.5 text-[10px] text-white/45">{completedCardCount}/3 완료</div>
+            </div>
+          </div>
+
+          {/* Step 3 */}
+          <div className="relative z-10 flex flex-row md:flex-col items-center gap-3 md:gap-2 md:w-1/3">
+            <div className={clsx(
+              "flex h-11 w-11 shrink-0 items-center justify-center rounded-full border transition-all duration-300 font-mono text-[10px] font-bold uppercase",
+              todayDailyAvailable
+                ? "border-cyan-400 bg-cyan-950 text-cyan-200 shadow-[0_0_12px_rgba(34,211,238,0.4)] animate-pulse"
+                : available.length > 0
+                  ? "border-cyan-500/50 bg-cyan-950/50 text-cyan-300/80"
+                  : "border-slate-700 bg-slate-900 text-white/40"
+            )}>
+              {todayDailyAvailable ? "READY" : "03"}
+            </div>
+            <div className="text-left md:text-center">
+              <div className="text-xs font-bold text-white">일일 보급 개봉</div>
+              <div className="mt-0.5 text-[10px] text-white/45">
+                {todayDailyAvailable
+                  ? `${TIER_LABEL[getDisplayTier(todayDailyBox!, upgradePoints)]} 등급 대기`
+                  : available.length > 0
+                    ? "박스 개봉 대기 중"
+                    : "대기 박스 없음"}
+              </div>
             </div>
           </div>
         </div>
       </div>
 
-      <div className="panel corner-bracket p-4 border-cyan-400/25 bg-cyan-500/5">
-        <div className="br" />
-        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-          <div>
-            <h3 className="text-lg font-bold text-cyan-50">박스 보상</h3>
-            <div className="mt-0.5 text-[11px] text-white/55">
-              오늘 박스는 열기 전 카드 완료 수에 따라 등급이 올라갑니다.
+      {/* 2. 오늘의 보상 박스 Hero 영역 */}
+      <div className="relative overflow-hidden rounded-xl border border-cyan-400/25 bg-gradient-to-br from-cyan-950/20 via-ink-950/80 to-ink-950 p-5 md:p-6 shadow-glow">
+        <div className="absolute -left-20 -top-20 h-52 w-52 rounded-full bg-cyan-500/10 blur-3xl pointer-events-none" />
+        
+        {todayDailyBox ? (() => {
+          const tier = getDisplayTier(todayDailyBox, upgradePoints)
+          const Icon = boxIcon(todayDailyBox)
+          const dropHints = previewRewardHints(todayDailyBox, tier)
+          
+          return (
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-5 relative z-10">
+              {/* Left Column: Big Premium Box Visual */}
+              <div className="flex items-center justify-center shrink-0 self-center md:self-auto w-32 h-32 md:w-36 md:h-36 relative group">
+                <div className={clsx(
+                  "absolute inset-0 rounded-full blur-xl opacity-25 group-hover:scale-110 transition-transform duration-300",
+                  tier === 'epic' ? 'bg-amber-400' : tier === 'superior' ? 'bg-purple-500' : 'bg-cyan-500'
+                )} />
+                <div className="absolute inset-0 border border-dashed border-cyan-500/35 rounded-full animate-spin opacity-40 pointer-events-none" />
+                
+                <div className={clsx(
+                  "relative flex h-24 w-24 items-center justify-center rounded-2xl border-2 shadow-2xl transition-transform duration-500 group-hover:scale-105",
+                  TIER_CLASS[tier]
+                )}>
+                  <div className="absolute inset-1.5 rounded-lg border border-white/5 bg-black/10" />
+                  <Box className={clsx(
+                    "relative h-12 w-12 text-cyan-200 drop-shadow-[0_0_12px_rgba(34,211,238,0.5)]",
+                    tier === 'epic' && "text-amber-200 drop-shadow-[0_0_15px_rgba(245,158,11,0.6)] animate-pulse",
+                    tier === 'superior' && "text-purple-200 drop-shadow-[0_0_12px_rgba(167,139,250,0.5)]"
+                  )} />
+                  <Icon className="absolute top-2 right-2 h-4 w-4 text-white/50" />
+                </div>
+              </div>
+
+              {/* Middle Column: Details / Descriptions */}
+              <div className="flex-1 min-w-0">
+                <div className="flex flex-wrap items-center gap-2 mb-1.5">
+                  <span className="rounded bg-cyan-950 border border-cyan-400/30 px-2 py-0.5 text-[9px] font-black text-cyan-300 tracking-wider">
+                    TODAY'S SUPPLY
+                  </span>
+                  <span className={clsx(
+                    "rounded px-2 py-0.5 text-[9px] font-extrabold uppercase tracking-wide border",
+                    tier === 'epic' ? 'border-amber-400 bg-amber-950 text-amber-300' :
+                    tier === 'superior' ? 'border-purple-400 bg-purple-950 text-purple-300' :
+                    tier === 'enhanced' ? 'border-emerald-400 bg-emerald-950 text-emerald-300' :
+                    'border-cyan-400 bg-cyan-950 text-cyan-300'
+                  )}>
+                    {TIER_LABEL[tier]} 등급
+                  </span>
+                </div>
+
+                <h3 className="text-base sm:text-lg font-black text-white leading-tight">
+                  {todayDailyBox.label}
+                </h3>
+                
+                <p className="mt-1.5 text-xs text-white/55 leading-relaxed">
+                  오늘 도전 카드 수행 실적에 따라 보상이 강화됩니다. 현재 보급 상자가 최대 등급까지 강화 준비를 마쳤습니다.
+                </p>
+
+                {/* Drop Previews */}
+                <div className="mt-3 flex flex-wrap gap-1.5 items-center">
+                  <span className="text-[10px] font-bold text-white/40 uppercase mr-1">예상 보상:</span>
+                  {dropHints.map(hint => (
+                    <span key={hint} className="rounded border border-slate-500/10 bg-black/20 px-2 py-0.5 text-[10px] font-semibold text-white/70">
+                      {hint}
+                    </span>
+                  ))}
+                </div>
+              </div>
+
+              {/* Right Column: Cards & Reveal CTA Button */}
+              <div className="flex flex-col justify-between items-stretch md:items-end gap-3 shrink-0 self-stretch md:self-auto min-w-[150px] border-t md:border-t-0 md:border-l border-white/5 pt-3 md:pt-0 md:pl-5">
+                <div className="text-left md:text-right space-y-1">
+                  <div className="text-[10px] system-text text-white/40">SUPPLY STATS</div>
+                  <div className="text-xs font-bold text-white flex md:justify-end gap-1.5">
+                    <span>도전 카드:</span>
+                    <span className="text-cyan-300">{completedCardCount} / 3 완료</span>
+                  </div>
+                  <div className="text-xs font-bold text-white flex md:justify-end gap-1.5">
+                    <span>박스 강화:</span>
+                    <span className="text-amber-300">+{upgradePoints} 강화</span>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => handleOpenBox(todayDailyBox.id)}
+                  className={clsx(
+                    "relative flex min-h-12 w-full items-center justify-center gap-2 rounded-xl border font-black text-sm transition-all duration-300 shadow-glow select-none",
+                    tier === 'epic'
+                      ? "border-amber-400 bg-amber-500/20 text-amber-200 hover:bg-amber-500/30 hover:text-white"
+                      : tier === 'superior'
+                        ? "border-purple-400 bg-purple-500/20 text-purple-200 hover:bg-purple-500/30 hover:text-white"
+                        : "border-cyan-400 bg-cyan-500/20 text-cyan-200 hover:bg-cyan-500/30 hover:text-white"
+                  )}
+                >
+                  <Sparkles className="h-4 w-4" />
+                  지금 열기
+                </button>
+              </div>
+            </div>
+          )
+        })() : (
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-5 relative z-10">
+            {/* Completed Box State */}
+            <div className="flex items-center justify-center shrink-0 self-center md:self-auto w-32 h-32 md:w-36 md:h-36 relative">
+              <div className="absolute inset-0 border border-dashed border-white/10 rounded-full pointer-events-none" />
+              <div className="relative flex h-24 w-24 items-center justify-center rounded-2xl border border-slate-700 bg-slate-900 text-white/30">
+                <Box className="h-10 w-10 text-white/20" />
+                <span className="absolute bottom-1.5 rounded bg-black/50 px-1 py-0.5 text-[8px] font-bold text-white/40">
+                  OPENED
+                </span>
+              </div>
+            </div>
+
+            <div className="flex-1 min-w-0">
+              <div className="inline-flex items-center gap-1.5 rounded bg-slate-900 border border-slate-700 px-2 py-0.5 text-[9px] font-black text-white/40 tracking-wider mb-2">
+                오늘의 보급 완료
+              </div>
+              <h3 className="text-base sm:text-lg font-black text-white/50 leading-tight">
+                일일 보급 상자 수령 완료
+              </h3>
+              <p className="mt-1 text-xs text-white/45 leading-relaxed">
+                오늘의 도전 보상이 이미 개봉되어 반영되었습니다. 내일 자정 이후에 새로운 일일 보급 박스가 활성화됩니다.
+              </p>
+              <div className="mt-3 text-[10px] font-semibold text-cyan-400 bg-cyan-950/20 border border-cyan-800/20 rounded px-2.5 py-1 inline-block">
+                💡 획득한 골드는 상점에서 장비 소환 및 다양한 아이템 구매에 요긴하게 사용됩니다.
+              </div>
+            </div>
+
+            <div className="shrink-0 w-full md:w-auto md:pl-5 md:border-l border-white/5">
+              <button
+                type="button"
+                disabled
+                className="flex min-h-12 w-full md:w-40 items-center justify-center gap-2 rounded-xl border border-slate-800 bg-slate-900/50 text-sm font-bold text-white/30 cursor-not-allowed"
+              >
+                수령 완료
+              </button>
             </div>
           </div>
-          <div className="text-[11px] system-text text-white/55">
-            {upgradePoints >= 6 ? 'Epic 적용 중' : upgradePoints >= 4 ? 'Superior · +2에 Epic' : upgradePoints >= 2 ? 'Enhanced · +2에 Superior' : `+${Math.max(0, 2 - upgradePoints)}에 Enhanced`}
-          </div>
-        </div>
+        )}
+      </div>
 
-        {available.length === 0 ? (
-          <div className="rounded-md border border-cyan-300/12 bg-ink-900/35 px-3 py-5 text-center text-sm text-white/45">
-            지금 열 수 있는 박스가 없습니다.
+      {/* 기타 보급 상자 (오늘의 일일 박스 외) */}
+      {otherBoxes.length > 0 && (
+        <div className="space-y-2.5">
+          <div className="flex items-center gap-1.5 system-text text-[10px] text-white/45 font-extrabold uppercase tracking-wider">
+            <Gift className="h-3.5 w-3.5" /> 대기 중인 기타 보급 상자
           </div>
-        ) : (
-          <div className="grid gap-3 md:grid-cols-2">
-            {available.map(box => {
-              const tier = getDisplayTier(box, upgradePoints)
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {otherBoxes.map(box => {
+              const tier = box.tier
               const Icon = boxIcon(box)
+              const dropHints = previewRewardHints(box, tier)
+              
               return (
                 <motion.div
                   key={box.id}
                   whileHover={{ y: -2 }}
-                  className={clsx('relative overflow-hidden rounded-lg border p-4', TIER_CLASS[tier])}
+                  className={clsx('relative overflow-hidden rounded-xl border p-4 flex flex-col justify-between min-h-[150px]', TIER_CLASS[tier])}
                 >
-                  {(tier === 'epic' || tier === 'superior') && (
-                    <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,rgba(251,191,36,0.12),transparent_55%)] shadow-mist-legendary" />
-                  )}
-                  {hasShadowSignalDrop(box.reward) && (
-                    <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_20%_12%,rgba(34,211,238,0.12),transparent_38%),radial-gradient(circle_at_82%_30%,rgba(168,85,247,0.12),transparent_40%)]" />
-                  )}
-                  <div className="absolute -right-8 -top-8 h-24 w-24 rounded-full bg-white/8 blur-2xl" />
-                  <div className="relative flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <div className="mb-1.5 flex items-center gap-2">
-                        <Icon className="h-5 w-5 shrink-0" />
-                        <span className="truncate text-sm font-bold">{box.label}</span>
+                  <div className="absolute -right-6 -top-6 h-20 w-20 rounded-full bg-white/5 blur-xl pointer-events-none" />
+                  
+                  <div>
+                    <div className="mb-2 flex items-start justify-between gap-2.5">
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-1.5 mb-1">
+                          <Icon className="h-4 w-4 shrink-0 text-white/70" />
+                          <span className="truncate text-xs font-bold text-white">{box.label}</span>
+                        </div>
+                        <div className="flex flex-wrap gap-1 text-[9px] system-text">
+                          <span className={clsx('rounded border px-1.5 py-0.2', BOX_TYPE_META[box.type].chip)}>
+                            {BOX_TYPE_META[box.type].label}
+                          </span>
+                          {box.floor ? <span className="rounded border border-white/10 bg-black/15 px-1.5 py-0.2">{box.floor}층</span> : null}
+                        </div>
                       </div>
-                      <div className="flex flex-wrap gap-1.5 text-[10px] system-text">
-                        <span className={clsx('rounded border px-1.5 py-0.5', BOX_TYPE_META[box.type].chip)}>
-                          {BOX_TYPE_META[box.type].label}
-                        </span>
-                        <span className="rounded border border-cyan-300/18 bg-black/20 px-1.5 py-0.5">{TIER_LABEL[tier]}</span>
-                        {box.floor ? <span className="rounded border border-cyan-300/14 bg-black/15 px-1.5 py-0.5">{box.floor}층</span> : null}
-                      </div>
+                      <Box className="h-7 w-7 shrink-0 text-white/30" />
                     </div>
-                    <Box className="h-8 w-8 shrink-0 opacity-70" />
+                    
+                    <p className="text-[10px] leading-relaxed text-white/60">
+                      {dropHints.slice(0, 3).join(' · ')}
+                    </p>
                   </div>
-                  <div className="relative mt-3 text-[11px] leading-relaxed text-white/65">
-                    {previewRewardHints(box, tier).slice(0, 3).join(' · ')}
-                  </div>
+
                   <button
                     type="button"
                     onClick={() => handleOpenBox(box.id)}
-                    className="mt-3 flex min-h-11 w-full items-center justify-center gap-2 rounded-md border border-cyan-300/22 bg-cyan-400/10 text-sm font-bold text-cyan-50 hover:bg-cyan-400/15 transition"
+                    className="mt-3 flex min-h-9 w-full items-center justify-center gap-1.5 rounded-lg border border-white/10 bg-white/10 text-xs font-bold text-white hover:bg-white/15 transition"
                   >
-                    <Sparkles className="h-4 w-4" />
+                    <Sparkles className="h-3.5 w-3.5" />
                     열기
                   </button>
                 </motion.div>
               )
             })}
           </div>
-        )}
-      </div>
-
-      {recentOpened.length > 0 && (
-        <div className="panel corner-bracket p-4 border-cyan-300/12">
-          <div className="br" />
-          <div className="system-text mb-3 text-[11px] text-white/45">RECENT REVEALS</div>
-          <div className="space-y-2">
-            {recentOpened.map(box => (
-              <div key={box.id} className="rounded-md border border-cyan-300/12 bg-cyan-400/5 p-3">
-                <div className="mb-1 flex items-center justify-between gap-3">
-                  <div className="min-w-0">
-                    <div className="truncate text-sm font-semibold text-white/80">{box.label}</div>
-                    <div className="text-[10px] system-text text-white/35">{BOX_TYPE_META[box.type].label}</div>
-                  </div>
-                  <div className="shrink-0 text-[10px] system-text text-white/40">{TIER_LABEL[box.tier]}</div>
-                </div>
-                <div className="flex flex-wrap gap-1.5 text-[11px] text-white/55">
-                  {formatReward(box.reward).map(line => (
-                    <span key={line} className={clsx('inline-flex items-center gap-1 rounded border px-1.5 py-0.5', rewardLineClass(line))}>
-                      <RewardLineIcon line={line} />
-                      {line}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            ))}
-          </div>
         </div>
       )}
+
+      {/* 3. 오늘의 도전 카드 */}
+      <ChallengeCardsPanel />
+
+      {/* 4. 최근 보상 기록 compact화 */}
+      {recentOpened.length > 0 && (() => {
+        const shownHistory = historyExpanded ? recentOpened : recentOpened.slice(0, 3)
+        
+        return (
+          <div className="panel corner-bracket p-4 border-cyan-300/12 bg-ink-950/30">
+            <div className="br" />
+            <div className="mb-3 flex items-center justify-between">
+              <span className="system-text text-[10px] text-white/40 font-extrabold uppercase tracking-wider">
+                RECENT REVEALS
+              </span>
+              <span className="text-[10px] text-white/30">
+                개봉 기록 {recentOpened.length}개
+              </span>
+            </div>
+
+            <div className="space-y-2">
+              {shownHistory.map(box => {
+                const dropLines = formatReward(box.reward)
+                
+                return (
+                  <div 
+                    key={box.id} 
+                    className="flex flex-col md:flex-row md:items-center justify-between gap-2.5 rounded-lg border border-slate-500/10 bg-black/20 p-2.5 text-xs transition hover:border-white/10"
+                  >
+                    {/* Left: Metadata one-liner */}
+                    <div className="flex flex-wrap items-center gap-2 shrink-0">
+                      <span className="font-bold text-white/80">{box.label}</span>
+                      <span className={clsx('rounded border px-1.5 py-0.2 text-[9px] system-text', BOX_TYPE_META[box.type].chip)}>
+                        {BOX_TYPE_META[box.type].short}
+                      </span>
+                      <span className="rounded border border-cyan-300/18 bg-black/15 px-1.5 py-0.2 text-[9px] system-text text-white/45">
+                        {TIER_LABEL[box.tier]}
+                      </span>
+                    </div>
+
+                    {/* Right: Compact Reward Drops Row */}
+                    <div className="flex flex-wrap gap-1 items-center md:justify-end overflow-hidden">
+                      {dropLines.slice(0, 4).map(line => (
+                        <span key={line} className={clsx('inline-flex items-center gap-1 rounded border px-1.5 py-0.2 text-[10px]', rewardLineClass(line))}>
+                          <RewardLineIcon line={line} />
+                          {line}
+                        </span>
+                      ))}
+                      {dropLines.length > 4 && (
+                        <span className="rounded border border-white/5 bg-slate-800 px-1 py-0.2 text-[8px] text-white/40 font-bold">
+                          +{dropLines.length - 4}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+
+            {/* Toggle Button */}
+            {recentOpened.length > 3 && (
+              <button
+                type="button"
+                onClick={() => setHistoryExpanded(!historyExpanded)}
+                className="mt-3 flex w-full items-center justify-center gap-1.5 rounded-lg border border-white/5 bg-white/5 py-1.5 text-xs font-bold text-white/60 hover:bg-white/10 hover:text-white/80 transition"
+              >
+                {historyExpanded ? (
+                  <>지난 개봉 기록 접기 ▴</>
+                ) : (
+                  <>지난 개봉 기록 더보기 ▾</>
+                )}
+              </button>
+            )}
+          </div>
+        )
+      })()}
     </div>
   )
 }

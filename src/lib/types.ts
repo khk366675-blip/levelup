@@ -727,6 +727,11 @@ export interface OwnedShadow {
   unlockedPassiveSlots?: number
   shadowSkillIds?: string[]
   shadowPassiveIds?: string[]
+  collapsed?: boolean
+  collapsedAt?: number
+  collapseReason?: string
+  restoreCost?: number
+  status?: 'active' | 'collapsed'
 }
 
 export interface ShadowSummonTicket {
@@ -1173,8 +1178,13 @@ export interface ManualBattleSession {
   consumableUseCount: number
   logs: CombatLog['turns']
   result?: ManualBattleResult
+  finalOutcome?: ManualBattleResult
+  playerDeathDetected?: boolean
+  hardcoreDeathHandled?: boolean
+  finalized?: boolean
+  defeatReason?: 'player_dead' | 'party_wipe' | 'abandon' | 'retreat' | 'timeout' | 'unknown'
   startedAt: string
-  source?: 'gate' | 'tower'
+  source?: 'gate' | 'tower' | 'echo' | 'gate_echo' | 'red_gate' | 'promotion_exam'
   towerFloor?: number
   pressureSnapshot?: RealityPressureSnapshot
   isRedGate?: boolean
@@ -1232,7 +1242,60 @@ export interface CombatLog {
   penaltyApplied?: GatePenalty
   totalWaves?: number
   clearedWaves?: number
-  source?: 'gate' | 'tower'
+  source?: 'gate' | 'tower' | 'echo' | 'gate_echo' | 'red_gate' | 'promotion_exam'
+  shadowCasualtyIds?: string[]
+  finalOutcome?: 'victory' | 'defeat' | 'draw' | 'cancelled'
+  defeatReason?: 'player_dead' | 'party_wipe' | 'abandon' | 'unknown'
+  playerDeathDetected?: boolean
+  battleStarted?: boolean
+  actionCount?: number
+  finalized?: boolean
+}
+
+export type GateEchoCategory =
+  | 'focus'
+  | 'study'
+  | 'work'
+  | 'exercise'
+  | 'routine'
+  | 'cleanup'
+  | 'health'
+  | 'custom'
+  | 'unknown'
+
+export interface HardcoreBackupMeta {
+  timestamp: number
+  reason: string
+  playerLevel?: number
+  battleContext?: string
+  backupKey: string
+}
+
+export interface GateEchoState {
+  id: string
+  date: string
+  sourceDate: string
+  category: GateEchoCategory
+  missedCount: number
+  monsterId: string
+  name: string
+  description: string
+  strengthLevel: number
+  status: 'active' | 'cleared'
+  createdAt: number
+  clearedAt?: number
+  linkedQuestIds?: string[]
+}
+
+export interface HardcoreState {
+  enabled: boolean
+  enabledAt?: number
+  gateEchoes: GateEchoState[]
+  lastEchoGeneratedForDate?: string
+  worldThreat: number
+  deathCount: number
+  lastHardcoreBackup?: HardcoreBackupMeta
+  resetPending?: boolean
 }
 
 export interface GateStatus {
@@ -2186,5 +2249,3 @@ export interface HunterGradeState {
   history: HunterGradeHistoryEntry[]
   lastEvaluatedAt?: number
 }
-
-

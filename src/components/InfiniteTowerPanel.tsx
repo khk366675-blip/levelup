@@ -1,11 +1,13 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import clsx from 'clsx'
-import { Swords, Trophy, Zap, Shield, FastForward, X } from 'lucide-react'
+import { Swords, Trophy, Zap, Shield, FastForward, X, Lock, ShieldAlert } from 'lucide-react'
 import { useGame } from '../lib/store'
+import { canUseMajorAction } from '../lib/gateEchoes'
 import {
   getTowerFloorType,
   getTowerRecommendedPower,
   getTowerMonstersForFloor,
+  calculateTowerReward,
 } from '../lib/infiniteTower'
 import type { CinematicLogData, CinematicLogTone } from './CinematicLogOverlay'
 import { CinematicLogOverlay } from './CinematicLogOverlay'
@@ -32,6 +34,11 @@ import {
   isHunterCombatSkill,
 } from '../lib/skills'
 import { pickDirectTowerEncounterKey } from '../lib/directBattleEncounters'
+import {
+  isManualBattleSessionPlayerDeath,
+  isManualBattleSessionTerminal,
+  shouldHideBattleContinueControls,
+} from '../lib/manualBattleSessionGuards'
 
 const sortTowerCombatSkills = (skills: ReturnType<typeof getPlayerCombatSkills>, cooldowns: Record<string, number>) => (
   [...skills].sort((a, b) => {
@@ -262,8 +269,20 @@ const buildDirectTowerCombatLog = (
     totalWaves: 1,
     clearedWaves: payload.outcome === 'victory' ? 1 : 0,
     source: 'tower',
+    finalOutcome: payload.finalOutcome,
+    defeatReason: payload.defeatReason,
+    playerDeathDetected: payload.playerDeathDetected,
+    battleStarted: payload.battleStarted,
+    actionCount: payload.actionCount,
+    finalized: payload.finalized,
+    shadowCasualtyIds: playerUnits
+      .filter(unit => unit.unitType === 'shadow' && unit.stats.currentHp <= 0)
+      .map(unit => unit.sourceId),
   }
 }
+
+const didDirectTowerHunterDie = (payload: DirectBattlePanelCompletePayload): boolean =>
+  payload.state.units.some(unit => unit.team === 'player' && unit.unitType === 'hunter' && unit.stats.currentHp <= 0)
 
 function StatPill({ label, value }: { label: string; value: string | number }) {
   return (
@@ -283,6 +302,7 @@ export function InfiniteTowerPanel() {
   const startTowerManualBattle = useGame(s => s.startTowerManualBattle)
   const performTowerManualBattleAction = useGame(s => s.performTowerManualBattleAction)
   const cancelTowerManualBattle = useGame(s => s.cancelTowerManualBattle)
+  const finalizeHardcoreDeathFromSession = useGame(s => s.finalizeHardcoreDeathFromSession)
   const combatLogs = useGame(s => s.combatLogs)
   const manualSession = useGame(s => s.manualBattleSession)
   const hunter = useGame(s => s.hunter)
@@ -293,6 +313,8 @@ export function InfiniteTowerPanel() {
   const equippedShadowIds = useGame(s => s.equippedShadowIds ?? [])
   const skillStates = useGame(s => s.skillStates ?? {})
   const visibleTraces = useGame(s => getSecretVisibleFragments(s.secretProgress))
+  const hardcoreState = useGame(s => s.hardcoreState)
+  const towerLock = canUseMajorAction(hardcoreState, 'tower')
 
   const [selectedFloor, setSelectedFloor] = useState<number | null>(null)
   const [cinematicLogs, setCinematicLogs] = useState<CinematicLogData[]>([])
@@ -337,6 +359,26 @@ export function InfiniteTowerPanel() {
   const monsters = getTowerMonstersForFloor(challengeFloor)
   const isBoss = floorType === 'boss'
 
+  const routeFloors = useMemo(() => {
+    const topFloor = Math.max(currentFloor + 2, 5)
+    return Array.from({ length: topFloor }, (_, i) => topFloor - i).filter(f => f >= 1)
+  }, [currentFloor])
+
+  const getCtaLabel = () => {
+    const isCurrent = challengeFloor === currentFloor
+    const isRetry = isCurrent && towerState.lastAttemptedFloor === currentFloor
+    if (isBoss) {
+      return '보스층 진입'
+    }
+    if (isRetry) {
+      return `${challengeFloor}층 재도전`
+    }
+    if (powerComparison.tone === 'danger') {
+      return '위험 감수하고 도전'
+    }
+    return `${challengeFloor}층 돌파 시작`
+  }
+
   const isAutoRevealing = activeBattle?.status === 'revealing'
   const isResolved = activeBattle?.status === 'resolved'
   const showResult = activeBattle?.showResult ?? false
@@ -346,6 +388,9 @@ export function InfiniteTowerPanel() {
     : undefined
 
   const isTowerManual = manualSession?.source === 'tower'
+  const terminalTowerSession = isTowerManual && manualSession ? isManualBattleSessionTerminal(manualSession) : false
+  const terminalTowerSessionKey = terminalTowerSession && manualSession ? `${manualSession.gateInstanceId}:${manualSession.startedAt}` : undefined
+  const finalizedTerminalTowerSessionsRef = useRef(new Set<string>())
   const manualFloor = manualSession?.towerFloor ?? challengeFloor
   const manualFloorType = getTowerFloorType(manualFloor)
   const isTowerBoss = manualFloorType === 'boss'
@@ -356,6 +401,13 @@ export function InfiniteTowerPanel() {
     : isTowerBoss
       ? 'border-amber-500 bg-amber-950/5 shadow-[inset_0_0_24px_rgba(245,158,11,0.12),0_0_20px_rgba(245,158,11,0.08)]'
       : 'border-cyan-400/30 bg-cyan-500/5'
+
+  useEffect(() => {
+    if (!terminalTowerSession || !terminalTowerSessionKey) return
+    if (finalizedTerminalTowerSessionsRef.current.has(terminalTowerSessionKey)) return
+    finalizedTerminalTowerSessionsRef.current.add(terminalTowerSessionKey)
+    finalizeHardcoreDeathFromSession()
+  }, [finalizeHardcoreDeathFromSession, terminalTowerSession, terminalTowerSessionKey])
 
   const towerResultRevealSteps = useMemo<RevealStep[]>(() => {
     if (!manualSession?.result) return []
@@ -376,7 +428,7 @@ export function InfiniteTowerPanel() {
           {
             title: manualSession.result === 'draw' ? 'LIMIT EXCEEDED' : 'CHALLENGE FAILED',
             text: manualSession.result === 'draw' ? '제한 행동 횟수를 초과했습니다.' : '탑의 마력에 굴복하고 말았습니다.',
-            subtext: manualSession.result === 'draw' ? '더 효율적인 무공/스킬 세팅이 필요합니다.' : '다시 전열을 가다듬고 도전하십시오.',
+            subtext: '탑 전투에서는 하드코어 리셋과 그림자 붕괴 페널티가 적용되지 않습니다.',
             durationMs: 1200,
             tone: 'failure',
           }
@@ -503,17 +555,19 @@ export function InfiniteTowerPanel() {
   const handleDirectTowerBattleComplete = (payload: DirectBattlePanelCompletePayload) => {
     const floor = directTowerBattleFloor ?? challengeFloor
     const runId = directTowerBattleRunIdRef.current ?? `direct-tower-${floor}-${payload.state.battleId}`
-    if (payload.outcome === 'cancelled') {
+    const hunterDied = Boolean(payload.battleStarted && (payload.actionCount ?? 0) > 0 && didDirectTowerHunterDie(payload))
+    if (payload.outcome === 'cancelled' && !hunterDied) {
       setIsDirectTowerBattleOpen(false)
       setDirectTowerBattleFloor(undefined)
       directTowerBattleRunIdRef.current = undefined
       return
     }
 
-    const resultKey = `${floor}:${runId}:${payload.outcome}`
+    const resolvedOutcome = hunterDied ? 'defeat' : payload.outcome
+    const resultKey = `${floor}:${runId}:${resolvedOutcome}`
     if (directTowerResultIdsRef.current.has(resultKey)) return
     directTowerResultIdsRef.current.add(resultKey)
-    resolveDirectTowerBattle(buildDirectTowerCombatLog(payload, floor, runId), floor)
+    resolveDirectTowerBattle(buildDirectTowerCombatLog({ ...payload, outcome: resolvedOutcome }, floor, runId), floor)
     setIsDirectTowerBattleOpen(false)
     setDirectTowerBattleFloor(undefined)
     directTowerBattleRunIdRef.current = undefined
@@ -548,6 +602,7 @@ export function InfiniteTowerPanel() {
     ? cinematicLogs
     : []
   const manualBattleLocked = isRevealing || Boolean(manualSession?.result)
+  const hideManualContinueControls = manualSession ? shouldHideBattleContinueControls(manualSession) : false
   const shouldShowResultReveal = Boolean(
     !isTowerManual &&
     isResolved &&
@@ -699,88 +754,237 @@ export function InfiniteTowerPanel() {
         </div>
       )}
 
-      {/* Floor navigation */}
-      <div className="mb-4 flex flex-wrap items-center gap-2">
-        {floorsNear.map(floor => {
-          const isCurrent = floor === currentFloor
-          const isBossFloor = floor % 5 === 0
-          return (
-            <button
-              key={floor}
-              type="button"
-              onClick={() => {
-                setSelectedFloor(floor)
-                setIsDirectTowerBattleOpen(false)
-                setDirectTowerBattleFloor(undefined)
-                directTowerBattleRunIdRef.current = undefined
-                if (!isTowerManual) cancelTowerBattle()
-              }}
-              className={clsx(
-                'inline-flex items-center gap-1 rounded border px-2.5 py-1 text-xs font-bold transition',
-                isCurrent
-                  ? 'border-violet-300/50 bg-violet-400/15 text-violet-100'
-                  : 'border-white/10 bg-white/5 text-white/50',
-                isBossFloor && 'ring-1 ring-amber-300/30'
-              )}
-            >
-              {isBossFloor && <Trophy className="w-3 h-3 text-amber-300" />}
-              {floor}층
-            </button>
-          )
-        })}
-      </div>
-
-      {/* Challenge card (shown when no battle active) */}
+      {/* Main Climbing & Briefing Panel */}
       {!isDirectTowerBattleOpen && !isAutoRevealing && !isTowerManual && (
-        <div className={clsx('mb-4 rounded-lg border p-4', isBoss ? 'tower-boss-warning border-amber-300/25 bg-amber-400/8' : 'border-violet-300/20 bg-violet-400/8')}>
-          <div className="flex items-center justify-between mb-2">
-            <div className="flex items-center gap-2">
-              <span className={clsx('system-text text-[10px] px-1.5 py-0.5 rounded border', isBoss ? 'border-amber-300/30 text-amber-200' : 'border-violet-300/30 text-violet-200')}>
-                {isBoss ? 'BOSS FLOOR' : 'NORMAL'}
-              </span>
-              <span className="text-sm font-bold text-white/90">{challengeFloor}층</span>
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 mb-4">
+          {/* Left Column: Route Stepper Map */}
+          <div className="lg:col-span-5 flex flex-col border border-violet-500/20 bg-black/40 rounded-lg p-4 max-h-[480px] overflow-y-auto scrollbar-none">
+            <div className="text-[10px] system-text text-violet-300/60 mb-3 uppercase tracking-wider">탑 등반 경로</div>
+            <div className="relative pl-6 space-y-4">
+              {/* Vertical line connecting nodes */}
+              <div className="absolute left-[11px] top-2 bottom-2 w-0.5 bg-gradient-to-b from-violet-500/10 via-violet-500/40 to-violet-500/10" />
+              
+              {routeFloors.map(floor => {
+                const isCleared = floor < currentFloor
+                const isCurrent = floor === currentFloor
+                const isSelected = floor === challengeFloor
+                const isBossFloor = floor % 5 === 0
+                const isLocked = floor > currentFloor
+                const isRetry = isCurrent && towerState.lastAttemptedFloor === currentFloor
+
+                return (
+                  <button
+                    key={floor}
+                    type="button"
+                    disabled={isLocked}
+                    onClick={() => {
+                      setSelectedFloor(floor)
+                      setIsDirectTowerBattleOpen(false)
+                      setDirectTowerBattleFloor(undefined)
+                      directTowerBattleRunIdRef.current = undefined
+                      if (!isTowerManual) cancelTowerBattle()
+                    }}
+                    className={clsx(
+                      'relative flex items-center justify-between w-full p-2.5 rounded border text-left transition',
+                      isSelected
+                        ? 'border-violet-400 bg-violet-500/20 text-violet-100 shadow-[0_0_12px_rgba(139,92,246,0.25)]'
+                        : isLocked
+                          ? 'border-white/5 bg-black/20 text-white/20 cursor-not-allowed'
+                          : isCurrent
+                            ? 'border-amber-400/50 bg-amber-400/10 text-amber-100 hover:bg-amber-400/15'
+                            : 'border-white/10 bg-white/5 text-white/60 hover:bg-white/10'
+                    )}
+                  >
+                    {/* Timeline dot */}
+                    <div className={clsx(
+                      'absolute -left-[29px] w-4 h-4 rounded-full border flex items-center justify-center text-[9px] font-bold z-10',
+                      isCleared
+                        ? 'border-emerald-400 bg-emerald-500/20 text-emerald-300'
+                        : isCurrent
+                          ? 'border-amber-400 bg-amber-500/20 text-amber-300 animate-pulse'
+                          : isLocked
+                            ? 'border-white/10 bg-zinc-900 text-white/20'
+                            : 'border-violet-400 bg-violet-500/20 text-violet-300'
+                    )}>
+                      {isCleared ? '✓' : isBossFloor ? '☠' : floor}
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <span className="font-mono text-sm font-black">{floor}층</span>
+                      {isBossFloor && (
+                        <span className="text-[10px] px-1.5 py-0.5 bg-rose-500/20 text-rose-300 border border-rose-500/30 rounded">
+                          보스
+                        </span>
+                      )}
+                      {isRetry && (
+                        <span className="text-[10px] px-1.5 py-0.5 bg-amber-500/20 text-amber-300 border border-amber-500/30 rounded animate-bounce">
+                          재도전
+                        </span>
+                      )}
+                      {isCurrent && !isRetry && (
+                        <span className="text-[10px] px-1.5 py-0.5 bg-violet-500/20 text-violet-300 border border-violet-500/30 rounded">
+                          도전
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="flex items-center gap-1.5">
+                      {isLocked ? (
+                        <Lock className="w-3 h-3 opacity-40 text-white" />
+                      ) : isCleared ? (
+                        <span className="text-[10px] text-emerald-400 font-bold">클리어</span>
+                      ) : (
+                        <span className="text-[10px] text-amber-400 font-bold">도전가능</span>
+                      )}
+                    </div>
+                  </button>
+                )
+              })}
             </div>
           </div>
 
-          <div className="mb-3 space-y-1">
-            <div className="text-xs text-white/55">추천 전투력: <span className="font-bold text-white/80">{recommendedPower}</span></div>
-            <div className={`rounded border px-2 py-1.5 text-[11px] ${powerComparisonClass}`}>
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <span className="system-text">전투력 비교 · {powerComparison.label}</span>
-                <span className="font-mono">
-                  현재 {hunterPower.toLocaleString()} / 권장 {recommendedPower.toLocaleString()} / 차이 {powerComparison.diff >= 0 ? '+' : ''}{powerComparison.diff.toLocaleString()}
+          {/* Right Column: Selected Floor Briefing & HUD */}
+          <div className="lg:col-span-7 space-y-4">
+            {/* HUD & Policy Announcement */}
+            <div className="border border-violet-500/20 bg-black/40 rounded-lg p-3 space-y-2">
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-white/55">최고 클리어 기록</span>
+                <span className="font-mono font-black text-violet-300">{highestCleared}층</span>
+              </div>
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-white/55">현재 도전 가능</span>
+                <span className="font-mono font-black text-amber-300">{currentFloor}층</span>
+              </div>
+              <div className="border-t border-violet-500/10 pt-2 flex gap-1.5 items-start text-[10px] text-cyan-300/80 leading-relaxed">
+                <ShieldAlert className="w-3.5 h-3.5 flex-shrink-0 text-cyan-400 mt-0.5" />
+                <div>
+                  탑 내부에서는 마력 안정장치에 의해 <span className="text-cyan-200 font-bold">사망 리셋(사망 시 초기화)</span> 및 <span className="text-cyan-200 font-bold">그림자 붕괴</span> 페널티가 절대로 적용되지 않습니다. 안전하게 등반하여 돌파하십시오.
+                </div>
+              </div>
+            </div>
+
+            {/* Floor Briefing Card */}
+            <div className={clsx('rounded-lg border p-4 transition-all duration-300', isBoss ? 'tower-boss-warning border-amber-300/25 bg-amber-400/8' : 'border-violet-300/20 bg-violet-400/8')}>
+              <div className="flex items-center justify-between mb-3 border-b border-white/5 pb-2">
+                <div className="flex items-center gap-2">
+                  <span className={clsx('system-text text-[9px] px-1.5 py-0.5 rounded border font-bold uppercase', isBoss ? 'border-amber-300/40 text-amber-300 bg-amber-500/10' : 'border-violet-300/40 text-violet-300 bg-violet-500/10')}>
+                    {isBoss ? '☠ BOSS ENCOUNTER' : ' Normal Floor'}
+                  </span>
+                  <h3 className="text-sm font-black text-white">{challengeFloor}층 브리핑</h3>
+                </div>
+                <span className="text-xs font-mono font-bold text-white/60">
+                  추천 레벨: {getDirectTowerEnemyBaseLevel(challengeFloor, floorType)}Lv
                 </span>
               </div>
-            </div>
-            {monsters.length > 0 && (
-              <div className="text-xs text-white/55">
-                등장 몬스터: {monsters.map(m => m.name).join(', ')}
+
+              <div className="space-y-3">
+                {/* Recommended vs Player combat power details */}
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-white/55">추천 전투력</span>
+                    <span className="font-mono font-bold text-white/80">{recommendedPower.toLocaleString()}</span>
+                  </div>
+                  
+                  <div className={`rounded border p-2 text-[11px] ${powerComparisonClass}`}>
+                    <div className="flex items-center justify-between mb-1 font-bold">
+                      <span className="system-text">전투력 비교: {powerComparison.label}</span>
+                      <span className="font-mono text-xs">
+                        {powerComparison.diff >= 0 ? '+' : ''}{powerComparison.diff.toLocaleString()}
+                      </span>
+                    </div>
+                    <div className="w-full bg-black/40 h-1.5 rounded-full overflow-hidden mb-1">
+                      <div 
+                        className={clsx(
+                          'h-full rounded-full transition-all duration-500',
+                          powerComparison.tone === 'stable'
+                            ? 'bg-emerald-400'
+                            : powerComparison.tone === 'challenge'
+                              ? 'bg-amber-400'
+                              : 'bg-rose-500'
+                        )} 
+                        style={{ width: `${Math.min(100, Math.max(10, (hunterPower / recommendedPower) * 100))}%` }} 
+                      />
+                    </div>
+                    <div className="flex justify-between text-[9px] text-white/40">
+                      <span>현재 {hunterPower.toLocaleString()}</span>
+                      <span>권장 {recommendedPower.toLocaleString()}</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Monsters list */}
+                {monsters.length > 0 && (
+                  <div className="text-xs bg-black/20 rounded p-2 border border-white/5 space-y-1">
+                    <span className="text-white/40 block text-[9px] uppercase font-bold tracking-wider">주요 적 개체</span>
+                    <span className="text-violet-100 font-bold">
+                      {monsters.map(m => m.name).join(', ')}
+                    </span>
+                  </div>
+                )}
+
+                {/* Floor Traits */}
+                <div className="text-xs bg-black/20 rounded p-2 border border-white/5 space-y-1">
+                  <span className="text-white/40 block text-[9px] uppercase font-bold tracking-wider">층 환경 특성</span>
+                  <span className="text-violet-200/90 leading-relaxed block">
+                    {isBoss 
+                      ? '보스층의 강력한 마력이 상층으로부터 감지됩니다. 직접 조작 및 철저한 준비 후 도전을 권장합니다.'
+                      : '빠른 적이 아군의 헛점을 노려 기습합니다. 진형의 전/후열 마력 밸런스에 신경 쓰십시오.'}
+                  </span>
+                </div>
+
+                {/* Reward preview section */}
+                <div className="text-xs bg-black/20 rounded p-2 border border-white/5 space-y-1">
+                  <span className="text-white/40 block text-[9px] uppercase font-bold tracking-wider">첫 돌파 보상</span>
+                  <div className="flex flex-wrap gap-1.5 pt-1">
+                    <span className="text-[10px] px-1.5 py-0.5 bg-violet-500/20 text-violet-300 border border-violet-500/30 rounded">
+                      XP {calculateTowerReward(challengeFloor, 'victory', true).hunterXp?.toLocaleString() || 100}
+                    </span>
+                    <span className="text-[10px] px-1.5 py-0.5 bg-amber-500/20 text-amber-300 border border-amber-500/30 rounded">
+                      골드 {calculateTowerReward(challengeFloor, 'victory', true).gold?.toLocaleString() || 1000}
+                    </span>
+                    <span className="text-[10px] px-1.5 py-0.5 bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 rounded font-bold">
+                      정수 {calculateTowerReward(challengeFloor, 'victory', true).shadowEssence?.toLocaleString() || 5}
+                    </span>
+                    {calculateTowerReward(challengeFloor, 'victory', true).boxType && (
+                      <span className="text-[10px] px-1.5 py-0.5 bg-rose-500/20 text-rose-300 border border-rose-500/30 rounded animate-pulse">
+                        보스 박스 획득
+                      </span>
+                    )}
+                  </div>
+                </div>
               </div>
-            )}
-          </div>
 
-          {isBoss && (
-            <div className="mb-3 text-[11px] text-amber-200/70 border border-amber-400/15 rounded px-2 py-1.5 bg-amber-400/5">
-              보스층입니다. 수동 전투와 소모품 사용을 권장합니다.
-            </div>
-          )}
-
-          <div className="grid gap-2">
-            <button
-              type="button"
-              onClick={handleDirectTowerBattle}
-              className={clsx(
-                'inline-flex items-center justify-center gap-2 rounded border px-3 py-2 text-sm font-bold transition',
-                isBoss
-                  ? 'border-amber-300/35 bg-amber-400/12 text-amber-100 hover:bg-amber-400/18'
-                  : 'border-violet-300/35 bg-violet-400/12 text-violet-100 hover:bg-violet-400/18'
-              )}
-            >
-              <Swords className="w-4 h-4" />
-              무한의 탑 직접 조작 전투
-            </button>
-            <div className="text-[11px] text-white/45">
-              추천 적 조합: <span className="text-violet-100/80">{getDirectBattleEncounterShortLabelKo(getDirectTowerEncounterKey(challengeFloor, floorType))}</span>
+              {/* Action button */}
+              <div className="mt-4 grid gap-2">
+                <button
+                  type="button"
+                  onClick={handleDirectTowerBattle}
+                  disabled={!towerLock.allowed}
+                  className={clsx(
+                    'inline-flex items-center justify-center gap-2 rounded border px-4 py-2.5 text-sm font-black transition-all duration-300 transform active:scale-95 shadow-md',
+                    !towerLock.allowed
+                      ? 'border-red-500/25 bg-red-950/15 text-red-400 cursor-not-allowed opacity-60'
+                      : isBoss
+                        ? 'border-rose-400 bg-rose-600/20 text-rose-200 hover:bg-rose-600/30 shadow-rose-950/20'
+                        : challengeFloor === currentFloor && towerState.lastAttemptedFloor === currentFloor
+                          ? 'border-amber-400 bg-amber-500/20 text-amber-100 hover:bg-amber-500/30 shadow-amber-950/20'
+                          : 'border-violet-400 bg-violet-600/20 text-violet-200 hover:bg-violet-600/30 shadow-violet-950/20'
+                  )}
+                >
+                  <Swords className="w-4 h-4" />
+                  {!towerLock.allowed ? '진입 불가 (잠김)' : getCtaLabel()}
+                </button>
+                
+                {!towerLock.allowed && (
+                  <div className="text-[10px] text-red-400/90 bg-red-950/25 border border-red-500/35 rounded p-2 text-center leading-relaxed">
+                    ⚠️ {towerLock.reason}
+                  </div>
+                )}
+                
+                <div className="text-[10px] text-white/35 text-center font-mono">
+                  전투 매칭 적 군단: <span className="text-violet-300">{getDirectBattleEncounterShortLabelKo(getDirectTowerEncounterKey(challengeFloor, floorType))}</span>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -789,6 +993,7 @@ export function InfiniteTowerPanel() {
       {isDirectTowerBattleOpen && (
         <div className="mb-4">
           <DirectBattlePreviewPanel
+            source="tower"
             title="무한의 탑 직접 조작 전투"
             note="승리/패배 결과는 기존 무한의 탑 보상과 층 진행 처리로 한 번만 연결됩니다."
             hunter={hunter}
@@ -843,7 +1048,20 @@ export function InfiniteTowerPanel() {
       )}
 
       {/* Manual battle panel */}
-      {isTowerManual && manualSession && (
+      {terminalTowerSession && manualSession && (
+        <div className="mb-4 rounded-lg border border-rose-400/30 bg-rose-950/20 p-4 text-xs text-rose-100">
+          <div className="text-sm font-black">
+            {isManualBattleSessionPlayerDeath(manualSession) ? '헌터 사망이 확정되었습니다.' : '전투 기록이 종료되었습니다.'}
+          </div>
+          <p className="mt-2 leading-relaxed text-rose-100/75">
+            {isManualBattleSessionPlayerDeath(manualSession)
+              ? '하드코어 정산이 진행 중입니다. 사망 전 백업을 저장한 뒤 진행 기록이 초기화됩니다.'
+              : '종료된 전투는 다시 진행하거나 포기할 수 없습니다.'}
+          </p>
+        </div>
+      )}
+
+      {isTowerManual && manualSession && !terminalTowerSession && (
         <div className={clsx("mb-4 border rounded-lg p-4 sm:p-5 transition-all duration-500 relative overflow-hidden", manualPanelStyleClass)}>
           {/* Cinematic overlay for manual actions */}
           <div className="relative mb-4">
@@ -1078,9 +1296,16 @@ export function InfiniteTowerPanel() {
               <button type="button" disabled={manualBattleLocked} onClick={() => handleManualAction({ type: 'auto_finish' })} className="btn text-sm min-h-10 border-amber-400/25 bg-amber-400/10 text-amber-100 disabled:opacity-50 disabled:cursor-not-allowed">
                 <Zap className="w-3 h-3" /> 자동 마무리
               </button>
-              <button type="button" onClick={handleManualCancel} className="btn text-sm min-h-10 border-rose-400/25 bg-rose-400/10 text-rose-100">
-                <X className="w-3 h-3" /> 전투 포기
-              </button>
+              {!hideManualContinueControls && (
+                <button type="button" onClick={handleManualCancel} className="btn text-sm min-h-10 border-rose-400/25 bg-rose-400/10 text-rose-100">
+                  <X className="w-3 h-3" /> 전투 포기
+                </button>
+              )}
+              {hideManualContinueControls && (
+                <div className="rounded border border-rose-400/25 bg-rose-400/10 px-3 py-2 text-center text-xs text-rose-100">
+                  전투 기록 종료
+                </div>
+              )}
             </div>
           </div>
 

@@ -53,12 +53,12 @@ export const GRADE_LABELS: Record<HunterGradeTier, string> = {
  * 헌터의 현재 게임 데이터를 바탕으로 평가 항목별 세부 점수(Breakdown)를 계산합니다.
  */
 export const buildAssociationRatingBreakdown = (state: any): AssociationRatingBreakdown => {
-  const focusSession = state.focusSession
-  const achievementStats = state.achievementStats
-  const combatLogs = state.combatLogs ?? []
-  const ownedShadows = state.ownedShadows ?? []
-  const skillStates = state.skillStates ? Object.values(state.skillStates) : []
-  const hunter = state.hunter
+  const focusSession = state?.focusSession
+  const achievementStats = state?.achievementStats
+  const combatLogs = state?.combatLogs ?? []
+  const ownedShadows = state?.ownedShadows ?? []
+  const skillStates = state?.skillStates ? Object.values(state.skillStates) : []
+  const hunter = state?.hunter
 
   // 1. realLife: 현실 집중 성과 (Focus Session)
   let realLifeScore = 0
@@ -136,7 +136,7 @@ export const buildAssociationRatingBreakdown = (state: any): AssociationRatingBr
   }
   bossScore += Math.min(700, killPoints)
 
-  const tower = state.infiniteTower
+  const tower = state?.infiniteTower
   if (tower) {
     const maxFloor = tower.highestClearedFloor ?? tower.maxFloor ?? 0
     bossScore += Math.min(300, Math.floor(maxFloor / 5) * 50)
@@ -252,7 +252,7 @@ export const evaluateTitleUnlocks = (state: any, currentGrade: HunterGradeTier):
   if (currentGrade === 'NATIONAL') unlocked.add('title_national')
 
   // 행동 기반 칭호
-  const focusSession = state.focusSession
+  const focusSession = state?.focusSession
   if (focusSession) {
     const successCount = (focusSession.history ?? []).filter((r: any) => r.completed).length
     if (successCount >= 10 || (focusSession.totalFocusedMs ?? 0) >= 10 * 60 * 60 * 1000) {
@@ -260,24 +260,24 @@ export const evaluateTitleUnlocks = (state: any, currentGrade: HunterGradeTier):
     }
   }
 
-  const redGateCleared = state.achievementStats?.redGateClearedCount ?? 0
+  const redGateCleared = state?.achievementStats?.redGateClearedCount ?? 0
   if (redGateCleared >= 3) {
     unlocked.add('title_red_gate')
   }
 
-  const ownedShadows = state.ownedShadows ?? []
+  const ownedShadows = state?.ownedShadows ?? []
   if (ownedShadows.length >= 6) {
     unlocked.add('title_shadow_commander')
   }
 
-  const bossKills = state.achievementStats?.bossKillsCount ?? 0
+  const bossKills = state?.achievementStats?.bossKillsCount ?? 0
   if (bossKills >= 5) {
     unlocked.add('title_boss_slayer')
   }
 
-  const skillStates = state.skillStates ? Object.values(state.skillStates) : []
+  const skillStates = state?.skillStates ? Object.values(state.skillStates) : []
   const hasCapstone = skillStates.some((sk: any) => sk.isCapstoneUnlocked)
-  const hunter = state.hunter
+  const hunter = state?.hunter
   const isHighJob = (hunter?.jobs?.[hunter?.activeJobId || '']?.level ?? 1) >= 5
   if (hasCapstone || isHighJob) {
     unlocked.add('title_tactician')
@@ -301,14 +301,14 @@ export const getMaxAutoGradeByLevel = (level: number): HunterGradeTier => {
  * 헌터의 실적 데이터에 명확하고 강력한 증거가 기록되어 있는지 대조합니다.
  */
 export const hasStrongEvidenceForGrade = (targetGrade: HunterGradeTier, state: any): boolean => {
-  const level = state.hunter?.level ?? 1
-  const stats = state.achievementStats
+  const level = state?.hunter?.level ?? 1
+  const stats = state?.achievementStats
   const gateCleared = stats?.gateClearedCount ?? 0
   const bossKills = stats?.bossKillsCount ?? 0
   const redGateCleared = stats?.redGateClearedCount ?? 0
-  const totalFocusedMs = state.focusSession?.totalFocusedMs ?? 0
-  const shadows = state.ownedShadows ?? []
-  const skillStates = state.skillStates ? Object.values(state.skillStates) : []
+  const totalFocusedMs = state?.focusSession?.totalFocusedMs ?? 0
+  const shadows = state?.ownedShadows ?? []
+  const skillStates = state?.skillStates ? Object.values(state.skillStates) : []
 
   if (targetGrade === 'E' || targetGrade === 'D') return true
   
@@ -344,7 +344,7 @@ export const hasStrongEvidenceForGrade = (targetGrade: HunterGradeTier, state: a
  * 마이그레이션 후보 등급을 레벨 및 증거 조건을 적용해 최종 제한합니다.
  */
 export const clampMigratedGradeByEvidence = (candidateGrade: HunterGradeTier, state: any): HunterGradeTier => {
-  const level = state.hunter?.level ?? 1
+  const level = state?.hunter?.level ?? 1
   const maxByLvl = getMaxAutoGradeByLevel(level)
   
   const tiers: HunterGradeTier[] = ['E', 'D', 'C', 'B', 'A', 'S', 'NATIONAL']
@@ -368,14 +368,14 @@ export const clampMigratedGradeByEvidence = (candidateGrade: HunterGradeTier, st
  * 특정 등급의 승급 시험(Promotion Exam)을 시작할 수 있는 자격이 주어지는지 판단합니다.
  */
 export const canStartExamForGrade = (targetGrade: HunterGradeTier, state: any): boolean => {
-  const level = state.hunter?.level ?? 1
-  const stats = state.achievementStats
+  const level = state?.hunter?.level ?? 1
+  const stats = state?.achievementStats
   const gateCleared = stats?.gateClearedCount ?? 0
   const bossKills = stats?.bossKillsCount ?? 0
   const redGateCleared = stats?.redGateClearedCount ?? 0
-  const totalFocusedMs = state.focusSession?.totalFocusedMs ?? 0
-  const shadows = state.ownedShadows ?? []
-  const skillStates = state.skillStates ? Object.values(state.skillStates) : []
+  const totalFocusedMs = state?.focusSession?.totalFocusedMs ?? 0
+  const shadows = state?.ownedShadows ?? []
+  const skillStates = state?.skillStates ? Object.values(state.skillStates) : []
 
   if (targetGrade === 'D') {
     return true // E -> D는 스코어만 충족하면 상시 허용

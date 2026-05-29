@@ -423,10 +423,8 @@ export function Battlefield2DView({
                     r={isCompact ? 5 : 7}
                     fill={projectileColor}
                     className="filter drop-shadow-[0_0_8px_rgba(255,255,255,0.8)]"
-                    style={{
-                      cx: `${start.x}%`,
-                      cy: `${start.y}%`
-                    }}
+                    cx={`${start.x}%`}
+                    cy={`${start.y}%`}
                     animate={{
                       cx: [`${start.x}%`, `${end.x}%`],
                       cy: [`${start.y}%`, `${end.y}%`],
@@ -445,10 +443,8 @@ export function Battlefield2DView({
                     fill={projectileColor}
                     opacity={0.7}
                     className="filter blur-[1px]"
-                    style={{
-                      cx: `${start.x}%`,
-                      cy: `${start.y}%`
-                    }}
+                    cx={`${start.x}%`}
+                    cy={`${start.y}%`}
                     animate={{
                       cx: [`${start.x}%`, `${end.x}%`],
                       cy: [`${start.y}%`, `${end.y}%`],
