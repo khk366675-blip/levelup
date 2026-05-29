@@ -119,6 +119,8 @@ export interface DirectBattlePreviewPanelProps {
   restartButtonLabel?: string
   cancelButtonLabel?: string
   onBattleComplete?: (payload: DirectBattlePanelCompletePayload) => void
+  pressureSnapshot?: any
+  isRedGate?: boolean
 }
 
 const enemyTargetTypes = new Set<BattleTargetType>([
@@ -682,6 +684,8 @@ export function DirectBattlePreviewPanel({
   restartButtonLabel = '새 전투 시작',
   cancelButtonLabel = '전투 취소',
   onBattleComplete,
+  pressureSnapshot,
+  isRedGate,
 }: DirectBattlePreviewPanelProps) {
   const autoStartedRef = useRef(false)
   const revealApplyTimersRef = useRef<number[]>([])
@@ -779,7 +783,7 @@ export function DirectBattlePreviewPanel({
     const shadowBuilds = buildShadowBattleUnits(previewShadows, shadowDefinitions, {
       unitIdPrefix: 'direct-preview-shadow',
     })
-    const enemyBuild = buildDirectBattleEncounterParty(encounterKey, enemyBaseLevel)
+    const enemyBuild = buildDirectBattleEncounterParty(encounterKey, enemyBaseLevel, pressureSnapshot, isRedGate)
     const units = [hunterBuild.unit, ...shadowBuilds.map(build => build.unit), ...enemyBuild.units]
     const state = createDirectBattleState(units, {
       battleId: `direct-manual-preview-${encounterKey}`,

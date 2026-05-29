@@ -20,8 +20,11 @@ import {
   Dices,
   Compass,
   Heart,
+  Sparkles,
 } from 'lucide-react'
 import { useGame } from '../lib/store'
+import { calculateRealityPressure } from '../lib/realityPressure'
+import { FocusSessionPanel } from './FocusSessionPanel'
 import { CinematicLogOverlay, type CinematicLogData, type CinematicLogTone } from './CinematicLogOverlay'
 import { CombatLogPanel, type CombatLogEntry, type CombatLogEntryTone } from './CombatLogPanel'
 import { DramaticReveal, type RevealStep } from './DramaticReveal'
@@ -1590,6 +1593,12 @@ export function GatePanel() {
   const ownedShadows = useGame(s => s.ownedShadows ?? [])
   const equippedShadowIds = useGame(s => s.equippedShadowIds ?? [])
   const gateStatus = useGame(s => s.gateStatus)
+  const dailyProgression = useGame(s => s.dailyProgression)
+  const focusSession = useGame(s => s.focusSession)
+  const currentPressure = useMemo(() => {
+    if (!activeGate) return undefined
+    return calculateRealityPressure(dailyProgression, focusSession, activeGate)
+  }, [dailyProgression, focusSession, activeGate])
   const combatLogs = useGame(s => s.combatLogs)
   const latestGateCombatLog = combatLogs.find(
     log => log.source === 'gate' || (!log.source && !log.gateInstanceId?.startsWith('tower-'))
@@ -1686,6 +1695,7 @@ export function GatePanel() {
   if (!activeGateOpen) {
     return (
       <div className="space-y-4">
+        <FocusSessionPanel />
         <GateStatusPanel />
         <ArchiveTraceChip count={traceCount} />
         <EmptyGateState />
@@ -1702,6 +1712,7 @@ export function GatePanel() {
   if (!gate || !activeGate) {
     return (
       <div className="space-y-4">
+        <FocusSessionPanel />
         <GateStatusPanel />
         <ArchiveTraceChip count={traceCount} />
         <div className="panel corner-bracket p-8 text-center border-rose-400/30">
@@ -1811,6 +1822,8 @@ export function GatePanel() {
           restartButtonLabel="처음부터 다시"
           cancelButtonLabel="전투 취소"
           onBattleComplete={handleDirectGateBattleComplete}
+          pressureSnapshot={activeGate.runState?.pressureSnapshot}
+          isRedGate={Boolean(activeGate.runState?.redGateState)}
         />
       </div>
     )
@@ -1865,6 +1878,7 @@ export function GatePanel() {
 
   return (
     <div className="space-y-4">
+      <FocusSessionPanel />
       <GateStatusPanel />
       <ArchiveTraceChip count={traceCount} />
 
@@ -1903,6 +1917,30 @@ export function GatePanel() {
           <StatPill label="권장 전투력" value={gate.recommendedPower} />
           <StatPill label="내 전투력" value={playerPower} />
         </div>
+
+        {currentPressure && currentPressure.reasonLabels.length > 0 && (
+          <div className="mb-4 rounded-lg border border-cyan-400/20 bg-cyan-950/20 px-3 py-2 text-xs text-cyan-200">
+            <div className="flex flex-col gap-1">
+              <div className="flex items-center gap-1.5 font-bold text-[12px] text-cyan-300">
+                <Sparkles className="w-3.5 h-3.5 animate-pulse text-cyan-400" />
+                현실 공명에 의한 게이트 심도 변화
+              </div>
+              <div className="text-white/70 text-[11px] leading-relaxed">
+                사용자의 현실 행동 공명(준비도 및 성공 집중 세션)이 이 게이트에 감응하여 보상이 강화된 대신, 몬스터 반응도 예리해졌습니다.
+              </div>
+              <div className="mt-1 flex flex-wrap gap-1.5 items-center">
+                {currentPressure.reasonLabels.map((label: string, idx: number) => (
+                  <span key={idx} className="bg-cyan-500/10 border border-cyan-400/35 rounded px-2 py-0.5 text-[9px] text-cyan-200">
+                    {label}
+                  </span>
+                ))}
+                <span className="bg-rose-500/10 border border-rose-400/35 rounded px-2 py-0.5 text-[9px] text-rose-200 font-bold">
+                  심층 반응: 몬스터 압박도 +{Math.round((currentPressure.monsterHpMultiplier - 1.0) * 100)}%
+                </span>
+              </div>
+            </div>
+          </div>
+        )}
 
         <div className={`mb-5 rounded-lg border px-3 py-2 text-xs ${powerComparisonClass}`}>
           <div className="flex flex-wrap items-center justify-between gap-2">
@@ -2218,6 +2256,7 @@ function GateRunPanel({
 
   return (
     <div className="space-y-4">
+      <FocusSessionPanel />
       {/* Red Gate Warning Banner */}
       {isRedGate && (
         <div className="mb-4 rounded-lg border border-red-500 bg-red-950/60 p-4 text-red-200 animate-pulse flex items-start gap-3 shadow-[0_0_15px_rgba(239,68,68,0.3)]">
@@ -2227,6 +2266,29 @@ function GateRunPanel({
             <p className="text-[11px] text-red-300 leading-relaxed mt-0.5">
               게이트가 붉게 뒤틀립니다. 도망칠 수 없는 붉은 균열이 전장을 삼킵니다! 남은 구역의 몬스터 전투 난이도가 대폭 강화되지만, 클리어 시 해당 게이트의 몬스터 그림자 추출 성공률 및 고등급/보스급 그림자의 공명 확률이 대폭 가산됩니다.
             </p>
+          </div>
+        </div>
+      )}
+
+      {/* Reality Pressure Warning Banner */}
+      {runState.pressureSnapshot && runState.pressureSnapshot.reasonLabels.length > 0 && (
+        <div className="mb-4 rounded-lg border border-cyan-500 bg-cyan-950/45 p-4 text-cyan-200 flex items-start gap-3 shadow-[0_0_10px_rgba(34,211,238,0.2)] animate-fade-in">
+          <Sparkles className="w-5 h-5 text-cyan-400 flex-shrink-0 mt-0.5 animate-pulse" />
+          <div>
+            <div className="font-bold text-xs tracking-wider uppercase text-cyan-400">REALITY RESONANCE ACTIVE</div>
+            <p className="text-[11px] text-cyan-300 leading-relaxed mt-0.5">
+              현실 공명으로 게이트 심도가 깊어졌습니다. 보상과 몬스터 위험이 동시에 증가합니다!
+            </p>
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {runState.pressureSnapshot.reasonLabels.map((label: string, idx: number) => (
+                <span key={idx} className="bg-cyan-500/10 border border-cyan-400/30 rounded px-2 py-0.5 text-[9px] text-cyan-200">
+                  {label}
+                </span>
+              ))}
+              <span className="bg-rose-500/10 border border-rose-400/30 rounded px-2 py-0.5 text-[9px] text-rose-300 font-bold">
+                심층 반응: 몬스터 압박도 +{Math.round((runState.pressureSnapshot.monsterHpMultiplier - 1.0) * 100)}%
+              </span>
+            </div>
           </div>
         </div>
       )}

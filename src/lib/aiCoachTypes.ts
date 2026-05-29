@@ -166,6 +166,11 @@ export interface AiCoachSaveSummary {
     suggestedIntervalDays: number
     urgency: 'low' | 'medium' | 'high' | 'unknown'
   }[]
+  todayCompletedFocusMs?: number
+  todayCompletedFocusSessionCount?: number
+  todayFailedFocusSessionCount?: number
+  longestFocusSessionMs?: number
+  focusQuestProgress?: string
 }
 
 /**

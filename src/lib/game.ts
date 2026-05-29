@@ -19,8 +19,10 @@ import type {
   StatKey,
   TitleDefinition,
   TitleEffects,
+  RealityPressureSnapshot,
 } from './types'
 import { CATEGORY_META, STAT_META, TITLE_DEFINITIONS } from './types'
+import { getMonsterPressureScaling } from './realityPressure'
 import { getShadowEffects } from './shadows'
 import { resolveShadowActionRuntime, type ShadowRuntimeEvent } from './shadowCombatRuntime'
 import { getShadowCombatAggregate, getShadowCombatModifiers } from './shadowStats'
@@ -1491,21 +1493,36 @@ export const createPlayerBattleActor = (
   cooldowns: {},
 })
 
-export const createMonsterBattleActor = (monster: MonsterDefinition): BattleActorState => ({
-  type: 'monster',
-  id: monster.id,
-  name: monster.name,
-  maxHp: monster.stats.maxHp,
-  hp: monster.stats.maxHp,
-  atk: monster.stats.atk,
-  def: monster.stats.def,
-  speed: monster.stats.speed,
-  critRate: monster.stats.critRate,
-  accuracy: monster.stats.accuracy,
-  evasionRate: monster.stats.evasionRate,
-  skillIds: Array.from(new Set([BASIC_ATTACK_SKILL.id, ...monster.skillIds])),
-  cooldowns: {},
-})
+export const createMonsterBattleActor = (
+  monster: MonsterDefinition,
+  pressureSnapshot?: RealityPressureSnapshot,
+  isRedGate = false
+): BattleActorState => {
+  const isBoss = monster.id.includes('boss') || monster.name.includes('보스')
+  const isElite = monster.id.includes('elite') || monster.name.includes('엘리트')
+  const monsterRole = isBoss ? 'boss' : isElite ? 'elite' : 'normal'
+  const scaling = getMonsterPressureScaling(pressureSnapshot, monsterRole, isRedGate)
+
+  const maxHp = Math.round(monster.stats.maxHp * scaling.hp)
+  const atk = Math.round(monster.stats.atk * scaling.atk)
+  const def = Math.round(monster.stats.def * scaling.def)
+
+  return {
+    type: 'monster',
+    id: monster.id,
+    name: monster.name,
+    maxHp,
+    hp: maxHp,
+    atk,
+    def,
+    speed: monster.stats.speed,
+    critRate: monster.stats.critRate,
+    accuracy: monster.stats.accuracy,
+    evasionRate: monster.stats.evasionRate,
+    skillIds: Array.from(new Set([BASIC_ATTACK_SKILL.id, ...monster.skillIds])),
+    cooldowns: {},
+  }
+}
 
 export const decrementCooldowns = (actor: BattleActorState): BattleActorState => ({
   ...actor,

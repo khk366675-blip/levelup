@@ -58,6 +58,13 @@ import type {
   GateRunEncounter,
   DailyProgressionState,
   DailyReadinessLevel,
+  HunterGradeTier,
+  HunterGradeState,
+  FocusSessionState,
+  ActiveFocusSession,
+  FocusSessionInterruption,
+  FocusSessionRecord,
+  FocusSessionRewardSummary,
 } from './types'
 
 import {
@@ -73,6 +80,7 @@ import { computeRollingSummary } from './aiCoachSummary'
 
 import { TITLE_DEFINITIONS, CATEGORY_META, JOB_DEFINITIONS, EQUIPMENT_SLOT_LABEL } from './types'
 import { JOB_DEFINITIONS_V2 } from './jobs'
+import { recalcHunterGradeState, createInitialHunterGradeState, evaluateTitleUnlocks, GRADE_LABELS, HUNTER_TITLE_DEFINITIONS } from './hunterGrade'
 import { getMockDirectBattleMonster } from './directBattleMonsters'
 import {
   GATE_DEFINITIONS,
@@ -344,6 +352,7 @@ export interface GameState {
   aiCoachCoreContext?: AiCoachCoreContext
   /** 12-40F: 현실 행동 기반 게임 준비도 상태 */
   dailyProgression?: DailyProgressionState
+  focusSession?: FocusSessionState
   initialized: boolean
 
   // hunter
@@ -494,6 +503,24 @@ export interface GameState {
 
   // 12-40F: daily progression
   recalculateDailyProgression: () => void
+
+  // 12-41A: Focus Session Actions
+  startFocusSession: (plannedDurationMs: number, linkedGateId?: string) => void
+  tickFocusSession: (customNow?: number) => void
+  pauseFocusSession: (customNow?: number) => void
+  resumeFocusSession: (customNow?: number) => void
+  recordFocusInterruption: (durationMs: number, customNow?: number) => void
+  completeFocusSession: (customNow?: number) => void
+  cancelFocusSession: (failReason?: 'interruption_limit_exceeded' | 'manual_cancel' | 'refresh_guard' | 'unknown', customNow?: number) => void
+
+  // 12-41B: Hunter Grade / Association Rating Actions
+  hunterGrade?: HunterGradeState
+  recalculateHunterGrade: (reason?: string) => void
+  equipHunterTitle: (titleId: string) => void
+  acknowledgePromotionExam: () => void
+  startPromotionExam: (targetGrade: HunterGradeTier) => void
+  completePromotionExam: (targetGrade: HunterGradeTier) => void
+  checkGateClearHooks: (gateId: string, isVictory: boolean) => void
 }
 
 const initialHunter: HunterState = {
@@ -571,6 +598,9 @@ const createInitialAchievementStats = (): AchievementStats => {
   }
 
   return {
+    gateClearedCount: 0,
+    redGateClearedCount: 0,
+    bossKillsCount: 0,
     questCompletions: {
       total: 0,
       byQuestId: {},
@@ -831,6 +861,73 @@ const recoverGateInjuryByQuestCompletion = (gateStatus: GateStatus, now = new Da
 
 const recoverGateAfterQuestCompletion = (gateStatus: GateStatus): GateStatus => {
   return recoverGateInjuryByQuestCompletion(recoverGateStaminaByQuest(gateStatus))
+}
+
+// ── 12-41A: Focus Session Reward Builder ──
+const buildFocusSessionReward = (
+  focusedMs: number,
+  plannedDurationMs: number,
+  completed: boolean,
+  interruptionCount: number,
+  linkedGateId?: string,
+  redGateResistBonus: number = 0
+): FocusSessionRewardSummary => {
+  const focusedMin = focusedMs / (60 * 1000)
+
+  // base 보상: 1분당 대략 gold 15, essence 3
+  let gold = Math.floor(focusedMin * 15)
+  let essence = Math.floor(focusedMin * 3)
+
+  // 완주 보너스 배율 (성공시 1.5배)
+  const completionMultiplier = completed ? 1.5 : 1.0
+  gold = Math.floor(gold * completionMultiplier)
+  essence = Math.floor(essence * completionMultiplier)
+
+  // interruptionCount에 따른 페널티 (1회당 -5%, 최대 30% 감쇄)
+  const penaltyFactor = Math.max(0.7, 1 - interruptionCount * 0.05)
+  gold = Math.floor(gold * penaltyFactor)
+  essence = Math.floor(essence * penaltyFactor)
+
+  // focus axis score 공정 계산 (1분당 1.0, 완주시 보너스 + plannedDuration 20%)
+  let focusAxisBonus = Math.floor(focusedMin * 1.0)
+  if (completed) {
+    focusAxisBonus += Math.floor((plannedDurationMs / (60 * 1000)) * 0.2)
+  }
+
+  // 25분 이상 완주시 fragment 획득 (완주시에만 획득 가능)
+  // 25분 이상 20% 확률, 50분 이상 40% 확률 1개
+  let shadowFragments: number | undefined = undefined
+  if (completed && focusedMin >= 25) {
+    const prob = focusedMin >= 50 ? 0.4 : 0.2
+    if (Math.random() < prob) {
+      shadowFragments = 1
+    }
+  }
+
+  // instability 계산 (이탈이 있고 linkedGate가 있는 경우만 누적)
+  let instabilityAdded: number | undefined = undefined
+  if (interruptionCount > 0 && linkedGateId) {
+    // 이탈 1회당 4 점씩 누적
+    const rawInstability = interruptionCount * 4
+    // redGateResistBonus (최대 0.25) 만큼 차감
+    instabilityAdded = Math.max(0, Math.round(rawInstability * (1 - redGateResistBonus)))
+  }
+
+  // extraction bonus 계산 (완주시 study timer 이탈 횟수가 적을수록 보너스)
+  let extractionBonus: number | undefined = undefined
+  if (completed && linkedGateId) {
+    // 이탈이 전혀 없으면 +12% 보너스, 1회당 -2.5%씩 차감 (최소 0%)
+    extractionBonus = Math.max(0.0, parseFloat((0.12 - interruptionCount * 0.025).toFixed(3)))
+  }
+
+  return {
+    focusAxisBonus,
+    essence,
+    gold,
+    shadowFragments,
+    extractionBonus,
+    instabilityAdded,
+  }
 }
 
 // ── 12-40F: Daily Progression Builder ─────────────────────────────────
@@ -2193,6 +2290,7 @@ type ChallengeProgressEvent = {
   towerClear?: boolean
   shadowExpeditionCompleted?: boolean
   boxOpened?: boolean
+  focusCompleted?: boolean
 }
 
 const getWeekKey = (date = new Date()): string => {
@@ -3085,6 +3183,8 @@ export const useGame = create<GameState>()(
       shopPurchases: {},
       skillStates: {},
       secretProgress: undefined,
+      focusSession: { history: [], totalFocusedMs: 0 },
+      hunterGrade: undefined,
       initialized: false,
 
       setHunterName: (name) => set((s) => ({ hunter: { ...s.hunter, name } })),
@@ -3245,6 +3345,9 @@ export const useGame = create<GameState>()(
         // 12-40F: 앱 열 때마다 daily 준비도 재계산 (날짜 바뀐 경우 리셋 포함)
         const dp = buildDailyProgression(s.quests, stats)
         
+        // 12-41B: Hunter Grade 마이그레이션 및 재평가
+        const nextGradeState = recalcHunterGradeState(s.hunterGrade, s, '앱 재기동 정기 검사')
+        
         return {
           achievementStats: {
             ...stats,
@@ -3256,6 +3359,7 @@ export const useGame = create<GameState>()(
             },
           },
           dailyProgression: dp,
+          hunterGrade: nextGradeState,
         }
       }),
 
@@ -4840,6 +4944,11 @@ export const useGame = create<GameState>()(
           gateAttempt: true,
           gateVictory: combatLog.result === 'victory',
         }))
+
+        // 12-41B: 게이트 최종 클리어 성공 연계 및 승급 후킹
+        if (combatLog.result === 'victory' && outcome.state.activeGate?.status === 'cleared') {
+          get().checkGateClearHooks(activeGate.gateId, true)
+        }
         if (outcome.shouldCheckUnlocks || addedSignals.length > 0) {
           setTimeout(() => {
             get().checkTitleUnlocks()
@@ -5379,6 +5488,8 @@ export const useGame = create<GameState>()(
               runState: run
             }
           })
+          // 12-41B: 게이트 최종 클리어 성공 연계 및 승급 후킹
+          get().checkGateClearHooks(activeGate.gateId, true)
         }
 
         if (choice.addEncounterType && run.currentEncounterIndex < run.encounters.length - 1) {
@@ -5485,6 +5596,8 @@ export const useGame = create<GameState>()(
               runState: run
             }
           })
+          // 12-41B: 게이트 최종 클리어 성공 연계 및 승급 후킹
+          get().checkGateClearHooks(activeGate.gateId, true)
         }
 
         set((prev) => ({
@@ -5588,6 +5701,8 @@ export const useGame = create<GameState>()(
               runState: run
             }
           })
+          // 12-41B: 게이트 최종 클리어 성공 연계 및 승급 후킹
+          get().checkGateClearHooks(activeGate.gateId, true)
         }
 
         set((prev) => ({
@@ -6314,6 +6429,7 @@ export const useGame = create<GameState>()(
 
         setTimeout(() => {
           get().checkJobAwakening()
+          get().recalculateHunterGrade('그림자 추출')
         }, 0)
       },
 
@@ -6568,6 +6684,9 @@ export const useGame = create<GameState>()(
             : sh
         )
         const nextHunter = addHiddenSignalToState(s.hunter, 'shadow-evolved')
+        setTimeout(() => {
+          get().recalculateHunterGrade('그림자 진화')
+        }, 0)
         return applySecretProgressEvent(s, { context: 'shadow', action: 'evolve', shadowInstanceId }, {
           ownedShadows: nextOwned,
           shadowEssence: (s.shadowEssence ?? 0) - cost,
@@ -9000,6 +9119,7 @@ export const useGame = create<GameState>()(
           get().updateAiCoachQuestOutcomeOnComplete(id)
           get().checkTitleUnlocks()
           get().checkJobAwakening()
+          get().recalculateHunterGrade('퀘스트 완료')
           if (q.type === 'daily') {
             get().ensureTodayShadowExpedition()
             get().rollGateSpawn('daily_completion')
@@ -9819,6 +9939,556 @@ export const useGame = create<GameState>()(
         return { dailyProgression: dp }
       }),
 
+      // ── 12-41A: Focus Session / Infiltration ───────────────────────────
+      startFocusSession: (plannedDurationMs: number, linkedGateId?: string) => set((s) => {
+        const now = Date.now()
+        const active: ActiveFocusSession = {
+          id: `focus-${now}-${Math.random().toString(36).slice(2, 6)}`,
+          startedAt: now,
+          plannedDurationMs,
+          accumulatedFocusedMs: 0,
+          lastForegroundAt: now,
+          interruptions: [],
+          linkedGateId,
+          status: 'running'
+        }
+        const focusSession = s.focusSession ?? { history: [], totalFocusedMs: 0 }
+        return {
+          focusSession: {
+            ...focusSession,
+            active
+          }
+        }
+      }),
+
+      tickFocusSession: (customNow?: number) => {
+        const s = get()
+        const focusSession = s.focusSession
+        if (!focusSession || !focusSession.active || focusSession.active.status !== 'running') return
+
+        const now = customNow ?? Date.now()
+        const active = focusSession.active
+        const elapsed = Math.max(0, now - (active.lastForegroundAt ?? now))
+        
+        const updatedActive: ActiveFocusSession = {
+          ...active,
+          accumulatedFocusedMs: Math.min(active.plannedDurationMs, active.accumulatedFocusedMs + elapsed),
+          lastForegroundAt: now
+        }
+
+        set({
+          focusSession: {
+            ...focusSession,
+            active: updatedActive
+          }
+        })
+
+        if (updatedActive.accumulatedFocusedMs >= active.plannedDurationMs) {
+          get().completeFocusSession(now)
+        }
+      },
+
+      pauseFocusSession: (customNow?: number) => set((s) => {
+        const focusSession = s.focusSession
+        if (!focusSession || !focusSession.active || focusSession.active.status !== 'running') return {}
+        const now = customNow ?? Date.now()
+        const active = focusSession.active
+        const elapsed = Math.max(0, now - (active.lastForegroundAt ?? now))
+        
+        const updatedActive: ActiveFocusSession = {
+          ...active,
+          status: 'paused',
+          accumulatedFocusedMs: Math.min(active.plannedDurationMs, active.accumulatedFocusedMs + elapsed),
+          lastForegroundAt: undefined
+        }
+        
+        return {
+          focusSession: {
+            ...focusSession,
+            active: updatedActive
+          }
+        }
+      }),
+
+      resumeFocusSession: (customNow?: number) => set((s) => {
+        const focusSession = s.focusSession
+        if (!focusSession || !focusSession.active || focusSession.active.status !== 'paused') return {}
+        const now = customNow ?? Date.now()
+        const active = focusSession.active
+        
+        const updatedActive: ActiveFocusSession = {
+          ...active,
+          status: 'running',
+          lastForegroundAt: now
+        }
+        
+        return {
+          focusSession: {
+            ...focusSession,
+            active: updatedActive
+          }
+        }
+      }),
+
+      recordFocusInterruption: (durationMs: number, customNow?: number) => set((s) => {
+        const focusSession = s.focusSession
+        if (!focusSession || !focusSession.active) return {}
+        const now = customNow ?? Date.now()
+        const active = focusSession.active
+        
+        const newInterruption: FocusSessionInterruption = {
+          at: now,
+          durationMs
+        }
+        const updatedActive: ActiveFocusSession = {
+          ...active,
+          interruptions: [...active.interruptions, newInterruption],
+          lastForegroundAt: now
+        }
+        
+        return {
+          focusSession: {
+            ...focusSession,
+            active: updatedActive
+          }
+        }
+      }),
+
+      completeFocusSession: (customNow?: number) => {
+        const s = get()
+        const focusSession = s.focusSession
+        if (!focusSession || !focusSession.active) return
+
+        const now = customNow ?? Date.now()
+        const active = focusSession.active
+        
+        let elapsed = 0
+        if (active.status === 'running' && active.lastForegroundAt) {
+          elapsed = Math.max(0, now - active.lastForegroundAt)
+        }
+        const finalFocusedMs = Math.min(active.plannedDurationMs, active.accumulatedFocusedMs + elapsed)
+        
+        const dpResist = s.dailyProgression?.redGateResistBonus ?? 0
+        
+        const rewards = buildFocusSessionReward(
+          finalFocusedMs,
+          active.plannedDurationMs,
+          true,
+          active.interruptions.length,
+          active.linkedGateId,
+          dpResist
+        )
+        
+        const newRecord: FocusSessionRecord = {
+          id: active.id,
+          startedAt: active.startedAt,
+          endedAt: now,
+          plannedDurationMs: active.plannedDurationMs,
+          focusedMs: finalFocusedMs,
+          completed: true,
+          interruptionCount: active.interruptions.length,
+          linkedGateId: active.linkedGateId,
+          rewards,
+          totalInterruptedMs: active.totalInterruptedMs ?? 0,
+          allowedInterruptionMs: active.allowedInterruptionMs ?? 60000
+        }
+        
+        const nextGold = (s.gold ?? 0) + rewards.gold
+        const nextEssence = (s.shadowEssence ?? 0) + rewards.essence
+        const nextFragments = { ...(s.shadowFragments ?? {}) }
+        
+        let fragmentRewardText = ''
+        if (rewards.shadowFragments && active.linkedGateId) {
+          const fid = `fragment-${active.linkedGateId}`
+          nextFragments[fid] = (nextFragments[fid] ?? 0) + rewards.shadowFragments
+          const gateDef = GATE_DEFINITIONS.find(g => g.id === active.linkedGateId)
+          fragmentRewardText = `, [${gateDef?.name ?? '게이트'} 조각] +${rewards.shadowFragments}`
+        }
+        
+        let nextActiveGate = s.activeGate
+        if (rewards.instabilityAdded && nextActiveGate && nextActiveGate.runState?.redGateState) {
+          const red = nextActiveGate.runState.redGateState
+          if (red.status !== 'opened' && red.status !== 'cleared' && red.status !== 'failed') {
+            red.instabilityScore = Math.min(100, (red.instabilityScore ?? 0) + rewards.instabilityAdded)
+            red.status = 'unstable'
+          }
+        }
+        
+        let nextHistory = [newRecord, ...focusSession.history]
+        if (nextHistory.length > 100) {
+          nextHistory = nextHistory.slice(0, 100)
+        }
+        const nextTotalFocusedMs = focusSession.totalFocusedMs + finalFocusedMs
+        
+        set({
+          gold: nextGold,
+          shadowEssence: nextEssence,
+          shadowFragments: nextFragments,
+          activeGate: nextActiveGate,
+          focusSession: {
+            active: undefined,
+            history: nextHistory,
+            totalFocusedMs: nextTotalFocusedMs
+          },
+          messages: [
+            ...s.messages,
+            {
+              id: uid(),
+              kind: 'quest',
+              title: '집중 잠입 완료',
+              lines: [
+                `성공적으로 게이트 심층 잠입을 완수했습니다.`,
+                `집중 시간: ${Math.floor(finalFocusedMs / 60000)}분`,
+                `획득 보상: 마도 정수 +${rewards.essence}, 골드 +${rewards.gold}${fragmentRewardText}`,
+                rewards.extractionBonus ? `[추출 공명] 해당 게이트의 그림자 추출 성공률이 추가로 +${Math.round(rewards.extractionBonus * 100)}% 상승합니다.` : '',
+                `협회 평가 기록에 반영될 집중 기록이 저장되었습니다.`
+              ].filter(Boolean),
+              createdAt: todayISO()
+            }
+          ]
+        })
+        
+        get().recalculateDailyProgression()
+        get().recalculateHunterGrade('집중 세션 완료')
+        
+        // 일일 도전과제 달성 체크
+        set(current => applyChallengeProgress(current, { focusCompleted: true }))
+        
+        setTimeout(() => {
+          get().checkJobAwakening()
+        }, 0)
+      },
+
+      cancelFocusSession: (failReason?: 'interruption_limit_exceeded' | 'manual_cancel' | 'refresh_guard' | 'unknown', customNow?: number) => {
+        const s = get()
+        const focusSession = s.focusSession
+        if (!focusSession || !focusSession.active) return
+
+        const now = customNow ?? Date.now()
+        const active = focusSession.active
+        const actualReason = failReason ?? 'manual_cancel'
+        
+        let elapsed = 0
+        if (active.status === 'running' && active.lastForegroundAt) {
+          elapsed = Math.max(0, now - active.lastForegroundAt)
+        }
+        const finalFocusedMs = Math.min(active.plannedDurationMs, active.accumulatedFocusedMs + elapsed)
+        
+        const dpResist = s.dailyProgression?.redGateResistBonus ?? 0
+        
+        const rewards = buildFocusSessionReward(
+          finalFocusedMs,
+          active.plannedDurationMs,
+          false,
+          active.interruptions.length,
+          active.linkedGateId,
+          dpResist
+        )
+        
+        const newRecord: FocusSessionRecord = {
+          id: active.id,
+          startedAt: active.startedAt,
+          endedAt: now,
+          plannedDurationMs: active.plannedDurationMs,
+          focusedMs: finalFocusedMs,
+          completed: false,
+          interruptionCount: active.interruptions.length,
+          linkedGateId: active.linkedGateId,
+          rewards,
+          failReason: actualReason,
+          failedAt: now,
+          totalInterruptedMs: active.totalInterruptedMs ?? 0,
+          allowedInterruptionMs: active.allowedInterruptionMs ?? 60000
+        }
+        
+        // 실패 시 보상 0
+        const nextGold = s.gold ?? 0
+        const nextEssence = s.shadowEssence ?? 0
+        const nextFragments = s.shadowFragments ?? {}
+        
+        let nextActiveGate = s.activeGate
+        if (rewards.instabilityAdded && nextActiveGate && nextActiveGate.runState?.redGateState) {
+          const red = nextActiveGate.runState.redGateState
+          if (red.status !== 'opened' && red.status !== 'cleared' && red.status !== 'failed') {
+            red.instabilityScore = Math.min(100, (red.instabilityScore ?? 0) + rewards.instabilityAdded)
+            red.status = 'unstable'
+          }
+        }
+
+        let nextHistory = [newRecord, ...focusSession.history]
+        if (nextHistory.length > 100) {
+          nextHistory = nextHistory.slice(0, 100)
+        }
+        
+        // 실패 시 totalFocusedMs 가산 차단 (성공 시간만 누적)
+        const nextTotalFocusedMs = focusSession.totalFocusedMs
+        
+        let msgTitle = '집중 타이머 중단'
+        let msgLines: string[] = []
+        
+        if (actualReason === 'manual_cancel') {
+          msgTitle = '집중 타이머 중단'
+          msgLines = [
+            `사용자가 수동으로 집중 타이머를 중단했습니다.`,
+            `집중 시간: ${Math.floor(finalFocusedMs / 60000)}분 (누적 이탈: ${Math.floor((active.totalInterruptedMs ?? 0) / 1000)}초)`,
+            `완주 성공 시에만 골드와 마도 정수를 획득할 수 있습니다. 확보된 성장 보상은 없지만, 다시 시작할 수 있습니다.`
+          ]
+        } else if (actualReason === 'interruption_limit_exceeded') {
+          msgTitle = '집중 유지 실패'
+          msgLines = [
+            `허용 이탈 시간을 초과하여 집중 세션이 실패 처리되었습니다.`,
+            `집중 시간: ${Math.floor(finalFocusedMs / 60000)}분 (누적 이탈: ${Math.floor((active.totalInterruptedMs ?? 0) / 1000)}초 / 허용: ${Math.floor((active.allowedInterruptionMs ?? 60000) / 1000)}초)`,
+            `완주 성공 시에만 골드와 마도 정수를 획득할 수 있습니다. 확보된 성장 보상은 없지만, 다시 시작할 수 있습니다.`,
+            rewards.instabilityAdded ? `[게이트 상태 동요] 이탈 허용 초과로 인해 게이트 내부 불안정성이 +${rewards.instabilityAdded}만큼 누적되었습니다.` : ''
+          ]
+        } else if (actualReason === 'refresh_guard') {
+          msgTitle = '집중 세션 연결 끊김'
+          msgLines = [
+            `세션 연결이 끊겨 이번 집중 기록은 완료 처리되지 않았습니다.`,
+            `확보된 성장 보상은 없지만, 다시 시작할 수 있습니다.`
+          ]
+        }
+
+        set({
+          gold: nextGold,
+          shadowEssence: nextEssence,
+          shadowFragments: nextFragments,
+          activeGate: nextActiveGate,
+          focusSession: {
+            active: undefined,
+            history: nextHistory,
+            totalFocusedMs: nextTotalFocusedMs
+          },
+          messages: [
+            ...s.messages,
+            {
+              id: uid(),
+              kind: 'quest',
+              title: msgTitle,
+              lines: msgLines.filter(Boolean),
+              createdAt: todayISO()
+            }
+          ]
+        })
+        
+        get().recalculateDailyProgression()
+        setTimeout(() => {
+          get().checkJobAwakening()
+        }, 0)
+      },
+
+      recalculateHunterGrade: (reason) => {
+        set(s => {
+          const nextGradeState = recalcHunterGradeState(s.hunterGrade, s, reason)
+          return { hunterGrade: nextGradeState }
+        })
+      },
+
+      equipHunterTitle: (titleId) => {
+        set(s => {
+          if (!s.hunterGrade) return {}
+          if (!s.hunterGrade.unlockedTitles.includes(titleId)) return {}
+          
+          const newGradeState = {
+            ...s.hunterGrade,
+            equippedTitleId: titleId
+          }
+          
+          return {
+            hunterGrade: newGradeState,
+            hunter: {
+              ...s.hunter,
+              equippedTitleId: titleId
+            }
+          }
+        })
+      },
+
+      acknowledgePromotionExam: () => {
+        set(s => {
+          if (!s.hunterGrade || !s.hunterGrade.pendingExam) return {}
+          return {
+            hunterGrade: {
+              ...s.hunterGrade,
+              pendingExam: {
+                ...s.hunterGrade.pendingExam,
+                status: s.hunterGrade.pendingExam.status === 'available' ? 'available' : s.hunterGrade.pendingExam.status
+              }
+            }
+          }
+        })
+      },
+
+      startPromotionExam: (targetGrade) => {
+        const s = get()
+        if (s.activeGate && s.activeGate.status === 'active') {
+          set({
+            messages: [...s.messages, {
+              id: uid(),
+              kind: 'info',
+              title: '승급 시험 불가',
+              lines: ['현재 이미 활성화된 게이트가 존재합니다. 공략을 완료하거나 포기한 뒤 시도하십시오.'],
+              createdAt: todayISO(),
+            }]
+          })
+          return
+        }
+
+        let searchRank = targetGrade as string
+        if (targetGrade === 'NATIONAL') {
+          searchRank = 'S'
+        }
+
+        const candidates = GATE_DEFINITIONS.filter(g => g.rank === searchRank)
+        const fallback = GATE_DEFINITIONS.filter(g => g.rank === 'S')
+        const pool = candidates.length > 0 ? candidates : fallback
+        const baseGate = pool[Math.floor(Math.random() * pool.length)]
+
+        if (!baseGate) return
+
+        const now = new Date()
+        const expiresAt = new Date(now)
+        expiresAt.setHours(expiresAt.getHours() + 24)
+
+        const seed = `exam-${targetGrade}-${Date.now()}-${Math.floor(Math.random() * 1000)}`
+        const runState = generateGateRunState(baseGate.id, seed)
+        
+        let difficultyMod = 1.0
+        if (targetGrade === 'D') difficultyMod = 1.1
+        else if (targetGrade === 'C') difficultyMod = 1.3
+        else if (targetGrade === 'B') difficultyMod = 1.5
+        else if (targetGrade === 'A') difficultyMod = 1.8
+        else if (targetGrade === 'S') difficultyMod = 2.2
+        else if (targetGrade === 'NATIONAL') difficultyMod = 3.0
+
+        runState.difficultyMod = difficultyMod
+        runState.isPromotionExam = true
+        runState.targetGrade = targetGrade
+
+        set({
+          activeGate: {
+            instanceId: `gate-exam-${targetGrade}-${Date.now()}`,
+            gateId: baseGate.id,
+            spawnedAt: now.toISOString(),
+            expiresAt: expiresAt.toISOString(),
+            status: 'active',
+            source: 'event',
+            runState
+          },
+          hunterGrade: s.hunterGrade ? {
+            ...s.hunterGrade,
+            pendingExam: {
+              targetGrade,
+              status: 'in_progress',
+              gateSeed: seed,
+              createdAt: Date.now()
+            }
+          } : undefined,
+          messages: [...s.messages, {
+            id: uid(),
+            kind: 'quest',
+            title: '협회 승급 심사 게이트 개방',
+            lines: [
+              `헌터 협회로부터 공식 [${GRADE_LABELS[targetGrade]}] 승급 심사령이 인가되었습니다.`,
+              `심사 전용 특수 게이트가 배치되었으며, 난이도가 ${Math.round(difficultyMod * 100)}% 가혹하게 보정됩니다.`,
+              `공략을 성공하여 헌터의 진정한 자격을 입증하십시오.`
+            ],
+            createdAt: todayISO(),
+          }]
+        })
+      },
+
+      completePromotionExam: (targetGrade) => {
+        set(s => {
+          if (!s.hunterGrade) return {}
+          
+          const tiers: HunterGradeTier[] = ['E', 'D', 'C', 'B', 'A', 'S', 'NATIONAL']
+          const targetIdx = tiers.indexOf(targetGrade)
+          
+          const historyEntry = {
+            grade: targetGrade,
+            at: Date.now(),
+            reason: `[공식 승급 시험 공략 성공] ${GRADE_LABELS[targetGrade]} 승격`
+          }
+          
+          const nextHistory = [...(s.hunterGrade.history || []), historyEntry]
+          const nextUnlocked = Array.from(new Set([...(s.hunterGrade.unlockedTitles || []), `title_${targetGrade.toLowerCase()}`]))
+          
+          const cosmeticTier = targetGrade === 'NATIONAL' ? 6 : targetGrade === 'S' ? 5 : targetGrade === 'A' ? 4 : targetGrade === 'B' ? 3 : targetGrade === 'C' ? 2 : targetGrade === 'D' ? 1 : 0
+          
+          const nextGradeState: HunterGradeState = {
+            ...s.hunterGrade,
+            currentGrade: targetGrade,
+            cosmeticTier,
+            pendingExam: undefined,
+            unlockedTitles: nextUnlocked,
+            history: nextHistory,
+            lastEvaluatedAt: Date.now()
+          }
+          
+          const updatedHunter = {
+            ...s.hunter,
+            rank: targetGrade === 'NATIONAL' ? 'National' as any : targetGrade,
+          }
+          
+          const titleName = HUNTER_TITLE_DEFINITIONS.find(t => t.id === `title_${targetGrade.toLowerCase()}`)?.name ?? ''
+          
+          return {
+            hunterGrade: nextGradeState,
+            hunter: updatedHunter,
+            messages: [
+              ...s.messages,
+              {
+                id: uid(),
+                kind: 'quest',
+                title: `★ 헌터 승급 성공 ★`,
+                lines: [
+                  `축하합니다! 공식 승급 심사를 통과하여 [${GRADE_LABELS[targetGrade]}]으로 공식 공인되었습니다.`,
+                  `새로운 공식 칭호 [${titleName}]가 지급되었습니다.`,
+                  `프로필 엠블럼의 오라 및 장식 테두리가 업그레이드되었습니다.`
+                ],
+                createdAt: todayISO()
+              }
+            ]
+          }
+        })
+        
+        get().recalculateHunterGrade('승급 완료 반영 검사')
+      },
+
+      checkGateClearHooks: (gateId, isVictory) => {
+        const s = get()
+        if (!isVictory) return
+
+        const activeGate = s.activeGate
+        if (!activeGate) return
+
+        const gate = GATE_DEFINITIONS.find(g => g.id === gateId)
+        if (!gate) return
+
+        const runState = activeGate.runState
+        const isExam = runState?.isPromotionExam
+        const examTarget = runState?.targetGrade
+
+        if (isExam && examTarget) {
+          get().completePromotionExam(examTarget)
+        } else {
+          const isRedGate = runState?.redGateState?.status === 'cleared' || runState?.redGateState?.status === 'opened'
+          const isBoss = gate.rank === 'S' || gate.rewardTableId?.includes('boss')
+
+          set(prev => ({
+            achievementStats: {
+              ...prev.achievementStats,
+              gateClearedCount: (prev.achievementStats.gateClearedCount ?? 0) + 1,
+              redGateClearedCount: isRedGate ? (prev.achievementStats.redGateClearedCount ?? 0) + 1 : (prev.achievementStats.redGateClearedCount ?? 0),
+              bossKillsCount: isBoss ? (prev.achievementStats.bossKillsCount ?? 0) + 1 : (prev.achievementStats.bossKillsCount ?? 0),
+            }
+          }))
+
+          get().recalculateHunterGrade('게이트 공략 성공')
+        }
+      },
+
     }),
     {
       name: 'levelup-save',
@@ -10192,6 +10862,11 @@ export const useGame = create<GameState>()(
           if (!run.redGateState) {
             run.redGateState = { status: 'none', instabilityScore: 0 }
           }
+        }
+
+        // Ensure focusSession exists
+        if (!persistedState.focusSession) {
+          persistedState.focusSession = { history: [], totalFocusedMs: 0 }
         }
 
         // 12-40F: dailyProgression 마이그레이션 가드 (기존 세이브 호환)

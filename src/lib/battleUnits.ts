@@ -29,6 +29,7 @@ import type {
   BattleUnitBuildResult,
 } from './directBattleTypes'
 import type { DirectBattleMonsterDefinition } from './directBattleMonsters'
+import { getMonsterPressureScaling } from './realityPressure'
 import { getEquipmentPowerBreakdown } from './equipmentPower'
 import { calculatePlayerCombatStats, getEquippedItems, getPlayerCombatSkills } from './game'
 import { getShadowDefinition } from './shadows'
@@ -60,6 +61,8 @@ export interface BuildMonsterBattleUnitOptions {
   unitIdPrefix?: string
   level?: number
   currentHp?: number
+  pressureSnapshot?: any
+  isRedGate?: boolean
 }
 
 const RARITY_MODIFIER: Record<ShadowRarity, number> = {
@@ -613,31 +616,36 @@ export const buildHunterBattleUnit = (
 export const buildMonsterBattleUnit = (
   definition: DirectBattleMonsterDefinition,
   options: BuildMonsterBattleUnitOptions = {},
-): BattleUnitBuildResult => {
-  const level = Math.max(1, options.level ?? definition.baseLevel)
-  const scale = 1 + (level - 1) * 0.088 + Math.max(0, level - 3) * 0.012
-  const bossScale = definition.unitType === 'boss' || definition.isBoss ? 1.28 : 1
-  const minionScale = definition.unitType === 'minion' || definition.isMinion ? 0.94 : 1
-  const threatScale = bossScale * minionScale
-  const maxHp = round((115 + level * 23.5) * definition.statBias.hp * scale * threatScale * MONSTER_BATTLE_LIFT, 1)
-  const unitId = `${options.unitIdPrefix ?? 'enemy'}-${definition.id}-${level}`
-
-  return {
-    unit: {
-      unitId,
-      sourceId: definition.id,
-      unitType: definition.unitType,
-      displayName: definition.name,
-      role: definition.role,
-      team: options.team ?? 'enemy',
-      level,
-      stats: {
-        maxHp,
-        currentHp: safeCurrentHp(options.currentHp, maxHp),
-        atk: round((16 + level * 4.55) * definition.statBias.atk * scale * threatScale * MONSTER_BATTLE_LIFT, 1),
-        def: round((10 + level * 2.05) * definition.statBias.def * scale * (definition.isBoss ? 1.12 : 1) * MONSTER_BATTLE_LIFT, 1),
-        spd: round((10 + level * 1.05) * definition.statBias.spd * (definition.role === 'assassin' ? 1.08 : 1) * 1.02, 1, 300),
-        skillPower: round((15 + level * 3.95) * definition.statBias.skill * scale * threatScale * MONSTER_BATTLE_LIFT, 1),
+ ): BattleUnitBuildResult => {
+   const level = Math.max(1, options.level ?? definition.baseLevel)
+   const scale = 1 + (level - 1) * 0.088 + Math.max(0, level - 3) * 0.012
+   const bossScale = definition.unitType === 'boss' || definition.isBoss ? 1.28 : 1
+   const minionScale = definition.unitType === 'minion' || definition.isMinion ? 0.94 : 1
+   const threatScale = bossScale * minionScale
+   
+   // 현실 각성공명 압박(Reality Pressure) 반영
+   const monsterRole = definition.unitType || (definition.isBoss ? 'boss' : definition.isMinion ? 'minion' : 'normal')
+   const pressure = getMonsterPressureScaling(options.pressureSnapshot, monsterRole, options.isRedGate)
+ 
+   const maxHp = round((115 + level * 23.5) * definition.statBias.hp * scale * threatScale * MONSTER_BATTLE_LIFT * pressure.hp, 1)
+   const unitId = `${options.unitIdPrefix ?? 'enemy'}-${definition.id}-${level}`
+  
+   return {
+     unit: {
+       unitId,
+       sourceId: definition.id,
+       unitType: definition.unitType,
+       displayName: definition.name,
+       role: definition.role,
+       team: options.team ?? 'enemy',
+       level,
+       stats: {
+         maxHp,
+         currentHp: safeCurrentHp(options.currentHp, maxHp),
+         atk: round((16 + level * 4.55) * definition.statBias.atk * scale * threatScale * MONSTER_BATTLE_LIFT * pressure.atk, 1),
+         def: round((10 + level * 2.05) * definition.statBias.def * scale * (definition.isBoss ? 1.12 : 1) * MONSTER_BATTLE_LIFT * pressure.def, 1),
+         spd: round((10 + level * 1.05) * definition.statBias.spd * (definition.role === 'assassin' ? 1.08 : 1) * 1.02, 1, 300),
+         skillPower: round((15 + level * 3.95) * definition.statBias.skill * scale * threatScale * MONSTER_BATTLE_LIFT * pressure.atk, 1),
         crit: capRatio((0.04 + level * 0.003) * (definition.statBias.crit ?? 1)),
         controlPower: round((5 + level * 1.7) * (definition.statBias.control ?? 0.7) * scale * MONSTER_BATTLE_LIFT, 0),
         supportPower: round((4 + level * 1.5) * (definition.statBias.support ?? 0.45) * scale * MONSTER_BATTLE_LIFT, 0),

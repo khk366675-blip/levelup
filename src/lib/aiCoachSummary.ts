@@ -140,6 +140,27 @@ export function generateAiCoachSaveSummary(state: GameState): AiCoachSaveSummary
     }
   })
 
+  // 8. Focus Session 요약 계산
+  const todayISOStr = new Date().toISOString().slice(0, 10)
+  
+  const todayCompletedFocusMs = (state.focusSession?.history ?? [])
+    .filter((r: any) => r.completed && new Date(r.endedAt).toISOString().slice(0, 10) === todayISOStr)
+    .reduce((sum: number, r: any) => sum + r.focusedMs, 0)
+
+  const todayCompletedFocusSessionCount = (state.focusSession?.history ?? [])
+    .filter((r: any) => r.completed && new Date(r.endedAt).toISOString().slice(0, 10) === todayISOStr)
+    .length
+
+  const todayFailedFocusSessionCount = (state.focusSession?.history ?? [])
+    .filter((r: any) => !r.completed && new Date(r.endedAt).toISOString().slice(0, 10) === todayISOStr)
+    .length
+
+  const longestFocusSessionMs = (state.focusSession?.history ?? [])
+    .filter((r: any) => r.completed && new Date(r.endedAt).toISOString().slice(0, 10) === todayISOStr)
+    .reduce((max: number, r: any) => Math.max(max, r.focusedMs), 0)
+
+  const focusQuestProgress = `성공 ${todayCompletedFocusSessionCount}회 (${Math.round(todayCompletedFocusMs / (60 * 1000))}분 집중)`
+
   return {
     hunterLevel: hunter.level,
     rank: hunter.rank,
@@ -149,7 +170,12 @@ export function generateAiCoachSaveSummary(state: GameState): AiCoachSaveSummary
     activeDungeons,
     recentAiQuestSuccessRate,
     baseDailies,
-    maintenanceStatus
+    maintenanceStatus,
+    todayCompletedFocusMs,
+    todayCompletedFocusSessionCount,
+    todayFailedFocusSessionCount,
+    longestFocusSessionMs,
+    focusQuestProgress
   }
 }
 

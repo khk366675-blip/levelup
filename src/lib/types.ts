@@ -1021,6 +1021,18 @@ export interface RedGateState {
   fragmentBonusCount?: number         // 실패 시 추가 조각 수량
 }
 
+export interface RealityPressureSnapshot {
+  readinessTier: string
+  focusResonanceTier: string
+  monsterHpMultiplier: number
+  monsterAtkMultiplier: number
+  monsterDefMultiplier: number
+  bossExtraMultiplier: number
+  eliteExtraMultiplier: number
+  telegraphPressureBonus?: number
+  reasonLabels: string[]
+}
+
 export interface GateRunState {
   gateId: string
   seed: string
@@ -1036,6 +1048,10 @@ export interface GateRunState {
   failed?: boolean
   completed?: boolean
   redGateState?: RedGateState
+  pressureSnapshot?: RealityPressureSnapshot
+  difficultyMod?: number
+  isPromotionExam?: boolean
+  targetGrade?: HunterGradeTier
 }
 
 
@@ -1158,6 +1174,8 @@ export interface ManualBattleSession {
   startedAt: string
   source?: 'gate' | 'tower'
   towerFloor?: number
+  pressureSnapshot?: RealityPressureSnapshot
+  isRedGate?: boolean
 }
 
 export type ManualBattleAction =
@@ -1784,6 +1802,9 @@ export type ChallengeCardConditionType =
   | 'completeTowerClear'
   | 'openBox'
   | 'completeWorkoutAndStudy'
+  | 'focusDuration'
+  | 'focusSessionCount'
+  | 'focusNoInterruption'
 
 export interface ChallengeCardCondition {
   type: ChallengeCardConditionType
@@ -1907,6 +1928,9 @@ export interface ActiveRandomQuest extends RandomQuestTemplate {
 // ───────────────────────────────────────────────────────────────────
 
 export interface AchievementStats {
+  gateClearedCount?: number
+  redGateClearedCount?: number
+  bossKillsCount?: number
   questCompletions: {
     total: number
     byQuestId: Record<string, number>
@@ -2040,3 +2064,96 @@ export interface InfiniteTowerState {
   bossRewardsClaimed: Record<number, boolean>
   activeTowerBattle?: TowerBattleSession
 }
+
+// ── Focus Session / Infiltration (12-41A) ───────────────────────────
+
+export interface FocusSessionState {
+  active?: ActiveFocusSession
+  history: FocusSessionRecord[]
+  totalFocusedMs: number
+}
+
+export interface ActiveFocusSession {
+  id: string
+  startedAt: number
+  plannedDurationMs: number
+  accumulatedFocusedMs: number
+  lastForegroundAt?: number
+  interruptions: FocusSessionInterruption[]
+  linkedGateId?: string
+  status: 'running' | 'paused'
+  failedAt?: number
+  failReason?: 'interruption_limit_exceeded' | 'manual_cancel' | 'refresh_guard' | 'unknown'
+  totalInterruptedMs?: number
+  allowedInterruptionMs?: number
+}
+
+export interface FocusSessionInterruption {
+  at: number
+  durationMs: number
+}
+
+export interface FocusSessionRecord {
+  id: string
+  startedAt: number
+  endedAt: number
+  plannedDurationMs: number
+  focusedMs: number
+  completed: boolean
+  interruptionCount: number
+  linkedGateId?: string
+  rewards?: FocusSessionRewardSummary
+  failedAt?: number
+  failReason?: 'interruption_limit_exceeded' | 'manual_cancel' | 'refresh_guard' | 'unknown'
+  totalInterruptedMs?: number
+  allowedInterruptionMs?: number
+}
+
+export interface FocusSessionRewardSummary {
+  focusAxisBonus: number
+  essence: number
+  gold: number
+  shadowFragments?: number
+  extractionBonus?: number
+  instabilityAdded?: number
+}
+
+// 12-41B Hunter Grade / Association Rating System
+export type HunterGradeTier = 'E' | 'D' | 'C' | 'B' | 'A' | 'S' | 'NATIONAL'
+
+export interface AssociationRatingBreakdown {
+  realLife: number
+  gateClears: number
+  redGate: number
+  bossKills: number
+  legion: number
+  mastery: number
+}
+
+export interface PromotionExamState {
+  targetGrade: HunterGradeTier
+  status: 'available' | 'in_progress' | 'cleared'
+  gateSeed?: string
+  createdAt: number
+}
+
+export interface HunterGradeHistoryEntry {
+  grade: HunterGradeTier
+  at: number
+  reason: string
+}
+
+export interface HunterGradeState {
+  currentGrade: HunterGradeTier
+  ratingScore: number
+  highestRatingScore: number
+  ratingBreakdown: AssociationRatingBreakdown
+  pendingExam?: PromotionExamState
+  unlockedTitles: string[]
+  equippedTitleId?: string
+  cosmeticTier: number
+  history: HunterGradeHistoryEntry[]
+  lastEvaluatedAt?: number
+}
+
+

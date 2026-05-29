@@ -874,6 +874,8 @@ export const validateDirectBattleMockEncounters = (): string[] => {
 export const buildDirectBattleEncounterParty = (
   encounterId: string,
   baseLevel?: number,
+  pressureSnapshot?: any,
+  isRedGate?: boolean,
 ): DirectBattleEncounterBuildResult => {
   const encounter = getDirectBattleMockEncounter(encounterId) ?? DIRECT_BATTLE_MOCK_ENCOUNTERS[0]
   const warnings: string[] = encounter.encounterId === encounterId || encounter.encounterKey === encounterId
@@ -889,6 +891,8 @@ export const buildDirectBattleEncounterParty = (
     const result = buildMonsterBattleUnit(monster, {
       unitIdPrefix: `${encounter.encounterId}-${slot.slotId}-${index + 1}`,
       level,
+      pressureSnapshot,
+      isRedGate,
     })
     return [{
       ...result,

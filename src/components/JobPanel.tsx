@@ -114,6 +114,7 @@ function getDynamicHiddenHint(
 
 export function JobPanel() {
   const [isJobListOpen, setIsJobListOpen] = useState(false)
+  const [isAdvancementOpen, setIsAdvancementOpen] = useState(false)
   const hunter = useGame(s => s.hunter)
   const equipJob = useGame(s => s.equipJob)
   const advanceToJob = useGame(s => s.advanceToJob)
@@ -344,210 +345,230 @@ export function JobPanel() {
 
       {/* 2. Next Advancement Candidate Classes (실사용 전직 선택지) */}
       <div className="space-y-3">
-        <div className="system-text text-[11px] text-cyan-400/80 mb-1">
-          ── 다음 단계 전직 후보 ──
+        <div className="flex justify-between items-center border-b border-cyan-500/20 pb-1.5 select-none">
+          <h3 className="system-text text-[11px] text-cyan-400/80 mb-1 font-bold">
+            ── 다음 단계 전직 후보 ──
+          </h3>
+          <button
+            type="button"
+            onClick={() => setIsAdvancementOpen(prev => !prev)}
+            className="text-[10px] text-cyan-400/60 hover:text-cyan-300 font-mono transition"
+          >
+            {isAdvancementOpen ? '▲ 접기' : '▼ 펼치기'}
+          </button>
         </div>
         
-        {totalCandidateIds.length === 0 ? (
-          <div className="panel corner-bracket p-5 text-center text-zinc-500 text-xs border border-dashed border-zinc-800">
-            현재 클래스에서 파생 가능한 더 이상의 다음 클래스 후보가 없거나 최종 단계에 도달했습니다.
-          </div>
-        ) : (
-          <div className="grid md:grid-cols-2 gap-3">
-            {totalCandidateIds.map(candId => {
-              const job = JOB_DEFINITIONS_V2.find(j => j.id === candId)
-              if (!job) return null
+        <AnimatePresence initial={false}>
+          {isAdvancementOpen && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              exit={{ opacity: 0, height: 0 }}
+              className="overflow-hidden"
+            >
+              {totalCandidateIds.length === 0 ? (
+                <div className="panel corner-bracket p-5 text-center text-zinc-500 text-xs border border-dashed border-zinc-800">
+                  현재 클래스에서 파생 가능한 더 이상의 다음 클래스 후보가 없거나 최종 단계에 도달했습니다.
+                </div>
+              ) : (
+                <div className="grid md:grid-cols-2 gap-3 pt-2">
+                  {totalCandidateIds.map(candId => {
+                    const job = JOB_DEFINITIONS_V2.find(j => j.id === candId)
+                    if (!job) return null
 
-              const isHidden = job.tier === 'hidden' || job.hiddenProfile?.isHidden
-              const isDiscovered = discoveredHiddenJobIds.includes(job.id) || availableAdvancements.includes(job.id)
-              
-              // Evaluate conditions
-              const cond = job.unlockCondition
-              let isConditionMet = true
-              const condLines: { text: string; met: boolean }[] = []
-
-              if (cond) {
-                if (cond.hunterLevel !== undefined) {
-                  const met = hunter.level >= cond.hunterLevel
-                  condLines.push({ text: `헌터 Lv.${cond.hunterLevel}`, met })
-                  if (!met) isConditionMet = false
-                }
-                if (cond.previousJobLevel !== undefined && job.previousJobIds) {
-                  const prevJobState = job.previousJobIds.map(prevId => jobs[prevId]).find(js => js && js.level >= (cond.previousJobLevel ?? 0))
-                  const met = !!prevJobState
-                  condLines.push({ text: `이전 클래스 Lv.${cond.previousJobLevel}`, met })
-                  if (!met) isConditionMet = false
-                }
-                if (cond.towerFloorCleared !== undefined) {
-                  const met = (infiniteTower?.highestClearedFloor ?? 0) >= cond.towerFloorCleared
-                  condLines.push({ text: `무한의 탑 ${cond.towerFloorCleared}층 클리어`, met })
-                  if (!met) isConditionMet = false
-                }
-                if (cond.gateClearCount !== undefined) {
-                  const met = (achievementStats?.dungeonClears.total ?? 0) >= cond.gateClearCount
-                  condLines.push({ text: `게이트 클리어 ${cond.gateClearCount}회`, met })
-                  if (!met) isConditionMet = false
-                }
-                if (cond.bossClearCount !== undefined) {
-                  const met = (achievementStats?.dungeonClears.total ?? 0) >= cond.bossClearCount
-                  condLines.push({ text: `보스 토벌 ${cond.bossClearCount}회`, met })
-                  if (!met) isConditionMet = false
-                }
-                if (cond.shadowCount !== undefined) {
-                  const met = (ownedShadows?.length ?? 0) >= cond.shadowCount
-                  condLines.push({ text: `그림자 부하 ${cond.shadowCount}마리`, met })
-                  if (!met) isConditionMet = false
-                }
-                if (cond.hiddenSignalKeys && cond.hiddenSignalKeys.length > 0) {
-                  cond.hiddenSignalKeys.forEach(key => {
-                    const met = (hunter.hiddenSignalKeys || []).includes(key)
-                    let text = `특수 업적 [${key}]`
-                    if (key === 'shadow-extraction-attempt') {
-                      text = '그림자 추출 시도'
-                    } else if (key === 'low-hp-victory') {
-                      text = '생사경 극복 승리 (HP 15% 이하)'
-                    } else if (key === 'long-battle-victory') {
-                      text = '장기전 끝의 승리 (20턴 이상)'
-                    }
-                    condLines.push({ text, met })
-                    if (!met) isConditionMet = false
-                  })
-                }
-              }
-
-              const canAdvance = isConditionMet || isDiscovered
-
-              // Render MASKED hidden class
-              if (isHidden && !canAdvance) {
-                const branchKey = (job.branch === 'chrono' ? 'rift' : job.branch) as 'shadow' | 'curse' | 'rift'
-                const targetResonance = cond?.resonanceRequired?.[branchKey] || 10
-                const dynamicHint = getDynamicHiddenHint(job, hunter.hiddenResonanceProgress || {}, targetResonance)
-                
-                let hiddenPulseClass = 'named-pulse'
-                if (branchKey === 'curse') hiddenPulseClass = 'tier-aura-hidden-curse'
-                if (branchKey === 'rift') hiddenPulseClass = 'tier-aura-hidden-rift'
-                if (branchKey === 'shadow') hiddenPulseClass = 'tier-aura-hidden-shadow'
-
-                return (
-                  <motion.div 
-                    key={job.id} 
-                    whileHover={{ y: -3, scale: 1.015 }}
-                    transition={{ duration: 0.2, ease: 'easeOut' }}
-                    className={`panel corner-bracket p-4 border bg-zinc-950/80 group card-premium-shine relative overflow-hidden transition-all duration-300 ${hiddenPulseClass}`}
-                  >
-                    <div className="br" />
-                    <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,rgba(244,63,94,0.06),transparent_55%)]" />
+                    const isHidden = job.tier === 'hidden' || job.hiddenProfile?.isHidden
+                    const isDiscovered = discoveredHiddenJobIds.includes(job.id) || availableAdvancements.includes(job.id)
                     
-                    <div className="relative z-10 flex items-center justify-between gap-2 mb-2">
-                      <div className="flex items-center gap-1.5">
-                        <Lock className="w-3.5 h-3.5 text-rose-500/70" />
-                        <h4 className="font-extrabold text-zinc-400 system-text tracking-wide text-sm">
-                          {dynamicHint.maskedName}
-                        </h4>
-                      </div>
-                      <span className="text-[8px] font-bold text-rose-400 bg-rose-950/45 px-1.5 py-0.5 rounded border border-rose-500/30 uppercase tracking-wider animate-pulse">
-                        균열 감지됨
-                      </span>
-                    </div>
-                    <p className="relative z-10 text-[11px] text-zinc-400 leading-relaxed font-medium bg-black/40 p-2 rounded border border-white/5">
-                      <span className="text-rose-400/80 font-bold block mb-0.5 text-[10px]">공명 반응:</span>
-                      {dynamicHint.hintText}
-                    </p>
-                  </motion.div>
-                )
-              }
+                    // Evaluate conditions
+                    const cond = job.unlockCondition
+                    let isConditionMet = true
+                    const condLines: { text: string; met: boolean }[] = []
 
-              // Render normal / revealed class candidates
-              const candAuraClass = getTierAuraClass(job.tier, job.branch)
+                    if (cond) {
+                      if (cond.hunterLevel !== undefined) {
+                        const met = hunter.level >= cond.hunterLevel
+                        condLines.push({ text: `헌터 Lv.${cond.hunterLevel}`, met })
+                        if (!met) isConditionMet = false
+                      }
+                      if (cond.previousJobLevel !== undefined && job.previousJobIds) {
+                        const prevJobState = job.previousJobIds.map(prevId => jobs[prevId]).find(js => js && js.level >= (cond.previousJobLevel ?? 0))
+                        const met = !!prevJobState
+                        condLines.push({ text: `이전 클래스 Lv.${cond.previousJobLevel}`, met })
+                        if (!met) isConditionMet = false
+                      }
+                      if (cond.towerFloorCleared !== undefined) {
+                        const met = (infiniteTower?.highestClearedFloor ?? 0) >= cond.towerFloorCleared
+                        condLines.push({ text: `무한의 탑 ${cond.towerFloorCleared}층 클리어`, met })
+                        if (!met) isConditionMet = false
+                      }
+                      if (cond.gateClearCount !== undefined) {
+                        const met = (achievementStats?.dungeonClears.total ?? 0) >= cond.gateClearCount
+                        condLines.push({ text: `게이트 클리어 ${cond.gateClearCount}회`, met })
+                        if (!met) isConditionMet = false
+                      }
+                      if (cond.bossClearCount !== undefined) {
+                        const met = (achievementStats?.dungeonClears.total ?? 0) >= cond.bossClearCount
+                        condLines.push({ text: `보스 토벌 ${cond.bossClearCount}회`, met })
+                        if (!met) isConditionMet = false
+                      }
+                      if (cond.shadowCount !== undefined) {
+                        const met = (ownedShadows?.length ?? 0) >= cond.shadowCount
+                        condLines.push({ text: `그림자 부하 ${cond.shadowCount}마리`, met })
+                        if (!met) isConditionMet = false
+                      }
+                      if (cond.hiddenSignalKeys && cond.hiddenSignalKeys.length > 0) {
+                        cond.hiddenSignalKeys.forEach(key => {
+                          const met = (hunter.hiddenSignalKeys || []).includes(key)
+                          let text = `특수 업적 [${key}]`
+                          if (key === 'shadow-extraction-attempt') {
+                            text = '그림자 추출 시도'
+                          } else if (key === 'low-hp-victory') {
+                            text = '생사경 극복 승리 (HP 15% 이하)'
+                          } else if (key === 'long-battle-victory') {
+                            text = '장기전 끝의 승리 (20턴 이상)'
+                          }
+                          condLines.push({ text, met })
+                          if (!met) isConditionMet = false
+                        })
+                      }
+                    }
 
-              return (
-                <motion.div 
-                  key={job.id}
-                  whileHover={{ y: -4, scale: 1.025 }}
-                  transition={{ duration: 0.22, ease: 'easeOut' }}
-                  className={`panel corner-bracket p-4 bg-gradient-to-br ${
-                    canAdvance 
-                      ? `${ARCHETYPE_GRADIENT[job.archetype]} border-cyan-400/40 shadow-[0_0_12px_rgba(34,211,238,0.08)]` 
-                      : 'from-black/20 to-black/35 opacity-75 border-zinc-800/80'
-                  } card-premium-shine group relative overflow-hidden transition-all duration-300 ${candAuraClass}`}
-                >
-                  <div className="br" />
-                  <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,rgba(6,182,212,0.06),transparent_55%)]" />
+                    const canAdvance = isConditionMet || isDiscovered
 
-                  <div className="relative z-10 flex justify-between items-start mb-2">
-                    <div>
-                      <div className="flex items-center gap-1.5">
-                        {isHidden ? (
-                          <Sparkles className="w-4 h-4 text-rose-400 animate-pulse" />
-                        ) : (
-                          <Wand2 className="w-4 h-4 text-cyan-400" />
-                        )}
-                        <h4 className={`font-black text-sm tracking-wide ${isHidden ? 'text-rose-300 drop-shadow' : 'text-white/90'}`}>
-                          {job.name}
-                        </h4>
-                      </div>
-                      <div className="flex items-center gap-1.5 text-[9px] text-white/40 mt-1 system-text font-bold">
-                        <span className={TIER_COLOR[job.tier]}>{TIER_LABEL[job.tier]}</span>
-                        <span>•</span>
-                        <span className="text-white/50">{job.combatStyle}</span>
-                      </div>
-                    </div>
-                    {canAdvance && (
-                      <span className={`text-[8px] font-bold px-2 py-0.5 rounded border uppercase tracking-wider animate-pulse ${
-                        isHidden 
-                          ? 'border-rose-400/40 bg-rose-400/15 text-rose-200' 
-                          : 'border-cyan-400/40 bg-cyan-400/15 text-cyan-200'
-                      }`}>
-                        전직 가능
-                      </span>
-                    )}
-                  </div>
+                    // Render MASKED hidden class
+                    if (isHidden && !canAdvance) {
+                      const branchKey = (job.branch === 'chrono' ? 'rift' : job.branch) as 'shadow' | 'curse' | 'rift'
+                      const targetResonance = cond?.resonanceRequired?.[branchKey] || 10
+                      const dynamicHint = getDynamicHiddenHint(job, hunter.hiddenResonanceProgress || {}, targetResonance)
+                      
+                      let hiddenPulseClass = 'named-pulse'
+                      if (branchKey === 'curse') hiddenPulseClass = 'tier-aura-hidden-curse'
+                      if (branchKey === 'rift') hiddenPulseClass = 'tier-aura-hidden-rift'
+                      if (branchKey === 'shadow') hiddenPulseClass = 'tier-aura-hidden-shadow'
 
-                  <p className="relative z-10 text-[11px] text-white/70 mb-3 leading-relaxed">
-                    {job.description}
-                  </p>
+                      return (
+                        <motion.div 
+                          key={job.id} 
+                          whileHover={{ y: -3, scale: 1.015 }}
+                          transition={{ duration: 0.2, ease: 'easeOut' }}
+                          className={`panel corner-bracket p-4 border bg-zinc-950/80 group card-premium-shine relative overflow-hidden transition-all duration-300 ${hiddenPulseClass}`}
+                        >
+                          <div className="br" />
+                          <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,rgba(244,63,94,0.06),transparent_55%)]" />
+                          
+                          <div className="relative z-10 flex items-center justify-between gap-2 mb-2">
+                            <div className="flex items-center gap-1.5">
+                              <Lock className="w-3.5 h-3.5 text-rose-500/70" />
+                              <h4 className="font-extrabold text-zinc-400 system-text tracking-wide text-sm">
+                                {dynamicHint.maskedName}
+                              </h4>
+                            </div>
+                            <span className="text-[8px] font-bold text-rose-400 bg-rose-950/45 px-1.5 py-0.5 rounded border border-rose-500/30 uppercase tracking-wider animate-pulse">
+                              균열 감지됨
+                            </span>
+                          </div>
+                          <p className="relative z-10 text-[11px] text-zinc-400 leading-relaxed font-medium bg-black/40 p-2 rounded border border-white/5">
+                            <span className="text-rose-400/80 font-bold block mb-0.5 text-[10px]">공명 반응:</span>
+                            {dynamicHint.hintText}
+                          </p>
+                        </motion.div>
+                      )
+                    }
 
-                  {/* Conditions Check Display */}
-                  {condLines.length > 0 && (
-                    <div className="relative z-10 space-y-1 bg-black/40 p-2.5 rounded border border-white/5 mb-3 text-[10px] system-text shadow-inner">
-                      <div className="text-[9px] text-white/30 mb-1 font-bold">전직 개방 요건:</div>
-                      {condLines.map((line, idx) => (
-                        <div key={idx} className="flex justify-between items-center">
-                          <span className={line.met ? 'text-white/70 font-semibold' : 'text-white/40'}>{line.met ? '✓' : '✗'} {line.text}</span>
-                          <span className={line.met ? 'text-emerald-400 font-extrabold' : 'text-red-400/80 font-bold'}>
-                            {line.met ? '만족' : '미충족'}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
+                    // Render normal / revealed class candidates
+                    const candAuraClass = getTierAuraClass(job.tier, job.branch)
 
-                  {/* Advancement Accept Button */}
-                  <div className="relative z-10">
-                    {canAdvance ? (
-                      <button
-                        type="button"
-                        onClick={() => advanceToJob(job.id)}
-                        className={`w-full py-1.5 text-center rounded text-xs font-black transition-all shadow-md hover:brightness-110 active:scale-[0.98] ${
-                          isHidden 
-                            ? 'bg-gradient-to-r from-rose-600 to-purple-600 text-white shadow-glow-rose' 
-                            : 'bg-gradient-to-r from-cyan-500 to-blue-500 text-white shadow-glow'
-                        }`}
+                    return (
+                      <motion.div 
+                        key={job.id}
+                        whileHover={{ y: -4, scale: 1.025 }}
+                        transition={{ duration: 0.22, ease: 'easeOut' }}
+                        className={`panel corner-bracket p-4 bg-gradient-to-br ${
+                          canAdvance 
+                            ? `${ARCHETYPE_GRADIENT[job.archetype]} border-cyan-400/40 shadow-[0_0_12px_rgba(34,211,238,0.08)]` 
+                            : 'from-black/20 to-black/35 opacity-75 border-zinc-800/80'
+                        } card-premium-shine group relative overflow-hidden transition-all duration-300 ${candAuraClass}`}
                       >
-                        {isHidden ? '기척 수락 (히든 전직)' : '수락 및 전직 완료'}
-                      </button>
-                    ) : (
-                      <div className="w-full py-1.5 text-center rounded bg-zinc-800/40 text-zinc-500 text-xs font-bold border border-zinc-800/50 flex items-center justify-center gap-1.5 shadow-sm">
-                        <Lock className="w-3.5 h-3.5" />
-                        클래스 잠김 (요건 미충족)
-                      </div>
-                    )}
-                  </div>
-                </motion.div>
-              )
-            })}
-          </div>
-        )}
+                        <div className="br" />
+                        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,rgba(6,182,212,0.06),transparent_55%)]" />
+
+                        <div className="relative z-10 flex justify-between items-start mb-2">
+                          <div>
+                            <div className="flex items-center gap-1.5">
+                              {isHidden ? (
+                                <Sparkles className="w-4 h-4 text-rose-400 animate-pulse" />
+                              ) : (
+                                <Wand2 className="w-4 h-4 text-cyan-400" />
+                              )}
+                              <h4 className={`font-black text-sm tracking-wide ${isHidden ? 'text-rose-300 drop-shadow' : 'text-white/90'}`}>
+                                {job.name}
+                              </h4>
+                            </div>
+                            <div className="flex items-center gap-1.5 text-[9px] text-white/40 mt-1 system-text font-bold">
+                              <span className={TIER_COLOR[job.tier]}>{TIER_LABEL[job.tier]}</span>
+                              <span>•</span>
+                              <span className="text-white/50">{job.combatStyle}</span>
+                            </div>
+                          </div>
+                          {canAdvance && (
+                            <span className={`text-[8px] font-bold px-2 py-0.5 rounded border uppercase tracking-wider animate-pulse ${
+                              isHidden 
+                                ? 'border-rose-400/40 bg-rose-400/15 text-rose-200' 
+                                : 'border-cyan-400/40 bg-cyan-400/15 text-cyan-200'
+                            }`}>
+                              전직 가능
+                            </span>
+                          )}
+                        </div>
+
+                        <p className="relative z-10 text-[11px] text-white/70 mb-3 leading-relaxed">
+                          {job.description}
+                        </p>
+
+                        {/* Conditions Check Display */}
+                        {condLines.length > 0 && (
+                          <div className="relative z-10 space-y-1 bg-black/40 p-2.5 rounded border border-white/5 mb-3 text-[10px] system-text shadow-inner">
+                            <div className="text-[9px] text-white/30 mb-1 font-bold">전직 개방 요건:</div>
+                            {condLines.map((line, idx) => (
+                              <div key={idx} className="flex justify-between items-center">
+                                <span className={line.met ? 'text-white/70 font-semibold' : 'text-white/40'}>{line.met ? '✓' : '✗'} {line.text}</span>
+                                <span className={line.met ? 'text-emerald-400 font-extrabold' : 'text-red-400/80 font-bold'}>
+                                  {line.met ? '만족' : '미충족'}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+
+                        {/* Advancement Accept Button */}
+                        <div className="relative z-10">
+                          {canAdvance ? (
+                            <button
+                              type="button"
+                              onClick={() => advanceToJob(job.id)}
+                              className={`w-full py-1.5 text-center rounded text-xs font-black transition-all shadow-md hover:brightness-110 active:scale-[0.98] ${
+                                isHidden 
+                                  ? 'bg-gradient-to-r from-rose-600 to-purple-600 text-white shadow-glow-rose' 
+                                  : 'bg-gradient-to-r from-cyan-500 to-blue-500 text-white shadow-glow'
+                              }`}
+                            >
+                              {isHidden ? '기척 수락 (히든 전직)' : '수락 및 전직 완료'}
+                            </button>
+                          ) : (
+                            <div className="w-full py-1.5 text-center rounded bg-zinc-800/40 text-zinc-500 text-xs font-bold border border-zinc-800/50 flex items-center justify-center gap-1.5 shadow-sm">
+                              <Lock className="w-3.5 h-3.5" />
+                              클래스 잠김 (요건 미충족)
+                            </div>
+                          )}
+                        </div>
+                      </motion.div>
+                    )
+                  })}
+                </div>
+              )}
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
 
       {/* 3. Class Encyclopedia Catalog (bottom collapsible) */}

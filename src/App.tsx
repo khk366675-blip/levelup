@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Award,
@@ -24,9 +24,9 @@ import { QuestCard } from './components/QuestCard'
 import { SystemMessageQueue } from './components/SystemMessage'
 import { AddQuestModal } from './components/AddQuestModal'
 import { Inventory } from './components/Inventory'
-import { TitleCollection } from './components/TitleCollection'
 import { RandomQuestCard } from './components/RandomQuestCard'
 import { GatePanel } from './components/GatePanel'
+import { HunterGradePanel } from './components/HunterGradePanel'
 import { ShadowPanel } from './components/ShadowPanel'
 import { BackupControls } from './components/BackupControls'
 import { InfiniteTowerPanel } from './components/InfiniteTowerPanel'
@@ -34,8 +34,9 @@ import { RewardBoxPanel } from './components/RewardBoxPanel'
 import { ChallengeCardsPanel } from './components/ChallengeCardsPanel'
 import { ShopPanel } from './components/ShopPanel'
 import { AiCoachPanel } from './components/AiCoachPanel'
+import { FocusSessionOverlay } from './components/FocusSessionOverlay'
 
-type Tab = 'rewards' | 'shop' | 'daily' | 'main' | 'gate' | 'shadows' | 'inventory' | 'titles' | 'tower' | 'coach'
+type Tab = 'rewards' | 'shop' | 'daily' | 'main' | 'gate' | 'shadows' | 'inventory' | 'grade' | 'tower' | 'coach'
 
 const TABS: { key: Tab; label: string; icon: typeof Calendar }[] = [
   { key: 'rewards',   label: '보상',           icon: Gift },
@@ -46,8 +47,17 @@ const TABS: { key: Tab; label: string; icon: typeof Calendar }[] = [
   { key: 'gate',      label: '게이트',      icon: Swords },
   { key: 'tower',     label: '무한의 탑',   icon: Swords },
   { key: 'inventory', label: '인벤토리',    icon: Package },
-  { key: 'titles',    label: '칭호',        icon: Award },
+  { key: 'grade',     label: '등급/칭호',    icon: Award },
   { key: 'coach',     label: 'AI 코치',      icon: Brain },
+]
+
+const MOBILE_TABS: { key: Tab; label: string; icon: typeof Calendar }[] = [
+  { key: 'rewards',   label: '보상',           icon: Gift },
+  { key: 'daily',     label: '일일',           icon: Calendar },
+  { key: 'gate',      label: '게이트',         icon: Swords },
+  { key: 'grade',     label: '등급',           icon: Award },
+  { key: 'shadows',   label: '군단',           icon: Eclipse },
+  { key: 'coach',     label: 'AI 코치',        icon: Brain },
 ]
 
 export default function App() {
@@ -78,6 +88,44 @@ export default function App() {
   const syncDefaultQuestMetadata = useGame(s => s.syncDefaultQuestMetadata)
   const ensureMainQuestMilestonesBackfilled = useGame(s => s.ensureMainQuestMilestonesBackfilled)
   const initialized = useGame(s => s.initialized)
+  const manualBattleSession = useGame(s => s.manualBattleSession)
+  const activeFocusSession = useGame(s => s.focusSession?.active)
+  const isOverlayActive = Boolean(manualBattleSession || activeFocusSession)
+
+  const tabAnchorRef = useRef<HTMLDivElement | null>(null)
+
+  const scrollToTabAnchor = (behavior: ScrollBehavior) => {
+    if (tabAnchorRef.current) {
+      const element = tabAnchorRef.current
+      const elementPosition = element.getBoundingClientRect().top + window.scrollY
+      // Mobile header: 56px, Desktop header: 64px
+      // Mobile offset = 56px + 4px extra space = 60px
+      // Desktop offset = 64px + 8px extra space = 72px
+      const offset = window.innerWidth >= 768 ? 72 : 60
+      const scrollPosition = elementPosition - offset
+      
+      const currentScroll = window.scrollY
+      if (Math.abs(currentScroll - scrollPosition) > 2) {
+        window.scrollTo({
+          top: scrollPosition,
+          behavior
+        })
+      }
+    } else {
+      window.scrollTo({ top: 0, behavior })
+    }
+  }
+
+  const handleTabChange = (newTab: Tab) => {
+    if (newTab === tab) {
+      scrollToTabAnchor('smooth')
+    } else {
+      setTab(newTab)
+      setTimeout(() => {
+        scrollToTabAnchor('auto')
+      }, 0)
+    }
+  }
 
   useEffect(() => {
     init()
@@ -217,18 +265,21 @@ export default function App() {
         </div>
       </header>
 
-      <main className="max-w-6xl mx-auto px-4 py-6 space-y-6">
+      <main className={`max-w-6xl mx-auto px-4 py-6 space-y-6 ${!isOverlayActive ? 'pb-24 md:pb-6' : ''}`}>
         <HunterStatus />
 
+        {/* 12-41UX-hotfix: Tab Anchor position for scroll offset adjustment */}
+        <div ref={tabAnchorRef} className="scroll-mt-[60px] md:scroll-mt-[72px]" />
+
         {/* Tabs */}
-        <div className="flex gap-1 p-1 panel rounded-lg overflow-x-auto">
+        <div className="sticky top-[56px] md:top-[64px] z-20 backdrop-blur-md bg-ink-950/75 border border-cyan-400/15 p-1 rounded-lg overflow-x-auto flex gap-1 shadow-[0_4px_20px_rgba(0,0,0,0.45)]">
           {TABS.map(t => {
             const Icon = t.icon
             const active = tab === t.key
             return (
               <button
                 key={t.key}
-                onClick={() => setTab(t.key)}
+                onClick={() => handleTabChange(t.key)}
                 className={`flex-1 min-w-fit relative px-4 py-2.5 rounded-md text-sm font-medium flex items-center justify-center gap-2 transition
                   ${active ? 'text-white' : 'text-white/50 hover:text-white/80'}`}
               >
@@ -426,9 +477,9 @@ export default function App() {
               </Section>
             )}
 
-            {tab === 'titles' && (
-              <Section title="칭호" subtitle="헌터의 업적과 영광">
-                <TitleCollection />
+            {tab === 'grade' && (
+              <Section title="헌터 등급" subtitle="헌터 협회 공인 등급과 자격 증명">
+                <HunterGradePanel />
               </Section>
             )}
 
@@ -449,6 +500,34 @@ export default function App() {
       </main>
 
       <AddQuestModal open={addOpen} onClose={() => setAddOpen(false)} type={tab === 'main' ? 'main' : 'daily'} />
+      
+      {/* Mobile Bottom Quick Nav */}
+      {!isOverlayActive && (
+        <div className="fixed bottom-0 left-0 right-0 z-30 md:hidden bg-ink-950/90 border-t border-cyan-400/25 backdrop-blur-lg px-2 pb-[safe-area-inset-bottom] pt-2 shadow-[0_-4px_25px_rgba(0,0,0,0.6)]">
+          <div className="flex justify-around items-center max-w-lg mx-auto">
+            {MOBILE_TABS.map(t => {
+              const Icon = t.icon
+              const active = tab === t.key
+              return (
+                <button
+                  key={t.key}
+                  onClick={() => handleTabChange(t.key)}
+                  className={`flex flex-col items-center justify-center py-1 flex-1 transition min-w-[50px] relative
+                    ${active ? 'text-cyan-300 font-bold scale-105' : 'text-white/45 hover:text-white/70'}`}
+                >
+                  <Icon className={`w-5 h-5 mb-1 ${active ? 'text-cyan-300 drop-shadow-[0_0_8px_rgba(34,211,238,0.6)]' : 'text-white/45'}`} />
+                  <span className="text-[9px] tracking-tight">{t.label}</span>
+                  {active && (
+                    <span className="absolute bottom-0 w-1.5 h-1.5 rounded-full bg-cyan-400 shadow-[0_0_6px_rgba(34,211,238,0.8)] animate-pulse" />
+                  )}
+                </button>
+              )
+            })}
+          </div>
+        </div>
+      )}
+
+      <FocusSessionOverlay />
     </div>
   )
 }
