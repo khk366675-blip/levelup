@@ -1,4 +1,6 @@
-import type { DailyProgressionState, FocusSessionState, ActiveGate, RealityPressureSnapshot } from './types'
+import type { DailyProgressionState, FocusSessionState, ActiveGate, RealityPressureSnapshot, HunterGradeTier } from './types'
+import { PROMOTION_EXAM_DEFINITIONS } from './promotionExams'
+
 
 /**
  * 현실 행동(준비도 및 성공 집중 공명 세션)에 기반하여 몬스터 강화 수치(Reality Pressure)를 산출합니다.
@@ -110,15 +112,19 @@ export const calculateRealityPressure = (
 export const getMonsterPressureScaling = (
   snapshot?: RealityPressureSnapshot,
   monsterType?: 'boss' | 'elite' | 'minion' | string,
-  isRedGate = false
+  isRedGate = false,
+  isPromotionExam = false,
+  targetGrade?: HunterGradeTier
 ): { hp: number; atk: number; def: number } => {
-  if (!snapshot) {
-    return { hp: 1.0, atk: 1.0, def: 1.0 }
-  }
+  let hpBase = 0
+  let atkBase = 0
+  let defBase = 0
 
-  const hpBase = snapshot.monsterHpMultiplier - 1.0
-  const atkBase = snapshot.monsterAtkMultiplier - 1.0
-  const defBase = snapshot.monsterDefMultiplier - 1.0
+  if (snapshot) {
+    hpBase = snapshot.monsterHpMultiplier - 1.0
+    atkBase = snapshot.monsterAtkMultiplier - 1.0
+    defBase = snapshot.monsterDefMultiplier - 1.0
+  }
 
   let hpFactor = 1.0
   let atkFactor = 1.0
@@ -175,9 +181,51 @@ export const getMonsterPressureScaling = (
     }
   }
 
+  const baseHpScale = 1.0 + finalHpAdd
+  const baseAtkScale = 1.0 + finalAtkAdd
+  const baseDefScale = 1.0 + finalDefAdd
+
+  let examMult = 1.0
+  if (isPromotionExam && targetGrade && targetGrade !== 'E') {
+    const examDef = PROMOTION_EXAM_DEFINITIONS[targetGrade]
+    if (examDef) {
+      examMult = isBoss ? examDef.bossMultiplier : examDef.normalMultiplier
+    }
+  }
+
+  let finalHpScale = baseHpScale * examMult
+  let finalAtkScale = baseAtkScale * examMult
+  // 방어력은 헌터의 관통력 등을 고려해 보수적으로 보정 (추가분의 35%만 적용)
+  let finalDefScale = baseDefScale * (1.0 + (examMult - 1.0) * 0.35)
+
+  // 3. Final Caps per rank to prevent unkillable states
+  if (isPromotionExam && targetGrade) {
+    let hpCap = 3.5
+    let atkCap = 3.5
+    let defCap = 1.8
+    
+    if (targetGrade === 'D' || targetGrade === 'C') {
+      hpCap = 1.8
+      atkCap = 1.8
+      defCap = 1.25
+    } else if (targetGrade === 'B' || targetGrade === 'A') {
+      hpCap = 2.6
+      atkCap = 2.6
+      defCap = 1.45
+    } else if (targetGrade === 'S') {
+      hpCap = 3.0
+      atkCap = 3.0
+      defCap = 1.6
+    }
+
+    finalHpScale = Math.min(hpCap, finalHpScale)
+    finalAtkScale = Math.min(atkCap, finalAtkScale)
+    finalDefScale = Math.min(defCap, finalDefScale)
+  }
+
   return {
-    hp: 1.0 + finalHpAdd,
-    atk: 1.0 + finalAtkAdd,
-    def: 1.0 + finalDefAdd
+    hp: finalHpScale,
+    atk: finalAtkScale,
+    def: finalDefScale
   }
 }

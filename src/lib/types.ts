@@ -813,6 +813,8 @@ export interface ExpeditionReport {
   highlight: string
   harvest: string
   closing: string
+  observation?: string
+  observationSignalId?: string
 }
 
 export interface ShadowExpeditionLog {
@@ -1724,6 +1726,34 @@ export interface SystemMessage {
   title: string
   lines: string[]
   createdAt: string
+  grade?: HunterGradeTier
+}
+
+export interface WorldSignalEntry {
+  id: string
+  at: number
+  source: 'focus' | 'red_gate' | 'extraction' | 'promotion' | 'expedition' | 'boss' | 'daily' | 'tower' | 'system'
+  tier: 'faint' | 'clear' | 'distorted' | 'severe' | 'sealed'
+  title: string
+  body: string
+  spoilerLevel: number
+  seen?: boolean
+}
+
+export interface WorldSignalState {
+  intensity: number
+  discoveredSignalIds: string[]
+  counters: {
+    focusResonance: number
+    redGateContact: number
+    extractionEcho: number
+    promotionAuthority: number
+    shadowExpeditionFindings: number
+    realityPressureSpikes: number
+    bossAnomalies: number
+  }
+  lastSignalAt?: number
+  recentSignals: WorldSignalEntry[]
 }
 
 export interface SecretProgressState {
@@ -1746,6 +1776,7 @@ export interface SecretProgressState {
   unlockedFragments?: string[]
   hiddenAffinity?: Record<string, number>
   sealedRewards?: Record<string, boolean>
+  worldSignals?: WorldSignalState
 }
 
 export type BoxType = 'daily' | 'weekly' | 'boss'

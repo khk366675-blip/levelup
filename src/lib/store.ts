@@ -95,6 +95,7 @@ import {
   SKILL_DEFINITIONS,
 } from './seed'
 import { generateGateRunState, hydrateGateRunEncounterChoices } from './gateRunEvents'
+import { PROMOTION_EXAM_DEFINITIONS } from './promotionExams'
 import {
   CATEGORY_TO_STAT,
   calculatePlayerCombatStats,
@@ -226,6 +227,7 @@ import {
   recordSecretEvent,
   type SecretEvent,
 } from './secrets'
+import { emitWorldSignal, type WorldSignalTemplateId } from './worldSignals'
 import {
   SHOP_PRODUCTS,
   getEquipmentStarWeights,
@@ -237,15 +239,15 @@ import {
 
 import { registerLegionNodeLevelResolver } from './shadowStats'
 
-function rollRedGateInstability(runState: GateRunState, encounterId: string, customIncrease?: number) {
-  if (!runState) return
+function rollRedGateInstability(runState: GateRunState, encounterId: string, customIncrease?: number): boolean {
+  if (!runState) return false
   if (!runState.redGateState) {
     runState.redGateState = { status: 'none', instabilityScore: 0 }
   }
 
   const red = runState.redGateState
   // 이미 열렸거나 클리어/실패된 경우 재판정 금지 (Gate당 최대 1회 개방 보장)
-  if (red.status === 'opened' || red.status === 'cleared' || red.status === 'failed') return
+  if (red.status === 'opened' || red.status === 'cleared' || red.status === 'failed') return false
 
   // 1. instabilityScore 누적
   const increase = customIncrease ?? 5
@@ -299,7 +301,9 @@ function rollRedGateInstability(runState: GateRunState, encounterId: string, cus
         }
       })
     }
+    return true
   }
+  return false
 }
 
 export interface GameState {
@@ -521,6 +525,7 @@ export interface GameState {
   startPromotionExam: (targetGrade: HunterGradeTier) => void
   completePromotionExam: (targetGrade: HunterGradeTier) => void
   checkGateClearHooks: (gateId: string, isVictory: boolean) => void
+  emitWorldSignal: (templateId: WorldSignalTemplateId) => void
 }
 
 const initialHunter: HunterState = {
@@ -1519,6 +1524,10 @@ const appendManualWaveClearLogs = (params: {
   monster: BattleActorState
   waveIndex: number
   remainingMonsterIds: string[]
+  pressureSnapshot?: any
+  isRedGate?: boolean
+  isPromotionExam?: boolean
+  targetGrade?: HunterGradeTier
 }): {
   logs: BattleTurn[]
   monster: BattleActorState
@@ -1561,7 +1570,14 @@ const appendManualWaveClearLogs = (params: {
     }
 
     waveIndex += 1
-    monster = createMonsterBattleActor(nextMonsterDef)
+    monster = createMonsterBattleActor(
+      nextMonsterDef,
+      params.pressureSnapshot,
+      params.isRedGate,
+      undefined,
+      params.isPromotionExam,
+      params.targetGrade
+    )
     logs = [
       ...logs,
       createManualSystemLog(
@@ -2069,43 +2085,63 @@ const createGateBattleOutcomeUpdate = (
       nextGold += earnedGold
       const nextEssenceVal = (s.shadowEssence ?? 0) + earnedEssence
 
-      const basePenalty = penalty ?? {
-        id: 'penalty-gate-basic',
-        name: '기본 게이트 패널티',
-        staminaCost: 50,
-        injuryHours: 6,
-      }
-      const penaltyReduction = getActiveGatePenaltyReduction(s.activeConsumableEffects)
-      const finalStaminaCost = Math.round(basePenalty.staminaCost * (1 - penaltyReduction))
-      const injuryHours = basePenalty.injuryHours ?? 6
-      const injuredUntil = new Date(Date.now() + injuryHours * 3_600_000).toISOString()
+      const isExam = run.isPromotionExam
+      const examTarget = run.targetGrade
 
-      penaltyApplied = {
-        ...basePenalty,
-        staminaCost: finalStaminaCost,
-        injuryHours,
-      }
-      nextGateStatus = {
-        ...gateStatus,
-        stamina: Math.max(0, gateStatus.stamina - finalStaminaCost),
-        injuredUntil,
-        recoveryQuestProgress: 0,
-        recoveryQuestRequired: 3,
+      let finalStaminaCost = 0
+      let injuryHours = 0
+      let injuredUntil: string | undefined = undefined
+
+      if (isExam) {
+        // No stamina cost or injury for exams!
+        nextGateStatus = {
+          ...gateStatus,
+        }
+      } else {
+        const basePenalty = penalty ?? {
+          id: 'penalty-gate-basic',
+          name: '기본 게이트 패널티',
+          staminaCost: 50,
+          injuryHours: 6,
+        }
+        const penaltyReduction = getActiveGatePenaltyReduction(s.activeConsumableEffects)
+        finalStaminaCost = Math.round(basePenalty.staminaCost * (1 - penaltyReduction))
+        injuryHours = basePenalty.injuryHours ?? 6
+        injuredUntil = new Date(Date.now() + injuryHours * 3_600_000).toISOString()
+
+        penaltyApplied = {
+          ...basePenalty,
+          staminaCost: finalStaminaCost,
+          injuryHours,
+        }
+        nextGateStatus = {
+          ...gateStatus,
+          stamina: Math.max(0, gateStatus.stamina - finalStaminaCost),
+          injuredUntil,
+          recoveryQuestProgress: 0,
+          recoveryQuestRequired: 3,
+        }
       }
 
-      const lines = [
-        `[${gate.name}] 던전 런 중 [${currentEncounter.title}]에서 패배했습니다.`,
-        `누적 획득 골드: +${earnedGold}, 정수: +${earnedEssence}`,
-        redGateShardBonus ? '레드 게이트 잔향 조각(네임드 조각) 획득: +1' : '',
-        `스태미나 -${finalStaminaCost}`,
-        `부상을 입었습니다. 6시간 경과 또는 퀘스트 3개 완료 시 회복됩니다.`,
-      ].filter(Boolean)
+      const lines = isExam 
+        ? [
+            `[${gate.name}] 승급 심사 게이트 공략 도중 실패했습니다.`,
+            `협회 안전 지원 대책에 의해 부상과 스태미나 손실이 면제되었습니다.`,
+            `헌터님의 등급은 유지되며, 재도전 준비가 완료되면 언제든지 다시 응시할 수 있습니다.`
+          ]
+        : [
+            `[${gate.name}] 던전 런 중 [${currentEncounter.title}]에서 패배했습니다.`,
+            `누적 획득 골드: +${earnedGold}, 정수: +${earnedEssence}`,
+            redGateShardBonus ? '레드 게이트 잔향 조각(네임드 조각) 획득: +1' : '',
+            `스태미나 -${finalStaminaCost}`,
+            `부상을 입었습니다. 6시간 경과 또는 퀘스트 3개 완료 시 회복됩니다.`,
+          ].filter(Boolean)
 
       const newMessages = [
         {
           id: uid(),
           kind: 'info' as const,
-          title: '던전 런 실패',
+          title: isExam ? '승급 심사 실패 (재도전 가능)' : '던전 런 실패',
           lines,
           createdAt: todayISO(),
         }
@@ -2117,6 +2153,16 @@ const createGateBattleOutcomeUpdate = (
         penaltyApplied,
         source: 'gate',
       }
+
+      const nextHunterGrade = (isExam && examTarget && s.hunterGrade?.pendingExam) 
+        ? {
+            ...s.hunterGrade,
+            pendingExam: {
+              ...s.hunterGrade.pendingExam,
+              status: 'available' as const,
+            }
+          }
+        : s.hunterGrade
 
       return {
         finalLog,
@@ -2133,6 +2179,7 @@ const createGateBattleOutcomeUpdate = (
           combatLogs: [finalLog, ...s.combatLogs].slice(0, 20),
           messages: [...s.messages, ...newMessages],
           manualBattleSession: undefined,
+          hunterGrade: nextHunterGrade,
         }),
       }
     }
@@ -4674,6 +4721,11 @@ export const useGame = create<GameState>()(
           equippedShadows,
           gateInstanceId: activeGate.instanceId,
           initialActiveEffects,
+          pressureSnapshot: activeGate.runState?.pressureSnapshot,
+          isRedGate: Boolean(activeGate.runState?.redGateState && (activeGate.runState.redGateState.status === 'opened' || activeGate.runState.redGateState.status === 'cleared')),
+          difficultyMod: activeGate.runState?.difficultyMod,
+          isPromotionExam: activeGate.runState?.isPromotionExam,
+          targetGrade: activeGate.runState?.targetGrade,
         })
 
         const nextConsumables = consumeNextGateConsumables(s.activeConsumableEffects)
@@ -5030,7 +5082,15 @@ export const useGame = create<GameState>()(
         const gateSuccessBonus = getActiveGateSuccessBonus(s.activeConsumableEffects)
         const initialActiveEffects = createGateSuccessCombatEffects(gateSuccessBonus, 'player')
         const player = createPlayerBattleActor(s.hunter.name || 'Hunter', playerStats, allPlayerSkills)
-        const monster = createMonsterBattleActor(monsters[0])
+        const isRedGate = Boolean(activeGate.runState?.redGateState && (activeGate.runState.redGateState.status === 'opened' || activeGate.runState.redGateState.status === 'cleared'))
+        const monster = createMonsterBattleActor(
+          monsters[0],
+          activeGate.runState?.pressureSnapshot,
+          isRedGate,
+          activeGate.runState?.difficultyMod,
+          activeGate.runState?.isPromotionExam,
+          activeGate.runState?.targetGrade
+        )
 
         set({
           gateStatus,
@@ -5237,7 +5297,17 @@ export const useGame = create<GameState>()(
         }
 
         if (!result && monster.hp <= 0) {
-          const waveUpdate = appendManualWaveClearLogs({ logs, monster, waveIndex, remainingMonsterIds })
+          const isRedGate = Boolean(activeGate.runState?.redGateState && (activeGate.runState.redGateState.status === 'opened' || activeGate.runState.redGateState.status === 'cleared'))
+          const waveUpdate = appendManualWaveClearLogs({
+            logs,
+            monster,
+            waveIndex,
+            remainingMonsterIds,
+            pressureSnapshot: activeGate.runState?.pressureSnapshot,
+            isRedGate,
+            isPromotionExam: activeGate.runState?.isPromotionExam,
+            targetGrade: activeGate.runState?.targetGrade,
+          })
           logs = waveUpdate.logs
           monster = waveUpdate.monster
           waveIndex = waveUpdate.waveIndex
@@ -5456,7 +5526,12 @@ export const useGame = create<GameState>()(
         if (choiceId in choiceInstabilityMap) {
           instabilityDelta = choiceInstabilityMap[choiceId]
         }
-        rollRedGateInstability(run, currentEncounter.id, instabilityDelta)
+        const openedRedGate = rollRedGateInstability(run, currentEncounter.id, instabilityDelta)
+        if (openedRedGate) {
+          setTimeout(() => {
+            get().emitWorldSignal('red_gate_spawn')
+          }, 0)
+        }
 
         const isLast = run.currentEncounterIndex === run.encounters.length - 1
         if (!isLast) {
@@ -5729,6 +5804,19 @@ export const useGame = create<GameState>()(
         const nextGold = (s.gold ?? 0) + earnedGold
         const nextEssenceVal = (s.shadowEssence ?? 0) + earnedEssence
 
+        const isExam = run.isPromotionExam
+        const examTarget = run.targetGrade
+
+        const nextHunterGrade = (isExam && examTarget && s.hunterGrade?.pendingExam) 
+          ? {
+              ...s.hunterGrade,
+              pendingExam: {
+                ...s.hunterGrade.pendingExam,
+                status: 'available' as const,
+              }
+            }
+          : s.hunterGrade
+
         set({
           gold: nextGold,
           shadowEssence: nextEssenceVal,
@@ -5737,11 +5825,20 @@ export const useGame = create<GameState>()(
             status: 'failed',
             runState: run
           },
+          hunterGrade: nextHunterGrade,
           messages: [...s.messages, {
             id: uid(),
             kind: 'info',
-            title: '던전 런 포기',
-            lines: [`던전 탐사를 도중에 철수했습니다.`, `누적 획득 보상 정산 지급: 골드 +${earnedGold}, 마력 정수 +${earnedEssence}`],
+            title: isExam ? '승급 심사 중도 철수' : '던전 런 포기',
+            lines: isExam 
+              ? [
+                  `승급 심사 게이트에서 중도 퇴장했습니다.`,
+                  `언제든지 준비를 가다듬고 승급 심사에 재도전할 수 있습니다.`
+                ]
+              : [
+                  `던전 탐사를 도중에 철수했습니다.`,
+                  `누적 획득 보상 정산 지급: 골드 +${earnedGold}, 마력 정수 +${earnedEssence}`
+                ],
             createdAt: todayISO(),
           }]
         })
@@ -5802,7 +5899,17 @@ export const useGame = create<GameState>()(
         let result: CombatLog['result'] | undefined
 
         if (monster.hp <= 0) {
-          const waveUpdate = appendManualWaveClearLogs({ logs, monster, waveIndex, remainingMonsterIds })
+          const isRedGate = Boolean(activeGate.runState?.redGateState && (activeGate.runState.redGateState.status === 'opened' || activeGate.runState.redGateState.status === 'cleared'))
+          const waveUpdate = appendManualWaveClearLogs({
+            logs,
+            monster,
+            waveIndex,
+            remainingMonsterIds,
+            pressureSnapshot: activeGate.runState?.pressureSnapshot,
+            isRedGate,
+            isPromotionExam: activeGate.runState?.isPromotionExam,
+            targetGrade: activeGate.runState?.targetGrade,
+          })
           logs = waveUpdate.logs
           monster = waveUpdate.monster
           waveIndex = waveUpdate.waveIndex
@@ -5902,7 +6009,17 @@ export const useGame = create<GameState>()(
           }
 
           if (monster.hp <= 0) {
-            const waveUpdate = appendManualWaveClearLogs({ logs, monster, waveIndex, remainingMonsterIds })
+            const isRedGate = Boolean(activeGate.runState?.redGateState && (activeGate.runState.redGateState.status === 'opened' || activeGate.runState.redGateState.status === 'cleared'))
+            const waveUpdate = appendManualWaveClearLogs({
+              logs,
+              monster,
+              waveIndex,
+              remainingMonsterIds,
+              pressureSnapshot: activeGate.runState?.pressureSnapshot,
+              isRedGate,
+              isPromotionExam: activeGate.runState?.isPromotionExam,
+              targetGrade: activeGate.runState?.targetGrade,
+            })
             logs = waveUpdate.logs
             monster = waveUpdate.monster
             waveIndex = waveUpdate.waveIndex
@@ -6428,6 +6545,22 @@ export const useGame = create<GameState>()(
         }))
 
         setTimeout(() => {
+          const nextFailCount = nextFailCountMap[gate.id] ?? 0
+          if (result.success && result.shadow) {
+            const isNamed = result.shadow.isNamed || result.shadow.isGateNamed || result.shadow.isAchievementNamed
+            const isBoss = gate.rank === 'S' || gate.rewardTableId?.includes('boss')
+            if (isNamed) {
+              get().emitWorldSignal('extraction_named_echo')
+            } else if (isBoss) {
+              get().emitWorldSignal('extraction_boss_success')
+            }
+          } else {
+            if (nextFailCount >= 3) {
+              get().emitWorldSignal('extraction_silence')
+            } else {
+              get().emitWorldSignal('extraction_fail_echo')
+            }
+          }
           get().checkJobAwakening()
           get().recalculateHunterGrade('그림자 추출')
         }, 0)
@@ -7302,6 +7435,12 @@ export const useGame = create<GameState>()(
             ],
             createdAt: todayISO(),
           })
+          const observationSignalId = resolved.result?.report?.observationSignalId
+          if (observationSignalId) {
+            setTimeout(() => {
+              get().emitWorldSignal(observationSignalId as any)
+            }, 0)
+          }
           setTimeout(() => {
             set(current => applyChallengeProgress(current, { shadowExpeditionCompleted: true }))
             get().checkJobAwakening()
@@ -8198,6 +8337,11 @@ export const useGame = create<GameState>()(
               skillStates: nextSkillStates,
             }))
             setTimeout(() => {
+              if (getTowerFloorType(floor) === 'boss') {
+                get().emitWorldSignal('tower_boss_anomaly')
+              } else if (floor >= 25) {
+                get().emitWorldSignal('tower_anomaly')
+              }
               set(current => applyChallengeProgress(current, { towerAttempt: true, towerClear: true }))
               get().checkTitleUnlocks()
               get().checkJobAwakening()
@@ -10150,6 +10294,21 @@ export const useGame = create<GameState>()(
         
         get().recalculateDailyProgression()
         get().recalculateHunterGrade('집중 세션 완료')
+
+        const elapsedMinutes = Math.floor(finalFocusedMs / 60000)
+        const dailyTotalMs = nextTotalFocusedMs
+        const dailyTotalHours = dailyTotalMs / 3600000
+        const readinessLevel = get().dailyProgression?.readinessLevel
+        
+        if (readinessLevel === 'transcendent' || readinessLevel === 'resonant' || dailyTotalHours >= 4) {
+          get().emitWorldSignal('focus_resonance_severe')
+        } else if (elapsedMinutes >= 50 && active.interruptions.length === 0) {
+          get().emitWorldSignal('focus_resonance_distorted')
+        } else if (elapsedMinutes >= 25) {
+          get().emitWorldSignal('focus_resonance_clear')
+        } else {
+          get().emitWorldSignal('focus_resonance_faint')
+        }
         
         // 일일 도전과제 달성 체크
         set(current => applyChallengeProgress(current, { focusCompleted: true }))
@@ -10272,6 +10431,7 @@ export const useGame = create<GameState>()(
         })
         
         get().recalculateDailyProgression()
+        get().emitWorldSignal('focus_resonance_faint')
         setTimeout(() => {
           get().checkJobAwakening()
         }, 0)
@@ -10279,8 +10439,42 @@ export const useGame = create<GameState>()(
 
       recalculateHunterGrade: (reason) => {
         set(s => {
+          const prevExam = s.hunterGrade?.pendingExam
           const nextGradeState = recalcHunterGradeState(s.hunterGrade, s, reason)
+          const nextExam = nextGradeState.pendingExam
+          
+          if (nextExam && nextExam.status === 'available' && (!prevExam || prevExam.status !== 'available')) {
+            setTimeout(() => {
+              if (nextExam.targetGrade === 'NATIONAL') {
+                get().emitWorldSignal('promotion_sealed_national')
+              } else {
+                get().emitWorldSignal('promotion_exam_available')
+              }
+            }, 0)
+          }
+          
           return { hunterGrade: nextGradeState }
+        })
+      },
+
+      emitWorldSignal: (templateId) => {
+        set(s => {
+          const secretState = s.secretProgress ? { ...s.secretProgress } : undefined
+          if (!secretState) return {}
+          const { progress, signal } = emitWorldSignal(secretState, templateId)
+          if (!signal) return { secretProgress: progress }
+          
+          const message: SystemMessage = {
+            id: uid(),
+            kind: 'secret',
+            title: signal.title,
+            lines: [signal.body],
+            createdAt: todayISO()
+          }
+          return {
+            secretProgress: progress,
+            messages: [...s.messages, message]
+          }
         })
       },
 
@@ -10351,15 +10545,15 @@ export const useGame = create<GameState>()(
         expiresAt.setHours(expiresAt.getHours() + 24)
 
         const seed = `exam-${targetGrade}-${Date.now()}-${Math.floor(Math.random() * 1000)}`
-        const runState = generateGateRunState(baseGate.id, seed)
+        const runState = generateGateRunState(baseGate.id, seed, targetGrade)
         
         let difficultyMod = 1.0
-        if (targetGrade === 'D') difficultyMod = 1.1
-        else if (targetGrade === 'C') difficultyMod = 1.3
-        else if (targetGrade === 'B') difficultyMod = 1.5
-        else if (targetGrade === 'A') difficultyMod = 1.8
-        else if (targetGrade === 'S') difficultyMod = 2.2
-        else if (targetGrade === 'NATIONAL') difficultyMod = 3.0
+        if (targetGrade !== 'E') {
+          const examDef = PROMOTION_EXAM_DEFINITIONS[targetGrade]
+          if (examDef) {
+            difficultyMod = examDef.difficultyMod
+          }
+        }
 
         runState.difficultyMod = difficultyMod
         runState.isPromotionExam = true
@@ -10396,6 +10590,9 @@ export const useGame = create<GameState>()(
             createdAt: todayISO(),
           }]
         })
+        setTimeout(() => {
+          get().emitWorldSignal('promotion_exam_start')
+        }, 0)
       },
 
       completePromotionExam: (targetGrade) => {
@@ -10440,20 +10637,24 @@ export const useGame = create<GameState>()(
               ...s.messages,
               {
                 id: uid(),
-                kind: 'quest',
+                kind: 'rank',
                 title: `★ 헌터 승급 성공 ★`,
                 lines: [
                   `축하합니다! 공식 승급 심사를 통과하여 [${GRADE_LABELS[targetGrade]}]으로 공식 공인되었습니다.`,
                   `새로운 공식 칭호 [${titleName}]가 지급되었습니다.`,
                   `프로필 엠블럼의 오라 및 장식 테두리가 업그레이드되었습니다.`
                 ],
-                createdAt: todayISO()
+                createdAt: todayISO(),
+                grade: targetGrade
               }
             ]
           }
         })
         
         get().recalculateHunterGrade('승급 완료 반영 검사')
+        setTimeout(() => {
+          get().emitWorldSignal('promotion_exam_clear')
+        }, 0)
       },
 
       checkGateClearHooks: (gateId, isVictory) => {
@@ -10484,6 +10685,23 @@ export const useGame = create<GameState>()(
               bossKillsCount: isBoss ? (prev.achievementStats.bossKillsCount ?? 0) + 1 : (prev.achievementStats.bossKillsCount ?? 0),
             }
           }))
+
+          if (isRedGate) {
+            const instability = runState?.redGateState?.instabilityScore ?? 0
+            const isHighPressure = runState?.pressureSnapshot && (runState.pressureSnapshot.readinessTier === 'transcendent' || runState.pressureSnapshot.monsterHpMultiplier >= 1.08)
+            if (instability >= 80 && isHighPressure) {
+              get().emitWorldSignal('red_gate_pressure_spike')
+            } else {
+              get().emitWorldSignal('red_gate_clear')
+            }
+          } else {
+            const instability = runState?.redGateState?.instabilityScore ?? 0
+            if (runState?.redGateState?.status === 'unstable' && instability >= 70) {
+              get().emitWorldSignal('red_gate_leak')
+            } else if (isBoss) {
+              get().emitWorldSignal('tower_boss_anomaly')
+            }
+          }
 
           get().recalculateHunterGrade('게이트 공략 성공')
         }
@@ -10875,6 +11093,43 @@ export const useGame = create<GameState>()(
         } else if (persistedState.dailyProgression.dateKey !== new Date().toISOString().slice(0, 10)) {
           // 날짜가 바뀌었으면 null로 리셋 → recordAppOpen 시 재계산됨
           persistedState.dailyProgression = undefined
+        }
+
+        // 12-41C: hunterGrade save migration validation
+        if (persistedState.hunterGrade) {
+          const hg = persistedState.hunterGrade
+          
+          // 1. Recover a broken in_progress exam to available if activeGate is missing or not active.
+          if (hg.pendingExam && hg.pendingExam.status === 'in_progress') {
+            const activeGate = persistedState.activeGate
+            const isGateActive = activeGate && activeGate.status === 'active' && activeGate.runState?.isPromotionExam
+            if (!isGateActive) {
+              hg.pendingExam.status = 'available'
+            }
+          }
+          
+          // 2. Delete pendingExam if currentGrade is already equal to or higher than targetGrade.
+          if (hg.pendingExam && hg.currentGrade) {
+            const GRADE_ORDER = ['E', 'D', 'C', 'B', 'A', 'S', 'NATIONAL']
+            const curIdx = GRADE_ORDER.indexOf(hg.currentGrade)
+            const targetIdx = GRADE_ORDER.indexOf(hg.pendingExam.targetGrade)
+            if (curIdx >= 0 && targetIdx >= 0 && curIdx >= targetIdx) {
+              hg.pendingExam = undefined
+            }
+          }
+          
+          // 3. Remove duplicate entries in history (unifying rank logs).
+          if (Array.isArray(hg.history)) {
+            const seen = new Set<string>()
+            hg.history = hg.history.filter((entry: any) => {
+              if (!entry || !entry.grade) return false
+              if (seen.has(entry.grade)) {
+                return false
+              }
+              seen.add(entry.grade)
+              return true
+            })
+          }
         }
 
         return persistedState;

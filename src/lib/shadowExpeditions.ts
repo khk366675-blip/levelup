@@ -724,6 +724,41 @@ export const resolveShadowExpeditionCommand = (
   const featured = actor ?? party[0]
   const report = buildExpeditionReport(outcome, featured?.name ?? '군단')
 
+  // World Signal Integration for Shadow Expedition reports
+  const scoutCount = party.filter(s => s.role === 'scout').length
+  const analystCount = party.filter(s => s.role === 'analyst').length
+  const hasNamed = party.some(s => s.isNamed || s.isGateNamed || s.isAchievementNamed)
+  const hasHighLevel = party.some(s => (s.level ?? 1) >= 10)
+
+  let signalChance = 0.10
+  if (scoutCount > 0) signalChance += 0.15
+  if (analystCount > 0) signalChance += 0.15
+  if (hasNamed) signalChance += 0.15
+  if (hasHighLevel) signalChance += 0.10
+  signalChance = Math.min(0.60, signalChance)
+
+  if (rng() < signalChance) {
+    let templateId = 'expedition_shadow_gaze'
+    const roll = rng()
+    if (scoutCount > 0 && roll < 0.5) {
+      templateId = 'expedition_scout_find'
+    } else if (hasNamed && roll < 0.4) {
+      templateId = 'expedition_censor'
+    } else if (roll < 0.5) {
+      templateId = 'expedition_coordinate_mismatch'
+    }
+
+    const signalBodies: Record<string, string> = {
+      expedition_scout_find: '원정 정찰 헌터로부터 보고서 여백에 기록되지 않은 미확인 인장의 잔재가 전달되었습니다.',
+      expedition_censor: '원정 보고서의 마지막 문단이 협회 특수 보안 규정에 의해 자동으로 검열되었습니다.',
+      expedition_coordinate_mismatch: '정찰조가 지도에 존재하지 않는 동일한 위상 기하 좌표를 반복해서 보고했습니다.',
+      expedition_shadow_gaze: '그림자 개체 중 하나가 명령 없이 특정 심도 너머를 오랫동안 바라보는 이상 행동을 보였습니다.',
+    }
+
+    report.observation = signalBodies[templateId] || signalBodies.expedition_shadow_gaze
+    report.observationSignalId = templateId
+  }
+
   // Role line for finish
   if (featured) {
     const ctx = outcome === 'great_success' ? 'great_success' : outcome === 'failure' ? 'failure' : 'success'

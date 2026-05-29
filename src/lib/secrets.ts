@@ -6,6 +6,7 @@ import type {
   SystemMessage,
 } from './types'
 import { SECRET_HINTS, SECRET_MESSAGES } from './secretLore'
+import { ensureWorldSignalState, createInitialWorldSignalState } from './worldSignals'
 
 type SecretSnapshot = {
   infiniteTower?: {
@@ -55,6 +56,7 @@ const blankProgress = (): SecretProgressState => ({
   unlockedFragments: [],
   hiddenAffinity: {},
   sealedRewards: {},
+  worldSignals: createInitialWorldSignalState(),
 })
 
 const count = (progress: SecretProgressState, key: string): number => progress.signals?.[key] ?? progress.counters?.[key] ?? 0
@@ -200,6 +202,7 @@ export const ensureSecretProgress = (
     unlockedFragments: progress.unlockedFragments ?? [],
     hiddenAffinity: progress.hiddenAffinity ?? {},
     sealedRewards: Object.fromEntries(Object.entries(sealed).map(([key]) => [key, true])),
+    worldSignals: ensureWorldSignalState(progress.worldSignals),
   }
 }
 

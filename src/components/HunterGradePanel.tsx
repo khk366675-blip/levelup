@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { Award, Lock, Sparkles, Shield, ChevronRight, Zap, Target, Flame, Users, BookOpen, Clock } from 'lucide-react'
 import { useGame } from '../lib/store'
 import { HUNTER_TITLE_DEFINITIONS, GRADE_CUTS, GRADE_LABELS } from '../lib/hunterGrade'
+import { PROMOTION_EXAM_DEFINITIONS } from '../lib/promotionExams'
 import type { HunterGradeTier, AssociationRatingBreakdown } from '../lib/types'
 
 const GRADE_THEME: Record<HunterGradeTier, { bg: string; border: string; text: string; glow: string; label: string; aura: string }> = {
@@ -187,7 +188,7 @@ export function HunterGradePanel() {
           </div>
 
           {/* 총평 및 스코어 표시 */}
-          <div className="w-full md:w-auto min-w-[200px] panel bg-black/40 border border-white/5 p-4 rounded text-center md:text-right">
+          <div className="w-full md:w-auto min-w-[220px] panel bg-black/40 border border-white/5 p-4 rounded text-center md:text-right">
             <div className="text-[10px] text-cyan-400/60 system-text tracking-widest uppercase mb-1">협회 종합 평가 점수 (Association Rating)</div>
             <div className="text-3xl font-extrabold text-white filter drop-shadow-[0_0_8px_rgba(6,182,212,0.3)]">
               {ratingScore} <span className="text-sm font-medium text-white/40">Points</span>
@@ -205,6 +206,20 @@ export function HunterGradePanel() {
                     style={{ width: `${progressPercent}%` }}
                   />
                 </div>
+                {/* 평가 점수는 도달했으나 조건 미충족 상태인 경우 경고 알림 */}
+                {!pendingExam && ratingScore >= nextCut && (
+                  <div className="mt-2 text-left panel border-red-500/20 bg-red-500/5 p-2 rounded text-[10px] text-red-300 leading-normal system-text">
+                    <div className="font-bold flex items-center gap-1 text-[9px] mb-0.5 text-red-200">
+                      <Zap className="w-2.5 h-2.5 text-red-400" />
+                      심사 승인 대기 중 (조건 미달)
+                    </div>
+                    {nextGrade === 'C' && '레벨 10 이상 또는 충분한 던전/집중 실적 필요'}
+                    {nextGrade === 'B' && '레벨 20 이상 및 (보스 1회 또는 게이트 20회 이상) 필요'}
+                    {nextGrade === 'A' && '레벨 35 이상 및 (레드게이트 1회 또는 보스 5회 이상) 필요'}
+                    {nextGrade === 'S' && '레벨 45 이상 및 (레드게이트 2회 또는 보스 8회 이상 등) 필요'}
+                    {nextGrade === 'NATIONAL' && '레벨 55 이상 및 레드게이트 5회 & 보스 15회 이상 필요'}
+                  </div>
+                )}
               </div>
             ) : (
               <div className="mt-1 text-[10px] text-amber-300 font-semibold system-text animate-pulse">
@@ -216,59 +231,119 @@ export function HunterGradePanel() {
       </div>
 
       {/* 2. 승급 시험 대기 알림판 */}
-      {pendingExam && (
-        <AnimatePresence>
-          <motion.div
-            initial={{ opacity: 0, y: -20 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -20 }}
-            className={`panel corner-bracket p-5 border shadow-2xl relative flex flex-col md:flex-row items-center gap-4 justify-between bg-black/90 ${
-              pendingExam.status === 'available'
-                ? 'border-amber-500/50 bg-gradient-to-r from-amber-950/20 via-black to-amber-950/10'
-                : 'border-cyan-500/40 bg-gradient-to-r from-cyan-950/20 via-black to-cyan-950/10'
-            }`}
-          >
-            <div className="br" />
-            <div className="absolute top-0 right-0 w-32 h-32 bg-amber-500/5 rounded-full filter blur-xl pointer-events-none" />
+      {pendingExam && (() => {
+        const examDef = pendingExam.targetGrade !== 'E' ? PROMOTION_EXAM_DEFINITIONS[pendingExam.targetGrade] : null
+        if (!examDef) return null
 
-            <div className="flex items-center gap-4 text-center md:text-left flex-col md:flex-row">
-              <div className={`w-12 h-12 rounded-lg flex items-center justify-between border ${
-                pendingExam.status === 'available' ? 'border-amber-500/40 bg-amber-500/10 text-amber-400' : 'border-cyan-500/40 bg-cyan-500/10 text-cyan-400'
-              }`}>
-                <Zap className="w-6 h-6 w-full text-center" />
-              </div>
-              <div className="space-y-1">
-                <h3 className={`font-bold text-base tracking-tight ${pendingExam.status === 'available' ? 'text-amber-300' : 'text-cyan-300'}`}>
-                  {pendingExam.status === 'available'
-                    ? `★ [공식 승급 심사 가용] ${GRADE_LABELS[pendingExam.targetGrade]}으로 도약하십시오! ★`
-                    : `[심사 진행 중] ${GRADE_LABELS[pendingExam.targetGrade]} 승급 게이트 배수 배치됨`
-                  }
-                </h3>
-                <p className="text-xs text-white/70 max-w-xl">
-                  {pendingExam.status === 'available'
-                    ? `평가 점수 기준이 충족되었습니다. 승급 전용 게이트를 스폰하여 클리어 시 등급이 즉각 인가됩니다.`
-                    : `승급 전용 훈련 심사 게이트가 로컬 차원에 강제 스폰되었습니다. '게이트' 메뉴로 가셔서 공략에 성공하십시오.`
-                  }
-                </p>
-              </div>
-            </div>
+        return (
+          <AnimatePresence>
+            <motion.div
+              initial={{ opacity: 0, y: -20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              className={`panel corner-bracket p-6 border shadow-2xl relative bg-black/90 overflow-hidden ${
+                pendingExam.status === 'available'
+                  ? 'border-amber-500/50 bg-gradient-to-br from-amber-950/20 via-black to-amber-950/10'
+                  : 'border-cyan-500/40 bg-gradient-to-br from-cyan-950/20 via-black to-cyan-950/10'
+              }`}
+            >
+              <div className="br" />
+              {/* Decorative radial glows */}
+              <div className={`absolute top-0 right-0 w-48 h-48 rounded-full filter blur-3xl pointer-events-none opacity-20 ${
+                pendingExam.status === 'available' ? 'bg-amber-500' : 'bg-cyan-500'
+              }`} />
+              
+              <div className="relative space-y-4">
+                {/* Header Banner */}
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-white/10">
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <span className={`text-[10px] px-2 py-0.5 rounded font-bold uppercase ${
+                        pendingExam.status === 'available'
+                          ? 'border border-amber-500/30 text-amber-400 bg-amber-500/10'
+                          : 'border border-cyan-500/30 text-cyan-400 bg-cyan-500/10'
+                      }`}>
+                        공식 승급 심사령
+                      </span>
+                      <span className="text-[10px] px-2 py-0.5 rounded font-bold border border-red-500/30 text-red-400 bg-red-500/10">
+                        위험도: {examDef.riskLevel}
+                      </span>
+                    </div>
+                    <h3 className={`text-lg font-extrabold tracking-tight ${
+                      pendingExam.status === 'available' ? 'text-amber-300' : 'text-cyan-300'
+                    }`}>
+                      {examDef.name}
+                    </h3>
+                  </div>
+                  
+                  {pendingExam.status === 'available' ? (
+                    <button
+                      onClick={() => startPromotionExam(pendingExam.targetGrade)}
+                      className="w-full sm:w-auto btn border-amber-500/60 text-amber-300 bg-amber-500/15 hover:bg-amber-500/35 hover:scale-[1.02] active:scale-95 transition-all text-xs py-2 px-5 font-bold shadow-lg shadow-amber-500/10 flex items-center gap-1.5 justify-center"
+                    >
+                      <Sparkles className="w-3.5 h-3.5 animate-spin" />
+                      심사 게이트 개방
+                    </button>
+                  ) : (
+                    <div className="w-full sm:w-auto text-center text-xs font-bold text-cyan-300/90 bg-cyan-950/30 border border-cyan-500/30 px-4 py-2 rounded system-text animate-pulse">
+                      게이트 탭에서 심사 진행 중
+                    </div>
+                  )}
+                </div>
 
-            {pendingExam.status === 'available' ? (
-              <button
-                onClick={() => startPromotionExam(pendingExam.targetGrade)}
-                className="w-full md:w-auto btn border-amber-500/60 text-amber-300 bg-amber-500/15 hover:bg-amber-500/35 hover:scale-105 transition-all text-sm py-2.5 px-6 font-bold shadow-lg shadow-amber-500/15 flex items-center gap-1.5 justify-center"
-              >
-                <Sparkles className="w-4 h-4 animate-spin" />
-                심사 도전 게이트 개방
-              </button>
-            ) : (
-              <div className="text-xs text-cyan-300/80 bg-cyan-950/30 border border-cyan-500/30 px-4 py-2 rounded system-text animate-pulse">
-                게이트 메뉴에서 '승급 심사' 공략 중
+                {/* Subtitle / Concept */}
+                <div className="space-y-1">
+                  <div className="text-xs text-white/50 font-medium">심사 테마: <span className="text-white/80">{examDef.concept}</span></div>
+                  <p className="text-xs text-white/70 leading-relaxed font-sans">{examDef.description}</p>
+                </div>
+
+                {/* Detail Grid */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-2">
+                  <div className="panel bg-white/5 border border-white/5 p-3 rounded">
+                    <div className="text-[10px] text-white/40 mb-1 system-text">권장 전투력</div>
+                    <div className="text-sm font-extrabold text-cyan-400">
+                      {examDef.recommendedPower} <span className="text-[10px] font-normal text-white/50">이상 권장</span>
+                    </div>
+                  </div>
+                  
+                  <div className="panel bg-white/5 border border-white/5 p-3 rounded">
+                    <div className="text-[10px] text-white/40 mb-1 system-text">심사 통과 요건</div>
+                    <div className="text-xs font-bold text-white/90 leading-tight">
+                      {examDef.clearRequirement}
+                    </div>
+                  </div>
+                  
+                  <div className="panel bg-white/5 border border-white/5 p-3 rounded">
+                    <div className="text-[10px] text-white/40 mb-1 system-text">평가 안전 조항</div>
+                    <div className="text-[10px] font-medium text-white/80 leading-normal">
+                      {examDef.failurePolicy}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Badges / Extras */}
+                <div className="flex flex-wrap gap-2 pt-1 text-[10px] system-text text-white/60">
+                  {examDef.shadowUsageAdvised && (
+                    <span className="px-2.5 py-1 rounded bg-purple-500/10 border border-purple-500/20 text-purple-400 flex items-center gap-1">
+                      <Users className="w-3 h-3" />
+                      그림자 군단 소환 적극 활용
+                    </span>
+                  )}
+                  {examDef.telegraphEmphasis && (
+                    <span className="px-2.5 py-1 rounded bg-red-500/10 border border-red-500/20 text-red-400 flex items-center gap-1">
+                      <Target className="w-3 h-3" />
+                      정밀한 전조(Telegraph) 패턴 감지
+                    </span>
+                  )}
+                  <span className="px-2.5 py-1 rounded bg-white/5 border border-white/10 text-white/40 flex items-center gap-1">
+                    총 {examDef.encounterCount}개 관문 연속 돌파
+                  </span>
+                </div>
               </div>
-            )}
-          </motion.div>
-        </AnimatePresence>
-      )}
+            </motion.div>
+          </AnimatePresence>
+        )
+      })()}
 
       {/* 3. 탭 셀렉터 */}
       <div className="flex border-b border-white/10 gap-1">
@@ -343,13 +418,16 @@ export function HunterGradePanel() {
                 헌터 협회 평가 점수(Association Rating) 정밀 정산 공식 안내
               </h4>
               <p>
-                - 헌터 협회 등급 시스템은 캐릭터 전투력과 별개로 **헌터의 현실적 자기관리 몰입 깊이와 게임 속 업적**을 종합 평점화(1000점Diminishing Soft-cap 탑재)한 명예 체계입니다.
+                - 헌터 협회 등급 시스템은 캐릭터 전투력과 별개로 **헌터의 현실적 자기관리 몰입 깊이와 게임 속 업적**을 종합 평점화(Diminishing Soft-cap 적용)한 명예 체계입니다.
               </p>
               <p>
-                - **강등 방지 단조성(Monotonicity) 보장:** 집중 실패나 루틴 이탈로 현실 준비도 점수가 변하더라도, 이미 한 번 달성한 현재 헌터 등급(`currentGrade`)은 **절대 강등되지 않고 박제 유지**됩니다.
+                - **강등 방지 단조성(Monotonicity) 보장:** 집중 실패나 루틴 이탈로 현실 준비도 점수가 변하더라도, 이미 한 번 달성한 현재 헌터 등급은 **절대 강등되지 않고 박제 유지**됩니다.
               </p>
               <p>
-                - 모든 승급에는 등급 컷 돌파 시 인가되는 **승급 시험(Promotion Exam Gate)**을 직접 개시해 던전 런 최종 공략에 성공해야 하는 가혹한 보정이 적용됩니다.
+                - **마이그레이션 보정 안내:** 최초 시스템 편입 시, 기존에 수행했던 레벨, 습득 스킬, 그림자 군단 규모 등의 활동 실적이 협회 보정 계산식을 거쳐 등급으로 자동 환산 및 초기 배정되었습니다.
+              </p>
+              <p>
+                - **등급 심사 승격 확정제:** 평가 점수가 컷에 도달하더라도 최소 조건(레벨/기록) 충족 후 개방되는 **심사 게이트(Promotion Exam Gate)**를 격파하기 전까지는 이전 등급에 안전하게 고정 유지됩니다.
               </p>
             </div>
           </div>

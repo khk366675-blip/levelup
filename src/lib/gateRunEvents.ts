@@ -1,5 +1,7 @@
-import { GateRunEncounterType, GateRunEventChoice, GateRunRewardBundle, GateReward, GateRunState, GateRunEncounter, GateRank, RedGateState } from './types'
+import { GateRunEncounterType, GateRunEventChoice, GateRunRewardBundle, GateReward, GateRunState, GateRunEncounter, GateRank, RedGateState, HunterGradeTier } from './types'
 import { GATE_DEFINITIONS, MONSTER_DEFINITIONS } from './seed'
+import { PROMOTION_EXAM_DEFINITIONS } from './promotionExams'
+
 
 export interface GateTheme {
   id: string
@@ -559,7 +561,7 @@ export function createSeededRandom(seed: string) {
 }
 
 // Seed 기반 Dungeon Run 생성 함수
-export function generateGateRunState(gateId: string, seed: string): GateRunState {
+export function generateGateRunState(gateId: string, seed: string, examGrade?: HunterGradeTier): GateRunState {
   const rand = createSeededRandom(seed)
   const gate = GATE_DEFINITIONS.find(g => g.id === gateId)
   const rank: GateRank = gate?.rank ?? 'E'
@@ -580,15 +582,35 @@ export function generateGateRunState(gateId: string, seed: string): GateRunState
   }
 
   // 3. 인카운터 개수 결정 (E/D: 2~3, C/B: 3~4, A/S: 4~5)
-  const minEncounters = (rank === 'E' || rank === 'D') ? 2 : (rank === 'C' || rank === 'B') ? 3 : 4
-  const maxEncounters = (rank === 'E' || rank === 'D') ? 3 : (rank === 'C' || rank === 'B') ? 4 : 5
-  const encounterCount = minEncounters + Math.floor(rand() * (maxEncounters - minEncounters + 1))
+  let encounterCount = 0
+  let typesList: GateRunEncounterType[] = []
+  const examDef = examGrade && examGrade !== 'E' ? PROMOTION_EXAM_DEFINITIONS[examGrade] : undefined
+  if (examDef) {
+    encounterCount = examDef.encounterCount
+    if (examGrade === 'D') {
+      typesList = ['battle', 'battle', 'boss']
+    } else if (examGrade === 'C') {
+      typesList = ['battle', 'event', 'elite', 'boss']
+    } else if (examGrade === 'B') {
+      typesList = ['battle', 'shadow_trace', 'elite', 'battle', 'boss']
+    } else if (examGrade === 'A') {
+      typesList = ['battle', 'event', 'elite', 'shadow_trace', 'rest', 'boss']
+    } else if (examGrade === 'S') {
+      typesList = ['battle', 'elite', 'event', 'elite', 'rest', 'boss']
+    } else if (examGrade === 'NATIONAL') {
+      typesList = ['battle', 'elite', 'event', 'elite', 'shadow_trace', 'rest', 'boss']
+    }
+  } else {
+    const minEncounters = (rank === 'E' || rank === 'D') ? 2 : (rank === 'C' || rank === 'B') ? 3 : 4
+    const maxEncounters = (rank === 'E' || rank === 'D') ? 3 : (rank === 'C' || rank === 'B') ? 4 : 5
+    encounterCount = minEncounters + Math.floor(rand() * (maxEncounters - minEncounters + 1))
+  }
 
   // 4. 인카운터 리스트 빌드
   const encounters: GateRunEncounter[] = []
   
   // E/D 랭크는 간소한 몬스터 조합, S/A 랭크 및 보스 게이트는 보스 무조건 배치
-  const isBossGate = gateId.includes('boss') || rank === 'S' || gate?.rewardTableId?.includes('boss')
+  const isBossGate = gateId.includes('boss') || rank === 'S' || gate?.rewardTableId?.includes('boss') || Boolean(examDef)
 
   // 인카운터 타입 풀 가중치 빌드
   const getNextEncounterType = (index: number): GateRunEncounterType => {
@@ -653,7 +675,7 @@ export function generateGateRunState(gateId: string, seed: string): GateRunState
   const gateMonsters = gate?.monsterIds ?? []
 
   for (let i = 0; i < encounterCount; i++) {
-    let encType = getNextEncounterType(i)
+    let encType = examDef ? typesList[i] : getNextEncounterType(i)
     let title = ''
     let description = ''
     let monsterIds: string[] = []
@@ -679,6 +701,10 @@ export function generateGateRunState(gateId: string, seed: string): GateRunState
       if (encType === 'boss') {
         title = isBossGate ? '심연의 군주 방 [BOSS]' : '구역 지배자 결전 [BOSS]'
         description = '이 던전의 모든 에너지가 집결된 보스 몬스터가 웅크리고 있습니다. 모든 전술을 총동원해야 합니다.'
+        if (examDef) {
+          title = `${examDef.name} - 최종 심사 [BOSS]`
+          description = `[${examDef.bossEmphasisName ?? '최종 보스'}]가 헌터님의 승격 자격을 최후 검증하기 위해 기다리고 있습니다.`
+        }
         // 마지막 몬스터 혹은 가장 무거운 몬스터
         const bossId = gateMonsters.find(mId => {
           const m = MONSTER_DEFINITIONS.find(x => x.id === mId)
@@ -715,12 +741,16 @@ export function generateGateRunState(gateId: string, seed: string): GateRunState
           }
         }
       }
+      
+      if (examDef && encType !== 'boss') {
+        title = `[승급 심사] ${title}`
+      }
     } else if (encType === 'event') {
       // 이벤트 선택 전수 가드 및 검증 (빈 선택지 생성 원천 방지)
       const validTemplates = GATE_RUN_EVENTS.filter(evt => evt && evt.id && evt.choices && evt.choices.length >= 2)
       if (validTemplates.length > 0) {
         const evtTemplate = validTemplates[Math.floor(rand() * validTemplates.length)]
-        title = `의외의 징후: ${evtTemplate.title}`
+        title = examDef ? `[승급 심사] 돌발 상황: ${evtTemplate.title}` : `의외의 징후: ${evtTemplate.title}`
         description = evtTemplate.description
         eventTemplateId = evtTemplate.id
         eventChoices = evtTemplate.choices.map(c => ({ ...c }))
@@ -731,7 +761,7 @@ export function generateGateRunState(gateId: string, seed: string): GateRunState
         const baseEssence = (rank === 'E' || rank === 'D') ? 100 : (rank === 'C' || rank === 'B') ? 200 : 400
         const goldAmt = Math.round(baseGold * (0.8 + rand() * 0.4))
         const essAmt = Math.round(baseEssence * (0.8 + rand() * 0.4))
-        title = '흘러나온 차원 보물 방'
+        title = examDef ? '[승급 심사] 흘러나온 차원 보물 방' : '흘러나온 차원 보물 방'
         description = '어둡고 비좁은 통로 끝에서 찬란하게 금색 마력 광채를 발하는 오래된 상자를 찾아냈습니다!'
         treasureReward = { gold: goldAmt, essence: essAmt, xp: 0, items: [] }
       }
@@ -742,7 +772,7 @@ export function generateGateRunState(gateId: string, seed: string): GateRunState
         { name: '그림자의 밀실', desc: '군주의 그림자 기운이 차분하게 헌터를 보호합니다. (HP 20% 회복 및 다음 추출 공명 보정 +5%)' }
       ]
       const chosenRest = restTypes[Math.floor(rand() * restTypes.length)]
-      title = `정비 거점: ${chosenRest.name}`
+      title = examDef ? `[승급 심사] 정비 거점: ${chosenRest.name}` : `정비 거점: ${chosenRest.name}`
       description = chosenRest.desc
     } else if (encType === 'treasure') {
       const baseGold = (rank === 'E' || rank === 'D') ? 400 : (rank === 'C' || rank === 'B') ? 800 : 1500
@@ -750,11 +780,11 @@ export function generateGateRunState(gateId: string, seed: string): GateRunState
       const goldAmt = Math.round(baseGold * (0.8 + rand() * 0.4))
       const essAmt = Math.round(baseEssence * (0.8 + rand() * 0.4))
 
-      title = '흘러나온 차원 보물 방'
+      title = examDef ? '[승급 심사] 흘러나온 차원 보물 방' : '흘러나온 차원 보물 방'
       description = '어둡고 비좁은 통로 끝에서 찬란하게 금색 마력 광채를 발하는 오래된 상자를 찾아냈습니다!'
       treasureReward = { gold: goldAmt, essence: essAmt, xp: 0, items: [] }
     } else if (encType === 'shadow_trace') {
-      title = '짙게 얼룩진 그림자 흔적'
+      title = examDef ? '[승급 심사] 짙게 얼룩진 그림자 흔적' : '짙게 얼룩진 그림자 흔적'
       description = '강력한 고대 마력의 흔적이 은은하게 소용돌이칩니다. 다음 그림자 추출의 성공 가능성을 한층 높여줄 것입니다.'
     }
 
@@ -776,6 +806,7 @@ export function generateGateRunState(gateId: string, seed: string): GateRunState
       treasureReward,
     })
   }
+
 
   // 6. 누적 보상 번들 초기화
   const accumulatedRewards: GateRunRewardBundle = {

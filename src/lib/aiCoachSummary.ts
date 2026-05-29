@@ -7,6 +7,7 @@ import {
 } from './aiCoachTypes'
 import { Quest } from './types'
 import type { GameState } from './store'
+import { getWorldSignalSummaryForAiCoach } from './worldSignals'
 
 /**
  * Zustand 게임 상태(GameState)로부터 AI 성장 코칭에 필요한 최소 정보만 요약하여 추출합니다.
@@ -161,6 +162,8 @@ export function generateAiCoachSaveSummary(state: GameState): AiCoachSaveSummary
 
   const focusQuestProgress = `성공 ${todayCompletedFocusSessionCount}회 (${Math.round(todayCompletedFocusMs / (60 * 1000))}분 집중)`
 
+  const wsSummary = getWorldSignalSummaryForAiCoach(state.secretProgress)
+
   return {
     hunterLevel: hunter.level,
     rank: hunter.rank,
@@ -175,7 +178,8 @@ export function generateAiCoachSaveSummary(state: GameState): AiCoachSaveSummary
     todayCompletedFocusSessionCount,
     todayFailedFocusSessionCount,
     longestFocusSessionMs,
-    focusQuestProgress
+    focusQuestProgress,
+    ...wsSummary
   }
 }
 

@@ -30,6 +30,9 @@ import type {
 } from './directBattleTypes'
 import type { DirectBattleMonsterDefinition } from './directBattleMonsters'
 import { getMonsterPressureScaling } from './realityPressure'
+import { PROMOTION_EXAM_DEFINITIONS } from './promotionExams'
+import { HunterGradeTier } from './types'
+
 import { getEquipmentPowerBreakdown } from './equipmentPower'
 import { calculatePlayerCombatStats, getEquippedItems, getPlayerCombatSkills } from './game'
 import { getShadowDefinition } from './shadows'
@@ -63,6 +66,8 @@ export interface BuildMonsterBattleUnitOptions {
   currentHp?: number
   pressureSnapshot?: any
   isRedGate?: boolean
+  isPromotionExam?: boolean
+  targetGrade?: HunterGradeTier
 }
 
 const RARITY_MODIFIER: Record<ShadowRarity, number> = {
@@ -623,19 +628,29 @@ export const buildMonsterBattleUnit = (
    const minionScale = definition.unitType === 'minion' || definition.isMinion ? 0.94 : 1
    const threatScale = bossScale * minionScale
    
-   // 현실 각성공명 압박(Reality Pressure) 반영
+   // 현실 각성공명 압박(Reality Pressure) 반영 + 승급 시험 보정 반영
    const monsterRole = definition.unitType || (definition.isBoss ? 'boss' : definition.isMinion ? 'minion' : 'normal')
-   const pressure = getMonsterPressureScaling(options.pressureSnapshot, monsterRole, options.isRedGate)
+   const pressure = getMonsterPressureScaling(
+     options.pressureSnapshot,
+     monsterRole,
+     options.isRedGate,
+     options.isPromotionExam,
+     options.targetGrade
+   )
  
    const maxHp = round((115 + level * 23.5) * definition.statBias.hp * scale * threatScale * MONSTER_BATTLE_LIFT * pressure.hp, 1)
    const unitId = `${options.unitIdPrefix ?? 'enemy'}-${definition.id}-${level}`
+   
+   const isBoss = definition.unitType === 'boss' || definition.isBoss
+   const examDef = options.isPromotionExam && options.targetGrade && options.targetGrade !== 'E' ? PROMOTION_EXAM_DEFINITIONS[options.targetGrade] : undefined
+   const displayName = (isBoss && examDef?.bossEmphasisName) ? examDef.bossEmphasisName : definition.name
   
    return {
      unit: {
        unitId,
        sourceId: definition.id,
        unitType: definition.unitType,
-       displayName: definition.name,
+       displayName,
        role: definition.role,
        team: options.team ?? 'enemy',
        level,

@@ -266,7 +266,7 @@ export default function App() {
       </header>
 
       <main className={`max-w-6xl mx-auto px-4 py-6 space-y-6 ${!isOverlayActive ? 'pb-24 md:pb-6' : ''}`}>
-        <HunterStatus />
+        <HunterStatus currentTab={tab} onTabChange={handleTabChange} />
 
         {/* 12-41UX-hotfix: Tab Anchor position for scroll offset adjustment */}
         <div ref={tabAnchorRef} className="scroll-mt-[60px] md:scroll-mt-[72px]" />

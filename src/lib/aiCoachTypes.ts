@@ -171,6 +171,12 @@ export interface AiCoachSaveSummary {
   todayFailedFocusSessionCount?: number
   longestFocusSessionMs?: number
   focusQuestProgress?: string
+  todayWorldSignalCount?: number
+  recentWorldSignalTier?: string
+  focusResonanceSignal?: boolean
+  redGateSignalObserved?: boolean
+  extractionEchoObserved?: boolean
+  promotionSealedRecordObserved?: boolean
 }
 
 /**

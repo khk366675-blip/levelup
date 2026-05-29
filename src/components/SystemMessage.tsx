@@ -54,6 +54,55 @@ export function SystemMessageQueue() {
             >
               {current.title}
             </motion.h2>
+
+            {current.kind === 'rank' && current.grade && (
+              <div className="flex justify-center my-6">
+                <motion.div
+                  initial={{ scale: 0.5, rotate: -180, opacity: 0 }}
+                  animate={{ scale: 1, rotate: 0, opacity: 1 }}
+                  transition={{ type: 'spring', delay: 0.3, stiffness: 120, damping: 14 }}
+                  className={`w-28 h-28 rounded-full flex items-center justify-center border-4 bg-ink-950/90 shadow-2xl relative ${
+                    current.grade === 'NATIONAL' ? 'border-red-500 shadow-red-600/50' :
+                    current.grade === 'S' ? 'border-amber-500 shadow-amber-500/40' :
+                    current.grade === 'A' ? 'border-pink-500 shadow-pink-500/30' :
+                    current.grade === 'B' ? 'border-purple-500 shadow-purple-500/30' :
+                    current.grade === 'C' ? 'border-cyan-500 shadow-cyan-500/30' :
+                    current.grade === 'D' ? 'border-emerald-500 shadow-emerald-500/20' :
+                    'border-zinc-500 shadow-zinc-500/10'
+                  }`}
+                >
+                  {/* Rotating dashed border for high grades */}
+                  {(current.grade === 'S' || current.grade === 'NATIONAL') && (
+                    <div className={`absolute -inset-2 rounded-full border-2 border-dashed animate-spin opacity-50 ${
+                      current.grade === 'NATIONAL' ? 'border-red-500' : 'border-amber-500'
+                    }`} />
+                  )}
+                  {/* Outer pulsating aura */}
+                  <div className={`absolute -inset-4 rounded-full border border-dashed animate-pulse opacity-25 blur-sm ${
+                    current.grade === 'NATIONAL' ? 'border-red-500' :
+                    current.grade === 'S' ? 'border-amber-500' :
+                    current.grade === 'A' ? 'border-pink-500' :
+                    current.grade === 'B' ? 'border-purple-500' :
+                    current.grade === 'C' ? 'border-cyan-500' :
+                    current.grade === 'D' ? 'border-emerald-500' :
+                    'border-zinc-500'
+                  }`} />
+                  
+                  <span className={`text-5xl font-black tracking-widest filter drop-shadow-[0_0_12px_rgba(0,0,0,0.6)] ${
+                    current.grade === 'NATIONAL' ? 'text-red-400' :
+                    current.grade === 'S' ? 'text-amber-400' :
+                    current.grade === 'A' ? 'text-pink-400' :
+                    current.grade === 'B' ? 'text-purple-400' :
+                    current.grade === 'C' ? 'text-cyan-400' :
+                    current.grade === 'D' ? 'text-emerald-400' :
+                    'text-zinc-400'
+                  }`}>
+                    {current.grade === 'NATIONAL' ? 'N' : current.grade}
+                  </span>
+                </motion.div>
+              </div>
+            )}
+
             <div className="space-y-1.5 mb-6">
               {current.lines.map((line, i) => (
                 <motion.div

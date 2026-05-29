@@ -20,9 +20,12 @@ import type {
   TitleDefinition,
   TitleEffects,
   RealityPressureSnapshot,
+  HunterGradeTier,
 } from './types'
 import { CATEGORY_META, STAT_META, TITLE_DEFINITIONS } from './types'
 import { getMonsterPressureScaling } from './realityPressure'
+import { PROMOTION_EXAM_DEFINITIONS } from './promotionExams'
+
 import { getShadowEffects } from './shadows'
 import { resolveShadowActionRuntime, type ShadowRuntimeEvent } from './shadowCombatRuntime'
 import { getShadowCombatAggregate, getShadowCombatModifiers } from './shadowStats'
@@ -69,7 +72,7 @@ export const RANK_LABEL: Record<Rank, string> = {
   B: 'B-Rank',
   A: 'A-Rank',
   S: 'S-Rank',
-  National: '국가 권력급',
+  National: '국가권력급',
 }
 
 export const isSameDay = (a?: string, b?: string): boolean => {
@@ -1414,6 +1417,11 @@ export interface SimulateGateWaveBattleParams {
   rng?: RngFn
   gateInstanceId?: string
   battleId?: string
+  pressureSnapshot?: RealityPressureSnapshot
+  isRedGate?: boolean
+  difficultyMod?: number
+  isPromotionExam?: boolean
+  targetGrade?: HunterGradeTier
 }
 
 export interface GateBattleSimulationSummary {
@@ -1496,12 +1504,18 @@ export const createPlayerBattleActor = (
 export const createMonsterBattleActor = (
   monster: MonsterDefinition,
   pressureSnapshot?: RealityPressureSnapshot,
-  isRedGate = false
+  isRedGate = false,
+  difficultyMod?: number,
+  isPromotionExam = false,
+  targetGrade?: HunterGradeTier
 ): BattleActorState => {
   const isBoss = monster.id.includes('boss') || monster.name.includes('보스')
   const isElite = monster.id.includes('elite') || monster.name.includes('엘리트')
   const monsterRole = isBoss ? 'boss' : isElite ? 'elite' : 'normal'
-  const scaling = getMonsterPressureScaling(pressureSnapshot, monsterRole, isRedGate)
+  const scaling = getMonsterPressureScaling(pressureSnapshot, monsterRole, isRedGate, isPromotionExam, targetGrade)
+
+  const examDef = isPromotionExam && targetGrade && targetGrade !== 'E' ? PROMOTION_EXAM_DEFINITIONS[targetGrade] : undefined
+  const displayName = (isBoss && examDef?.bossEmphasisName) ? examDef.bossEmphasisName : monster.name
 
   const maxHp = Math.round(monster.stats.maxHp * scaling.hp)
   const atk = Math.round(monster.stats.atk * scaling.atk)
@@ -1510,7 +1524,7 @@ export const createMonsterBattleActor = (
   return {
     type: 'monster',
     id: monster.id,
-    name: monster.name,
+    name: displayName,
     maxHp,
     hp: maxHp,
     atk,
@@ -2066,7 +2080,7 @@ export const simulateGateBattle = ({
 }
 
 export const simulateGateWaveBattle = ({
-  playerName = '?뚰꽣',
+  playerName = '헌터',
   playerStats,
   monsters,
   skills,
@@ -2077,6 +2091,11 @@ export const simulateGateWaveBattle = ({
   rng: providedRng,
   gateInstanceId = 'simulated-gate',
   battleId,
+  pressureSnapshot,
+  isRedGate = false,
+  difficultyMod,
+  isPromotionExam = false,
+  targetGrade,
 }: SimulateGateWaveBattleParams): CombatLog => {
   const rng = providedRng ?? (seed != null ? createSeededRng(seed) : Math.random)
   const allSkills = ensureBasicAttack(skills)
@@ -2105,7 +2124,7 @@ export const simulateGateWaveBattle = ({
 
   for (let waveIndex = 0; waveIndex < monsters.length; waveIndex++) {
     const monsterDef = monsters[waveIndex]
-    let monsterActor = createMonsterBattleActor(monsterDef)
+    let monsterActor = createMonsterBattleActor(monsterDef, pressureSnapshot, isRedGate, difficultyMod, isPromotionExam, targetGrade)
     const waveNumber = waveIndex + 1
     const waveLabel = `Wave ${waveNumber}`
 

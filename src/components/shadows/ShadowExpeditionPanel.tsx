@@ -1076,6 +1076,12 @@ function ReportPanel({
             <div className="system-text text-[9px] text-white/35 mb-0.5">마무리</div>
             <div className="text-xs leading-relaxed text-white/60 italic">{report.closing}</div>
           </div>
+          {report.observation && (
+            <div className="rounded-md border border-red-500/25 bg-red-950/10 px-3 py-2 animate-pulse">
+              <div className="system-text text-[9px] text-red-400 font-extrabold mb-0.5 tracking-wider">📡 이상 관측 기록 (비공개 등급)</div>
+              <div className="text-xs leading-relaxed text-red-300">{report.observation}</div>
+            </div>
+          )}
         </div>
       )}
 
