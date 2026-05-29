@@ -35,6 +35,7 @@ import { ShadowExtractionReveal } from './shadows/ShadowExtractionReveal'
 import { SkillActionCard, skillSourceSortRank, skillTypeSortRank } from './SkillActionCard'
 import { GATE_DEFINITIONS, GATE_PENALTIES, GATE_REWARD_TABLES, MONSTER_DEFINITIONS, SKILL_DEFINITIONS } from '../lib/seed'
 import { GATE_THEMES, GATE_MODIFIERS, hydrateGateRunEncounterChoices } from '../lib/gateRunEvents'
+import { pickDirectGateRunEncounterKey } from '../lib/directBattleEncounters'
 import {
   calculatePlayerCombatStats,
   formatStatReward,
@@ -105,8 +106,13 @@ const riskMeta: Record<GateRisk, { label: string; className: string }> = {
   extreme: { label: '매우 위험', className: 'text-rose-300 border-rose-400/40 bg-rose-400/10' },
 }
 
-const getDirectGateEncounterKey = (gate: GateDefinition, seed?: string): string =>
-  pickDirectGateEncounterKey(gate.rank, seed ?? `${gate.id}:${gate.name}:${gate.monsterIds.join('|')}`)
+const getDirectGateEncounterKey = (gate: GateDefinition, seed?: string, encounterType?: string): string => {
+  const effectiveSeed = seed ?? `${gate.id}:${gate.name}:${gate.monsterIds.join('|')}`
+  if (encounterType && encounterType !== 'battle') {
+    return pickDirectGateRunEncounterKey(gate.rank, encounterType, effectiveSeed)
+  }
+  return pickDirectGateEncounterKey(gate.rank, effectiveSeed)
+}
 
 const getDirectGateEnemyBaseLevel = (gate: GateDefinition): number => {
   const rankBonus: Record<GateDefinition['rank'], number> = {
@@ -1657,6 +1663,14 @@ export function GatePanel() {
     directGateResultIdsRef.current.clear()
   }, [activeGate?.instanceId])
 
+  // 멀티 인카운터: 단계 클리어(isLast 아님) 시 isBattleRevealing 자동 리셋하여 다음 단계 버튼 활성화
+  const runStateEncounterIndex = activeGate?.runState?.currentEncounterIndex
+  useEffect(() => {
+    if (runStateEncounterIndex !== undefined && runStateEncounterIndex > 0) {
+      setIsBattleRevealing(false)
+    }
+  }, [runStateEncounterIndex])
+
   const manualGateDefinition =
     manualBattleSession && (!manualBattleSession.source || manualBattleSession.source === 'gate')
       ? GATE_DEFINITIONS.find(g => g.id === manualBattleSession.gateId)
@@ -1794,7 +1808,17 @@ export function GatePanel() {
     setIsBattleRevealing(true)
   }
 
-  const directGateEncounterKey = getDirectGateEncounterKey(gate, activeGate.instanceId)
+  // 멀티 인카운터 런에서는 현재 인카운터 타입을 반영한 encounter key 사용
+  const activeRunEncounterType = activeGate.runState
+    ? activeGate.runState.encounters[activeGate.runState.currentEncounterIndex]?.type
+    : undefined
+  const directGateEncounterKey = getDirectGateEncounterKey(
+    gate,
+    activeGate.runState
+      ? `${activeGate.instanceId}:enc${activeGate.runState.currentEncounterIndex}`
+      : activeGate.instanceId,
+    activeRunEncounterType
+  )
 
   if (isDirectGateBattleOpen) {
     return (

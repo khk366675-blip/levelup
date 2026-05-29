@@ -828,6 +828,38 @@ const stablePick = (pool: readonly string[], seed: string | number): string => {
 export const pickDirectGateEncounterKey = (rank: string, seed: string | number): string =>
   stablePick(DIRECT_BATTLE_GATE_ENCOUNTER_POOLS[rank] ?? DIRECT_BATTLE_GATE_ENCOUNTER_POOLS.E, `${rank}:${seed}`)
 
+export const pickDirectGateRunEncounterKey = (
+  rank: string,
+  encounterType: string,
+  seed: string | number
+): string => {
+  if (!encounterType || encounterType === 'normal') {
+    return pickDirectGateEncounterKey(rank, seed)
+  }
+
+  if (encounterType === 'boss') {
+    if (rank === 'E' || rank === 'D') {
+      return stablePick(['boss_minion', 'boss_double_minion'], seed)
+    } else if (rank === 'C' || rank === 'B') {
+      return stablePick(['boss_minion', 'boss_double_minion', 'commander_line', 'oblivion_watch'], seed)
+    } else {
+      return stablePick(['commander_line', 'oblivion_watch', 'iron_wall_court', 'abyss_devourer_pack', 'memory_warden_party'], seed)
+    }
+  }
+
+  if (encounterType === 'elite') {
+    if (rank === 'E' || rank === 'D') {
+      return stablePick(['scout_pair', 'small_caster_guard', 'tank_assassin', 'control_support'], seed)
+    } else if (rank === 'C' || rank === 'B') {
+      return stablePick(['tank_assassin', 'control_support', 'tank_controller_assassin', 'double_caster_guard', 'support_protected_bruiser'], seed)
+    } else {
+      return stablePick(['tank_controller_assassin', 'double_caster_guard', 'support_protected_bruiser', 'assassin_mark_combo', 'elite_mixed_party', 'storm_killbox'], seed)
+    }
+  }
+
+  return pickDirectGateEncounterKey(rank, seed)
+}
+
 export const pickDirectTowerEncounterKey = (floor: number, floorType: 'normal' | 'boss' | 'elite' | string): string => {
   if (floorType === 'boss') {
     const bossPool = floor >= 20
