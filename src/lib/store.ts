@@ -7769,9 +7769,6 @@ export const useGame = create<GameState>()(
         // 2) get().spawnGate(dynamicGateId, 'worldmap', helperHunterIds, customGateDef)
         get().spawnGate(nodeId, 'worldmap', helperHunterIds, customGateDef)
         set({ activeRiftNodeId: nodeId })
-
-        // 3) get().startManualGateBattle(dynamicGateId)
-        get().startManualGateBattle(nodeId)
       },
 
       performWorldManualBattleAction: (action) => {},

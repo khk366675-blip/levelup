@@ -335,11 +335,7 @@ export function WorldMapPanel() {
               <button
                 onClick={() => {
                   setShowRecklessConfirm(false)
-                  if (recklessConfirmType === 'auto') {
-                    startWorldBattle(selectedNode.id, selectedHelpers)
-                  } else {
-                    startWorldManualBattle(selectedNode.id, selectedHelpers)
-                  }
+                  startWorldManualBattle(selectedNode.id, selectedHelpers)
                 }}
                 className="rounded border border-rose-500/40 bg-rose-500/10 hover:bg-rose-500/25 px-4 py-2 text-xs font-bold text-rose-200 shadow-glow-red hover:text-white transition-all cursor-pointer"
               >
