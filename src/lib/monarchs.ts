@@ -1,3 +1,5 @@
+import type { BattleUnit, BattleStats, BattleActionDefinition } from './directBattleTypes'
+
 export interface MonarchData {
   id: string
   rank: number             // 1~8 (낮을수록 강함)
@@ -81,4 +83,89 @@ export const FINAL_ANGEL: MonarchData = {
   theme: '신성 / 광휘',
   recommendedCP: 50000,
   concept: '절대적 판정 · 종말의 광선'
+}
+
+export function buildMonarchBattleUnit(monarchId: string, recommendedCP: number): BattleUnit {
+  const monarch = MONARCHS.find(m => m.id === monarchId) || (monarchId === 'angel' ? FINAL_ANGEL : null)
+  const name = monarch?.name ?? monarchId
+  const cp = recommendedCP
+
+  const maxHp = Math.round(cp * 1.0 + 35000)
+  const atk = Math.round(cp * 0.052 + 3000)
+  const def = Math.round(cp * 0.04 + 200)
+  const spd = Math.round(20 + cp * 0.0001)
+
+  const stats: BattleStats = {
+    maxHp,
+    currentHp: maxHp,
+    atk,
+    def,
+    spd,
+    skillPower: Math.round(cp * 0.15),
+    crit: 0.15,
+    controlPower: Math.round(cp * 0.05),
+    supportPower: Math.round(cp * 0.03),
+    survivalPower: Math.round(cp * 0.04),
+    bossPower: Math.round(cp * 0.05),
+    synergyPower: Math.round(cp * 0.03),
+  }
+
+  const actionList: BattleActionDefinition[] = [
+    {
+      actionId: `${monarchId}-basic-attack`,
+      label: '일반 공격',
+      actionType: 'basic',
+      targetType: 'single_enemy',
+      effectKind: 'basic',
+      basePriority: 0,
+      cooldown: 0,
+      actionCue: 'strike-boss',
+      animationCue: 'strike-boss',
+      effectColor: 'crimson',
+    },
+    {
+      actionId: `${monarchId}-concept-strike`,
+      label: monarch ? `${monarch.theme} 강타` : '권능 강타',
+      actionType: 'skill',
+      targetType: 'single_enemy',
+      effectKind: 'basic',
+      basePriority: 2,
+      cooldown: 3,
+      actionCue: 'boss-sweep',
+      animationCue: 'boss-sweep',
+      effectColor: 'crimson',
+      masteryMultiplier: 1.8,
+    }
+  ]
+
+  const unit: BattleUnit = {
+    unitId: `monarch-${monarchId}`,
+    sourceId: monarchId,
+    unitType: 'boss',
+    displayName: name,
+    role: 'boss',
+    team: 'enemy',
+    level: 100,
+    stats,
+    statusEffects: [],
+    cooldowns: {},
+    actionList,
+    passiveList: [],
+    actionPriority: 5,
+    boardLane: 'boss',
+    actionCue: 'boss-sweep',
+    animationCue: 'strike-boss',
+    effectColor: 'crimson',
+    metadata: {
+      source: 'mock_monster',
+      hiddenSafe: true,
+      tags: ['boss', 'monarch'],
+    },
+    monsterPatternState: {
+      patternId: `${monarchId}-pattern`,
+      stepIndex: 0,
+    }
+  }
+
+  return unit
 }

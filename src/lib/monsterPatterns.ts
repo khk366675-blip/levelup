@@ -203,6 +203,28 @@ export function resolveBossAction(
   const skillA = unit.actionList.find(a => a.actionType === 'skill' || a.effectKind === 'control') ?? basic
   const skillB = unit.actionList.find(a => (a.actionType === 'skill' || a.actionType === 'guard' || a.actionType === 'support') && a.actionId !== skillA.actionId) ?? skillA
 
+  // 0. 심연의 군주들 및 지고의 심판자 (L4-B Monarchs and Angel)
+  const isMonarch = ['grellic', 'celaide', 'igris', 'dorga', 'mirage', 'pesta', 'belatus', 'nox', 'angel'].includes(unit.sourceId)
+  if (isMonarch) {
+    const cycleStep = stepIndex % 3
+    if (cycleStep === 1) {
+      return {
+        action: skillA,
+        telegraphName: '권능 강타 💥',
+        telegraphText: '군주가 권능 강타를 준비합니다.',
+        severity: 'high',
+        targetRule: 'random',
+      }
+    }
+    return {
+      action: basic,
+      telegraphName: '일반 공격',
+      telegraphText: '군주의 일반 공격 예정',
+      severity: 'medium',
+      targetRule: 'random',
+    }
+  }
+
   // 1. 균열 군주 (boss-riftlord / rift-commander / mock-boss)
   if (unit.sourceId.includes('rift-commander') || unit.sourceId.includes('mock-boss')) {
     // 40% Enrage trigger: faster and lethal

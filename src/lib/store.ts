@@ -78,7 +78,9 @@ import type {
 
 import { initLivingWorld } from './livingWorld'
 import { advanceWorldDay } from './livingWorldTick'
-import { MONARCHS, FINAL_ANGEL } from './monarchs'
+import { MONARCHS, FINAL_ANGEL, buildMonarchBattleUnit } from './monarchs'
+import { buildHunterBattleUnit, buildShadowBattleUnits } from './battleUnits'
+import { createDirectBattleState, runMockDirectBattle } from './directBattleRuntime'
 
 import {
   AiCoachMemoryState,
@@ -278,17 +280,16 @@ export const WORLD_SHADOW_GUARD_EVASION_FACTOR = 0.05  // 그림자당 헌터 �
 export const WORLD_SHADOW_GUARD_DR_FACTOR = 0.5        // 그림자 탱킹 대미지 감쇄 비율
 
 // ── Monarch Shadow Guard Constants (L4-B) ─────────────────────
-export const MONARCH_SHADOW_GUARD_DEF_BASE = 5000       // 군주전 그림자 탱킹 기본 방어 가산치
-export const MONARCH_SHADOW_GUARD_DEF_PER_SHADOW = 2000 // 군주전 그림자 탱킹 그림자당 추가 방어
-export const MONARCH_SHADOW_GUARD_EVASION_BASE = 0.40   // 군주전 그림자 탱킹 기본 회피 가산치
-export const MONARCH_SHADOW_GUARD_EVASION_PER_SHADOW = 0.05 // 군주전 그림자 탱킹 그림자당 추가 회피
-export const MONARCH_SHADOW_GUARD_DR_FACTOR = 0.5       // 군주전 그림자 탱킹 대미지 감쇄 비율
+// Deprecated: Monarch Shadow Guard A-way direct stat buffs are removed.
+// We now use B-way Shadow Shield (protect redirection & dynamic safeguard shield).
+export const MONARCH_SAFEGUARD_DR_VALUE = 0.15          // 군주전 그림자 장벽 기본 대미지 감쇄 비율
+export const MONARCH_SAFEGUARD_DURATION_ROUNDS = 4      // 군주전 그림자 장벽 유지 라운드 수
 
 // ── World Map NPC Cooperation Constants (L1-A) ────────────────
-export const COOP_HELP_ATK_FACTOR = 0.04  // 협력자 합산 CP의 4%를 플레이어 공격력에 더함
-export const COOP_HELP_DEF_FACTOR = 0.04  // 협력자 합산 CP의 4%를 플레이어 방어력에 더함
-export const COOP_HELP_DR_FACTOR = 0.05    // 협력자 1명당 대미지 감소 5% 추가
-export const COOP_HELP_DR_CAP = 0.5        // 협력자 대미지 감소 최대 50% 상한
+export const COOP_HELP_ATK_FACTOR = 0.10  // 협력자 합산 CP의 10%를 플레이어 공격력에 더함
+export const COOP_HELP_DEF_FACTOR = 0.10  // 협력자 합산 CP의 10%를 플레이어 방어력에 더함
+export const COOP_HELP_DR_FACTOR = 0.20   // 협력자 1명당 대미지 감소 20% 추가 (shield type)
+export const COOP_HELP_DR_CAP = 0.5       // 협력자 대미지 감소 최대 50% 상한
 export const COOP_REWARD_PENALTY_PER_HELPER = 0.15 // 협력자 1명당 플레이어 보상 15% 차감
 export const COOP_REWARD_MIN_RATIO = 0.3   // 최소 보상 30% 보장
 
@@ -1594,6 +1595,38 @@ const createManualConsumableUseLog = (
 })
 
 const isManualSystemLog = (log: BattleTurn): boolean => log.skillId === 'system-manual-battle' || isShadowCombatLog(log)
+
+const convertDirectLogsToBattleTurns = (state: any, logs: any[]): BattleTurn[] => {
+  return logs.map((log, index) => {
+    const actor = state.units.find((unit: any) => unit.unitId === log.actorUnitId)
+    const target = state.units.find((unit: any) => unit.unitId === log.targetUnitIds?.[0])
+    const fallbackTarget = target ?? actor ?? state.units[0]
+    const actorIsEnemy = actor?.team === 'enemy'
+    const targetIsEnemy = fallbackTarget?.team === 'enemy'
+    const outcome: BattleTurn['outcome'] =
+      log.eventType === 'heal' ? 'heal' :
+      log.eventType === 'status' || log.eventType === 'reaction' ? 'buff' :
+      'hit'
+
+    return {
+      turnNumber: index + 1,
+      waveNumber: Math.max(1, log.round),
+      waveLabel: `Wave ${Math.max(1, log.round)}`,
+      actorType: actorIsEnemy ? 'monster' : 'player',
+      actorId: actor?.unitId ?? `direct-system-${index + 1}`,
+      actorName: actor?.displayName ?? 'Direct Battle',
+      targetType: targetIsEnemy ? 'monster' : 'player',
+      targetId: fallbackTarget?.unitId ?? `direct-target-${index + 1}`,
+      targetName: fallbackTarget?.displayName ?? 'Direct Battle',
+      skillId: log.actionCue || 'basic-attack',
+      skillName: log.actionCue || '기본 공격',
+      outcome,
+      damage: log.eventType === 'damage' ? log.value : undefined,
+      remainingHp: fallbackTarget ? Math.round(fallbackTarget.stats.currentHp) : undefined,
+      message: log.message,
+    }
+  })
+}
 
 const getManualActionCount = (logs: BattleTurn[]): number => {
   return logs.filter(log => !isManualSystemLog(log)).length
@@ -7187,35 +7220,7 @@ export const useGame = create<GameState>()(
         // 2순위 그림자 탱킹 (수호 효과 버프 적용)
         const initialActiveEffects: ActiveCombatEffect[] = []
         if (equippedShadows.length > 0) {
-          if (isMonarchId) {
-            const buffDef = MONARCH_SHADOW_GUARD_DEF_BASE + MONARCH_SHADOW_GUARD_DEF_PER_SHADOW * equippedShadows.length
-            const buffEvasion = MONARCH_SHADOW_GUARD_EVASION_BASE + MONARCH_SHADOW_GUARD_EVASION_PER_SHADOW * equippedShadows.length
-            initialActiveEffects.push(
-              {
-                sourceSkillId: 'monarch-shadow-guard-def',
-                kind: 'stat',
-                stat: 'def',
-                value: buffDef,
-                remainingTurns: 999,
-                targetId: 'player',
-              },
-              {
-                sourceSkillId: 'monarch-shadow-guard-eva',
-                kind: 'stat',
-                stat: 'evasionRate',
-                value: buffEvasion,
-                remainingTurns: 999,
-                targetId: 'player',
-              },
-              {
-                sourceSkillId: 'monarch-shadow-guard-dr',
-                kind: 'damage_reduction',
-                value: MONARCH_SHADOW_GUARD_DR_FACTOR,
-                remainingTurns: 999,
-                targetId: 'player',
-              }
-            )
-          } else {
+          if (!isMonarchId) {
             const buffDef = Math.round(playerStats.def * WORLD_SHADOW_GUARD_DEF_FACTOR * equippedShadows.length)
             const buffEvasion = WORLD_SHADOW_GUARD_EVASION_FACTOR * equippedShadows.length
             initialActiveEffects.push(
@@ -7299,16 +7304,157 @@ export const useGame = create<GameState>()(
           }
         }
 
-        const combatLog = simulateGateWaveBattle({
-          playerName: s.hunter.name || '헌터',
-          playerStats,
-          monsters,
-          skills,
-          equippedShadows,
-          gateInstanceId: `worldmap-${nodeId}`,
-          battleId: `worldmap-battle-${nodeId}-${Date.now()}`,
-          initialActiveEffects,
-        })
+        let combatLog: CombatLog
+
+        if (isMonarchId) {
+          const shadowDefinitions = equippedShadows
+            .map(shadow => getShadowDefinition(shadow.definitionId))
+            .filter((definition): definition is NonNullable<typeof definition> => Boolean(definition))
+          const shadowBuilds = buildShadowBattleUnits(equippedShadows, shadowDefinitions, {
+            unitIdPrefix: 'direct-preview-shadow',
+          })
+
+          const hunterBuild = buildHunterBattleUnit(s.hunter, {
+            items: s.items,
+            equipment: s.equipment,
+            activeConsumableEffects: s.activeConsumableEffects,
+            unitId: 'direct-preview-hunter',
+          })
+
+          // Inject coop helper stats
+          if (buffCoopAtk > 0) hunterBuild.unit.stats.atk += buffCoopAtk
+          if (buffCoopDef > 0) hunterBuild.unit.stats.def += buffCoopDef
+
+          // Inject coop helper DR
+          if (drCoop > 0) {
+            hunterBuild.unit.statusEffects.push({
+              statusId: `coop-dr-${Date.now()}`,
+              definitionId: 'guard',
+              name: '협력 방어',
+              type: 'guard',
+              targetUnitId: hunterBuild.unit.unitId,
+              durationRounds: 999,
+              stackCount: 1,
+              maxStacks: 1,
+              effectValue: drCoop,
+              timing: 'round_start',
+            })
+          }
+
+          // Inject protect / safeguard DR if shadows are alive
+          if (shadowBuilds.length > 0) {
+            // Protect pointing to the first shadow unit
+            hunterBuild.unit.statusEffects.push({
+              statusId: `shadow-guard-protect-${Date.now()}`,
+              definitionId: 'protect',
+              name: '그림자 보호',
+              type: 'protect',
+              sourceUnitId: shadowBuilds[0].unit.unitId,
+              targetUnitId: hunterBuild.unit.unitId,
+              durationRounds: 999,
+              stackCount: 1,
+              maxStacks: 1,
+              effectValue: 0.35,
+              timing: 'round_start',
+            })
+
+            // Safeguard DR (15% for 4 rounds)
+            hunterBuild.unit.statusEffects.push({
+              statusId: `monarch-safeguard-${Date.now()}`,
+              definitionId: 'guard',
+              name: '그림자 장벽',
+              type: 'guard',
+              targetUnitId: hunterBuild.unit.unitId,
+              durationRounds: 4,
+              stackCount: 1,
+              maxStacks: 1,
+              effectValue: 0.15,
+              timing: 'round_start',
+            })
+          }
+
+          const monarchUnit = buildMonarchBattleUnit(nodeId, node.difficulty)
+
+          const dbUnits = [hunterBuild.unit, ...shadowBuilds.map(b => b.unit), monarchUnit]
+          const dbState = createDirectBattleState(dbUnits, {
+            battleId: `worldmap-monarch-${nodeId}-${Date.now()}`,
+            maxRounds: 25,
+          })
+
+          const simResult = runMockDirectBattle(dbState)
+          const resolvedOutcome = simResult.winner === 'player' ? 'victory' : 'defeat'
+          const hunterDied = simResult.state.units.some(u => u.team === 'player' && u.unitType === 'hunter' && u.stats.currentHp <= 0)
+
+          const turns = convertDirectLogsToBattleTurns(simResult.state, simResult.logs)
+
+          combatLog = {
+            battleId: dbState.battleId,
+            gateInstanceId: `worldmap-${nodeId}`,
+            result: resolvedOutcome === 'victory' ? 'victory' : 'defeat',
+            turns,
+            totalTurns: simResult.roundsSimulated,
+            playerHpRemaining: Math.max(0, Math.round(hunterBuild.unit.stats.currentHp)),
+            rewards: [],
+            totalWaves: 1,
+            clearedWaves: resolvedOutcome === 'victory' ? 1 : 0,
+            source: 'worldmap',
+            finalOutcome: resolvedOutcome === 'victory' ? 'victory' : 'defeat',
+            defeatReason: hunterDied ? 'player_dead' : 'party_wipe',
+            playerDeathDetected: hunterDied,
+            battleStarted: true,
+            finalized: true,
+            shadowCasualtyIds: simResult.state.units
+              .filter(unit => unit.unitType === 'shadow' && unit.stats.currentHp <= 0)
+              .map(unit => unit.sourceId),
+          }
+
+          // Add intro logs for the turns
+          const conceptLabel = monarchUnit.displayName
+          turns.unshift({
+            turnNumber: 0,
+            waveNumber: 1,
+            waveLabel: 'Wave 1',
+            actorType: 'player',
+            actorId: 'system',
+            actorName: 'System',
+            targetType: 'monster',
+            targetId: monarchUnit.unitId,
+            targetName: monarchUnit.displayName,
+            skillId: 'monarch-intro',
+            skillName: '군주 강림',
+            outcome: 'buff',
+            message: `🔥 [군주 출현] CP ${node.difficulty.toLocaleString()} 권장 영역에 군주 [${conceptLabel}]이(가) 나타났습니다!`,
+          })
+
+          if (equippedShadows.length > 0) {
+            turns.unshift({
+              turnNumber: 0,
+              waveNumber: 1,
+              waveLabel: 'Wave 1',
+              actorType: 'player',
+              actorId: 'system',
+              actorName: 'System',
+              targetType: 'player',
+              targetId: 'player',
+              targetName: s.hunter.name || '헌터',
+              skillId: 'shadow-shield',
+              skillName: '그림자 방패',
+              outcome: 'buff',
+              message: `🛡️ [그림자 방패] 그림자 군단(${equippedShadows.length}명)이 독립 유닛으로 전방에 배치되었습니다! 그림자가 살아있는 동안 적의 공격 타겟을 대신 받으며, 전멸 시 본체가 위험에 처합니다.`,
+            })
+          }
+        } else {
+          combatLog = simulateGateWaveBattle({
+            playerName: s.hunter.name || '헌터',
+            playerStats,
+            monsters,
+            skills,
+            equippedShadows,
+            gateInstanceId: `worldmap-${nodeId}`,
+            battleId: `worldmap-battle-${nodeId}-${Date.now()}`,
+            initialActiveEffects,
+          })
+        }
 
         // 보상 계산 (난이도 CP 비례 & 협력 페널티 트레이드오프 적용)
         let baseGold = node.loveCall?.promisedReward.gold ?? Math.round((node.difficulty ?? 500) * 0.15)
@@ -7354,16 +7500,10 @@ export const useGame = create<GameState>()(
         }
 
         // 로그 연출 보강 (그림자 탱킹 로그 주입)
-        if (equippedShadows.length > 0) {
-          const defPercent = isMonarchId
-            ? `고정 +${MONARCH_SHADOW_GUARD_DEF_BASE.toLocaleString()} (그림자당 +${MONARCH_SHADOW_GUARD_DEF_PER_SHADOW.toLocaleString()})`
-            : `+${Math.round(WORLD_SHADOW_GUARD_DEF_FACTOR * equippedShadows.length * 100)}%`
-          const evaPercent = isMonarchId
-            ? `고정 +${Math.round(MONARCH_SHADOW_GUARD_EVASION_BASE * 100)}% (그림자당 +${Math.round(MONARCH_SHADOW_GUARD_EVASION_PER_SHADOW * 100)}%)`
-            : `+${Math.round(WORLD_SHADOW_GUARD_EVASION_FACTOR * equippedShadows.length * 100)}%`
-          const drPercent = isMonarchId
-            ? `${Math.round(MONARCH_SHADOW_GUARD_DR_FACTOR * 100)}%`
-            : `${Math.round(WORLD_SHADOW_GUARD_DR_FACTOR * 100)}%`
+        if (equippedShadows.length > 0 && !isMonarchId) {
+          const defPercent = `+${Math.round(WORLD_SHADOW_GUARD_DEF_FACTOR * equippedShadows.length * 100)}%`
+          const evaPercent = `+${Math.round(WORLD_SHADOW_GUARD_EVASION_FACTOR * equippedShadows.length * 100)}%`
+          const drPercent = `${Math.round(WORLD_SHADOW_GUARD_DR_FACTOR * 100)}%`
 
           combatLog.turns.unshift(
             createManualSystemLog(
@@ -7376,7 +7516,7 @@ export const useGame = create<GameState>()(
         }
 
         // [L1-A] 협력 전투 연출 로그 주입
-        if (helperCount > 0) {
+        if (helperCount > 0 && !isMonarchId) {
           const helperNames = activeHelpers.map(h => h.name).join(', ')
           combatLog.turns.unshift(
             createManualSystemLog(
@@ -7841,35 +7981,7 @@ export const useGame = create<GameState>()(
         // 2순위 그림자 탱킹 (수호 효과 버프 적용)
         const initialActiveEffects: ActiveCombatEffect[] = []
         if (equippedShadows.length > 0) {
-          if (isMonarchId) {
-            const buffDef = MONARCH_SHADOW_GUARD_DEF_BASE + MONARCH_SHADOW_GUARD_DEF_PER_SHADOW * equippedShadows.length
-            const buffEvasion = MONARCH_SHADOW_GUARD_EVASION_BASE + MONARCH_SHADOW_GUARD_EVASION_PER_SHADOW * equippedShadows.length
-            initialActiveEffects.push(
-              {
-                sourceSkillId: 'monarch-shadow-guard-def',
-                kind: 'stat',
-                stat: 'def',
-                value: buffDef,
-                remainingTurns: 999,
-                targetId: 'player',
-              },
-              {
-                sourceSkillId: 'monarch-shadow-guard-eva',
-                kind: 'stat',
-                stat: 'evasionRate',
-                value: buffEvasion,
-                remainingTurns: 999,
-                targetId: 'player',
-              },
-              {
-                sourceSkillId: 'monarch-shadow-guard-dr',
-                kind: 'damage_reduction',
-                value: MONARCH_SHADOW_GUARD_DR_FACTOR,
-                remainingTurns: 999,
-                targetId: 'player',
-              }
-            )
-          } else {
+          if (!isMonarchId) {
             const buffDef = Math.round(playerStats.def * WORLD_SHADOW_GUARD_DEF_FACTOR * equippedShadows.length)
             const buffEvasion = WORLD_SHADOW_GUARD_EVASION_FACTOR * equippedShadows.length
             initialActiveEffects.push(
@@ -7955,15 +8067,9 @@ export const useGame = create<GameState>()(
 
         const logs: BattleTurn[] = []
         if (equippedShadows.length > 0) {
-          const defPercent = isMonarchId
-            ? `고정 +${MONARCH_SHADOW_GUARD_DEF_BASE.toLocaleString()} (그림자당 +${MONARCH_SHADOW_GUARD_DEF_PER_SHADOW.toLocaleString()})`
-            : `+${Math.round(WORLD_SHADOW_GUARD_DEF_FACTOR * equippedShadows.length * 100)}%`
-          const evaPercent = isMonarchId
-            ? `고정 +${Math.round(MONARCH_SHADOW_GUARD_EVASION_BASE * 100)}% (그림자당 +${Math.round(MONARCH_SHADOW_GUARD_EVASION_PER_SHADOW * 100)}%)`
-            : `+${Math.round(WORLD_SHADOW_GUARD_EVASION_FACTOR * equippedShadows.length * 100)}%`
-          const drPercent = isMonarchId
-            ? `${Math.round(MONARCH_SHADOW_GUARD_DR_FACTOR * 100)}%`
-            : `${Math.round(WORLD_SHADOW_GUARD_DR_FACTOR * 100)}%`
+          const defPercent = `+${Math.round(WORLD_SHADOW_GUARD_DEF_FACTOR * equippedShadows.length * 100)}%`
+          const evaPercent = `+${Math.round(WORLD_SHADOW_GUARD_EVASION_FACTOR * equippedShadows.length * 100)}%`
+          const drPercent = `${Math.round(WORLD_SHADOW_GUARD_DR_FACTOR * 100)}%`
 
           logs.push(
             createManualSystemLog(

@@ -54,6 +54,8 @@ import type {
   DirectBattleActionSelection,
   DirectBattleLogEntry,
   DirectBattleState,
+  BattleStats,
+  BattleStatusEffect,
 } from '../lib/directBattleTypes'
 
 type ManualSelectionMap = Record<string, DirectBattleActionSelection>
@@ -132,6 +134,8 @@ export interface DirectBattlePreviewPanelProps {
   customBattleId?: string
   maxRoundsOverride?: number
   source?: string
+  initialHunterStatsModifier?: Partial<BattleStats>
+  initialHunterStatusEffects?: BattleStatusEffect[]
 }
 
 const enemyTargetTypes = new Set<BattleTargetType>([
@@ -748,6 +752,8 @@ export function DirectBattlePreviewPanel({
   customBattleId,
   maxRoundsOverride,
   source,
+  initialHunterStatsModifier,
+  initialHunterStatusEffects,
 }: DirectBattlePreviewPanelProps) {
   const autoStartedRef = useRef(false)
   const completionSentRef = useRef(false)
@@ -847,6 +853,22 @@ export function DirectBattlePreviewPanel({
       activeConsumableEffects,
       unitId: 'direct-preview-hunter',
     })
+
+    if (initialHunterStatsModifier) {
+      for (const [key, val] of Object.entries(initialHunterStatsModifier)) {
+        if (typeof val === 'number') {
+          (hunterBuild.unit.stats as any)[key] = ((hunterBuild.unit.stats as any)[key] ?? 0) + val
+          if (key === 'maxHp') {
+            hunterBuild.unit.stats.currentHp = hunterBuild.unit.stats.maxHp
+          }
+        }
+      }
+    }
+
+    if (initialHunterStatusEffects) {
+      // Map status effects to correct type if needed, but since types are compatible, push is fine.
+      hunterBuild.unit.statusEffects.push(...initialHunterStatusEffects)
+    }
     const shadowBuilds = buildShadowBattleUnits(previewShadows, shadowDefinitions, {
       unitIdPrefix: 'direct-preview-shadow',
     })

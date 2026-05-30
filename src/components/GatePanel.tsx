@@ -36,6 +36,7 @@ import { SkillActionCard, skillSourceSortRank, skillTypeSortRank } from './Skill
 import { GATE_DEFINITIONS, GATE_PENALTIES, GATE_REWARD_TABLES, MONSTER_DEFINITIONS, SKILL_DEFINITIONS } from '../lib/seed'
 import { GATE_THEMES, GATE_MODIFIERS, hydrateGateRunEncounterChoices } from '../lib/gateRunEvents'
 import { pickDirectGateRunEncounterKey } from '../lib/directBattleEncounters'
+import { MONARCHS, FINAL_ANGEL, buildMonarchBattleUnit } from '../lib/monarchs'
 import {
   calculatePlayerCombatStats,
   formatStatReward,
@@ -1774,6 +1775,7 @@ export function GatePanel() {
   const cancelManualGateBattle = useGame(s => s.cancelManualGateBattle)
   const performWorldManualBattleAction = useGame(s => s.performWorldManualBattleAction)
   const cancelWorldBattle = useGame(s => s.cancelWorldBattle)
+  const resolveDirectWorldBattle = useGame(s => s.resolveDirectWorldBattle)
   const finalizeHardcoreDeathFromSession = useGame(s => s.finalizeHardcoreDeathFromSession)
   const visibleTraces = useGame(s => getSecretVisibleFragments(s.secretProgress))
   const traceCount = visibleTraces.length
@@ -1820,6 +1822,218 @@ export function GatePanel() {
   const gate = activeGateOpen
     ? GATE_DEFINITIONS.find(g => g.id === activeGate.gateId)
     : undefined
+
+  const isMonarchSession = manualBattleSession && manualBattleSession.source === 'world_map' && (MONARCHS.some(m => m.id === manualBattleSession.gateId) || manualBattleSession.gateId === 'angel')
+
+  if (isMonarchSession && manualBattleSession) {
+    const monarchId = manualBattleSession.gateId
+    const monarchData = monarchId === 'angel' ? FINAL_ANGEL : MONARCHS.find(m => m.id === monarchId)
+    const recommendedCP = monarchData?.recommendedCP ?? 30000
+
+    const handleDirectWorldBattleComplete = (payload: DirectBattlePanelCompletePayload) => {
+      const hunterDied = Boolean(payload.battleStarted && (payload.actionCount ?? 0) > 0 && didDirectBattleHunterDie(payload))
+
+      if (payload.outcome === 'cancelled' && !hunterDied) {
+        cancelWorldBattle()
+        return
+      }
+
+      const resolvedOutcome = hunterDied ? 'defeat' : payload.outcome
+      const resultKey = `worldmap-${monarchId}:${payload.state.battleId}:${resolvedOutcome}`
+      if (directGateResultIdsRef.current.has(resultKey)) return
+      directGateResultIdsRef.current.add(resultKey)
+
+      const playerUnits = payload.state.units.filter(unit => unit.team === 'player')
+      const hunterUnit = playerUnits.find(unit => unit.unitType === 'hunter') ?? playerUnits[0]
+
+      const turns: BattleTurn[] = payload.logs.length > 0
+        ? payload.logs.map((_, index) => directLogToGateTurn(payload, index))
+        : [{
+            turnNumber: 1,
+            actorType: 'player',
+            actorId: hunterUnit?.unitId ?? 'direct-monarch-battle',
+            actorName: hunterUnit?.displayName ?? 'Hunter',
+            targetType: 'monster',
+            targetId: monarchId,
+            targetName: monarchData?.name ?? 'Monarch',
+            outcome: 'hit',
+            message: resolvedOutcome === 'victory' ? '군주 토벌전에서 승리했습니다.' : '군주 토벌전에서 패배했습니다.',
+          }]
+
+      // Add intro/setup logs for completeness
+      turns.unshift({
+        turnNumber: 0,
+        waveNumber: 1,
+        waveLabel: 'Wave 1',
+        actorType: 'player',
+        actorId: 'system',
+        actorName: 'System',
+        targetType: 'monster',
+        targetId: `monarch-${monarchId}`,
+        targetName: monarchData?.name ?? 'Monarch',
+        skillId: 'monarch-intro',
+        skillName: '군주 강림',
+        outcome: 'buff',
+        message: `🔥 [군주 출현] 권장 영역에 군주 [${monarchData?.name}]이(가) 나타났습니다!`,
+      })
+
+      if (equippedShadows.length > 0) {
+        turns.unshift({
+          turnNumber: 0,
+          waveNumber: 1,
+          waveLabel: 'Wave 1',
+          actorType: 'player',
+          actorId: 'system',
+          actorName: 'System',
+          targetType: 'player',
+          targetId: 'player',
+          targetName: hunter.name || '헌터',
+          skillId: 'shadow-shield',
+          skillName: '그림자 방패',
+          outcome: 'buff',
+          message: `🛡️ [그림자 방패] 그림자 군단이 독립 유닛으로 배치되었습니다! 그림자가 살아있는 동안 적의 공격을 대신 흡수하며, 전멸 시 본체가 위험해집니다.`,
+        })
+      }
+
+      const combatLog: CombatLog = {
+        battleId: `worldmap-monarch-${monarchId}-${Date.now()}`,
+        gateInstanceId: `worldmap-${monarchId}`,
+        result: resolvedOutcome === 'victory' ? 'victory' : 'defeat',
+        turns,
+        totalTurns: Math.max(1, payload.rounds),
+        playerHpRemaining: Math.max(0, Math.round(hunterUnit?.stats.currentHp ?? 0)),
+        rewards: [],
+        totalWaves: 1,
+        clearedWaves: resolvedOutcome === 'victory' ? 1 : 0,
+        source: 'worldmap',
+        finalOutcome: resolvedOutcome === 'victory' ? 'victory' : 'defeat',
+        defeatReason: hunterDied ? 'player_dead' : 'party_wipe',
+        playerDeathDetected: hunterDied,
+        battleStarted: payload.battleStarted,
+        actionCount: payload.actionCount,
+        finalized: payload.finalized || hunterDied,
+        shadowCasualtyIds: playerUnits
+          .filter(unit => unit.unitType === 'shadow' && unit.stats.currentHp <= 0)
+          .map(unit => unit.sourceId),
+      }
+
+      resolveDirectWorldBattle(combatLog, monarchId, manualBattleSession.helperHunterIds)
+      cancelManualGateBattle()
+    }
+
+    const helperHunterIds = manualBattleSession.helperHunterIds
+    let helperPower = 0
+    let helperCount = 0
+    let buffCoopAtk = 0
+    let buffCoopDef = 0
+    let drCoop = 0
+
+    const livingWorld = useGame.getState().livingWorld
+    if (helperHunterIds && helperHunterIds.length > 0 && livingWorld) {
+      for (const hid of helperHunterIds) {
+        const h = livingWorld.namedHunters[hid]
+        if (h && h.status === 'active') {
+          helperPower += h.power
+          helperCount++
+        }
+      }
+    }
+
+    // Constants identical to store.ts/sim-monarch-battle.ts
+    const COOP_HELP_ATK_FACTOR = 0.04
+    const COOP_HELP_DEF_FACTOR = 0.04
+    const COOP_HELP_DR_FACTOR = 0.05
+    const COOP_HELP_DR_CAP = 0.5
+
+    if (helperCount > 0) {
+      buffCoopAtk = Math.round(COOP_HELP_ATK_FACTOR * helperPower)
+      buffCoopDef = Math.round(COOP_HELP_DEF_FACTOR * helperPower)
+      drCoop = Math.min(COOP_HELP_DR_CAP, COOP_HELP_DR_FACTOR * helperCount)
+    }
+
+    // Build the initial stats modifier and status effects for the hunter unit!
+    const statsModifier: Partial<any> = {}
+    if (buffCoopAtk > 0) statsModifier.atk = buffCoopAtk
+    if (buffCoopDef > 0) statsModifier.def = buffCoopDef
+
+    const statusEffects: any[] = []
+    if (drCoop > 0) {
+      statusEffects.push({
+        statusId: `coop-dr-${Date.now()}`,
+        definitionId: 'guard',
+        name: '협력 방어',
+        type: 'guard',
+        targetUnitId: 'direct-preview-hunter',
+        durationRounds: 999,
+        stackCount: 1,
+        maxStacks: 1,
+        effectValue: drCoop,
+        timing: 'round_start',
+      })
+    }
+
+    if (equippedShadows.length > 0) {
+      // Find first shadow's unit ID (constructed in DirectBattlePreviewPanel as `direct-preview-shadow-${shadow.instanceId}`)
+      const firstShadowUnitId = `direct-preview-shadow-${equippedShadows[0].instanceId}`
+      statusEffects.push({
+        statusId: `shadow-guard-protect-${Date.now()}`,
+        definitionId: 'protect',
+        name: '그림자 보호',
+        type: 'protect',
+        sourceUnitId: firstShadowUnitId,
+        targetUnitId: 'direct-preview-hunter',
+        durationRounds: 999,
+        stackCount: 1,
+        maxStacks: 1,
+        effectValue: 0.35,
+        timing: 'round_start',
+      })
+
+      // Safeguard DR (15% for 4 rounds)
+      statusEffects.push({
+        statusId: `monarch-safeguard-${Date.now()}`,
+        definitionId: 'guard',
+        name: '그림자 장벽',
+        type: 'guard',
+        targetUnitId: 'direct-preview-hunter',
+        durationRounds: 4,
+        stackCount: 1,
+        maxStacks: 1,
+        effectValue: 0.15,
+        timing: 'round_start',
+      })
+    }
+
+    return (
+      <div className="space-y-4">
+        <DirectBattlePreviewPanel
+          source="world_map"
+          title="군주 격퇴전"
+          note="그림자가 전방에서 공격을 받아내어 본체를 수호합니다. 그림자가 모두 쓰러지면 본체가 위험에 처합니다."
+          hunter={hunter}
+          items={items}
+          equipment={equipment}
+          activeConsumableEffects={activeConsumableEffects}
+          equippedShadows={equippedShadows}
+          contextStats={[
+            { label: '군주', value: monarchData?.name ?? monarchId },
+            { label: '권장 CP', value: `${recommendedCP.toLocaleString()} CP` },
+          ]}
+          customEnemyUnits={[buildMonarchBattleUnit(monarchId, recommendedCP)]}
+          customBattleId={`direct-monarch-${monarchId}`}
+          maxRoundsOverride={25}
+          autoStart
+          allowEncounterSelection={false}
+          startButtonLabel="격퇴전 개시"
+          restartButtonLabel="다시 준비"
+          cancelButtonLabel="후퇴"
+          onBattleComplete={handleDirectWorldBattleComplete}
+          initialHunterStatsModifier={statsModifier}
+          initialHunterStatusEffects={statusEffects}
+        />
+      </div>
+    )
+  }
 
   // 12-29I: 월드맵 수동 전투 세션에 대한 최상단 렌더링 예외 가드 추가
   if (manualBattleSession && manualBattleSession.source === 'world_map') {
