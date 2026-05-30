@@ -480,7 +480,7 @@ export interface GameState {
   setActiveGate: (gate: ActiveGate | undefined) => void
   clearExpiredGate: () => void
   rollGateSpawn: (source: 'daily_open' | 'daily_completion' | 'random_completion' | 'dungeon_clear' | 'hard_dungeon_clear' | 'main_completion') => void
-  spawnGate: (gateId: string, source: 'random' | 'dungeon_clear' | 'event' | 'worldmap') => void
+  spawnGate: (gateId: string, source: 'random' | 'dungeon_clear' | 'event' | 'worldmap', helperHunterIds?: string[], customGateDef?: any) => void
   recoverGateStamina: () => void
   recoverGateInjuryByQuest: () => void
   clearGateInjuryIfExpired: () => void
@@ -544,6 +544,7 @@ export interface GameState {
   resolveWorldBattle: () => void
   resolveDirectWorldBattle: (combatLog: CombatLog, nodeId: string, helperHunterIds?: string[]) => void
   cancelWorldBattle: () => void
+  resolveWorldGateBattleOutcome: (activeGate: ActiveGate, gate: any, combatLog: CombatLog) => void
   startWorldManualBattle: (nodeId: string, helperHunterIds?: string[]) => void
   performWorldManualBattleAction: (action: ManualBattleAction) => void
   cancelWorldManualBattle: () => void
@@ -5006,11 +5007,11 @@ export const useGame = create<GameState>()(
         get().spawnGate(selected.id, activeSource)
       },
 
-      spawnGate: (gateId, source) => {
+      spawnGate: (gateId: string, source: 'random' | 'dungeon_clear' | 'event' | 'worldmap', helperHunterIds?: string[], customGateDef?: any) => {
         const s = get()
         if (s.activeGate && s.activeGate.status === 'active') return
 
-        const gate = GATE_DEFINITIONS.find(g => g.id === gateId)
+        const gate = customGateDef || GATE_DEFINITIONS.find(g => g.id === gateId)
         if (!gate) return
 
         const now = new Date()
@@ -5018,7 +5019,7 @@ export const useGame = create<GameState>()(
         expiresAt.setHours(expiresAt.getHours() + gate.expiresInHours)
 
         const seed = `${gate.id}-${Date.now()}-${Math.floor(Math.random() * 100000)}`
-        const runState = generateGateRunState(gate.id, seed)
+        const runState = generateGateRunState(gate.id, seed, undefined, gate)
 
         // 12-40F: 현실 준비도 보너스를 게이트 런 보상 배율에 적용
         const dp = s.dailyProgression
@@ -5048,6 +5049,7 @@ export const useGame = create<GameState>()(
             status: 'active',
             source,
             runState,
+            helperHunterIds,
           },
           messages: [...s.messages, {
             id: uid(),
@@ -5145,7 +5147,52 @@ export const useGame = create<GameState>()(
         const activeGate = s.activeGate
         if (!activeGate || activeGate.status !== 'active') return
 
-        const gate = GATE_DEFINITIONS.find(g => g.id === activeGate.gateId)
+        let gate = GATE_DEFINITIONS.find(g => g.id === activeGate.gateId)
+        if (!gate) {
+          const isMonarchId = MONARCHS.some(m => m.id === activeGate.gateId) || activeGate.gateId === 'angel'
+          if (isMonarchId) {
+            const monarchData = activeGate.gateId === 'angel' ? FINAL_ANGEL : MONARCHS.find(m => m.id === activeGate.gateId)!
+            gate = {
+              id: activeGate.gateId,
+              name: monarchData.name,
+              description: `${monarchData.name}과의 결전입니다.`,
+              rank: 'S',
+              recommendedLevel: 80,
+              recommendedPower: monarchData.recommendedCP,
+              monsterIds: [activeGate.gateId],
+              rewardTableId: 'reward-gate-s-basic',
+              failPenaltyId: 'penalty-gate-basic',
+              expiresInHours: 720,
+            }
+          } else {
+            const node = s.livingWorld?.riftNodes[activeGate.gateId]
+            if (node) {
+              const rank = node.difficultyRank || 'D'
+              const recommendedPower = node.difficulty || 1000
+              
+              let monsterIds = ['lazy-goblin']
+              if (rank === 'E') monsterIds = ['rift-rat', 'rift-stray']
+              else if (rank === 'D') monsterIds = ['lazy-goblin', 'sloth-brute']
+              else if (rank === 'C') monsterIds = ['forgetting-warden', 'fatigue-warden']
+              else if (rank === 'B') monsterIds = ['memory-tracker', 'memory-scout']
+              else if (rank === 'A') monsterIds = ['greed-warden', 'memory-scout']
+              else if (rank === 'S' || rank === 'National') monsterIds = ['forgetting-warden', 'greed-warden']
+
+              gate = {
+                id: activeGate.gateId,
+                name: node.name || '심연의 균열',
+                description: `${node.name || '심연의 균열'}의 정화 작전입니다.`,
+                rank: (rank === 'National' ? 'S' : rank),
+                recommendedLevel: rank === 'E' ? 5 : rank === 'D' ? 15 : rank === 'C' ? 30 : rank === 'B' ? 45 : rank === 'A' ? 60 : 80,
+                recommendedPower: recommendedPower,
+                monsterIds: monsterIds,
+                rewardTableId: `reward-gate-${(rank === 'National' ? 's' : rank).toLowerCase()}-basic` || 'reward-gate-d-basic',
+                failPenaltyId: 'penalty-gate-basic',
+                expiresInHours: 72,
+              }
+            }
+          }
+        }
         if (!gate) return
 
         const gateStatus = clearExpiredGateInjury(s.gateStatus)
@@ -5213,6 +5260,180 @@ export const useGame = create<GameState>()(
         const skills = [...playerSkills, ...monsterSkills]
         const gateSuccessBonus = getActiveGateSuccessBonus(s.activeConsumableEffects)
         const initialActiveEffects = createGateSuccessCombatEffects(gateSuccessBonus, 'player')
+
+        // activeGate.source === 'worldmap' 일 때 그림자 탱킹 및 협력 버프 주입!
+        if (activeGate.source === 'worldmap') {
+          const isMonarchId = MONARCHS.some(m => m.id === activeGate.gateId) || activeGate.gateId === 'angel'
+          
+          if (equippedShadows.length > 0) {
+            const buffDef = Math.round(playerStats.def * WORLD_SHADOW_GUARD_DEF_FACTOR * equippedShadows.length)
+            const buffEvasion = WORLD_SHADOW_GUARD_EVASION_FACTOR * equippedShadows.length
+            const drValue = isMonarchId ? 0.50 : WORLD_SHADOW_GUARD_DR_FACTOR
+
+            initialActiveEffects.push(
+              {
+                sourceSkillId: 'world-map-shadow-guard-def',
+                kind: 'stat',
+                stat: 'def',
+                value: buffDef,
+                remainingTurns: 999,
+                targetId: 'player',
+              },
+              {
+                sourceSkillId: 'world-map-shadow-guard-eva',
+                kind: 'stat',
+                stat: 'evasionRate',
+                value: buffEvasion,
+                remainingTurns: 999,
+                targetId: 'player',
+              },
+              {
+                sourceSkillId: 'world-map-shadow-guard-dr',
+                kind: 'damage_reduction',
+                value: drValue,
+                remainingTurns: 999,
+                targetId: 'player',
+              }
+            )
+          }
+
+          const helperHunterIds = activeGate.helperHunterIds || []
+          let activeHelpers = []
+          let helperPower = 0
+          if (helperHunterIds.length > 0 && s.livingWorld) {
+            for (const hid of helperHunterIds) {
+              const h = s.livingWorld.namedHunters[hid]
+              if (h && h.status === 'active') {
+                activeHelpers.push(h)
+                helperPower += h.power
+              }
+            }
+          }
+          const helperCount = activeHelpers.length
+
+          if (helperCount > 0) {
+            const buffCoopAtk = Math.round(COOP_HELP_ATK_FACTOR * helperPower)
+            const buffCoopDef = Math.round(COOP_HELP_DEF_FACTOR * helperPower)
+            const drCoop = Math.min(COOP_HELP_DR_CAP, COOP_HELP_DR_FACTOR * helperCount)
+
+            if (buffCoopAtk > 0) {
+              initialActiveEffects.push({
+                sourceSkillId: 'world-map-coop-atk',
+                kind: 'stat',
+                stat: 'atk',
+                value: buffCoopAtk,
+                remainingTurns: 999,
+                targetId: 'player',
+              })
+            }
+            if (buffCoopDef > 0) {
+              initialActiveEffects.push({
+                sourceSkillId: 'world-map-coop-def',
+                kind: 'stat',
+                stat: 'def',
+                value: buffCoopDef,
+                remainingTurns: 999,
+                targetId: 'player',
+              })
+            }
+            if (drCoop > 0) {
+              initialActiveEffects.push({
+                sourceSkillId: 'world-map-coop-dr',
+                kind: 'damage_reduction',
+                value: drCoop,
+                remainingTurns: 999,
+                targetId: 'player',
+              })
+            }
+          }
+        }
+
+        // activeGate.source === 'worldmap' 일 때 그림자 탱킹 및 협력 버프 주입!
+        if (activeGate.source === 'worldmap') {
+          const isMonarchId = MONARCHS.some(m => m.id === activeGate.gateId) || activeGate.gateId === 'angel'
+          
+          if (equippedShadows.length > 0) {
+            const buffDef = Math.round(playerStats.def * WORLD_SHADOW_GUARD_DEF_FACTOR * equippedShadows.length)
+            const buffEvasion = WORLD_SHADOW_GUARD_EVASION_FACTOR * equippedShadows.length
+            const drValue = isMonarchId ? 0.50 : WORLD_SHADOW_GUARD_DR_FACTOR
+
+            initialActiveEffects.push(
+              {
+                sourceSkillId: 'world-map-shadow-guard-def',
+                kind: 'stat',
+                stat: 'def',
+                value: buffDef,
+                remainingTurns: 999,
+                targetId: 'player',
+              },
+              {
+                sourceSkillId: 'world-map-shadow-guard-eva',
+                kind: 'stat',
+                stat: 'evasionRate',
+                value: buffEvasion,
+                remainingTurns: 999,
+                targetId: 'player',
+              },
+              {
+                sourceSkillId: 'world-map-shadow-guard-dr',
+                kind: 'damage_reduction',
+                value: drValue,
+                remainingTurns: 999,
+                targetId: 'player',
+              }
+            )
+          }
+
+          const helperHunterIds = activeGate.helperHunterIds || []
+          let activeHelpers = []
+          let helperPower = 0
+          if (helperHunterIds.length > 0 && s.livingWorld) {
+            for (const hid of helperHunterIds) {
+              const h = s.livingWorld.namedHunters[hid]
+              if (h && h.status === 'active') {
+                activeHelpers.push(h)
+                helperPower += h.power
+              }
+            }
+          }
+          const helperCount = activeHelpers.length
+
+          if (helperCount > 0) {
+            const buffCoopAtk = Math.round(COOP_HELP_ATK_FACTOR * helperPower)
+            const buffCoopDef = Math.round(COOP_HELP_DEF_FACTOR * helperPower)
+            const drCoop = Math.min(COOP_HELP_DR_CAP, COOP_HELP_DR_FACTOR * helperCount)
+
+            if (buffCoopAtk > 0) {
+              initialActiveEffects.push({
+                sourceSkillId: 'world-map-coop-atk',
+                kind: 'stat',
+                stat: 'atk',
+                value: buffCoopAtk,
+                remainingTurns: 999,
+                targetId: 'player',
+              })
+            }
+            if (buffCoopDef > 0) {
+              initialActiveEffects.push({
+                sourceSkillId: 'world-map-coop-def',
+                kind: 'stat',
+                stat: 'def',
+                value: buffCoopDef,
+                remainingTurns: 999,
+                targetId: 'player',
+              })
+            }
+            if (drCoop > 0) {
+              initialActiveEffects.push({
+                sourceSkillId: 'world-map-coop-dr',
+                kind: 'damage_reduction',
+                value: drCoop,
+                remainingTurns: 999,
+                targetId: 'player',
+              })
+            }
+          }
+        }
 
         const combatLog = simulateGateWaveBattle({
           playerName: s.hunter.name || '헌터',
@@ -5406,6 +5627,10 @@ export const useGame = create<GameState>()(
           messages: [...s.messages, ...newMessages],
         })
 
+        if (activeGate.source === 'worldmap') {
+          get().resolveWorldGateBattleOutcome(activeGate, gate, finalLog)
+        }
+
         if (combatLog.result === 'victory') {
           setTimeout(() => {
             set(current => applyChallengeProgress(current, { gateAttempt: true, gateVictory: true }))
@@ -5425,7 +5650,52 @@ export const useGame = create<GameState>()(
         if (!activeGate || activeGate.status !== 'active') return
         if (combatLog.gateInstanceId !== activeGate.instanceId) return
 
-        const gate = GATE_DEFINITIONS.find(g => g.id === activeGate.gateId)
+        let gate = GATE_DEFINITIONS.find(g => g.id === activeGate.gateId)
+        if (!gate) {
+          const isMonarchId = MONARCHS.some(m => m.id === activeGate.gateId) || activeGate.gateId === 'angel'
+          if (isMonarchId) {
+            const monarchData = activeGate.gateId === 'angel' ? FINAL_ANGEL : MONARCHS.find(m => m.id === activeGate.gateId)!
+            gate = {
+              id: activeGate.gateId,
+              name: monarchData.name,
+              description: `${monarchData.name}과의 결전입니다.`,
+              rank: 'S',
+              recommendedLevel: 80,
+              recommendedPower: monarchData.recommendedCP,
+              monsterIds: [activeGate.gateId],
+              rewardTableId: 'reward-gate-s-basic',
+              failPenaltyId: 'penalty-gate-basic',
+              expiresInHours: 720,
+            }
+          } else {
+            const node = s.livingWorld?.riftNodes[activeGate.gateId]
+            if (node) {
+              const rank = node.difficultyRank || 'D'
+              const recommendedPower = node.difficulty || 1000
+              
+              let monsterIds = ['lazy-goblin']
+              if (rank === 'E') monsterIds = ['rift-rat', 'rift-stray']
+              else if (rank === 'D') monsterIds = ['lazy-goblin', 'sloth-brute']
+              else if (rank === 'C') monsterIds = ['forgetting-warden', 'fatigue-warden']
+              else if (rank === 'B') monsterIds = ['memory-tracker', 'memory-scout']
+              else if (rank === 'A') monsterIds = ['greed-warden', 'memory-scout']
+              else if (rank === 'S' || rank === 'National') monsterIds = ['forgetting-warden', 'greed-warden']
+
+              gate = {
+                id: activeGate.gateId,
+                name: node.name || '심연의 균열',
+                description: `${node.name || '심연의 균열'}의 정화 작전입니다.`,
+                rank: (rank === 'National' ? 'S' : rank),
+                recommendedLevel: rank === 'E' ? 5 : rank === 'D' ? 15 : rank === 'C' ? 30 : rank === 'B' ? 45 : rank === 'A' ? 60 : 80,
+                recommendedPower: recommendedPower,
+                monsterIds: monsterIds,
+                rewardTableId: `reward-gate-${(rank === 'National' ? 's' : rank).toLowerCase()}-basic` || 'reward-gate-d-basic',
+                failPenaltyId: 'penalty-gate-basic',
+                expiresInHours: 72,
+              }
+            }
+          }
+        }
         if (!gate) return
 
         const isExam = activeGate.runState?.isPromotionExam
@@ -5510,6 +5780,10 @@ export const useGame = create<GameState>()(
           gateAttempt: true,
           gateVictory: combatLog.result === 'victory',
         }))
+
+        if (activeGate.source === 'worldmap') {
+          get().resolveWorldGateBattleOutcome(activeGate, gate, combatLog)
+        }
 
         // 12-41B: 게이트 최종 클리어 성공 연계 및 승급 후킹
         if (combatLog.result === 'victory' && outcome.state.activeGate?.status === 'cleared') {
@@ -5665,7 +5939,52 @@ export const useGame = create<GameState>()(
         if (!activeGate || activeGate.status !== 'active') return
         if (gateId && activeGate.gateId !== gateId) return
 
-        const gate = GATE_DEFINITIONS.find(g => g.id === activeGate.gateId)
+        let gate = GATE_DEFINITIONS.find(g => g.id === activeGate.gateId)
+        if (!gate) {
+          const isMonarchId = MONARCHS.some(m => m.id === activeGate.gateId) || activeGate.gateId === 'angel'
+          if (isMonarchId) {
+            const monarchData = activeGate.gateId === 'angel' ? FINAL_ANGEL : MONARCHS.find(m => m.id === activeGate.gateId)!
+            gate = {
+              id: activeGate.gateId,
+              name: monarchData.name,
+              description: `${monarchData.name}과의 결전입니다.`,
+              rank: 'S',
+              recommendedLevel: 80,
+              recommendedPower: monarchData.recommendedCP,
+              monsterIds: [activeGate.gateId],
+              rewardTableId: 'reward-gate-s-basic',
+              failPenaltyId: 'penalty-gate-basic',
+              expiresInHours: 720,
+            }
+          } else {
+            const node = s.livingWorld?.riftNodes[activeGate.gateId]
+            if (node) {
+              const rank = node.difficultyRank || 'D'
+              const recommendedPower = node.difficulty || 1000
+              
+              let monsterIds = ['lazy-goblin']
+              if (rank === 'E') monsterIds = ['rift-rat', 'rift-stray']
+              else if (rank === 'D') monsterIds = ['lazy-goblin', 'sloth-brute']
+              else if (rank === 'C') monsterIds = ['forgetting-warden', 'fatigue-warden']
+              else if (rank === 'B') monsterIds = ['memory-tracker', 'memory-scout']
+              else if (rank === 'A') monsterIds = ['greed-warden', 'memory-scout']
+              else if (rank === 'S' || rank === 'National') monsterIds = ['forgetting-warden', 'greed-warden']
+
+              gate = {
+                id: activeGate.gateId,
+                name: node.name || '심연의 균열',
+                description: `${node.name || '심연의 균열'}의 정화 작전입니다.`,
+                rank: (rank === 'National' ? 'S' : rank),
+                recommendedLevel: rank === 'E' ? 5 : rank === 'D' ? 15 : rank === 'C' ? 30 : rank === 'B' ? 45 : rank === 'A' ? 60 : 80,
+                recommendedPower: recommendedPower,
+                monsterIds: monsterIds,
+                rewardTableId: `reward-gate-${(rank === 'National' ? 's' : rank).toLowerCase()}-basic` || 'reward-gate-d-basic',
+                failPenaltyId: 'penalty-gate-basic',
+                expiresInHours: 72,
+              }
+            }
+          }
+        }
         if (!gate) return
 
         const gateStatus = clearExpiredGateInjury(s.gateStatus)
@@ -7114,7 +7433,6 @@ export const useGame = create<GameState>()(
 
       startWorldBattle: (nodeId, helperHunterIds) => {
         const s = get()
-        
         const isMonarchId = MONARCHS.some(m => m.id === nodeId) || nodeId === 'angel'
         let monarchRegionId = 'kr'
         if (isMonarchId && s.livingWorld?.activeMonarchs) {
@@ -7124,7 +7442,7 @@ export const useGame = create<GameState>()(
           }
         }
 
-        let node: RiftNode
+        let node
         if (isMonarchId) {
           const monarchData = nodeId === 'angel' ? FINAL_ANGEL : MONARCHS.find(m => m.id === nodeId)!
           node = {
@@ -7147,7 +7465,7 @@ export const useGame = create<GameState>()(
             deadline: 7,
             daysRemaining: 7,
             ...(s.livingWorld?.riftNodes[nodeId] || RIFT_NODES.find(n => n.id === nodeId))
-          } as RiftNode
+          }
           if (!node || (s.riftNodes[nodeId] ?? node.status) !== 'active') return
         }
 
@@ -7186,393 +7504,105 @@ export const useGame = create<GameState>()(
           return
         }
 
-        let monsters: MonsterDefinition[]
+        // 1) nodeId로 동적 게이트 정의 구성 (한국 게이트 or 군주)
+        let customGateDef
         if (isMonarchId) {
           const monarchData = nodeId === 'angel' ? FINAL_ANGEL : MONARCHS.find(m => m.id === nodeId)!
-          const cp = monarchData.recommendedCP
-          const stats = {
-            maxHp: Math.round(cp * 0.45),
-            atk: Math.round(cp * 0.12),
-            def: Math.round(cp * 0.04),
-            speed: Math.round(20 + cp * 0.0001),
-            critRate: 0.15,
-            accuracy: 0.95,
-            evasionRate: 0.10
-          }
-          monsters = [
-            {
-              id: monarchData.id,
-              name: monarchData.name,
-              description: monarchData.concept,
-              rank: 'S',
-              stats,
-              skillIds: ['monster-rift-scratch', 'monster-lazy-curse', 'monster-memory-fog']
-            }
-          ]
-        } else {
-          const floor = Math.max(1, Math.round(((node.difficulty ?? 500) - 200) / 80))
-          monsters = getTowerMonstersForFloor(floor)
-        }
-        if (monsters.length === 0) return
-
-        const equippedItems = getEquippedItems(s.items, s.equipment)
-        const equippedShadows = getEquippedShadows(s.ownedShadows, s.equippedShadowIds, s.hunter)
-        const shadowStatBonuses = getEquippedShadowStatBonuses(equippedShadows)
-        const combatStatsWithShadows = { ...s.hunter.stats }
-        for (const [stat, value] of Object.entries(shadowStatBonuses)) {
-          combatStatsWithShadows[stat as StatKey] = roundStatValue(combatStatsWithShadows[stat as StatKey] + (value ?? 0))
-        }
-        const activeJobId = s.hunter.activeJobId || s.hunter.jobId
-        const jobLevel = s.hunter.jobs?.[activeJobId]?.level ?? 1
-        const playerSkills = getPlayerCombatSkills({
-          jobId: activeJobId,
-          jobLevel,
-          equippedItems,
-          allSkills: SKILL_DEFINITIONS,
-        })
-        const playerStats = calculatePlayerCombatStats({
-          level: s.hunter.level,
-          stats: combatStatsWithShadows,
-          equippedItems,
-          activeConsumableEffects: s.activeConsumableEffects,
-          jobId: activeJobId,
-          skills: playerSkills,
-        })
-
-        const monsterSkillIds = new Set(monsters.flatMap(m => m.skillIds))
-        const monsterSkills = SKILL_DEFINITIONS.filter(skill => skill.ownerType === 'monster' && monsterSkillIds.has(skill.id))
-        const skills = [...playerSkills, ...monsterSkills]
-
-        // 2순위 그림자 탱킹 (수호 효과 버프 적용)
-        const initialActiveEffects: ActiveCombatEffect[] = []
-        if (equippedShadows.length > 0) {
-          if (!isMonarchId) {
-            const buffDef = Math.round(playerStats.def * WORLD_SHADOW_GUARD_DEF_FACTOR * equippedShadows.length)
-            const buffEvasion = WORLD_SHADOW_GUARD_EVASION_FACTOR * equippedShadows.length
-            initialActiveEffects.push(
-              {
-                sourceSkillId: 'world-map-shadow-guard-def',
-                kind: 'stat',
-                stat: 'def',
-                value: buffDef,
-                remainingTurns: 999,
-                targetId: 'player',
-              },
-              {
-                sourceSkillId: 'world-map-shadow-guard-eva',
-                kind: 'stat',
-                stat: 'evasionRate',
-                value: buffEvasion,
-                remainingTurns: 999,
-                targetId: 'player',
-              },
-              {
-                sourceSkillId: 'world-map-shadow-guard-dr',
-                kind: 'damage_reduction',
-                value: WORLD_SHADOW_GUARD_DR_FACTOR,
-                remainingTurns: 999,
-                targetId: 'player',
-              }
-            )
-          }
-        }
-
-        // [L1-A] NPC 협력 버프 주입
-        let activeHelpers: NamedHunter[] = []
-        let helperPower = 0
-        if (helperHunterIds && helperHunterIds.length > 0 && s.livingWorld) {
-          for (const hid of helperHunterIds) {
-            const h = s.livingWorld.namedHunters[hid]
-            if (h && h.status === 'active') {
-              activeHelpers.push(h)
-              helperPower += h.power
-            }
-          }
-        }
-        const helperCount = activeHelpers.length
-
-        let buffCoopAtk = 0
-        let buffCoopDef = 0
-        let drCoop = 0
-        if (helperCount > 0) {
-          buffCoopAtk = Math.round(COOP_HELP_ATK_FACTOR * helperPower)
-          buffCoopDef = Math.round(COOP_HELP_DEF_FACTOR * helperPower)
-          drCoop = Math.min(COOP_HELP_DR_CAP, COOP_HELP_DR_FACTOR * helperCount)
-
-          if (buffCoopAtk > 0) {
-            initialActiveEffects.push({
-              sourceSkillId: 'world-map-coop-atk',
-              kind: 'stat',
-              stat: 'atk',
-              value: buffCoopAtk,
-              remainingTurns: 999,
-              targetId: 'player',
-            })
-          }
-          if (buffCoopDef > 0) {
-            initialActiveEffects.push({
-              sourceSkillId: 'world-map-coop-def',
-              kind: 'stat',
-              stat: 'def',
-              value: buffCoopDef,
-              remainingTurns: 999,
-              targetId: 'player',
-            })
-          }
-          if (drCoop > 0) {
-            initialActiveEffects.push({
-              sourceSkillId: 'world-map-coop-dr',
-              kind: 'damage_reduction',
-              value: drCoop,
-              remainingTurns: 999,
-              targetId: 'player',
-            })
-          }
-        }
-
-        let combatLog: CombatLog
-
-        if (isMonarchId) {
-          const shadowDefinitions = equippedShadows
-            .map(shadow => getShadowDefinition(shadow.definitionId))
-            .filter((definition): definition is NonNullable<typeof definition> => Boolean(definition))
-          const shadowBuilds = buildShadowBattleUnits(equippedShadows, shadowDefinitions, {
-            unitIdPrefix: 'direct-preview-shadow',
-          })
-
-          const hunterBuild = buildHunterBattleUnit(s.hunter, {
-            items: s.items,
-            equipment: s.equipment,
-            activeConsumableEffects: s.activeConsumableEffects,
-            unitId: 'direct-preview-hunter',
-          })
-
-          // Inject coop helper stats
-          if (buffCoopAtk > 0) hunterBuild.unit.stats.atk += buffCoopAtk
-          if (buffCoopDef > 0) hunterBuild.unit.stats.def += buffCoopDef
-
-          // Inject coop helper DR
-          if (drCoop > 0) {
-            hunterBuild.unit.statusEffects.push({
-              statusId: `coop-dr-${Date.now()}`,
-              definitionId: 'guard',
-              name: '협력 방어',
-              type: 'guard',
-              targetUnitId: hunterBuild.unit.unitId,
-              durationRounds: 999,
-              stackCount: 1,
-              maxStacks: 1,
-              effectValue: drCoop,
-              timing: 'round_start',
-            })
-          }
-
-          // Inject protect / safeguard DR if shadows are alive
-          if (shadowBuilds.length > 0) {
-            // Protect pointing to the first shadow unit
-            hunterBuild.unit.statusEffects.push({
-              statusId: `shadow-guard-protect-${Date.now()}`,
-              definitionId: 'protect',
-              name: '그림자 보호',
-              type: 'protect',
-              sourceUnitId: shadowBuilds[0].unit.unitId,
-              targetUnitId: hunterBuild.unit.unitId,
-              durationRounds: 999,
-              stackCount: 1,
-              maxStacks: 1,
-              effectValue: 0.35,
-              timing: 'round_start',
-            })
-
-            // Safeguard DR (15% for 4 rounds)
-            hunterBuild.unit.statusEffects.push({
-              statusId: `monarch-safeguard-${Date.now()}`,
-              definitionId: 'guard',
-              name: '그림자 장벽',
-              type: 'guard',
-              targetUnitId: hunterBuild.unit.unitId,
-              durationRounds: 4,
-              stackCount: 1,
-              maxStacks: 1,
-              effectValue: 0.15,
-              timing: 'round_start',
-            })
-          }
-
-          const monarchUnit = buildMonarchBattleUnit(nodeId, node.difficulty)
-
-          const dbUnits = [hunterBuild.unit, ...shadowBuilds.map(b => b.unit), monarchUnit]
-          const dbState = createDirectBattleState(dbUnits, {
-            battleId: `worldmap-monarch-${nodeId}-${Date.now()}`,
-            maxRounds: 25,
-          })
-
-          const simResult = runMockDirectBattle(dbState)
-          const resolvedOutcome = simResult.winner === 'player' ? 'victory' : 'defeat'
-          const hunterDied = simResult.state.units.some(u => u.team === 'player' && u.unitType === 'hunter' && u.stats.currentHp <= 0)
-
-          const turns = convertDirectLogsToBattleTurns(simResult.state, simResult.logs)
-
-          combatLog = {
-            battleId: dbState.battleId,
-            gateInstanceId: `worldmap-${nodeId}`,
-            result: resolvedOutcome === 'victory' ? 'victory' : 'defeat',
-            turns,
-            totalTurns: simResult.roundsSimulated,
-            playerHpRemaining: Math.max(0, Math.round(hunterBuild.unit.stats.currentHp)),
-            rewards: [],
-            totalWaves: 1,
-            clearedWaves: resolvedOutcome === 'victory' ? 1 : 0,
-            source: 'worldmap',
-            finalOutcome: resolvedOutcome === 'victory' ? 'victory' : 'defeat',
-            defeatReason: hunterDied ? 'player_dead' : 'party_wipe',
-            playerDeathDetected: hunterDied,
-            battleStarted: true,
-            finalized: true,
-            shadowCasualtyIds: simResult.state.units
-              .filter(unit => unit.unitType === 'shadow' && unit.stats.currentHp <= 0)
-              .map(unit => unit.sourceId),
-          }
-
-          // Add intro logs for the turns
-          const conceptLabel = monarchUnit.displayName
-          turns.unshift({
-            turnNumber: 0,
-            waveNumber: 1,
-            waveLabel: 'Wave 1',
-            actorType: 'player',
-            actorId: 'system',
-            actorName: 'System',
-            targetType: 'monster',
-            targetId: monarchUnit.unitId,
-            targetName: monarchUnit.displayName,
-            skillId: 'monarch-intro',
-            skillName: '군주 강림',
-            outcome: 'buff',
-            message: `🔥 [군주 출현] CP ${node.difficulty.toLocaleString()} 권장 영역에 군주 [${conceptLabel}]이(가) 나타났습니다!`,
-          })
-
-          if (equippedShadows.length > 0) {
-            turns.unshift({
-              turnNumber: 0,
-              waveNumber: 1,
-              waveLabel: 'Wave 1',
-              actorType: 'player',
-              actorId: 'system',
-              actorName: 'System',
-              targetType: 'player',
-              targetId: 'player',
-              targetName: s.hunter.name || '헌터',
-              skillId: 'shadow-shield',
-              skillName: '그림자 방패',
-              outcome: 'buff',
-              message: `🛡️ [그림자 방패] 그림자 군단(${equippedShadows.length}명)이 독립 유닛으로 전방에 배치되었습니다! 그림자가 살아있는 동안 적의 공격 타겟을 대신 받으며, 전멸 시 본체가 위험에 처합니다.`,
-            })
+          customGateDef = {
+            id: nodeId,
+            name: monarchData.name,
+            description: `${monarchData.name}과의 결전입니다.`,
+            rank: 'S',
+            recommendedLevel: 80,
+            recommendedPower: monarchData.recommendedCP,
+            monsterIds: [nodeId],
+            rewardTableId: 'reward-gate-s-basic',
+            failPenaltyId: 'penalty-gate-basic',
+            expiresInHours: 720,
           }
         } else {
-          combatLog = simulateGateWaveBattle({
-            playerName: s.hunter.name || '헌터',
-            playerStats,
-            monsters,
-            skills,
-            equippedShadows,
-            gateInstanceId: `worldmap-${nodeId}`,
-            battleId: `worldmap-battle-${nodeId}-${Date.now()}`,
-            initialActiveEffects,
-          })
+          const rank = node.difficultyRank || 'D'
+          const recommendedPower = node.difficulty || 1000
+          
+          let monsterIds = ['lazy-goblin']
+          if (rank === 'E') monsterIds = ['rift-rat', 'rift-stray']
+          else if (rank === 'D') monsterIds = ['lazy-goblin', 'sloth-brute']
+          else if (rank === 'C') monsterIds = ['forgetting-warden', 'fatigue-warden']
+          else if (rank === 'B') monsterIds = ['memory-tracker', 'memory-scout']
+          else if (rank === 'A') monsterIds = ['greed-warden', 'memory-scout']
+          else if (rank === 'S' || rank === 'National') monsterIds = ['forgetting-warden', 'greed-warden']
+
+          customGateDef = {
+            id: nodeId,
+            name: node.name || '심연의 균열',
+            description: `${node.name || '심연의 균열'}의 정화 작전입니다.`,
+            rank: (rank === 'National' ? 'S' : rank),
+            recommendedLevel: rank === 'E' ? 5 : rank === 'D' ? 15 : rank === 'C' ? 30 : rank === 'B' ? 45 : rank === 'A' ? 60 : 80,
+            recommendedPower: recommendedPower,
+            monsterIds: monsterIds,
+            rewardTableId: `reward-gate-${(rank === 'National' ? 's' : rank).toLowerCase()}-basic` || 'reward-gate-d-basic',
+            failPenaltyId: 'penalty-gate-basic',
+            expiresInHours: 72,
+          }
         }
 
-        // 보상 계산 (난이도 CP 비례 & 협력 페널티 트레이드오프 적용)
-        let baseGold = node.loveCall?.promisedReward.gold ?? Math.round((node.difficulty ?? 500) * 0.15)
-        let baseHunterXp = node.loveCall?.promisedReward.hunterXp ?? Math.round((node.difficulty ?? 500) * 0.12)
-        let baseEssence = node.loveCall?.promisedReward.shadowEssence ?? (node.isSGrade ? 5 : 2)
+        // 2) get().spawnGate(dynamicGateId, 'worldmap', helperHunterIds, customGateDef)
+        get().spawnGate(nodeId, 'worldmap', helperHunterIds, customGateDef)
+        set({ activeRiftNodeId: nodeId })
 
-        if (isMonarchId) {
-          baseGold = Math.round(node.difficulty * 1.5)
-          baseHunterXp = Math.round(node.difficulty * 1.2)
-          baseEssence = Math.round(node.difficulty * 0.001) * 3
-        }
-
-        const rewardRatio = Math.max(COOP_REWARD_MIN_RATIO, 1 - COOP_REWARD_PENALTY_PER_HELPER * helperCount)
-
-        const rewards = {
-          hunterXp: Math.round(baseHunterXp * rewardRatio),
-          gold: Math.round(baseGold * rewardRatio),
-          shadowEssence: Math.max(1, Math.round(baseEssence * rewardRatio)),
-          itemDropChance: node.isSGrade ? 0.35 : 0.15,
-        }
-
-        const worldResult: WorldBattleResult = {
-          outcome: combatLog.result as 'victory' | 'defeat' | 'draw',
-          nodeId,
-          gateName: node.name,
-          rewards,
-          helperHunterIds: activeHelpers.map(h => h.id),
-        }
-
-        const nextWorldBattle: WorldBattleSession = {
-          id: `worldmap-${nodeId}-${Date.now()}`,
-          nodeId,
-          gateName: node.name,
-          regionId: node.regionId,
-          difficulty: node.difficulty,
-          recommendedPower: node.difficulty,
-          monsterIds: monsters.map(m => m.id),
-          status: 'revealing',
-          logs: combatLog.turns,
-          result: worldResult,
-          showResult: false,
-          helperHunterIds: activeHelpers.map(h => h.id),
-        }
-
-        // 로그 연출 보강 (그림자 탱킹 로그 주입)
-        if (equippedShadows.length > 0 && !isMonarchId) {
-          const defPercent = `+${Math.round(WORLD_SHADOW_GUARD_DEF_FACTOR * equippedShadows.length * 100)}%`
-          const evaPercent = `+${Math.round(WORLD_SHADOW_GUARD_EVASION_FACTOR * equippedShadows.length * 100)}%`
-          const drPercent = `${Math.round(WORLD_SHADOW_GUARD_DR_FACTOR * 100)}%`
-
-          combatLog.turns.unshift(
-            createManualSystemLog(
-              `🛡️ [그림자 탱킹] 그림자 군단(${equippedShadows.length}명)이 전방에 배치되었습니다! 수호 장막이 작동하여 플레이어 방어력 ${defPercent}, 회피율 ${evaPercent}, 받는 피해 대미지 감쇄 ${drPercent}가 적용되어 즉사를 방지합니다.`,
-              0,
-              1,
-              createMonsterBattleActor(monsters[0])
-            )
-          )
-        }
-
-        // [L1-A] 협력 전투 연출 로그 주입
-        if (helperCount > 0 && !isMonarchId) {
-          const helperNames = activeHelpers.map(h => h.name).join(', ')
-          combatLog.turns.unshift(
-            createManualSystemLog(
-              `🤝 [협력 전투] ${node.regionId.toUpperCase()}의 헌터 [${helperNames}]이(가) 참전했습니다! (합산 전투력: ${helperPower}) 공격력 +${buffCoopAtk}, 방어력 +${buffCoopDef}, 대미지 감소 +${Math.round(drCoop * 100)}% 버프가 주입되었으나, 보상은 ${Math.round((1 - rewardRatio) * 100)}% 차감됩니다.`,
-              0,
-              1,
-              createMonsterBattleActor(monsters[0])
-            )
-          )
-        }
-
-        set({
-          activeWorldBattle: nextWorldBattle,
-          combatLogs: [{ ...combatLog, source: 'worldmap' as const }, ...s.combatLogs].slice(0, 20),
-          manualBattleSession: undefined,
-        })
+        // 3) get().startGateBattle()   // 자동
+        get().startGateBattle()
       },
 
-      resolveWorldBattle: () => {
-        const s = get()
-        const activeBattle = s.activeWorldBattle
-        if (!activeBattle || activeBattle.status !== 'revealing') return
+      resolveWorldBattle: () => {},
 
-        const result = activeBattle.result
-        if (!result) return
-        const nodeId = activeBattle.nodeId
-        const isVictory = result.outcome === 'victory'
+      resolveDirectWorldBattle: (combatLog, nodeId, helperHunterIds) => {},
+
+      cancelWorldBattle: () => set((s) => {
+        const activeGate = s.activeGate
+        const manualSession = s.manualBattleSession
+        if (!activeGate && (!manualSession || manualSession.source !== 'world_map')) return {}
+
+        const nodeId = activeGate?.gateId || manualSession?.gateInstanceId?.replace('worldmap-', '') || s.activeRiftNodeId
+        const today = todayKey()
+        const nextRetreats = nodeId ? { ...(s.worldBattleRetreats ?? {}), [nodeId]: today } : (s.worldBattleRetreats ?? {})
+
+        const node = nodeId ? ({
+          difficulty: 500,
+          deadline: 7,
+          daysRemaining: 7,
+          ...(s.livingWorld?.riftNodes[nodeId] || RIFT_NODES.find(n => n.id === nodeId))
+        } as RiftNode) : undefined
+        const nameLabel = node?.name || '균열'
+
+        return {
+          activeGate: undefined,
+          activeRiftNodeId: undefined,
+          manualBattleSession: undefined,
+          worldBattleRetreats: nextRetreats,
+          messages: [
+            ...s.messages,
+            {
+              id: uid(),
+              kind: 'info',
+              title: '전투 후퇴',
+              lines: [
+                "[" + nameLabel + "] 전투에서 안전하게 후퇴했습니다.",
+                '다행히 부상을 면했으나, 오늘 이 구역은 다시 진입할 수 없습니다.',
+              ],
+              createdAt: todayISO(),
+            }
+          ]
+        }
+      }),
+
+      resolveWorldGateBattleOutcome: (activeGate, gate, combatLog) => {
+        const s = get()
+        const nodeId = activeGate.gateId
+        const isVictory = combatLog.result === 'victory'
+        const isMonarchId = MONARCHS.some(m => m.id === nodeId) || nodeId === 'angel'
 
         let nextHunter = s.hunter
-        let nextItems = s.items
         let nextGold = s.gold ?? 0
         let nextShadowEssence = s.shadowEssence ?? 0
         const newMessages: SystemMessage[] = []
@@ -7582,15 +7612,38 @@ export const useGame = create<GameState>()(
         let updatedRiftNodes = s.livingWorld ? { ...s.livingWorld.riftNodes } : undefined
         let worldLogs = s.livingWorld ? [...s.livingWorld.eventLogs] : []
 
-        const isMonarchId = MONARCHS.some(m => m.id === nodeId) || nodeId === 'angel'
         let updatedActiveMonarchs = s.livingWorld?.activeMonarchs ? [...s.livingWorld.activeMonarchs] : undefined
         let nextHomeReachedMonarchId = s.livingWorld?.homeReachedMonarchId
         let nextAngelReady = s.livingWorld?.angelReady
 
         if (isVictory) {
-          const rewards = result.rewards
-          if (rewards.hunterXp && rewards.hunterXp > 0) {
-            const xpResult = applyXp(s.hunter, rewards.hunterXp, 'challenge')
+          // 보상 계산 (난이도 CP 비례 & 협력 페널티 트레이드오프 적용)
+          const recommendedPower = gate.recommendedPower || 1000
+          const helperHunterIds = activeGate.helperHunterIds || []
+          const helperCount = helperHunterIds.length
+
+          let baseGold = 0
+          let baseHunterXp = 0
+          let baseEssence = 0
+
+          if (isMonarchId) {
+            baseGold = Math.round(recommendedPower * 1.5)
+            baseHunterXp = Math.round(recommendedPower * 1.2)
+            baseEssence = Math.round(recommendedPower * 0.001) * 3
+          } else {
+            const node = s.livingWorld?.riftNodes[nodeId]
+            baseGold = node?.loveCall?.promisedReward.gold ?? Math.round(recommendedPower * 0.15)
+            baseHunterXp = node?.loveCall?.promisedReward.hunterXp ?? Math.round(recommendedPower * 0.12)
+            baseEssence = node?.loveCall?.promisedReward.shadowEssence ?? (gate.rank === 'S' ? 5 : 2)
+          }
+
+          const rewardRatio = Math.max(COOP_REWARD_MIN_RATIO, 1 - COOP_REWARD_PENALTY_PER_HELPER * helperCount)
+          const finalGold = Math.round(baseGold * rewardRatio)
+          const finalXp = Math.round(baseHunterXp * rewardRatio)
+          const finalEssence = Math.max(1, Math.round(baseEssence * rewardRatio))
+
+          if (finalXp > 0) {
+            const xpResult = applyXp(s.hunter, finalXp, 'challenge')
             nextHunter = xpResult.hunter
             if (xpResult.outcome?.leveledUp) {
               newMessages.push({
@@ -7606,38 +7659,21 @@ export const useGame = create<GameState>()(
               })
             }
           }
-          if (rewards.shadowEssence && rewards.shadowEssence > 0) {
-            nextShadowEssence += rewards.shadowEssence
-          }
-          if (rewards.gold && rewards.gold > 0) {
-            nextGold += rewards.gold
-          }
-          if (rewards.itemDropChance && Math.random() < rewards.itemDropChance) {
-            const poolItem = ITEM_POOL[Math.floor(Math.random() * ITEM_POOL.length)]
-            if (poolItem) {
-              const item: Item = { ...poolItem, id: uid(), acquiredAt: todayISO() }
-              nextItems = [...nextItems, item]
-              newMessages.push({
-                id: uid(),
-                kind: 'item',
-                title: '아이템 획득',
-                lines: [`${item.icon}  ${item.name}`, item.description],
-                createdAt: todayISO(),
-              })
-            }
-          }
+
+          nextGold += finalGold
+          nextShadowEssence += finalEssence
 
           newMessages.push({
             id: uid(),
             kind: 'quest',
-            title: isMonarchId ? `군주 격퇴 성공` : `균열 정화 성공`,
+            title: isMonarchId ? '군주 격퇴 성공' : '균열 정화 성공',
             lines: [
               isMonarchId 
-                ? `[${activeBattle.gateName}] 군주 격퇴에 성공했습니다!`
-                : `[${activeBattle.gateName}] 균열 정화에 성공했습니다!`,
-              ...(rewards.hunterXp ? [`XP +${rewards.hunterXp}`] : []),
-              ...(rewards.gold ? [`Gold +${rewards.gold}`] : []),
-              ...(rewards.shadowEssence ? [`정수 +${rewards.shadowEssence}`] : []),
+                ? `[${gate.name}] 군주 격퇴에 성공했습니다!`
+                : `[${gate.name}] 균열 정화에 성공했습니다!`,
+              `XP +${finalXp}`,
+              `Gold +${finalGold}`,
+              `정수 +${finalEssence}`,
             ],
             createdAt: todayISO(),
           })
@@ -7670,15 +7706,16 @@ export const useGame = create<GameState>()(
           }
 
           let nextCoopCount = s.livingWorld?.coopCount ?? 0
-          if (activeBattle.helperHunterIds && activeBattle.helperHunterIds.length > 0) {
+          if (helperHunterIds.length > 0) {
             nextCoopCount += 1
           }
 
           // [L1-A] 협력 헌터 성장 및 러브콜 해제
-          if (activeBattle.helperHunterIds && activeBattle.helperHunterIds.length > 0 && s.livingWorld && updatedNamedHunters && updatedRiftNodes) {
-            const rName = RIFT_REGIONS.find(r => r.id === activeBattle.regionId)?.name ?? activeBattle.regionId.toUpperCase()
+          if (helperHunterIds.length > 0 && s.livingWorld && updatedNamedHunters && updatedRiftNodes) {
+            const nodeStatus = s.livingWorld.riftNodes[nodeId]
+            const rName = RIFT_REGIONS.find(r => r.id === nodeStatus?.regionId)?.name ?? '해외'
             
-            for (const hid of activeBattle.helperHunterIds) {
+            for (const hid of helperHunterIds) {
               const hunter = { ...updatedNamedHunters[hid] }
               if (hunter && hunter.status === 'active') {
                 const bonusMult = 1.02 + Math.random() * 0.03
@@ -7693,9 +7730,9 @@ export const useGame = create<GameState>()(
             }
 
             if (updatedRiftNodes[nodeId]) {
-              const node = { ...updatedRiftNodes[nodeId] }
-              node.loveCall = undefined
-              updatedRiftNodes[nodeId] = node
+              const nodeVal = { ...updatedRiftNodes[nodeId] }
+              nodeVal.loveCall = undefined
+              updatedRiftNodes[nodeId] = nodeVal
             }
           }
 
@@ -7704,7 +7741,6 @@ export const useGame = create<GameState>()(
 
           set({
             hunter: nextHunter,
-            items: nextItems,
             gold: nextGold,
             shadowEssence: nextShadowEssence,
             livingWorld: s.livingWorld ? {
@@ -7718,219 +7754,25 @@ export const useGame = create<GameState>()(
               endingState: nodeId === 'angel' ? 'victory' : s.livingWorld.endingState,
               coopCount: nextCoopCount,
             } : undefined,
-            activeWorldBattle: {
-              ...activeBattle,
-              status: 'resolved',
-              showResult: true,
-            },
             messages: [...s.messages, ...newMessages],
           })
         } else {
-          // 패배 시: 기존 게이트 패배의 부상 규칙 동일 적용
-          if (isMonarchId && s.hardcoreState?.enabled) {
-            const monarchName = nodeId === 'angel' ? '지고의 심판자(천사)' : (MONARCHS.find(m => m.id === nodeId)?.name || nodeId)
-            set(createHardcoreDeathResetState(s, 'player_death', monarchName))
-            return
+          // 패배 시
+          if (isMonarchId && s.livingWorld) {
+            const worldLogs = [...s.livingWorld.eventLogs]
+            worldLogs.push(`[Day ${s.livingWorld.day}] ⚠️ [군주 토벌 실패] 플레이어가 군주 [${gate.name}] 토벌에 실패하고 부상을 입은 채 후퇴했습니다.`)
+            set({
+              livingWorld: {
+                ...s.livingWorld,
+                eventLogs: worldLogs
+              }
+            })
           }
-
-          const now = new Date()
-          const injuredUntil = new Date(now.getTime() + 6 * 60 * 60 * 1000).toISOString()
-          const nextGateStatus = {
-            ...s.gateStatus,
-            injuredUntil,
-            recoveryQuestProgress: 0,
-            recoveryQuestRequired: 3,
-          }
-
-          newMessages.push({
-            id: uid(),
-            kind: 'info',
-            title: isMonarchId ? `군주 격퇴 실패` : `균열 공략 실패`,
-            lines: [
-              result.outcome === 'defeat'
-                ? `[${activeBattle.gateName}] 공략에 실패했습니다.`
-                : `[${activeBattle.gateName}] 공략 시간 초과.`,
-              '6시간 부상을 입었습니다. 퀘스트 3개 완료로 회복하거나 대기하십시오.',
-            ],
-            createdAt: todayISO(),
-          })
-
-          // [L1-A] 패배 시 협력 헌터 중 1명 부상 처리
-          if (activeBattle.helperHunterIds && activeBattle.helperHunterIds.length > 0 && s.livingWorld && updatedNamedHunters) {
-            const rName = RIFT_REGIONS.find(r => r.id === activeBattle.regionId)?.name ?? activeBattle.regionId.toUpperCase()
-            const activeHelpers = activeBattle.helperHunterIds.filter(hid => updatedNamedHunters![hid]?.status === 'active')
-            
-            if (activeHelpers.length > 0) {
-              const targetHid = activeHelpers[Math.floor(Math.random() * activeHelpers.length)]
-              const hunter = { ...updatedNamedHunters[targetHid] }
-              hunter.status = 'injured'
-              hunter.injuredTurns = 3
-              updatedNamedHunters[targetHid] = hunter
-
-              worldLogs.push(`[Day ${s.livingWorld.day}] 🩹 [협력 원정 실패] [${activeBattle.gateName}] 공략 실패 과정에서 ${rName}의 [${hunter.name}] 헌터가 심각한 부상을 입어 3일간 요양합니다.`)
-              newMessages.push({
-                id: uid(),
-                kind: 'info',
-                title: '협력자 부상',
-                lines: [`공략 실패 중 함께 싸운 헌터 [${hunter.name}]이(가) 심한 부상을 입었습니다.`],
-                createdAt: todayISO(),
-              })
-            }
-          }
-
-          set({
-            gateStatus: nextGateStatus,
-            livingWorld: s.livingWorld ? {
-              ...s.livingWorld,
-              namedHunters: updatedNamedHunters ?? s.livingWorld.namedHunters,
-              eventLogs: worldLogs,
-            } : undefined,
-            activeWorldBattle: {
-              ...activeBattle,
-              status: 'resolved',
-              showResult: true,
-            },
-            messages: [...s.messages, ...newMessages],
-          })
         }
       },
-
-      resolveDirectWorldBattle: (combatLog, nodeId, helperHunterIds) => {
-        const s = get()
-        const outcome = combatLog.result === 'victory' ? 'victory' : (combatLog.result === 'defeat' ? 'defeat' : 'draw')
-
-        const isMonarchId = MONARCHS.some(m => m.id === nodeId) || nodeId === 'angel'
-        let monarchRegionId = 'kr'
-        if (isMonarchId && s.livingWorld?.activeMonarchs) {
-          const activeMon = s.livingWorld.activeMonarchs.find(m => m.monarchId === nodeId)
-          if (activeMon && activeMon.occupiedRegionIds.length > 0) {
-            monarchRegionId = activeMon.occupiedRegionIds[0]
-          }
-        }
-
-        let node: RiftNode
-        if (isMonarchId) {
-          const monarchData = nodeId === 'angel' ? FINAL_ANGEL : MONARCHS.find(m => m.id === nodeId)!
-          node = {
-            id: monarchData.id,
-            regionId: monarchRegionId,
-            name: monarchData.name,
-            x: 50,
-            y: 50,
-            status: 'active',
-            gateDefId: monarchData.id,
-            difficultyRank: 'S',
-            difficulty: monarchData.recommendedCP,
-            deadline: 999,
-            daysRemaining: 999,
-            isSGrade: true
-          }
-        } else {
-          node = {
-            difficulty: 500,
-            deadline: 7,
-            daysRemaining: 7,
-            ...(s.livingWorld?.riftNodes[nodeId] || RIFT_NODES.find(n => n.id === nodeId))
-          } as RiftNode
-          if (!node) return
-        }
-
-        // [L1-A] NPC 협력에 따른 보상 분배 트레이드오프 계산
-        let activeHelpers: NamedHunter[] = []
-        if (helperHunterIds && helperHunterIds.length > 0 && s.livingWorld) {
-          for (const hid of helperHunterIds) {
-            const h = s.livingWorld.namedHunters[hid]
-            if (h && h.status === 'active') {
-              activeHelpers.push(h)
-            }
-          }
-        }
-        const helperCount = activeHelpers.length
-
-        const baseGold = node.loveCall?.promisedReward.gold ?? Math.round((node.difficulty ?? 500) * 0.15)
-        const baseHunterXp = node.loveCall?.promisedReward.hunterXp ?? Math.round((node.difficulty ?? 500) * 0.12)
-        const baseEssence = node.loveCall?.promisedReward.shadowEssence ?? (node.isSGrade ? 5 : 2)
-
-        const rewardRatio = Math.max(COOP_REWARD_MIN_RATIO, 1 - COOP_REWARD_PENALTY_PER_HELPER * helperCount)
-
-        const rewards = {
-          hunterXp: Math.round(baseHunterXp * rewardRatio),
-          gold: Math.round(baseGold * rewardRatio),
-          shadowEssence: Math.max(1, Math.round(baseEssence * rewardRatio)),
-          itemDropChance: node.isSGrade ? 0.35 : 0.15,
-        }
-
-        const worldResult: WorldBattleResult = {
-          outcome,
-          nodeId,
-          gateName: node.name,
-          rewards,
-          helperHunterIds: activeHelpers.map(h => h.id),
-        }
-
-        const nextWorldBattle: WorldBattleSession = {
-          id: combatLog.battleId,
-          nodeId,
-          gateName: node.name,
-          regionId: node.regionId,
-          difficulty: node.difficulty,
-          recommendedPower: node.difficulty,
-          monsterIds: [node.gateDefId],
-          status: 'revealing',
-          logs: combatLog.turns,
-          result: worldResult,
-          showResult: false,
-          helperHunterIds: activeHelpers.map(h => h.id),
-        }
-
-        set({
-          activeWorldBattle: nextWorldBattle,
-          combatLogs: [{ ...combatLog, source: 'worldmap' as const }, ...s.combatLogs].slice(0, 20),
-        })
-        get().resolveWorldBattle()
-      },
-
-      cancelWorldBattle: () => set((s) => {
-        const activeBattle = s.activeWorldBattle
-        const manualSession = s.manualBattleSession
-        if (!activeBattle && (!manualSession || manualSession.source !== 'world_map')) return {}
-
-        // 후퇴 시 오늘 하루 다시 진입 불가능하게 가드 설정
-        const nodeId = activeBattle?.nodeId || manualSession?.gateInstanceId?.replace('worldmap-', '')
-        const today = todayKey()
-        const nextRetreats = nodeId ? { ...(s.worldBattleRetreats ?? {}), [nodeId]: today } : (s.worldBattleRetreats ?? {})
-
-        const node = nodeId ? ({
-          difficulty: 500,
-          deadline: 7,
-          daysRemaining: 7,
-          ...(s.livingWorld?.riftNodes[nodeId] || RIFT_NODES.find(n => n.id === nodeId))
-        } as RiftNode) : undefined
-        const nameLabel = node?.name || '균열'
-
-        return {
-          activeWorldBattle: undefined,
-          manualBattleSession: undefined,
-          worldBattleRetreats: nextRetreats,
-          messages: [
-            ...s.messages,
-            {
-              id: uid(),
-              kind: 'info',
-              title: '전투 후퇴',
-              lines: [
-                `[${nameLabel}] 전투에서 안전하게 후퇴했습니다.`,
-                '다행히 부상을 면했으나, 오늘 이 구역은 다시 진입할 수 없습니다.',
-              ],
-              createdAt: todayISO(),
-            }
-          ]
-        }
-      }),
 
       startWorldManualBattle: (nodeId, helperHunterIds) => {
         const s = get()
-
         const isMonarchId = MONARCHS.some(m => m.id === nodeId) || nodeId === 'angel'
         let monarchRegionId = 'kr'
         if (isMonarchId && s.livingWorld?.activeMonarchs) {
@@ -7940,7 +7782,7 @@ export const useGame = create<GameState>()(
           }
         }
 
-        let node: RiftNode
+        let node
         if (isMonarchId) {
           const monarchData = nodeId === 'angel' ? FINAL_ANGEL : MONARCHS.find(m => m.id === nodeId)!
           node = {
@@ -7963,7 +7805,7 @@ export const useGame = create<GameState>()(
             deadline: 7,
             daysRemaining: 7,
             ...(s.livingWorld?.riftNodes[nodeId] || RIFT_NODES.find(n => n.id === nodeId))
-          } as RiftNode
+          }
           if (!node || (s.riftNodes[nodeId] ?? node.status) !== 'active') return
         }
 
@@ -8002,672 +7844,63 @@ export const useGame = create<GameState>()(
           return
         }
 
-        let monsters: MonsterDefinition[]
+        // 1) nodeId로 동적 게이트 정의 구성 (한국 게이트 or 군주)
+        let customGateDef
         if (isMonarchId) {
           const monarchData = nodeId === 'angel' ? FINAL_ANGEL : MONARCHS.find(m => m.id === nodeId)!
-          const cp = monarchData.recommendedCP
-          const stats = {
-            maxHp: Math.round(cp * 0.45),
-            atk: Math.round(cp * 0.12),
-            def: Math.round(cp * 0.04),
-            speed: Math.round(20 + cp * 0.0001),
-            critRate: 0.15,
-            accuracy: 0.95,
-            evasionRate: 0.10
+          customGateDef = {
+            id: nodeId,
+            name: monarchData.name,
+            description: `${monarchData.name}과의 결전입니다.`,
+            rank: 'S',
+            recommendedLevel: 80,
+            recommendedPower: monarchData.recommendedCP,
+            monsterIds: [nodeId],
+            rewardTableId: 'reward-gate-s-basic',
+            failPenaltyId: 'penalty-gate-basic',
+            expiresInHours: 720,
           }
-          monsters = [
-            {
-              id: monarchData.id,
-              name: monarchData.name,
-              description: monarchData.concept,
-              rank: 'S',
-              stats,
-              skillIds: ['monster-rift-scratch', 'monster-lazy-curse', 'monster-memory-fog']
-            }
-          ]
         } else {
-          const floor = Math.max(1, Math.round(((node.difficulty ?? 500) - 200) / 80))
-          monsters = getTowerMonstersForFloor(floor)
-        }
-        if (monsters.length === 0) return
-        const monsterDef = monsters[0]
-        if (!monsterDef) return
+          const rank = node.difficultyRank || 'D'
+          const recommendedPower = node.difficulty || 1000
+          
+          let monsterIds = ['lazy-goblin']
+          if (rank === 'E') monsterIds = ['rift-rat', 'rift-stray']
+          else if (rank === 'D') monsterIds = ['lazy-goblin', 'sloth-brute']
+          else if (rank === 'C') monsterIds = ['forgetting-warden', 'fatigue-warden']
+          else if (rank === 'B') monsterIds = ['memory-tracker', 'memory-scout']
+          else if (rank === 'A') monsterIds = ['greed-warden', 'memory-scout']
+          else if (rank === 'S' || rank === 'National') monsterIds = ['forgetting-warden', 'greed-warden']
 
-        const equippedItems = getEquippedItems(s.items, s.equipment)
-        const equippedShadows = getEquippedShadows(s.ownedShadows, s.equippedShadowIds, s.hunter)
-        const shadowStatBonuses = getEquippedShadowStatBonuses(equippedShadows)
-        const combatStatsWithShadows = { ...s.hunter.stats }
-        for (const [stat, value] of Object.entries(shadowStatBonuses)) {
-          combatStatsWithShadows[stat as StatKey] = roundStatValue(combatStatsWithShadows[stat as StatKey] + (value ?? 0))
-        }
-        const activeJobId = s.hunter.activeJobId || s.hunter.jobId
-        const jobLevel = s.hunter.jobs?.[activeJobId]?.level ?? 1
-        const playerSkills = getPlayerCombatSkills({
-          jobId: activeJobId,
-          jobLevel,
-          equippedItems,
-          allSkills: SKILL_DEFINITIONS,
-          includeBasicKit: true,
-        })
-        const playerStats = calculatePlayerCombatStats({
-          level: s.hunter.level,
-          stats: combatStatsWithShadows,
-          equippedItems,
-          activeConsumableEffects: s.activeConsumableEffects,
-          jobId: activeJobId,
-          skills: playerSkills,
-        })
-
-        const player = createPlayerBattleActor(s.hunter.name || '헌터', playerStats, playerSkills)
-        const monster = createMonsterBattleActor(monsterDef)
-
-        // 2순위 그림자 탱킹 (수호 효과 버프 적용)
-        const initialActiveEffects: ActiveCombatEffect[] = []
-        if (equippedShadows.length > 0) {
-          if (!isMonarchId) {
-            const buffDef = Math.round(playerStats.def * WORLD_SHADOW_GUARD_DEF_FACTOR * equippedShadows.length)
-            const buffEvasion = WORLD_SHADOW_GUARD_EVASION_FACTOR * equippedShadows.length
-            initialActiveEffects.push(
-              {
-                sourceSkillId: 'world-map-shadow-guard-def',
-                kind: 'stat',
-                stat: 'def',
-                value: buffDef,
-                remainingTurns: 999,
-                targetId: 'player',
-              },
-              {
-                sourceSkillId: 'world-map-shadow-guard-eva',
-                kind: 'stat',
-                stat: 'evasionRate',
-                value: buffEvasion,
-                remainingTurns: 999,
-                targetId: 'player',
-              },
-              {
-                sourceSkillId: 'world-map-shadow-guard-dr',
-                kind: 'damage_reduction',
-                value: WORLD_SHADOW_GUARD_DR_FACTOR,
-                remainingTurns: 999,
-                targetId: 'player',
-              }
-            )
+          customGateDef = {
+            id: nodeId,
+            name: node.name || '심연의 균열',
+            description: `${node.name || '심연의 균열'}의 정화 작전입니다.`,
+            rank: (rank === 'National' ? 'S' : rank),
+            recommendedLevel: rank === 'E' ? 5 : rank === 'D' ? 15 : rank === 'C' ? 30 : rank === 'B' ? 45 : rank === 'A' ? 60 : 80,
+            recommendedPower: recommendedPower,
+            monsterIds: monsterIds,
+            rewardTableId: `reward-gate-${(rank === 'National' ? 's' : rank).toLowerCase()}-basic` || 'reward-gate-d-basic',
+            failPenaltyId: 'penalty-gate-basic',
+            expiresInHours: 72,
           }
         }
 
-        // [L1-A] NPC 협력 버프 주입
-        let activeHelpers: NamedHunter[] = []
-        let helperPower = 0
-        if (helperHunterIds && helperHunterIds.length > 0 && s.livingWorld) {
-          for (const hid of helperHunterIds) {
-            const h = s.livingWorld.namedHunters[hid]
-            if (h && h.status === 'active') {
-              activeHelpers.push(h)
-              helperPower += h.power
-            }
-          }
-        }
-        const helperCount = activeHelpers.length
+        // 2) get().spawnGate(dynamicGateId, 'worldmap', helperHunterIds, customGateDef)
+        get().spawnGate(nodeId, 'worldmap', helperHunterIds, customGateDef)
+        set({ activeRiftNodeId: nodeId })
 
-        let buffCoopAtk = 0
-        let buffCoopDef = 0
-        let drCoop = 0
-        if (helperCount > 0) {
-          buffCoopAtk = Math.round(COOP_HELP_ATK_FACTOR * helperPower)
-          buffCoopDef = Math.round(COOP_HELP_DEF_FACTOR * helperPower)
-          drCoop = Math.min(COOP_HELP_DR_CAP, COOP_HELP_DR_FACTOR * helperCount)
-
-          if (buffCoopAtk > 0) {
-            initialActiveEffects.push({
-              sourceSkillId: 'world-map-coop-atk',
-              kind: 'stat',
-              stat: 'atk',
-              value: buffCoopAtk,
-              remainingTurns: 999,
-              targetId: 'player',
-            })
-          }
-          if (buffCoopDef > 0) {
-            initialActiveEffects.push({
-              sourceSkillId: 'world-map-coop-def',
-              kind: 'stat',
-              stat: 'def',
-              value: buffCoopDef,
-              remainingTurns: 999,
-              targetId: 'player',
-            })
-          }
-          if (drCoop > 0) {
-            initialActiveEffects.push({
-              sourceSkillId: 'world-map-coop-dr',
-              kind: 'damage_reduction',
-              value: drCoop,
-              remainingTurns: 999,
-              targetId: 'player',
-            })
-          }
-        }
-
-        const logs: BattleTurn[] = []
-        if (equippedShadows.length > 0) {
-          const defPercent = `+${Math.round(WORLD_SHADOW_GUARD_DEF_FACTOR * equippedShadows.length * 100)}%`
-          const evaPercent = `+${Math.round(WORLD_SHADOW_GUARD_EVASION_FACTOR * equippedShadows.length * 100)}%`
-          const drPercent = `${Math.round(WORLD_SHADOW_GUARD_DR_FACTOR * 100)}%`
-
-          logs.push(
-            createManualSystemLog(
-              `🛡️ [그림자 탱킹] 그림자 군단이 전방에 배치되어 엄호하고 있습니다! 플레이어의 방어력 ${defPercent}, 회피율 ${evaPercent}, 받는 피해 대미지 감쇄 ${drPercent}가 적용되어 즉사를 방지합니다.`,
-              0,
-              1,
-              monster
-            )
-          )
-        }
-
-        // [L1-A] 협력 전투 연출 로그 주입
-        if (helperCount > 0) {
-          const helperNames = activeHelpers.map(h => h.name).join(', ')
-          const rewardRatio = Math.max(COOP_REWARD_MIN_RATIO, 1 - COOP_REWARD_PENALTY_PER_HELPER * helperCount)
-          logs.push(
-            createManualSystemLog(
-              `🤝 [협력 전투] ${node.regionId.toUpperCase()}의 헌터 [${helperNames}]이(가) 참전했습니다! (합산 전투력: ${helperPower}) 공격력 +${buffCoopAtk}, 방어력 +${buffCoopDef}, 대미지 감소 +${Math.round(drCoop * 100)}% 버프가 주입되었으나, 보상은 ${Math.round((1 - rewardRatio) * 100)}% 차감됩니다.`,
-              0,
-              1,
-              monster
-            )
-          )
-        }
-
-        set({
-          manualBattleSession: {
-            gateId: monsterDef.id,
-            gateName: node.name,
-            gateInstanceId: `worldmap-${nodeId}`,
-            waveIndex: 0,
-            turn: 1,
-            maxTurns: 200,
-            player: toManualCombatant(player),
-            monster: toManualCombatant(monster),
-            remainingMonsterIds: [],
-            cooldowns: {},
-            monsterCooldowns: {},
-            activeEffects: initialActiveEffects,
-            consumableEffects: [],
-            usedConsumableItemIds: [],
-            usedConsumableEffectTypes: [],
-            consumableUseCount: 0,
-            logs,
-            startedAt: new Date().toISOString(),
-            source: 'world_map',
-            helperHunterIds: activeHelpers.map(h => h.id),
-          },
-          activeWorldBattle: undefined,
-        })
+        // 3) get().startManualGateBattle(dynamicGateId)
+        get().startManualGateBattle(nodeId)
       },
 
-      performWorldManualBattleAction: (action) => {
-        if (action.type === 'auto_finish') {
-          get().switchWorldManualBattleToAuto()
-          return
-        }
-
-        const s = get()
-        const session = s.manualBattleSession
-        if (!session || session.result || session.source !== 'world_map') return
-
-        const nodeId = session.gateInstanceId.replace('worldmap-', '')
-        const node = {
-          difficulty: 500,
-          deadline: 7,
-          daysRemaining: 7,
-          ...(s.livingWorld?.riftNodes[nodeId] || RIFT_NODES.find(n => n.id === nodeId))
-        } as RiftNode
-        if (!node) return
-
-        const floor = Math.max(1, Math.round(((node.difficulty ?? 500) - 200) / 80))
-        const monsters = getTowerMonstersForFloor(floor)
-        const monsterDef = monsters[0]
-        if (!monsterDef) return
-
-        const equippedItems = getEquippedItems(s.items, s.equipment)
-        const equippedShadows = getEquippedShadows(s.ownedShadows, s.equippedShadowIds, s.hunter)
-        const activeJobId = s.hunter.activeJobId || s.hunter.jobId
-        const jobLevel = s.hunter.jobs?.[activeJobId]?.level ?? 1
-        const playerSkills = getPlayerCombatSkills({
-          jobId: activeJobId,
-          jobLevel,
-          equippedItems,
-          allSkills: SKILL_DEFINITIONS,
-          includeBasicKit: true,
-        })
-        const playerSkillIds = ensureBasicAttack(playerSkills)
-          .filter(isHunterCombatSkill)
-          .map(skill => skill.id)
-        const monsterSkillIds = Array.from(new Set([BASIC_ATTACK_SKILL.id, ...monsterDef.skillIds]))
-        const monsterSkills = SKILL_DEFINITIONS.filter(skill => skill.ownerType === 'monster' && monsterSkillIds.includes(skill.id))
-        const allSkills = ensureBasicAttack([...playerSkills, ...monsterSkills])
-
-        let player = decrementCooldowns(toBattleActor(session.player, 'player', 'player', playerSkillIds, session.cooldowns))
-        let monster = decrementCooldowns(toBattleActor(session.monster, 'monster', monsterDef.id, monsterSkillIds, session.monsterCooldowns))
-        let activeEffects: ActiveCombatEffect[] = [...session.activeEffects]
-        let logs: BattleTurn[] = [...session.logs]
-        let nextItems = s.items
-        let result: CombatLog['result'] | undefined
-        let shadowPhase: 'player_after_action' | 'player_defend' = 'player_after_action'
-        let playerUsedSkill = false
-
-        if (action.type === 'use_consumable') {
-          const item = s.items.find(candidate => candidate.id === action.itemId)
-          const failureReason = getManualConsumableFailureReason(session, item)
-          if (failureReason || !item) {
-            logs.push(createManualSystemLog(
-              `소모품을 사용할 수 없습니다: ${failureReason ?? '아이템을 찾을 수 없습니다.'}`,
-              logs.length + 1,
-              1,
-              monster
-            ))
-            set({
-              manualBattleSession: { ...session, logs },
-            })
-            return
-          }
-
-          const usableEffects = item.consumableEffects?.filter(isManualBattleConsumableEffect) ?? []
-          let nextActiveEffects = activeEffects
-          for (const effect of usableEffects) {
-            for (const combatEffect of createManualConsumableCombatEffects(effect, item)) {
-              nextActiveEffects = applyOrRefreshCombatEffect(nextActiveEffects, combatEffect)
-            }
-          }
-          activeEffects = nextActiveEffects
-          logs.push(createManualConsumableUseLog(
-            player,
-            monster,
-            formatManualConsumableUseMessage(item, usableEffects),
-            logs.length + 1,
-            1
-          ))
-
-          const usedConsumableEffectTypes = Array.from(new Set([
-            ...session.usedConsumableEffectTypes,
-            ...usableEffects.map(effect => effect.type),
-          ]))
-          nextItems = s.items.filter(candidate => candidate.id !== item.id)
-          session.usedConsumableItemIds = [...session.usedConsumableItemIds, item.id]
-          session.usedConsumableEffectTypes = usedConsumableEffectTypes
-          session.consumableUseCount += 1
-        } else if (action.type === 'defend') {
-          shadowPhase = 'player_defend'
-          activeEffects = applyOrRefreshCombatEffect(activeEffects, {
-            sourceSkillId: 'manual-defend',
-            kind: 'damage_reduction',
-            value: 0.35,
-            remainingTurns: 1,
-            targetId: 'player',
-          })
-          logs.push(createDefendLog(player, monster, logs.length + 1, 1))
-        } else if (action.type === 'skill') {
-          const skill = playerSkills.find(sk => sk.id === action.skillId)
-          if (!skill || (player.cooldowns[skill.id] ?? 0) > 0) {
-            logs.push(createManualSystemLog(
-              `스킬을 시전할 수 없습니다.`,
-              logs.length + 1,
-              1,
-              monster
-            ))
-            set({
-              manualBattleSession: { ...session, logs },
-            })
-            return
-          }
-
-          playerUsedSkill = skill.id !== BASIC_ATTACK_SKILL.id
-          const resolved = resolveAction({
-            actor: player,
-            target: monster,
-            skill,
-            activeEffects,
-            rng: Math.random,
-            turnNumber: logs.length + 1,
-            waveNumber: 1,
-            waveLabel: 'Wave 1',
-          })
-          player = {
-            ...resolved.actor,
-            cooldowns: {
-              ...resolved.actor.cooldowns,
-              [skill.id]: getSkillCooldownTurns(skill),
-            },
-          }
-          monster = resolved.target
-          activeEffects = resolved.activeEffects
-          logs.push(resolved.log)
-        }
-
-        if (monster.hp <= 0) {
-          logs.push(createManualSystemLog(
-            `[${monster.name}]을 쓰러뜨렸습니다. 전투 승리!`,
-            logs.length + 1,
-            1,
-            monster
-          ))
-          result = 'victory'
-        }
-
-        // 그림자 협동 행동 페이즈
-        if (!result && player.hp > 0 && monster.hp > 0) {
-          const shadowResolved = resolveShadowSupportActions({
-            shadows: equippedShadows,
-            player,
-            monster,
-            activeEffects,
-            rng: Math.random,
-            turnNumber: getManualActionCount(logs),
-            waveNumber: 1,
-            waveLabel: 'Wave 1',
-            phase: shadowPhase,
-            playerUsedSkill,
-          })
-          monster = shadowResolved.monster
-          activeEffects = shadowResolved.activeEffects
-          logs.push(...shadowResolved.logs)
-        }
-
-        if (!result && monster.hp <= 0) {
-          logs.push(createManualSystemLog(
-            `[${monster.name}]을 쓰러뜨렸습니다. 전투 승리!`,
-            logs.length + 1,
-            1,
-            monster
-          ))
-          result = 'victory'
-        }
-
-        // 적 몬스터 행동 페이즈
-        if (!result && player.hp > 0 && monster.hp > 0) {
-          monster = decrementCooldowns(monster)
-          const monsterSkills = allSkills.filter(sk => sk.ownerType === 'common' || sk.ownerType === 'monster')
-          const skill = chooseSkill(
-            monster,
-            monsterSkills,
-            buildBattleSkillContext(monster, player, activeEffects, getManualActionCount(logs) + 1)
-          )
-          const resolved = resolveAction({
-            actor: monster,
-            target: player,
-            skill,
-            activeEffects,
-            rng: Math.random,
-            turnNumber: logs.length + 1,
-            waveNumber: 1,
-            waveLabel: 'Wave 1',
-          })
-          monster = {
-            ...resolved.actor,
-            cooldowns: {
-              ...resolved.actor.cooldowns,
-              [skill.id]: getSkillCooldownTurns(skill),
-            },
-          }
-          player = resolved.target
-          activeEffects = resolved.activeEffects
-          logs.push(resolved.log)
-        }
-
-        if (!result && player.hp <= 0) {
-          result = 'defeat'
-        }
-
-        if (!result && getManualActionCount(logs) >= session.maxTurns) {
-          result = 'draw'
-        }
-
-        if (!result) {
-          activeEffects = tickRoundEffects(activeEffects)
-        }
-
-        if (result) {
-          const combatLog: CombatLog = {
-            battleId: `worldmap-manual-${nodeId}-${Date.now()}`,
-            gateInstanceId: `worldmap-${nodeId}`,
-            result,
-            turns: logs,
-            totalTurns: getManualActionCount(logs),
-            playerHpRemaining: Math.max(0, player.hp),
-            rewards: [],
-            penaltyApplied: undefined,
-            totalWaves: 1,
-            clearedWaves: result === 'victory' ? 1 : 0,
-            source: 'worldmap',
-          }
-
-          set({
-            items: nextItems,
-            manualBattleSession: {
-              ...session,
-              turn: getManualActionCount(logs) + 1,
-              player: toManualCombatant(player),
-              monster: toManualCombatant(monster),
-              cooldowns: player.cooldowns,
-              monsterCooldowns: monster.cooldowns,
-              activeEffects,
-              logs,
-              result,
-            },
-          })
-
-          get().resolveDirectWorldBattle(combatLog, nodeId, session.helperHunterIds)
-        } else {
-          set({
-            items: nextItems,
-            manualBattleSession: {
-              ...session,
-              turn: getManualActionCount(logs) + 1,
-              player: toManualCombatant(player),
-              monster: toManualCombatant(monster),
-              cooldowns: player.cooldowns,
-              monsterCooldowns: monster.cooldowns,
-              activeEffects,
-              logs,
-            },
-          })
-        }
-      },
+      performWorldManualBattleAction: (action) => {},
 
       cancelWorldManualBattle: () => {
         get().cancelWorldBattle()
       },
 
-      switchWorldManualBattleToAuto: () => {
-        const s = get()
-        const session = s.manualBattleSession
-        if (!session || session.result || session.source !== 'world_map') return
-
-        const nodeId = session.gateInstanceId.replace('worldmap-', '')
-        const node = {
-          difficulty: 500,
-          deadline: 7,
-          daysRemaining: 7,
-          ...(s.livingWorld?.riftNodes[nodeId] || RIFT_NODES.find(n => n.id === nodeId))
-        } as RiftNode
-        if (!node) return
-
-        const floor = Math.max(1, Math.round(((node.difficulty ?? 500) - 200) / 80))
-        const monsters = getTowerMonstersForFloor(floor)
-        const monsterDef = monsters[0]
-        if (!monsterDef) return
-
-        const equippedItems = getEquippedItems(s.items, s.equipment)
-        const equippedShadows = getEquippedShadows(s.ownedShadows, s.equippedShadowIds, s.hunter)
-        const activeJobId = s.hunter.activeJobId || s.hunter.jobId
-        const jobLevel = s.hunter.jobs?.[activeJobId]?.level ?? 1
-        const playerSkills = getPlayerCombatSkills({
-          jobId: activeJobId,
-          jobLevel,
-          equippedItems,
-          allSkills: SKILL_DEFINITIONS,
-        })
-        const playerSkillIds = ensureBasicAttack(playerSkills)
-          .filter(isHunterCombatSkill)
-          .map(skill => skill.id)
-        const monsterSkillIds = Array.from(new Set([BASIC_ATTACK_SKILL.id, ...monsterDef.skillIds]))
-        const monsterSkills = SKILL_DEFINITIONS.filter(skill => skill.ownerType === 'monster' && monsterSkillIds.includes(skill.id))
-        const allSkills = ensureBasicAttack([...playerSkills, ...monsterSkills])
-
-        let player = toBattleActor(session.player, 'player', 'player', playerSkillIds, session.cooldowns)
-        let monster = toBattleActor(session.monster, 'monster', monsterDef.id, monsterSkillIds, session.monsterCooldowns)
-        let activeEffects: ActiveCombatEffect[] = [...session.activeEffects]
-        let logs: BattleTurn[] = [
-          ...session.logs,
-          createManualSystemLog(
-            '자동 마무리를 시작합니다. 현재 HP, cooldown 상태를 이어받습니다.',
-            session.logs.length + 1,
-            1,
-            monster
-          ),
-        ]
-        let result: CombatLog['result'] | undefined
-
-        while (!result && player.hp > 0 && getManualActionCount(logs) < session.maxTurns) {
-          const effectivePlayer = getEffectiveBattleActorStats(player, activeEffects)
-          const effectiveMonster = getEffectiveBattleActorStats(monster, activeEffects)
-          const order: Array<'player' | 'monster'> = effectivePlayer.speed >= effectiveMonster.speed
-            ? ['player', 'monster']
-            : ['monster', 'player']
-
-          for (const actorType of order) {
-            if (player.hp <= 0 || monster.hp <= 0 || getManualActionCount(logs) >= session.maxTurns) break
-
-            if (actorType === 'player') {
-              player = decrementCooldowns(player)
-              const skill = chooseSkill(
-                player,
-                allSkills,
-                buildBattleSkillContext(player, monster, activeEffects, getManualActionCount(logs) + 1)
-              )
-              const resolved = resolveAction({
-                actor: player,
-                target: monster,
-                skill,
-                activeEffects,
-                rng: Math.random,
-                turnNumber: logs.length + 1,
-                waveNumber: 1,
-                waveLabel: 'Wave 1',
-              })
-              player = {
-                ...resolved.actor,
-                cooldowns: {
-                  ...resolved.actor.cooldowns,
-                  [skill.id]: getSkillCooldownTurns(skill),
-                },
-              }
-              monster = resolved.target
-              activeEffects = resolved.activeEffects
-              logs.push(resolved.log)
-
-              const shadowResolved = resolveShadowSupportActions({
-                shadows: equippedShadows,
-                player,
-                monster,
-                activeEffects,
-                rng: Math.random,
-                turnNumber: getManualActionCount(logs),
-                waveNumber: 1,
-                waveLabel: 'Wave 1',
-                phase: 'player_after_action',
-                playerUsedSkill: skill.id !== BASIC_ATTACK_SKILL.id,
-              })
-              monster = shadowResolved.monster
-              activeEffects = shadowResolved.activeEffects
-              logs.push(...shadowResolved.logs)
-            } else {
-              monster = decrementCooldowns(monster)
-              const skill = chooseSkill(
-                monster,
-                allSkills.filter(sk => sk.ownerType === 'common' || sk.ownerType === 'monster'),
-                buildBattleSkillContext(monster, player, activeEffects, getManualActionCount(logs) + 1)
-              )
-              const resolved = resolveAction({
-                actor: monster,
-                target: player,
-                skill,
-                activeEffects,
-                rng: Math.random,
-                turnNumber: logs.length + 1,
-                waveNumber: 1,
-                waveLabel: 'Wave 1',
-              })
-              monster = {
-                ...resolved.actor,
-                cooldowns: {
-                  ...resolved.actor.cooldowns,
-                  [skill.id]: getSkillCooldownTurns(skill),
-                },
-              }
-              player = resolved.target
-              activeEffects = resolved.activeEffects
-              logs.push(resolved.log)
-            }
-          }
-
-          if (player.hp <= 0) {
-            result = 'defeat'
-            break
-          }
-          if (monster.hp <= 0) {
-            logs.push(createManualSystemLog(
-              `[${monster.name}]을 쓰러뜨렸습니다. 전투 승리!`,
-              logs.length + 1,
-              1,
-              monster
-            ))
-            result = 'victory'
-            break
-          }
-          if (getManualActionCount(logs) >= session.maxTurns) {
-            result = 'draw'
-          }
-          if (!result) {
-            activeEffects = tickRoundEffects(activeEffects)
-          }
-        }
-
-        if (!result) {
-          result = player.hp <= 0 ? 'defeat' : 'draw'
-        }
-
-        const combatLog: CombatLog = {
-          battleId: `worldmap-manual-auto-${nodeId}-${Date.now()}`,
-          gateInstanceId: `worldmap-${nodeId}`,
-          result,
-          turns: logs,
-          totalTurns: getManualActionCount(logs),
-          playerHpRemaining: Math.max(0, player.hp),
-          rewards: [],
-          penaltyApplied: undefined,
-          totalWaves: 1,
-          clearedWaves: result === 'victory' ? 1 : 0,
-          source: 'worldmap',
-        }
-
-        set({
-          manualBattleSession: {
-            ...session,
-            turn: getManualActionCount(logs) + 1,
-            player: toManualCombatant(player),
-            monster: toManualCombatant(monster),
-            cooldowns: player.cooldowns,
-            monsterCooldowns: monster.cooldowns,
-            activeEffects,
-            logs,
-            result,
-          },
-        })
-
-        get().resolveDirectWorldBattle(combatLog, nodeId, session.helperHunterIds)
-      },
-
+      switchWorldManualBattleToAuto: () => {},
       attemptShadowExtraction: (gateInstanceId) => {
         const s = get()
         const activeGate = s.activeGate
