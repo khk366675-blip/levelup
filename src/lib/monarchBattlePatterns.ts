@@ -350,7 +350,7 @@ export function resolveMonarchBossAction(
         return {
           action: skill,
           telegraphName: '종말의 공허 특이점 🪐',
-          telegraphText: '무저갱의 어둠이 전장 전체를 집어삼키며, 전원의 생명력을 붕괴시키는 소멸 구체를 점화합니다. (협력 헌터 엄호 필수)',
+          telegraphText: '무저갱의 어둠이 전장 전체를 집어삼키며, 공간마저 분쇄해버릴 듯한 소멸의 특이점이 서서히 확장됩니다.',
           severity: 'lethal',
           targetRule: 'all_enemies',
         }
@@ -489,7 +489,7 @@ export function resolveMonarchBossAction(
   return {
     action: (stepIndex % 3 === 1) ? skillA : basic,
     telegraphName: (stepIndex % 3 === 1) ? '권능 폭발 💥' : '일반 타격',
-    telegraphText: (stepIndex % 3 === 1) ? '위협적인 무거운 보스 강타 공격 예정' : '가벼운 기본 물리 참격 예정',
+    telegraphText: (stepIndex % 3 === 1) ? '무겁고 파괴적인 권능의 오라가 전장을 짓누릅니다.' : '날카로운 살기가 깃든 서릿바람이 전선을 훑고 지나갑니다.',
     severity: (stepIndex % 3 === 1) ? 'high' : 'medium',
     targetRule: 'random',
   }
