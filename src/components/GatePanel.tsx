@@ -1772,6 +1772,8 @@ export function GatePanel() {
   const startManualGateBattle = useGame(s => s.startManualGateBattle)
   const performManualBattleAction = useGame(s => s.performManualBattleAction)
   const cancelManualGateBattle = useGame(s => s.cancelManualGateBattle)
+  const performWorldManualBattleAction = useGame(s => s.performWorldManualBattleAction)
+  const cancelWorldBattle = useGame(s => s.cancelWorldBattle)
   const finalizeHardcoreDeathFromSession = useGame(s => s.finalizeHardcoreDeathFromSession)
   const visibleTraces = useGame(s => getSecretVisibleFragments(s.secretProgress))
   const traceCount = visibleTraces.length
@@ -1818,6 +1820,23 @@ export function GatePanel() {
   const gate = activeGateOpen
     ? GATE_DEFINITIONS.find(g => g.id === activeGate.gateId)
     : undefined
+
+  // 12-29I: 월드맵 수동 전투 세션에 대한 최상단 렌더링 예외 가드 추가
+  if (manualBattleSession && manualBattleSession.source === 'world_map') {
+    const worldMonsterDef = MONSTER_DEFINITIONS.find(monster => monster.id === manualBattleSession.gateId) || MONSTER_DEFINITIONS[0]
+    return (
+      <div className="space-y-4">
+        <ManualBattlePanelV2
+          session={manualBattleSession}
+          skills={manualPlayerSkills.filter(skill => skill.id !== 'basic-attack')}
+          items={items}
+          monsterDefinition={worldMonsterDef}
+          onAction={performWorldManualBattleAction || performManualBattleAction}
+          onCancel={cancelWorldBattle}
+        />
+      </div>
+    )
+  }
 
   useEffect(() => {
     setIsDirectGateBattleOpen(false)

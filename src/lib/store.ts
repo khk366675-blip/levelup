@@ -70,6 +70,9 @@ import type {
   HardcoreBackupMeta,
   RiftNodeStatus,
   LivingWorldState,
+  WorldBattleSession,
+  WorldBattleResult,
+  RiftNode,
 } from './types'
 
 import { initLivingWorld } from './livingWorld'
@@ -374,6 +377,8 @@ export interface GameState {
   activeShadowExpeditionId?: string
   shadowLegionNodes?: Record<string, number>
   infiniteTower?: InfiniteTowerState
+  activeWorldBattle?: WorldBattleSession
+  worldBattleRetreats?: Record<string, string>
   rewardBoxes?: RewardBox[]
   lastDailyBoxDate?: string
   lastWeeklyBoxWeek?: string
@@ -510,6 +515,16 @@ export interface GameState {
   performTowerManualBattleAction: (action: ManualBattleAction) => void
   cancelTowerManualBattle: () => void
   switchTowerManualBattleToAuto: () => void
+
+  // world map battle (L3)
+  startWorldBattle: (nodeId: string) => void
+  resolveWorldBattle: () => void
+  resolveDirectWorldBattle: (combatLog: CombatLog, nodeId: string) => void
+  cancelWorldBattle: () => void
+  startWorldManualBattle: (nodeId: string) => void
+  performWorldManualBattleAction: (action: ManualBattleAction) => void
+  cancelWorldManualBattle: () => void
+  switchWorldManualBattleToAuto: () => void
 
   // rewards / challenge cards
   ensureDailyRewardSystems: () => void
@@ -3353,6 +3368,8 @@ const createHardcoreDeathResetState = (
     activeShadowExpeditionId: undefined,
     shadowLegionNodes: {},
     infiniteTower: createInitialTowerState(),
+    activeWorldBattle: undefined,
+    worldBattleRetreats: {},
     rewardBoxes: [],
     lastDailyBoxDate: undefined,
     lastWeeklyBoxWeek: undefined,
@@ -4717,37 +4734,29 @@ export const useGame = create<GameState>()(
       },
 
       enterRiftNode: (nodeId) => {
-        const node = RIFT_NODES.find(n => n.id === nodeId)
-        if (!node) return
         const s = get()
-
-        // 보완 2: 이미 활성 게이트가 있으면 막고 안내
-        if (s.activeGate && s.activeGate.status === 'active') {
-          set({
-            messages: [
-              ...s.messages,
-              {
-                id: uid(),
-                kind: 'info',
-                title: '진입 불가',
-                lines: ['이미 공략 중인 활성 게이트가 있습니다. 기존 게이트를 완료하거나 포기하십시오.'],
-                createdAt: todayISO(),
-              }
-            ]
-          })
-          return
-        }
+        const node = {
+          difficulty: 500,
+          deadline: 7,
+          daysRemaining: 7,
+          ...(s.livingWorld?.riftNodes[nodeId] || RIFT_NODES.find(n => n.id === nodeId))
+        } as RiftNode
+        if (!node) return
 
         set({ activeRiftNodeId: nodeId })
-        get().spawnGate(node.gateDefId, 'worldmap')
       },
 
       markRiftNodeCleared: (nodeId) => {
         const s = get()
-        const node = RIFT_NODES.find((n) => n.id === nodeId)
+        const node = {
+          difficulty: 500,
+          deadline: 7,
+          daysRemaining: 7,
+          ...(s.livingWorld?.riftNodes[nodeId] || RIFT_NODES.find((n) => n.id === nodeId))
+        } as RiftNode
         if (!node) return
 
-        const currentStatus = s.riftNodes[nodeId] ?? node.status
+        const currentStatus = (s.riftNodes[nodeId] ?? node.status)
         if (currentStatus === 'cleared') return
 
         const updatedNodes = { ...s.riftNodes, [nodeId]: 'cleared' as RiftNodeStatus }
@@ -4756,7 +4765,6 @@ export const useGame = create<GameState>()(
         RIFT_NODES.forEach((n) => {
           const nStatus = updatedNodes[n.id] ?? n.status
           if (nStatus === 'locked' && n.requiresNodeIds?.includes(nodeId)) {
-            // 이 노드의 모든 선행조건이 cleared인지 판정
             const allReqsCleared = n.requiresNodeIds.every(
               (reqId) => updatedNodes[reqId] === 'cleared'
             )
@@ -4766,8 +4774,71 @@ export const useGame = create<GameState>()(
           }
         })
 
+        // livingWorld 상태 반영 (동적 생성 노드 등 반영)
+        let nextLivingWorld = s.livingWorld
+        if (nextLivingWorld) {
+          const updatedWorldNodes = { ...nextLivingWorld.riftNodes }
+          if (updatedWorldNodes[nodeId]) {
+            updatedWorldNodes[nodeId] = {
+              ...updatedWorldNodes[nodeId],
+              status: 'cleared',
+              daysRemaining: 0,
+            }
+          } else {
+            updatedWorldNodes[nodeId] = {
+              ...node,
+              status: 'cleared',
+              daysRemaining: 0,
+            }
+          }
+
+          // livingWorld 내 locked 노드 해제
+          Object.values(updatedWorldNodes).forEach((n) => {
+            if (n.status === 'locked' && n.requiresNodeIds?.includes(nodeId)) {
+              const allReqsCleared = n.requiresNodeIds.every(
+                (reqId) => updatedWorldNodes[reqId]?.status === 'cleared'
+              )
+              if (allReqsCleared) {
+                n.status = 'active'
+              }
+            }
+          })
+
+          const regionId = node.regionId
+          const regionState = nextLivingWorld.regions[regionId]
+          if (regionState) {
+            // 정화 상수에 맞춘 오염도 차감 (CLEANSE_MIN = 1, CLEANSE_RANGE = 2)
+            const cleanse = Math.round(1 + Math.random() * 2)
+            const nextCorruption = Math.max(0, regionState.corruption - cleanse)
+            const nextActiveGateIds = regionState.activeGateIds.filter((id) => id !== nodeId)
+
+            const nextRegions = {
+              ...nextLivingWorld.regions,
+              [regionId]: {
+                ...regionState,
+                corruption: nextCorruption,
+                activeGateIds: nextActiveGateIds,
+              },
+            }
+
+            const rName = RIFT_REGIONS.find((r) => r.id === regionId)?.name ?? regionId.toUpperCase()
+            const eventLogs = [
+              ...nextLivingWorld.eventLogs,
+              `[Day ${nextLivingWorld.day}] 🛡️ 헌터(플레이어)가 [${node.name}] 정화에 성공했습니다! 지역 오염도 -${cleanse}%`,
+            ].slice(-60)
+
+            nextLivingWorld = {
+              ...nextLivingWorld,
+              regions: nextRegions,
+              riftNodes: updatedWorldNodes,
+              eventLogs,
+            }
+          }
+        }
+
         set({
           riftNodes: updatedNodes,
+          livingWorld: nextLivingWorld,
           messages: [
             ...s.messages,
             {
@@ -6962,6 +7033,958 @@ export const useGame = create<GameState>()(
             },
           }))
         }
+      },
+
+      // ── World Map Battle System (L3) ───────────────────────────────
+
+      startWorldBattle: (nodeId) => {
+        const s = get()
+        const node = {
+          difficulty: 500,
+          deadline: 7,
+          daysRemaining: 7,
+          ...(s.livingWorld?.riftNodes[nodeId] || RIFT_NODES.find(n => n.id === nodeId))
+        } as RiftNode
+        if (!node || (s.riftNodes[nodeId] ?? node.status) !== 'active') return
+
+        // 후퇴 일일 가드 확인
+        const today = todayKey()
+        if (s.worldBattleRetreats && s.worldBattleRetreats[nodeId] === today) {
+          set({
+            messages: [
+              ...s.messages,
+              {
+                id: uid(),
+                kind: 'info',
+                title: '진입 차단',
+                lines: ['오늘 이 구역에서 후퇴하여 다시 진입할 수 없습니다. 내일 다시 시도하십시오.'],
+                createdAt: todayISO(),
+              }
+            ]
+          })
+          return
+        }
+
+        const floor = Math.max(1, Math.round(((node.difficulty ?? 500) - 200) / 80))
+        const monsters = getTowerMonstersForFloor(floor)
+        if (monsters.length === 0) return
+
+        const equippedItems = getEquippedItems(s.items, s.equipment)
+        const equippedShadows = getEquippedShadows(s.ownedShadows, s.equippedShadowIds, s.hunter)
+        const shadowStatBonuses = getEquippedShadowStatBonuses(equippedShadows)
+        const combatStatsWithShadows = { ...s.hunter.stats }
+        for (const [stat, value] of Object.entries(shadowStatBonuses)) {
+          combatStatsWithShadows[stat as StatKey] = roundStatValue(combatStatsWithShadows[stat as StatKey] + (value ?? 0))
+        }
+        const activeJobId = s.hunter.activeJobId || s.hunter.jobId
+        const jobLevel = s.hunter.jobs?.[activeJobId]?.level ?? 1
+        const playerSkills = getPlayerCombatSkills({
+          jobId: activeJobId,
+          jobLevel,
+          equippedItems,
+          allSkills: SKILL_DEFINITIONS,
+        })
+        const playerStats = calculatePlayerCombatStats({
+          level: s.hunter.level,
+          stats: combatStatsWithShadows,
+          equippedItems,
+          activeConsumableEffects: s.activeConsumableEffects,
+          jobId: activeJobId,
+          skills: playerSkills,
+        })
+
+        const monsterSkillIds = new Set(monsters.flatMap(m => m.skillIds))
+        const monsterSkills = SKILL_DEFINITIONS.filter(skill => skill.ownerType === 'monster' && monsterSkillIds.has(skill.id))
+        const skills = [...playerSkills, ...monsterSkills]
+
+        // 2순위 그림자 탱킹 (수호 효과 버프 적용)
+        const initialActiveEffects: ActiveCombatEffect[] = []
+        if (equippedShadows.length > 0) {
+          const buffDef = Math.round(playerStats.def * 0.25 * equippedShadows.length)
+          const buffEvasion = 0.05 * equippedShadows.length
+          initialActiveEffects.push(
+            {
+              sourceSkillId: 'world-map-shadow-guard-def',
+              kind: 'stat',
+              stat: 'def',
+              value: buffDef,
+              remainingTurns: 999,
+              targetId: 'player',
+            },
+            {
+              sourceSkillId: 'world-map-shadow-guard-eva',
+              kind: 'stat',
+              stat: 'evasionRate',
+              value: buffEvasion,
+              remainingTurns: 999,
+              targetId: 'player',
+            },
+            {
+              sourceSkillId: 'world-map-shadow-guard-dr',
+              kind: 'damage_reduction',
+              value: 0.5,
+              remainingTurns: 999,
+              targetId: 'player',
+            }
+          )
+        }
+
+        const combatLog = simulateGateWaveBattle({
+          playerName: s.hunter.name || '헌터',
+          playerStats,
+          monsters,
+          skills,
+          equippedShadows,
+          gateInstanceId: `worldmap-${nodeId}`,
+          battleId: `worldmap-battle-${nodeId}-${Date.now()}`,
+          initialActiveEffects,
+        })
+
+        // 보상 계산 (난이도 CP 비례)
+        const rewards = {
+          hunterXp: Math.round((node.difficulty ?? 500) * 0.12),
+          gold: Math.round((node.difficulty ?? 500) * 0.15),
+          shadowEssence: node.isSGrade ? 5 : 2,
+          itemDropChance: node.isSGrade ? 0.35 : 0.15,
+        }
+
+        const worldResult: WorldBattleResult = {
+          outcome: combatLog.result as 'victory' | 'defeat' | 'draw',
+          nodeId,
+          gateName: node.name,
+          rewards,
+        }
+
+        const nextWorldBattle: WorldBattleSession = {
+          id: `worldmap-${nodeId}-${Date.now()}`,
+          nodeId,
+          gateName: node.name,
+          regionId: node.regionId,
+          difficulty: node.difficulty,
+          recommendedPower: node.difficulty,
+          monsterIds: monsters.map(m => m.id),
+          status: 'revealing',
+          logs: combatLog.turns,
+          result: worldResult,
+          showResult: false,
+        }
+
+        // 로그 연출 보강 (그림자 탱킹 로그 주입)
+        if (equippedShadows.length > 0) {
+          combatLog.turns.unshift(
+            createManualSystemLog(
+              `🛡️ 그림자 군단(${equippedShadows.length}명)이 전방에 배치되었습니다! [그림자 탱킹] 수호가 작동하여 방어력 +${Math.round(0.25 * equippedShadows.length * 100)}%, 회피율 +${Math.round(0.05 * equippedShadows.length * 100)}%, 받는 피해 50%가 감소합니다.`,
+              0,
+              1,
+              createMonsterBattleActor(monsters[0])
+            )
+          )
+        }
+
+        set({
+          activeWorldBattle: nextWorldBattle,
+          combatLogs: [{ ...combatLog, source: 'worldmap' as const }, ...s.combatLogs].slice(0, 20),
+          manualBattleSession: undefined,
+        })
+      },
+
+      resolveWorldBattle: () => {
+        const s = get()
+        const activeBattle = s.activeWorldBattle
+        if (!activeBattle || activeBattle.status !== 'revealing') return
+
+        const result = activeBattle.result
+        if (!result) return
+        const nodeId = activeBattle.nodeId
+        const isVictory = result.outcome === 'victory'
+
+        let nextHunter = s.hunter
+        let nextItems = s.items
+        let nextGold = s.gold ?? 0
+        let nextShadowEssence = s.shadowEssence ?? 0
+        const newMessages: SystemMessage[] = []
+
+        if (isVictory) {
+          const rewards = result.rewards
+          if (rewards.hunterXp && rewards.hunterXp > 0) {
+            const xpResult = applyXp(s.hunter, rewards.hunterXp, 'challenge')
+            nextHunter = xpResult.hunter
+            if (xpResult.outcome?.leveledUp) {
+              newMessages.push({
+                id: uid(),
+                kind: 'levelup',
+                title: 'LEVEL UP',
+                lines: [
+                  `Lv.${s.hunter.level} → Lv.${xpResult.outcome.newLevel}`,
+                  `자동 분배 — ${formatStatGains(xpResult.outcome.autoStatGains)}`,
+                  `자유 배분권 +${xpResult.outcome.freeStatPointsGained}`,
+                ],
+                createdAt: todayISO(),
+              })
+            }
+          }
+          if (rewards.shadowEssence && rewards.shadowEssence > 0) {
+            nextShadowEssence += rewards.shadowEssence
+          }
+          if (rewards.gold && rewards.gold > 0) {
+            nextGold += rewards.gold
+          }
+          if (rewards.itemDropChance && Math.random() < rewards.itemDropChance) {
+            const poolItem = ITEM_POOL[Math.floor(Math.random() * ITEM_POOL.length)]
+            if (poolItem) {
+              const item: Item = { ...poolItem, id: uid(), acquiredAt: todayISO() }
+              nextItems = [...nextItems, item]
+              newMessages.push({
+                id: uid(),
+                kind: 'item',
+                title: '아이템 획득',
+                lines: [`${item.icon}  ${item.name}`, item.description],
+                createdAt: todayISO(),
+              })
+            }
+          }
+
+          newMessages.push({
+            id: uid(),
+            kind: 'quest',
+            title: `균열 정화 성공`,
+            lines: [
+              `[${activeBattle.gateName}] 균열 정화에 성공했습니다!`,
+              ...(rewards.hunterXp ? [`XP +${rewards.hunterXp}`] : []),
+              ...(rewards.gold ? [`Gold +${rewards.gold}`] : []),
+              ...(rewards.shadowEssence ? [`정수 +${rewards.shadowEssence}`] : []),
+            ],
+            createdAt: todayISO(),
+          })
+
+          // 정화 완료 후처리 (NPC 클리어와 공유하는 오염도 감소 및 locked 해제 적용)
+          get().markRiftNodeCleared(nodeId)
+
+          set({
+            hunter: nextHunter,
+            items: nextItems,
+            gold: nextGold,
+            shadowEssence: nextShadowEssence,
+            activeWorldBattle: {
+              ...activeBattle,
+              status: 'resolved',
+              showResult: true,
+            },
+            messages: [...s.messages, ...newMessages],
+          })
+        } else {
+          // 패배 시: 기존 게이트 패배의 부상 규칙 동일 적용
+          const now = new Date()
+          const injuredUntil = new Date(now.getTime() + 6 * 60 * 60 * 1000).toISOString()
+          const nextGateStatus = {
+            ...s.gateStatus,
+            injuredUntil,
+            recoveryQuestProgress: 0,
+            recoveryQuestRequired: 3,
+          }
+
+          newMessages.push({
+            id: uid(),
+            kind: 'info',
+            title: `균열 공략 실패`,
+            lines: [
+              result.outcome === 'defeat'
+                ? `[${activeBattle.gateName}] 정화에 실패했습니다.`
+                : `[${activeBattle.gateName}] 정화 시간 초과.`,
+              '6시간 부상을 입었습니다. 퀘스트 3개 완료로 회복하거나 대기하십시오.',
+            ],
+            createdAt: todayISO(),
+          })
+
+          set({
+            gateStatus: nextGateStatus,
+            activeWorldBattle: {
+              ...activeBattle,
+              status: 'resolved',
+              showResult: true,
+            },
+            messages: [...s.messages, ...newMessages],
+          })
+        }
+      },
+
+      resolveDirectWorldBattle: (combatLog, nodeId) => {
+        const s = get()
+        const outcome = combatLog.result === 'victory' ? 'victory' : (combatLog.result === 'defeat' ? 'defeat' : 'draw')
+        const node = {
+          difficulty: 500,
+          deadline: 7,
+          daysRemaining: 7,
+          ...(s.livingWorld?.riftNodes[nodeId] || RIFT_NODES.find(n => n.id === nodeId))
+        } as RiftNode
+        if (!node) return
+
+        const rewards = {
+          hunterXp: Math.round((node.difficulty ?? 500) * 0.12),
+          gold: Math.round((node.difficulty ?? 500) * 0.15),
+          shadowEssence: node.isSGrade ? 5 : 2,
+          itemDropChance: node.isSGrade ? 0.35 : 0.15,
+        }
+
+        const worldResult: WorldBattleResult = {
+          outcome,
+          nodeId,
+          gateName: node.name,
+          rewards,
+        }
+
+        const nextWorldBattle: WorldBattleSession = {
+          id: combatLog.battleId,
+          nodeId,
+          gateName: node.name,
+          regionId: node.regionId,
+          difficulty: node.difficulty,
+          recommendedPower: node.difficulty,
+          monsterIds: [node.gateDefId],
+          status: 'revealing',
+          logs: combatLog.turns,
+          result: worldResult,
+          showResult: false,
+        }
+
+        set({
+          activeWorldBattle: nextWorldBattle,
+          combatLogs: [{ ...combatLog, source: 'worldmap' as const }, ...s.combatLogs].slice(0, 20),
+        })
+        get().resolveWorldBattle()
+      },
+
+      cancelWorldBattle: () => set((s) => {
+        const activeBattle = s.activeWorldBattle
+        const manualSession = s.manualBattleSession
+        if (!activeBattle && (!manualSession || manualSession.source !== 'world_map')) return {}
+
+        // 후퇴 시 오늘 하루 다시 진입 불가능하게 가드 설정
+        const nodeId = activeBattle?.nodeId || manualSession?.gateInstanceId?.replace('worldmap-', '')
+        const today = todayKey()
+        const nextRetreats = nodeId ? { ...(s.worldBattleRetreats ?? {}), [nodeId]: today } : (s.worldBattleRetreats ?? {})
+
+        const node = nodeId ? ({
+          difficulty: 500,
+          deadline: 7,
+          daysRemaining: 7,
+          ...(s.livingWorld?.riftNodes[nodeId] || RIFT_NODES.find(n => n.id === nodeId))
+        } as RiftNode) : undefined
+        const nameLabel = node?.name || '균열'
+
+        return {
+          activeWorldBattle: undefined,
+          manualBattleSession: undefined,
+          worldBattleRetreats: nextRetreats,
+          messages: [
+            ...s.messages,
+            {
+              id: uid(),
+              kind: 'info',
+              title: '전투 후퇴',
+              lines: [
+                `[${nameLabel}] 전투에서 안전하게 후퇴했습니다.`,
+                '다행히 부상을 면했으나, 오늘 이 구역은 다시 진입할 수 없습니다.',
+              ],
+              createdAt: todayISO(),
+            }
+          ]
+        }
+      }),
+
+      startWorldManualBattle: (nodeId) => {
+        const s = get()
+        const node = {
+          difficulty: 500,
+          deadline: 7,
+          daysRemaining: 7,
+          ...(s.livingWorld?.riftNodes[nodeId] || RIFT_NODES.find(n => n.id === nodeId))
+        } as RiftNode
+        if (!node || (s.riftNodes[nodeId] ?? node.status) !== 'active') return
+
+        // 후퇴 일일 가드 확인
+        const today = todayKey()
+        if (s.worldBattleRetreats && s.worldBattleRetreats[nodeId] === today) {
+          set({
+            messages: [
+              ...s.messages,
+              {
+                id: uid(),
+                kind: 'info',
+                title: '진입 차단',
+                lines: ['오늘 이 구역에서 후퇴하여 다시 진입할 수 없습니다. 내일 다시 시도하십시오.'],
+                createdAt: todayISO(),
+              }
+            ]
+          })
+          return
+        }
+
+        const floor = Math.max(1, Math.round(((node.difficulty ?? 500) - 200) / 80))
+        const monsters = getTowerMonstersForFloor(floor)
+        if (monsters.length === 0) return
+        const monsterDef = monsters[0]
+        if (!monsterDef) return
+
+        const equippedItems = getEquippedItems(s.items, s.equipment)
+        const equippedShadows = getEquippedShadows(s.ownedShadows, s.equippedShadowIds, s.hunter)
+        const shadowStatBonuses = getEquippedShadowStatBonuses(equippedShadows)
+        const combatStatsWithShadows = { ...s.hunter.stats }
+        for (const [stat, value] of Object.entries(shadowStatBonuses)) {
+          combatStatsWithShadows[stat as StatKey] = roundStatValue(combatStatsWithShadows[stat as StatKey] + (value ?? 0))
+        }
+        const activeJobId = s.hunter.activeJobId || s.hunter.jobId
+        const jobLevel = s.hunter.jobs?.[activeJobId]?.level ?? 1
+        const playerSkills = getPlayerCombatSkills({
+          jobId: activeJobId,
+          jobLevel,
+          equippedItems,
+          allSkills: SKILL_DEFINITIONS,
+          includeBasicKit: true,
+        })
+        const playerStats = calculatePlayerCombatStats({
+          level: s.hunter.level,
+          stats: combatStatsWithShadows,
+          equippedItems,
+          activeConsumableEffects: s.activeConsumableEffects,
+          jobId: activeJobId,
+          skills: playerSkills,
+        })
+
+        const player = createPlayerBattleActor(s.hunter.name || '헌터', playerStats, playerSkills)
+        const monster = createMonsterBattleActor(monsterDef)
+
+        // 2순위 그림자 탱킹 (수호 효과 버프 적용)
+        const initialActiveEffects: ActiveCombatEffect[] = []
+        if (equippedShadows.length > 0) {
+          const buffDef = Math.round(playerStats.def * 0.25 * equippedShadows.length)
+          const buffEvasion = 0.05 * equippedShadows.length
+          initialActiveEffects.push(
+            {
+              sourceSkillId: 'world-map-shadow-guard-def',
+              kind: 'stat',
+              stat: 'def',
+              value: buffDef,
+              remainingTurns: 999,
+              targetId: 'player',
+            },
+            {
+              sourceSkillId: 'world-map-shadow-guard-eva',
+              kind: 'stat',
+              stat: 'evasionRate',
+              value: buffEvasion,
+              remainingTurns: 999,
+              targetId: 'player',
+            },
+            {
+              sourceSkillId: 'world-map-shadow-guard-dr',
+              kind: 'damage_reduction',
+              value: 0.5,
+              remainingTurns: 999,
+              targetId: 'player',
+            }
+          )
+        }
+
+        const logs: BattleTurn[] = []
+        if (equippedShadows.length > 0) {
+          logs.push(
+            createManualSystemLog(
+              `🛡️ 그림자 군단이 전방에 배치되어 엄호하고 있습니다! 플레이어의 방어력 +${Math.round(0.25 * equippedShadows.length * 100)}%, 회피율 +${Math.round(0.05 * equippedShadows.length * 100)}%, 받는 피해 50%가 감소합니다.`,
+              0,
+              1,
+              monster
+            )
+          )
+        }
+
+        set({
+          manualBattleSession: {
+            gateId: monsterDef.id,
+            gateName: node.name,
+            gateInstanceId: `worldmap-${nodeId}`,
+            waveIndex: 0,
+            turn: 1,
+            maxTurns: 200,
+            player: toManualCombatant(player),
+            monster: toManualCombatant(monster),
+            remainingMonsterIds: [],
+            cooldowns: {},
+            monsterCooldowns: {},
+            activeEffects: initialActiveEffects,
+            consumableEffects: [],
+            usedConsumableItemIds: [],
+            usedConsumableEffectTypes: [],
+            consumableUseCount: 0,
+            logs,
+            startedAt: new Date().toISOString(),
+            source: 'world_map',
+          },
+          activeWorldBattle: undefined,
+        })
+      },
+
+      performWorldManualBattleAction: (action) => {
+        if (action.type === 'auto_finish') {
+          get().switchWorldManualBattleToAuto()
+          return
+        }
+
+        const s = get()
+        const session = s.manualBattleSession
+        if (!session || session.result || session.source !== 'world_map') return
+
+        const nodeId = session.gateInstanceId.replace('worldmap-', '')
+        const node = {
+          difficulty: 500,
+          deadline: 7,
+          daysRemaining: 7,
+          ...(s.livingWorld?.riftNodes[nodeId] || RIFT_NODES.find(n => n.id === nodeId))
+        } as RiftNode
+        if (!node) return
+
+        const floor = Math.max(1, Math.round(((node.difficulty ?? 500) - 200) / 80))
+        const monsters = getTowerMonstersForFloor(floor)
+        const monsterDef = monsters[0]
+        if (!monsterDef) return
+
+        const equippedItems = getEquippedItems(s.items, s.equipment)
+        const equippedShadows = getEquippedShadows(s.ownedShadows, s.equippedShadowIds, s.hunter)
+        const activeJobId = s.hunter.activeJobId || s.hunter.jobId
+        const jobLevel = s.hunter.jobs?.[activeJobId]?.level ?? 1
+        const playerSkills = getPlayerCombatSkills({
+          jobId: activeJobId,
+          jobLevel,
+          equippedItems,
+          allSkills: SKILL_DEFINITIONS,
+          includeBasicKit: true,
+        })
+        const playerSkillIds = ensureBasicAttack(playerSkills)
+          .filter(isHunterCombatSkill)
+          .map(skill => skill.id)
+        const monsterSkillIds = Array.from(new Set([BASIC_ATTACK_SKILL.id, ...monsterDef.skillIds]))
+        const monsterSkills = SKILL_DEFINITIONS.filter(skill => skill.ownerType === 'monster' && monsterSkillIds.includes(skill.id))
+        const allSkills = ensureBasicAttack([...playerSkills, ...monsterSkills])
+
+        let player = decrementCooldowns(toBattleActor(session.player, 'player', 'player', playerSkillIds, session.cooldowns))
+        let monster = decrementCooldowns(toBattleActor(session.monster, 'monster', monsterDef.id, monsterSkillIds, session.monsterCooldowns))
+        let activeEffects: ActiveCombatEffect[] = [...session.activeEffects]
+        let logs: BattleTurn[] = [...session.logs]
+        let nextItems = s.items
+        let result: CombatLog['result'] | undefined
+        let shadowPhase: 'player_after_action' | 'player_defend' = 'player_after_action'
+        let playerUsedSkill = false
+
+        if (action.type === 'use_consumable') {
+          const item = s.items.find(candidate => candidate.id === action.itemId)
+          const failureReason = getManualConsumableFailureReason(session, item)
+          if (failureReason || !item) {
+            logs.push(createManualSystemLog(
+              `소모품을 사용할 수 없습니다: ${failureReason ?? '아이템을 찾을 수 없습니다.'}`,
+              logs.length + 1,
+              1,
+              monster
+            ))
+            set({
+              manualBattleSession: { ...session, logs },
+            })
+            return
+          }
+
+          const usableEffects = item.consumableEffects?.filter(isManualBattleConsumableEffect) ?? []
+          let nextActiveEffects = activeEffects
+          for (const effect of usableEffects) {
+            for (const combatEffect of createManualConsumableCombatEffects(effect, item)) {
+              nextActiveEffects = applyOrRefreshCombatEffect(nextActiveEffects, combatEffect)
+            }
+          }
+          activeEffects = nextActiveEffects
+          logs.push(createManualConsumableUseLog(
+            player,
+            monster,
+            formatManualConsumableUseMessage(item, usableEffects),
+            logs.length + 1,
+            1
+          ))
+
+          const usedConsumableEffectTypes = Array.from(new Set([
+            ...session.usedConsumableEffectTypes,
+            ...usableEffects.map(effect => effect.type),
+          ]))
+          nextItems = s.items.filter(candidate => candidate.id !== item.id)
+          session.usedConsumableItemIds = [...session.usedConsumableItemIds, item.id]
+          session.usedConsumableEffectTypes = usedConsumableEffectTypes
+          session.consumableUseCount += 1
+        } else if (action.type === 'defend') {
+          shadowPhase = 'player_defend'
+          activeEffects = applyOrRefreshCombatEffect(activeEffects, {
+            sourceSkillId: 'manual-defend',
+            kind: 'damage_reduction',
+            value: 0.35,
+            remainingTurns: 1,
+            targetId: 'player',
+          })
+          logs.push(createDefendLog(player, monster, logs.length + 1, 1))
+        } else if (action.type === 'skill') {
+          const skill = playerSkills.find(sk => sk.id === action.skillId)
+          if (!skill || (player.cooldowns[skill.id] ?? 0) > 0) {
+            logs.push(createManualSystemLog(
+              `스킬을 시전할 수 없습니다.`,
+              logs.length + 1,
+              1,
+              monster
+            ))
+            set({
+              manualBattleSession: { ...session, logs },
+            })
+            return
+          }
+
+          playerUsedSkill = skill.id !== BASIC_ATTACK_SKILL.id
+          const resolved = resolveAction({
+            actor: player,
+            target: monster,
+            skill,
+            activeEffects,
+            rng: Math.random,
+            turnNumber: logs.length + 1,
+            waveNumber: 1,
+            waveLabel: 'Wave 1',
+          })
+          player = {
+            ...resolved.actor,
+            cooldowns: {
+              ...resolved.actor.cooldowns,
+              [skill.id]: getSkillCooldownTurns(skill),
+            },
+          }
+          monster = resolved.target
+          activeEffects = resolved.activeEffects
+          logs.push(resolved.log)
+        }
+
+        if (monster.hp <= 0) {
+          logs.push(createManualSystemLog(
+            `[${monster.name}]을 쓰러뜨렸습니다. 전투 승리!`,
+            logs.length + 1,
+            1,
+            monster
+          ))
+          result = 'victory'
+        }
+
+        // 그림자 협동 행동 페이즈
+        if (!result && player.hp > 0 && monster.hp > 0) {
+          const shadowResolved = resolveShadowSupportActions({
+            shadows: equippedShadows,
+            player,
+            monster,
+            activeEffects,
+            rng: Math.random,
+            turnNumber: getManualActionCount(logs),
+            waveNumber: 1,
+            waveLabel: 'Wave 1',
+            phase: shadowPhase,
+            playerUsedSkill,
+          })
+          monster = shadowResolved.monster
+          activeEffects = shadowResolved.activeEffects
+          logs.push(...shadowResolved.logs)
+        }
+
+        if (!result && monster.hp <= 0) {
+          logs.push(createManualSystemLog(
+            `[${monster.name}]을 쓰러뜨렸습니다. 전투 승리!`,
+            logs.length + 1,
+            1,
+            monster
+          ))
+          result = 'victory'
+        }
+
+        // 적 몬스터 행동 페이즈
+        if (!result && player.hp > 0 && monster.hp > 0) {
+          monster = decrementCooldowns(monster)
+          const monsterSkills = allSkills.filter(sk => sk.ownerType === 'common' || sk.ownerType === 'monster')
+          const skill = chooseSkill(
+            monster,
+            monsterSkills,
+            buildBattleSkillContext(monster, player, activeEffects, getManualActionCount(logs) + 1)
+          )
+          const resolved = resolveAction({
+            actor: monster,
+            target: player,
+            skill,
+            activeEffects,
+            rng: Math.random,
+            turnNumber: logs.length + 1,
+            waveNumber: 1,
+            waveLabel: 'Wave 1',
+          })
+          monster = {
+            ...resolved.actor,
+            cooldowns: {
+              ...resolved.actor.cooldowns,
+              [skill.id]: getSkillCooldownTurns(skill),
+            },
+          }
+          player = resolved.target
+          activeEffects = resolved.activeEffects
+          logs.push(resolved.log)
+        }
+
+        if (!result && player.hp <= 0) {
+          result = 'defeat'
+        }
+
+        if (!result && getManualActionCount(logs) >= session.maxTurns) {
+          result = 'draw'
+        }
+
+        if (!result) {
+          activeEffects = tickRoundEffects(activeEffects)
+        }
+
+        if (result) {
+          const combatLog: CombatLog = {
+            battleId: `worldmap-manual-${nodeId}-${Date.now()}`,
+            gateInstanceId: `worldmap-${nodeId}`,
+            result,
+            turns: logs,
+            totalTurns: getManualActionCount(logs),
+            playerHpRemaining: Math.max(0, player.hp),
+            rewards: [],
+            penaltyApplied: undefined,
+            totalWaves: 1,
+            clearedWaves: result === 'victory' ? 1 : 0,
+            source: 'worldmap',
+          }
+
+          set({
+            items: nextItems,
+            manualBattleSession: {
+              ...session,
+              turn: getManualActionCount(logs) + 1,
+              player: toManualCombatant(player),
+              monster: toManualCombatant(monster),
+              cooldowns: player.cooldowns,
+              monsterCooldowns: monster.cooldowns,
+              activeEffects,
+              logs,
+              result,
+            },
+          })
+
+          get().resolveDirectWorldBattle(combatLog, nodeId)
+        } else {
+          set({
+            items: nextItems,
+            manualBattleSession: {
+              ...session,
+              turn: getManualActionCount(logs) + 1,
+              player: toManualCombatant(player),
+              monster: toManualCombatant(monster),
+              cooldowns: player.cooldowns,
+              monsterCooldowns: monster.cooldowns,
+              activeEffects,
+              logs,
+            },
+          })
+        }
+      },
+
+      cancelWorldManualBattle: () => {
+        get().cancelWorldBattle()
+      },
+
+      switchWorldManualBattleToAuto: () => {
+        const s = get()
+        const session = s.manualBattleSession
+        if (!session || session.result || session.source !== 'world_map') return
+
+        const nodeId = session.gateInstanceId.replace('worldmap-', '')
+        const node = {
+          difficulty: 500,
+          deadline: 7,
+          daysRemaining: 7,
+          ...(s.livingWorld?.riftNodes[nodeId] || RIFT_NODES.find(n => n.id === nodeId))
+        } as RiftNode
+        if (!node) return
+
+        const floor = Math.max(1, Math.round(((node.difficulty ?? 500) - 200) / 80))
+        const monsters = getTowerMonstersForFloor(floor)
+        const monsterDef = monsters[0]
+        if (!monsterDef) return
+
+        const equippedItems = getEquippedItems(s.items, s.equipment)
+        const equippedShadows = getEquippedShadows(s.ownedShadows, s.equippedShadowIds, s.hunter)
+        const activeJobId = s.hunter.activeJobId || s.hunter.jobId
+        const jobLevel = s.hunter.jobs?.[activeJobId]?.level ?? 1
+        const playerSkills = getPlayerCombatSkills({
+          jobId: activeJobId,
+          jobLevel,
+          equippedItems,
+          allSkills: SKILL_DEFINITIONS,
+        })
+        const playerSkillIds = ensureBasicAttack(playerSkills)
+          .filter(isHunterCombatSkill)
+          .map(skill => skill.id)
+        const monsterSkillIds = Array.from(new Set([BASIC_ATTACK_SKILL.id, ...monsterDef.skillIds]))
+        const monsterSkills = SKILL_DEFINITIONS.filter(skill => skill.ownerType === 'monster' && monsterSkillIds.includes(skill.id))
+        const allSkills = ensureBasicAttack([...playerSkills, ...monsterSkills])
+
+        let player = toBattleActor(session.player, 'player', 'player', playerSkillIds, session.cooldowns)
+        let monster = toBattleActor(session.monster, 'monster', monsterDef.id, monsterSkillIds, session.monsterCooldowns)
+        let activeEffects: ActiveCombatEffect[] = [...session.activeEffects]
+        let logs: BattleTurn[] = [
+          ...session.logs,
+          createManualSystemLog(
+            '자동 마무리를 시작합니다. 현재 HP, cooldown 상태를 이어받습니다.',
+            session.logs.length + 1,
+            1,
+            monster
+          ),
+        ]
+        let result: CombatLog['result'] | undefined
+
+        while (!result && player.hp > 0 && getManualActionCount(logs) < session.maxTurns) {
+          const effectivePlayer = getEffectiveBattleActorStats(player, activeEffects)
+          const effectiveMonster = getEffectiveBattleActorStats(monster, activeEffects)
+          const order: Array<'player' | 'monster'> = effectivePlayer.speed >= effectiveMonster.speed
+            ? ['player', 'monster']
+            : ['monster', 'player']
+
+          for (const actorType of order) {
+            if (player.hp <= 0 || monster.hp <= 0 || getManualActionCount(logs) >= session.maxTurns) break
+
+            if (actorType === 'player') {
+              player = decrementCooldowns(player)
+              const skill = chooseSkill(
+                player,
+                allSkills,
+                buildBattleSkillContext(player, monster, activeEffects, getManualActionCount(logs) + 1)
+              )
+              const resolved = resolveAction({
+                actor: player,
+                target: monster,
+                skill,
+                activeEffects,
+                rng: Math.random,
+                turnNumber: logs.length + 1,
+                waveNumber: 1,
+                waveLabel: 'Wave 1',
+              })
+              player = {
+                ...resolved.actor,
+                cooldowns: {
+                  ...resolved.actor.cooldowns,
+                  [skill.id]: getSkillCooldownTurns(skill),
+                },
+              }
+              monster = resolved.target
+              activeEffects = resolved.activeEffects
+              logs.push(resolved.log)
+
+              const shadowResolved = resolveShadowSupportActions({
+                shadows: equippedShadows,
+                player,
+                monster,
+                activeEffects,
+                rng: Math.random,
+                turnNumber: getManualActionCount(logs),
+                waveNumber: 1,
+                waveLabel: 'Wave 1',
+                phase: 'player_after_action',
+                playerUsedSkill: skill.id !== BASIC_ATTACK_SKILL.id,
+              })
+              monster = shadowResolved.monster
+              activeEffects = shadowResolved.activeEffects
+              logs.push(...shadowResolved.logs)
+            } else {
+              monster = decrementCooldowns(monster)
+              const skill = chooseSkill(
+                monster,
+                allSkills.filter(sk => sk.ownerType === 'common' || sk.ownerType === 'monster'),
+                buildBattleSkillContext(monster, player, activeEffects, getManualActionCount(logs) + 1)
+              )
+              const resolved = resolveAction({
+                actor: monster,
+                target: player,
+                skill,
+                activeEffects,
+                rng: Math.random,
+                turnNumber: logs.length + 1,
+                waveNumber: 1,
+                waveLabel: 'Wave 1',
+              })
+              monster = {
+                ...resolved.actor,
+                cooldowns: {
+                  ...resolved.actor.cooldowns,
+                  [skill.id]: getSkillCooldownTurns(skill),
+                },
+              }
+              player = resolved.target
+              activeEffects = resolved.activeEffects
+              logs.push(resolved.log)
+            }
+          }
+
+          if (player.hp <= 0) {
+            result = 'defeat'
+            break
+          }
+          if (monster.hp <= 0) {
+            logs.push(createManualSystemLog(
+              `[${monster.name}]을 쓰러뜨렸습니다. 전투 승리!`,
+              logs.length + 1,
+              1,
+              monster
+            ))
+            result = 'victory'
+            break
+          }
+          if (getManualActionCount(logs) >= session.maxTurns) {
+            result = 'draw'
+          }
+          if (!result) {
+            activeEffects = tickRoundEffects(activeEffects)
+          }
+        }
+
+        if (!result) {
+          result = player.hp <= 0 ? 'defeat' : 'draw'
+        }
+
+        const combatLog: CombatLog = {
+          battleId: `worldmap-manual-auto-${nodeId}-${Date.now()}`,
+          gateInstanceId: `worldmap-${nodeId}`,
+          result,
+          turns: logs,
+          totalTurns: getManualActionCount(logs),
+          playerHpRemaining: Math.max(0, player.hp),
+          rewards: [],
+          penaltyApplied: undefined,
+          totalWaves: 1,
+          clearedWaves: result === 'victory' ? 1 : 0,
+          source: 'worldmap',
+        }
+
+        set({
+          manualBattleSession: {
+            ...session,
+            turn: getManualActionCount(logs) + 1,
+            player: toManualCombatant(player),
+            monster: toManualCombatant(monster),
+            cooldowns: player.cooldowns,
+            monsterCooldowns: monster.cooldowns,
+            activeEffects,
+            logs,
+            result,
+          },
+        })
+
+        get().resolveDirectWorldBattle(combatLog, nodeId)
       },
 
       attemptShadowExtraction: (gateInstanceId) => {
@@ -10412,6 +11435,8 @@ export const useGame = create<GameState>()(
         lastShadowExpeditionDate: undefined,
         activeShadowExpeditionId: undefined,
         infiniteTower: createInitialTowerState(),
+        activeWorldBattle: undefined,
+        worldBattleRetreats: {},
         rewardBoxes: [],
         lastDailyBoxDate: undefined,
         lastWeeklyBoxWeek: undefined,
@@ -10534,6 +11559,8 @@ export const useGame = create<GameState>()(
           lastShadowExpeditionDate: undefined,
           activeShadowExpeditionId: undefined,
           infiniteTower: createInitialTowerState(),
+          activeWorldBattle: undefined,
+          worldBattleRetreats: {},
           rewardBoxes: [],
           lastDailyBoxDate: undefined,
           lastWeeklyBoxWeek: undefined,
@@ -11356,7 +12383,7 @@ export const useGame = create<GameState>()(
     }),
     {
       name: 'levelup-save',
-      version: 17,
+      version: 18,
       partialize: (state) => ({
         ...state,
         manualBattleSession: undefined,
@@ -11895,6 +12922,16 @@ export const useGame = create<GameState>()(
                 )
               }
             }
+          }
+        }
+
+        // ── World Map Battle System L3 (v18) 마이그레이션 ──
+        if (persistedState) {
+          if (!('activeWorldBattle' in persistedState)) {
+            persistedState.activeWorldBattle = undefined
+          }
+          if (!persistedState.worldBattleRetreats) {
+            persistedState.worldBattleRetreats = {}
           }
         }
 

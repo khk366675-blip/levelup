@@ -3,6 +3,38 @@ import { RIFT_REGIONS, REGION_ADJACENCY, RIFT_NODES } from './seed'
 
 type RngFn = () => number
 
+// =====================================================================
+// 밸런스 튜닝 상수 (살아있는 균열 세계)
+// 목표 기준선: 플레이어 개입 없이 100일 시뮬 시 → 세계 오염도 70%+,
+//   군주 2~3명 등장, 거의 모든 회차에서 군주 최소 1명 등장(세계가 무너지는 궤도).
+// 밸런스가 어긋나면 아래 숫자만 조정해 재측정한다. (로직은 건드리지 않음)
+// =====================================================================
+
+// [레버1] 게이트 난이도 배율. 일반 게이트 기본 난이도에 곱해 NPC 성공률을 낮춘다.
+//   기존 99% 성공률 → 목표 70~80%대. 값↑ = 세계가 더 위험.
+const GATE_DIFFICULTY_MULT = 2.6
+
+// [레버2] S급 게이트 조기화. 시작일을 앞당기고 출현 확률을 올린다.
+const SGRADE_START_DAY = 20
+const SGRADE_CHANCE_EARLY = 0.4   // SGRADE_START_DAY~59일
+const SGRADE_CHANCE_MID = 0.65    // 60~89일
+const SGRADE_CHANCE_LATE = 0.9    // 90일+
+
+// [레버3] 정화 보너스 감소. 클리어 시 지역 오염 감소량을 줄여 오염이 쌓이게 한다.
+//   기존 5~10 → 축소. 값↓ = 오염이 더 잘 쌓임.
+const CLEANSE_MIN = 1
+const CLEANSE_RANGE = 2   // 실제 정화 = CLEANSE_MIN ~ CLEANSE_MIN+CLEANSE_RANGE
+
+// [레버4] 군주 등장 후 오염 가속. 군주가 하나라도 있으면 매일 이만큼 전역 오염 상승.
+//   주의: 군주 '수에 비례'시키면 양성 피드백으로 폭주(0 아니면 5로 양극화)하므로,
+//   고정 소량으로 두어 서서히 압박만 가한다. (설계 4장: 1막 멈추지 않되 점진적)
+const MONARCH_DAILY_CORRUPTION = 0.6
+
+// [레버5] 군주 등장 오염 임계값. 각 군주가 등장하는 전역 오염도 경계.
+//   간격이 좁으면 오염 상승 시 군주가 우르르 등장한다. 100일 평균 2~3명이 목표.
+//   5명(천사 직전)은 오염 거의 만렙(plateau)에서만 도달하도록 상한을 높게 둔다.
+const MONARCH_THRESHOLDS = [40, 60, 78, 92, 99]   // 1~5번째 군주 등장 오염도
+
 /**
  * 특정 지역의 가용 총전력을 계산합니다. (사망/부상 헌터 제외)
  */
@@ -190,8 +222,8 @@ export function advanceWorldDay(state: LivingWorldState, rng: RngFn): LivingWorl
           }
         }
 
-        // 오염 정화 보너스 (지역 오염도 -5% ~ -10%)
-        const cleanse = Math.round(5 + rng() * 5)
+        // 오염 정화 보너스 (지역 오염도 감소) — [레버3] 축소됨
+        const cleanse = Math.round(CLEANSE_MIN + rng() * CLEANSE_RANGE)
         region.corruption = Math.max(0, region.corruption - cleanse)
 
         addLog(`⚔️ [${rName}] 헌터들이 [${gate.name}] 게이트 공략에 성공했습니다! (승률: ${Math.round(winChance * 100)}%) 지역 오염도 -${cleanse}%`)
@@ -278,7 +310,7 @@ export function advanceWorldDay(state: LivingWorldState, rng: RngFn): LivingWorl
       const region = { ...nextRegions[regionId] }
       // 한 국가당 최대 4개 이하의 활성 게이트를 가질 때만 스폰
       if (region && region.activeGateIds.length < 4) {
-        const isSGrade = nextDay >= 30 && rng() < (nextDay < 60 ? 0.25 : nextDay < 90 ? 0.55 : 0.85)
+        const isSGrade = nextDay >= SGRADE_START_DAY && rng() < (nextDay < 60 ? SGRADE_CHANCE_EARLY : nextDay < 90 ? SGRADE_CHANCE_MID : SGRADE_CHANCE_LATE)
         
         const newGateId = `gate-spawn-${nextDay}-${regionId}-${Math.floor(rng() * 10000)}`
         const rName = RIFT_REGIONS.find(r => r.id === regionId)?.name ?? regionId.toUpperCase()
@@ -297,17 +329,17 @@ export function advanceWorldDay(state: LivingWorldState, rng: RngFn): LivingWorl
           const difficultyRoll = rng()
           if (difficultyRoll < 0.4) {
             gateName = '보이지 않는 하수구'
-            difficulty = Math.round(300 + rng() * 300)
+            difficulty = Math.round((300 + rng() * 300) * GATE_DIFFICULTY_MULT)
             deadline = Math.round(8 + rng() * 4) // E급 8~12일
             rank = 'E'
           } else if (difficultyRoll < 0.8) {
             gateName = '나태의 메아리 회랑'
-            difficulty = Math.round(700 + rng() * 400)
+            difficulty = Math.round((700 + rng() * 400) * GATE_DIFFICULTY_MULT)
             deadline = Math.round(7 + rng() * 4) // D급 7~11일
             rank = 'D'
           } else {
             gateName = '기억 유실의 서고'
-            difficulty = Math.round(1300 + rng() * 600)
+            difficulty = Math.round((1300 + rng() * 600) * GATE_DIFFICULTY_MULT)
             deadline = Math.round(6 + rng() * 4) // C급 6~10일
             rank = 'C'
           }
@@ -336,14 +368,20 @@ export function advanceWorldDay(state: LivingWorldState, rng: RngFn): LivingWorl
     }
   }
 
+  // 5.5 [레버4] 군주 등장 후 오염 가속 — 등장한 군주 수에 비례해 매일 전역 오염 상승
+  // (설계 4장: 1막은 군주 등장 후에도 멈추지 않으며 군주가 압박을 가중한다)
+  if (state.monarchsAppeared > 0) {
+    nextWorldCorruption = Math.min(100, nextWorldCorruption + MONARCH_DAILY_CORRUPTION)
+  }
+
   // 6. 군주 등장 조건 판정
   // 전역 오염도가 30, 50, 70, 85, 95를 초과할 때마다 군주 등장 카운트 증가
-  const nextMonarchsLimit = 
-    nextWorldCorruption >= 95 ? 5 :
-    nextWorldCorruption >= 85 ? 4 :
-    nextWorldCorruption >= 70 ? 3 :
-    nextWorldCorruption >= 50 ? 2 :
-    nextWorldCorruption >= 30 ? 1 : 0
+  const nextMonarchsLimit =
+    nextWorldCorruption >= MONARCH_THRESHOLDS[4] ? 5 :
+    nextWorldCorruption >= MONARCH_THRESHOLDS[3] ? 4 :
+    nextWorldCorruption >= MONARCH_THRESHOLDS[2] ? 3 :
+    nextWorldCorruption >= MONARCH_THRESHOLDS[1] ? 2 :
+    nextWorldCorruption >= MONARCH_THRESHOLDS[0] ? 1 : 0
 
   let nextMonarchsAppeared = state.monarchsAppeared
   if (nextMonarchsLimit > nextMonarchsAppeared) {

@@ -1184,7 +1184,7 @@ export interface ManualBattleSession {
   finalized?: boolean
   defeatReason?: 'player_dead' | 'party_wipe' | 'abandon' | 'retreat' | 'timeout' | 'unknown'
   startedAt: string
-  source?: 'gate' | 'tower' | 'echo' | 'gate_echo' | 'red_gate' | 'promotion_exam'
+  source?: 'gate' | 'tower' | 'echo' | 'gate_echo' | 'red_gate' | 'promotion_exam' | 'worldmap' | 'world_map'
   towerFloor?: number
   pressureSnapshot?: RealityPressureSnapshot
   isRedGate?: boolean
@@ -1242,7 +1242,7 @@ export interface CombatLog {
   penaltyApplied?: GatePenalty
   totalWaves?: number
   clearedWaves?: number
-  source?: 'gate' | 'tower' | 'echo' | 'gate_echo' | 'red_gate' | 'promotion_exam'
+  source?: 'gate' | 'tower' | 'echo' | 'gate_echo' | 'red_gate' | 'promotion_exam' | 'worldmap' | 'world_map'
   shadowCasualtyIds?: string[]
   finalOutcome?: 'victory' | 'defeat' | 'draw' | 'cancelled'
   defeatReason?: 'player_dead' | 'party_wipe' | 'abandon' | 'unknown'
@@ -2157,6 +2157,36 @@ export interface InfiniteTowerState {
   firstClearRewardsClaimed: Record<number, boolean>
   bossRewardsClaimed: Record<number, boolean>
   activeTowerBattle?: TowerBattleSession
+}
+
+// ── World Map Battle System (L3) ───────────────────────────────────
+
+export type WorldBattleStatus = 'idle' | 'in_progress' | 'revealing' | 'resolved'
+
+export interface WorldBattleResult {
+  outcome: 'victory' | 'defeat' | 'draw'
+  nodeId: string
+  gateName: string
+  rewards: {
+    hunterXp?: number
+    gold?: number
+    shadowEssence?: number
+    itemDropChance?: number
+  }
+}
+
+export interface WorldBattleSession {
+  id: string
+  nodeId: string
+  gateName: string
+  regionId: string
+  difficulty: number
+  recommendedPower: number
+  monsterIds: string[]
+  status: WorldBattleStatus
+  logs: BattleTurn[]
+  result?: WorldBattleResult
+  showResult?: boolean
 }
 
 // ── Focus Session / Infiltration (12-41A) ───────────────────────────

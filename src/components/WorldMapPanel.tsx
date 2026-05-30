@@ -8,13 +8,54 @@ import {
   HelpCircle,
   X,
   Swords,
+  Shield,
+  Zap,
 } from 'lucide-react'
 import { useGame } from '../lib/store'
 import { RIFT_REGIONS, RIFT_NODES } from '../lib/seed'
 import { getRegionProgress, RIFT_NODE_STATUS_META } from '../lib/riftWorld'
 import { getRegionTotalPower } from '../lib/livingWorld'
 import { GatePanel } from './GatePanel'
-import type { RiftNode, RiftNodeStatus, RiftRegion } from '../lib/types'
+import type { RiftNode, RiftRegion } from '../lib/types'
+import { getHunterCombatPower } from '../lib/combatPower'
+import { todayKey } from '../lib/game'
+import { DramaticReveal, type RevealStep } from './DramaticReveal'
+import { CinematicLogOverlay, type CinematicLogData, type CinematicLogTone } from './CinematicLogOverlay'
+
+// 배틀 로그를 CinematicLogData로 매핑해주는 헬퍼 함수
+const mapTurnsToCinematicLogs = (turns: any[]): CinematicLogData[] => {
+  return turns.map((t, idx) => {
+    let tone: CinematicLogTone = 'system'
+    let badge = `Turn ${t.turnNumber || idx + 1}`
+    let title = t.message || ''
+    let body = ''
+
+    if (t.outcome === 'damage') {
+      tone = t.actorType === 'player' ? 'player' : 'monster'
+      badge = t.actorType === 'player' ? '플레이어 차례' : '몬스터 차례'
+    } else if (t.outcome === 'heal') {
+      tone = 'reward'
+      badge = '치유'
+    } else if (t.outcome === 'miss' || t.outcome === 'evade') {
+      tone = 'defense'
+      badge = '회피/명중 실패'
+    } else if (t.eventType === 'reaction') {
+      tone = 'shadow'
+      badge = '그림자 수호'
+    } else if (t.message && t.message.includes('그림자')) {
+      tone = 'shadow'
+      badge = '그림자 출격'
+    }
+
+    return {
+      id: `world-log-${idx}-${Date.now()}`,
+      tone,
+      badge,
+      title,
+      body,
+    }
+  })
+}
 
 export function WorldMapPanel() {
   const riftNodesState = useGame((s) => s.riftNodes ?? {})
@@ -24,10 +65,42 @@ export function WorldMapPanel() {
   const enterRiftNode = useGame((s) => s.enterRiftNode)
   const livingWorld = useGame((s) => s.livingWorld)
 
-  const [expandedRegionId, setExpandedRegionId] = useState<string | null>(null)
+  // L3 전용 신설 월드맵 상태 및 액션 연동
+  const activeWorldBattle = useGame((s) => s.activeWorldBattle)
+  const worldBattleRetreats = useGame((s) => s.worldBattleRetreats ?? {})
+  const manualSession = useGame((s) => s.manualBattleSession)
+  const startWorldBattle = useGame((s) => s.startWorldBattle)
+  const startWorldManualBattle = useGame((s) => s.startWorldManualBattle)
+  const cancelWorldBattle = useGame((s) => s.cancelWorldBattle)
+  const resolveWorldBattle = useGame((s) => s.resolveWorldBattle)
 
+  // 헌터 스펙 및 실효 CP 연동용 상태
+  const hunter = useGame((s) => s.hunter)
+  const items = useGame((s) => s.items)
+  const equipment = useGame((s) => s.equipment)
+  const ownedShadows = useGame((s) => s.ownedShadows ?? [])
+  const equippedShadowIds = useGame((s) => s.equippedShadowIds ?? [])
+  const activeConsumableEffects = useGame((s) => s.activeConsumableEffects ?? [])
+
+  const equippedShadows = ownedShadows.filter((s) => equippedShadowIds.includes(s.instanceId))
+
+  // 실효 CP (본체 + 장착 섀도우 CP 합산)
+  const playerPower = getHunterCombatPower({
+    hunter,
+    items,
+    equipment,
+    ownedShadows,
+    equippedShadowIds,
+    activeConsumableEffects,
+  })
+
+  const [expandedRegionId, setExpandedRegionId] = useState<string | null>(null)
   const [selectedNode, setSelectedNode] = useState<RiftNode | null>(null)
   const [toastMessage, setToastMessage] = useState<string | null>(null)
+
+  // 로컬 확인 모달 제어용 상태
+  const [showRecklessConfirm, setShowRecklessConfirm] = useState(false)
+  const [recklessConfirmType, setRecklessConfirmType] = useState<'auto' | 'manual'>('auto')
 
   // 토스트 메시지 도우미
   const triggerToast = (msg: string) => {
@@ -56,25 +129,199 @@ export function WorldMapPanel() {
     }
   }
 
-  const handleEnterGate = (node: RiftNode) => {
-    enterRiftNode(node.id)
-    triggerToast(`[${node.name}] 균열 탐색 및 전투 준비 돌입!`)
-  }
-
-  // 현재 노드의 활성 게이트가 켜져 있는지 여부
+  // 현재 노드의 활성 게이트가 켜져 있는지 여부 (기존 E/D/C 일반 게이트 전선)
   const isGateActive =
     activeGate &&
     activeGate.status === 'active' &&
     activeRiftNodeId &&
-    RIFT_NODES.some((rn: any) => rn.id === activeRiftNodeId)
+    RIFT_NODES.some((rn: any) => rn.id === activeRiftNodeId) &&
+    (!manualSession || manualSession.source !== 'world_map')
+
+  // 위험도 계산 함수 (0.6 미만 시 무모, recommendedPower 이상 시 안전, 그 사이 위험)
+  const getDangerLevel = (node: RiftNode) => {
+    const difficulty = node.difficulty ?? 500
+    if (playerPower >= difficulty) return 'safe'
+    if (playerPower >= difficulty * 0.6) return 'danger'
+    return 'reckless'
+  }
+
+  // 당일 후퇴 가드 여부
+  const isNodeRetreatedToday = (nodeId: string) => {
+    return worldBattleRetreats[nodeId] === todayKey()
+  }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 relative">
       {/* 균열 상태 토스트 안내 */}
       {toastMessage && (
         <div className="fixed bottom-6 right-6 z-50 flex items-center gap-2 rounded-lg border border-purple-500/30 bg-ink-950 px-4 py-3 text-sm text-purple-200 shadow-glow-purple">
           <AlertCircle className="h-4 w-4 text-purple-400" />
           <span>{toastMessage}</span>
+        </div>
+      )}
+
+      {/* 무모(Reckless) 진입 확인 모달 */}
+      {showRecklessConfirm && selectedNode && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/85 backdrop-blur-sm">
+          <div className="panel corner-bracket border-rose-500/40 bg-ink-950 p-6 max-w-md w-full mx-4 shadow-glow-red animate-scale-in">
+            <div className="br" />
+            <div className="flex items-center gap-3 text-rose-400">
+              <AlertCircle className="h-6 w-6 animate-pulse" />
+              <h4 className="text-lg font-black tracking-wider">⚠️ 위험 경고: 무모한 진입</h4>
+            </div>
+            <p className="mt-4 text-sm text-white/70 leading-relaxed">
+              이 균열 구역의 권장 전투력은 <span className="text-pink-300 font-bold">{(selectedNode.difficulty ?? 500).toLocaleString()} CP</span>이나, 현재 헌터의 실효 전투력은 <span className="text-rose-400 font-bold">{playerPower.toLocaleString()} CP</span>로 60% 미만입니다.
+            </p>
+            <div className="mt-3 rounded border border-rose-500/20 bg-rose-500/5 p-3 text-xs text-rose-300/80 leading-normal">
+              정화 도중 일반 몬스터에게 일격에 즉사할 위험이 매우 높습니다! 정화 전선에 진입하기 전에 장착 그림자를 추가하거나 장비를 강화하는 것을 권장합니다.
+            </div>
+            <div className="mt-6 flex justify-end gap-3">
+              <button
+                onClick={() => setShowRecklessConfirm(false)}
+                className="rounded border border-white/10 bg-white/5 hover:bg-white/10 px-4 py-2 text-xs font-bold text-white/70 transition-all cursor-pointer"
+              >
+                돌아가기 (취소)
+              </button>
+              <button
+                onClick={() => {
+                  setShowRecklessConfirm(false)
+                  if (recklessConfirmType === 'auto') {
+                    startWorldBattle(selectedNode.id)
+                  } else {
+                    startWorldManualBattle(selectedNode.id)
+                  }
+                }}
+                className="rounded border border-rose-500/40 bg-rose-500/10 hover:bg-rose-500/25 px-4 py-2 text-xs font-bold text-rose-200 shadow-glow-red hover:text-white transition-all cursor-pointer"
+              >
+                강행 진입
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 자동 전투 시네마틱 오버레이 */}
+      {activeWorldBattle && activeWorldBattle.status === 'revealing' && (
+        <div className="fixed inset-0 z-[80] flex flex-col items-center justify-center bg-black/90 backdrop-blur-md">
+          <div className="text-center mb-10 animate-pulse">
+            <h3 className="text-lg font-black tracking-widest text-purple-400">자동 균열 정화 전투 진행 중</h3>
+            <p className="text-xs text-white/40 mt-1">심연의 파동을 억제하고 정화 전선을 구축하는 중입니다...</p>
+          </div>
+          
+          <div className="relative w-full max-w-lg h-56 flex items-center justify-center">
+            <CinematicLogOverlay
+              visible={true}
+              logs={mapTurnsToCinematicLogs(activeWorldBattle.logs)}
+              onComplete={() => resolveWorldBattle()}
+              intervalMs={2200}
+              position="inline"
+            />
+          </div>
+          
+          <div className="mt-10">
+            <button
+              onClick={() => cancelWorldBattle()}
+              className="rounded border border-rose-500/30 bg-rose-500/10 hover:bg-rose-500/20 px-4 py-2 text-xs font-bold text-rose-200 tracking-wider transition-all cursor-pointer"
+            >
+              🏳️ 전투 후퇴 (당일 재진입 제한)
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* 자동 전투 결과 Dramatic Reveal */}
+      {activeWorldBattle && activeWorldBattle.status === 'resolved' && activeWorldBattle.result && (
+        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/90 backdrop-blur-md">
+          <div className="max-w-md w-full mx-4">
+            <DramaticReveal
+              isOpen={true}
+              steps={[
+                {
+                  title: activeWorldBattle.result.outcome === 'victory' ? '정화 성공' : '정화 실패',
+                  text: activeWorldBattle.result.outcome === 'victory' 
+                    ? '🎉 균열 정화 완료!' 
+                    : '💀 정화 공략 실패...',
+                  subtext: activeWorldBattle.result.outcome === 'victory'
+                    ? `[${activeWorldBattle.gateName}]의 심연 에너지를 완벽히 차단하고 정화했습니다.`
+                    : `[${activeWorldBattle.gateName}] 공략 도중 부상을 당해 복귀했습니다.`,
+                }
+              ]}
+              tone={activeWorldBattle.result.outcome === 'victory' ? 'success' : 'failure'}
+              position="inline"
+              result={
+                <div className="mt-6 space-y-4">
+                  {activeWorldBattle.result.outcome === 'victory' ? (
+                    <div className="grid gap-2 text-xs font-medium">
+                      <div className="text-white/40 text-center mb-1">획득 보상 목록</div>
+                      {activeWorldBattle.result.rewards.hunterXp ? (
+                        <div className="rounded border border-emerald-500/20 bg-emerald-500/5 px-3 py-2 text-emerald-300 flex justify-between">
+                          <span>전투 정화 XP</span>
+                          <span className="font-bold">+{activeWorldBattle.result.rewards.hunterXp} XP</span>
+                        </div>
+                      ) : null}
+                      {activeWorldBattle.result.rewards.gold ? (
+                        <div className="rounded border border-amber-500/20 bg-amber-500/5 px-3 py-2 text-amber-300 flex justify-between">
+                          <span>정화 지원금</span>
+                          <span className="font-bold">+{activeWorldBattle.result.rewards.gold} Gold</span>
+                        </div>
+                      ) : null}
+                      {activeWorldBattle.result.rewards.shadowEssence ? (
+                        <div className="rounded border border-purple-500/20 bg-purple-500/5 px-3 py-2 text-purple-300 flex justify-between">
+                          <span>어둠의 정수</span>
+                          <span className="font-bold">+{activeWorldBattle.result.rewards.shadowEssence} 정수</span>
+                        </div>
+                      ) : null}
+                    </div>
+                  ) : (
+                    <div className="rounded border border-rose-500/20 bg-rose-500/5 p-3 text-xs text-rose-300/80 text-center">
+                      6시간 동안 행동 불능 및 부상 상태가 되며, 회복 퀘스트를 3개 클리어하거나 대기 시간이 지나야 공략을 재개할 수 있습니다.
+                    </div>
+                  )}
+                  
+                  <button
+                    onClick={() => cancelWorldBattle()} // 세션 클리어용 호출
+                    className="btn btn-primary mt-4 w-full py-2.5 text-xs font-black tracking-widest text-center cursor-pointer"
+                  >
+                    정화 전선 정리 후 복귀
+                  </button>
+                </div>
+              }
+            />
+          </div>
+        </div>
+      )}
+
+      {/* 수동 전투 모드 (전체 오버레이 형태로 GatePanel을 렌더링) */}
+      {manualSession && manualSession.source === 'world_map' && (
+        <div className="fixed inset-0 z-[90] bg-ink-950 overflow-y-auto p-4 sm:p-6 md:p-8 animate-fade-in scrollbar-thin">
+          <div className="max-w-4xl mx-auto space-y-4">
+            <div className="flex items-center justify-between border-b border-white/5 pb-3">
+              <div className="flex items-center gap-2 text-purple-400">
+                <Swords className="h-5 w-5" />
+                <span className="text-sm font-black tracking-widest">수동 정화 전투 개시</span>
+              </div>
+              <span className="rounded bg-purple-500/25 px-2.5 py-0.5 text-[10px] font-bold text-purple-200 border border-purple-400/20">
+                {manualSession.gateName}
+              </span>
+            </div>
+            
+            {/* 그림자 장착 정보 표시 */}
+            {equippedShadows.length > 0 && (
+              <div className="rounded border border-purple-500/20 bg-purple-500/5 p-3 flex flex-wrap gap-2 items-center text-xs">
+                <Shield className="h-4 w-4 text-purple-400" />
+                <span className="text-white/60 font-medium">🛡️ 그림자 탱킹 작동 중:</span>
+                {equippedShadows.map(shadow => (
+                  <span key={shadow.instanceId} className="rounded bg-purple-500/10 px-2 py-0.5 text-[10px] text-purple-300 font-bold border border-purple-500/10">
+                    {shadow.name} (Lv.{shadow.level})
+                  </span>
+                ))}
+              </div>
+            )}
+
+            <div className="bg-ink-900 rounded-xl border border-white/10 p-2 sm:p-4">
+              <GatePanel />
+            </div>
+          </div>
         </div>
       )}
 
@@ -180,7 +427,6 @@ export function WorldMapPanel() {
                 const prog = getRegionProgress(region.id, riftNodesState)
                 const regionState = livingWorld?.regions[region.id]
                 const totalPower = regionState ? getRegionTotalPower(regionState, livingWorld.namedHunters) : 0
-                const namedCount = regionState ? regionState.namedHunterIds.length : 0
                 const isExpanded = expandedRegionId === region.id
 
                 return (
@@ -245,17 +491,17 @@ export function WorldMapPanel() {
                         <div className="space-y-1">
                           <div className="text-[9px] font-bold text-white/40 mb-1">소속 네임드 헌터</div>
                           {regionState.namedHunterIds.map((hunterId) => {
-                            const hunter = livingWorld?.namedHunters[hunterId]
-                            if (!hunter) return null
+                            const hunterObj = livingWorld?.namedHunters[hunterId]
+                            if (!hunterObj) return null
                             return (
                               <div key={hunterId} className="flex items-center justify-between bg-white/5 px-2 py-1 rounded">
-                                <span className="font-bold text-white/80">{hunter.name}</span>
+                                <span className="font-bold text-white/80">{hunterObj.name}</span>
                                 <div className="flex items-center gap-1.5">
                                   <span className="rounded bg-purple-500/20 px-1 text-[8px] font-black text-purple-300 border border-purple-500/30">
-                                    {hunter.rank}
+                                    {hunterObj.rank}
                                   </span>
                                   <span className="text-cyan-300 font-mono text-[9px] font-bold">
-                                    ⚔️{(hunter.power / 1000).toFixed(0)}k
+                                    ⚔️{(hunterObj.power / 1000).toFixed(0)}k
                                   </span>
                                 </div>
                               </div>
@@ -285,7 +531,7 @@ export function WorldMapPanel() {
                 </div>
                 <button
                   onClick={() => setSelectedNode(null)}
-                  className="rounded p-1 hover:bg-white/5 text-white/45 hover:text-white"
+                  className="rounded p-1 hover:bg-white/5 text-white/45 hover:text-white cursor-pointer"
                 >
                   <X className="h-4 w-4" />
                 </button>
@@ -314,15 +560,52 @@ export function WorldMapPanel() {
                     {selectedNode.difficultyRank ?? 'E'}-RANK
                   </span>
                 </div>
-                {/* MVP-2 구역 권장 전력 및 시한 */}
+                
+                {/* 권장 CP vs 실효 CP 비교 브리핑 */}
                 {(selectedNode.difficulty ?? 0) > 0 && (
-                  <div className="flex justify-between border-b border-white/5 pb-2 text-xs">
-                    <span className="text-white/45">권장 전투력</span>
-                    <span className="font-bold text-pink-300">
-                      {(selectedNode.difficulty ?? 0).toLocaleString()} CP
-                    </span>
-                  </div>
+                  <>
+                    <div className="flex justify-between border-b border-white/5 pb-2 text-xs">
+                      <span className="text-white/45">권장 전투력</span>
+                      <span className="font-bold text-pink-300">
+                        {(selectedNode.difficulty ?? 0).toLocaleString()} CP
+                      </span>
+                    </div>
+                    <div className="flex justify-between border-b border-white/5 pb-2 text-xs">
+                      <span className="text-white/45">헌터 실효 전투력</span>
+                      <span className="font-bold text-cyan-300">
+                        {playerPower.toLocaleString()} CP
+                      </span>
+                    </div>
+
+                    {/* 위험도 경고 표시 */}
+                    <div className="mt-2.5 rounded border p-3 flex flex-col gap-1.5">
+                      {getDangerLevel(selectedNode) === 'safe' && (
+                        <div className="text-emerald-400 flex items-center gap-1.5 text-xs font-bold">
+                          <CheckCircle className="h-4 w-4" />
+                          <span>안전: 격파 수월. 안정적인 정화 전선입니다.</span>
+                        </div>
+                      )}
+                      {getDangerLevel(selectedNode) === 'danger' && (
+                        <div className="text-yellow-400 flex items-center gap-1.5 text-xs font-bold">
+                          <AlertCircle className="h-4 w-4" />
+                          <span>위험: 균열의 압박이 강하나 도전해볼 만합니다.</span>
+                        </div>
+                      )}
+                      {getDangerLevel(selectedNode) === 'reckless' && (
+                        <div className="text-rose-400 flex flex-col gap-1 text-xs font-bold border border-rose-500/20 bg-rose-500/5 rounded p-2">
+                          <div className="flex items-center gap-1.5">
+                            <AlertCircle className="h-4 w-4 animate-pulse" />
+                            <span>⚠️ 무모: 매우 높은 즉사 위험 구역!</span>
+                          </div>
+                          <span className="text-[10px] font-medium text-rose-300/80 leading-normal">
+                            치명적인 즉사 위험이 있으니 그림자를 보강하거나 레벨업 후 진입하십시오.
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  </>
                 )}
+
                 {selectedNode.daysRemaining !== undefined && (
                   <div className="flex justify-between border-b border-white/5 pb-2 text-xs">
                     <span className="text-white/45">소멸/폭주 시한</span>
@@ -331,33 +614,62 @@ export function WorldMapPanel() {
                     </span>
                   </div>
                 )}
-                <div className="flex justify-between border-b border-white/5 pb-2 text-xs">
-                  <span className="text-white/45">매핑 게이트 ID</span>
-                  <span className="text-white/70 font-mono text-[10px]">
-                    {selectedNode.gateDefId}
-                  </span>
-                </div>
               </div>
 
-              <div className="mt-6">
-                {(riftNodesState[selectedNode.id] ?? selectedNode.status) ===
-                'cleared' ? (
-                  <div className="rounded border border-emerald-500/20 bg-emerald-500/5 p-3 text-xs text-emerald-200 text-center">
-                    이미 완전히 정화된 구역입니다. 재진입이 가능합니다.
+              <div className="mt-6 space-y-2">
+                {isNodeRetreatedToday(selectedNode.id) ? (
+                  <div className="rounded border border-rose-500/25 bg-rose-500/5 p-3 text-xs text-rose-300/85 text-center font-bold">
+                    ⚠️ 오늘 이 구역에서 후퇴하여 다시 진입할 수 없습니다. 내일 다시 시도하십시오.
                   </div>
-                ) : null}
+                ) : (
+                  <>
+                    {(riftNodesState[selectedNode.id] ?? selectedNode.status) === 'cleared' ? (
+                      <div className="rounded border border-emerald-500/20 bg-emerald-500/5 p-2.5 text-[11px] text-emerald-200 text-center">
+                        이미 완전히 정화된 구역입니다. 재정화가 가능합니다.
+                      </div>
+                    ) : null}
 
-                <button
-                  onClick={() => handleEnterGate(selectedNode)}
-                  disabled={
-                    (riftNodesState[selectedNode.id] ?? selectedNode.status) ===
-                    'locked'
-                  }
-                  className="btn btn-primary mt-3 w-full flex items-center justify-center gap-2 py-2 text-xs"
-                >
-                  <Swords className="h-4 w-4" />
-                  균열 정화 개시
-                </button>
+                    {/* 자동 전투 버튼 */}
+                    <button
+                      onClick={() => {
+                        const level = getDangerLevel(selectedNode)
+                        if (level === 'reckless') {
+                          setRecklessConfirmType('auto')
+                          setShowRecklessConfirm(true)
+                        } else {
+                          startWorldBattle(selectedNode.id)
+                        }
+                      }}
+                      disabled={
+                        (riftNodesState[selectedNode.id] ?? selectedNode.status) === 'locked'
+                      }
+                      className="btn btn-primary w-full flex items-center justify-center gap-2 py-2 text-xs cursor-pointer"
+                    >
+                      <Swords className="h-4 w-4" />
+                      자동 정화 전투 (시네마틱)
+                    </button>
+
+                    {/* 수동 전투 버튼 */}
+                    <button
+                      onClick={() => {
+                        const level = getDangerLevel(selectedNode)
+                        if (level === 'reckless') {
+                          setRecklessConfirmType('manual')
+                          setShowRecklessConfirm(true)
+                        } else {
+                          startWorldManualBattle(selectedNode.id)
+                        }
+                      }}
+                      disabled={
+                        (riftNodesState[selectedNode.id] ?? selectedNode.status) === 'locked'
+                      }
+                      className="btn border border-cyan-500/30 bg-cyan-950/20 hover:bg-cyan-500/15 w-full flex items-center justify-center gap-2 py-2 text-xs text-cyan-200 transition-all cursor-pointer"
+                    >
+                      <Zap className="h-4 w-4 text-cyan-400" />
+                      수동 조작 정화 (카드 전투)
+                    </button>
+                  </>
+                )}
               </div>
             </div>
           ) : (
@@ -379,7 +691,7 @@ export function WorldMapPanel() {
 
             {/* 지도 상의 가상 대륙 경계선 대체 홀더 */}
             <div className="absolute inset-0 flex items-center justify-center text-[10px] text-white/5 select-none pointer-events-none font-mono">
-              [ DIMENSIONAL RIFT MAP - MVP-1 ]
+              [ DIMENSIONAL RIFT MAP - MVP-2 ]
             </div>
 
             {/* 국가(Region) 레이블 렌더링 */}
@@ -446,9 +758,9 @@ export function WorldMapPanel() {
         </div>
       </div>
 
-      {/* 인라인 게이트 활성화 HUD (현재 균열에 진입한 경우) */}
+      {/* 인라인 게이트 활성화 HUD (기존 게이트 전선 호환용) */}
       {isGateActive && (
-        <div className="panel corner-bracket border-purple-500/40 bg-purple-950/10 p-6 animate-fade-in relative">
+        <div className="panel corner-bracket border-purple-500/40 bg-purple-950/10 p-6 animate-fade-in relative mt-6">
           <div className="br" />
           <div className="absolute top-4 right-4 z-10">
             <span className="rounded-full bg-purple-500/20 border border-purple-400/30 px-3 py-1 text-[10px] font-black text-purple-200 tracking-widest animate-pulse">

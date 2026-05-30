@@ -58,17 +58,19 @@ export function initLivingWorld(seed: number): LivingWorldState {
   // 1. RIFT_NODES (게이트) 초기 상태 구축
   for (const node of RIFT_NODES) {
     // 난이도에 따른 권장 전투력 롤링 (개인 스케일 적용)
+    // 초기 게이트는 회차 시작 직후이므로 틱 생성 게이트(2.6배)보다 완만한 1.8배 적용
+    const initMult = 1.8
     let difficulty = 300
     if (node.difficultyRank === 'E') {
-      difficulty = Math.round(300 + rng() * 300) // 300~600
+      difficulty = Math.round((300 + rng() * 300) * initMult)
     } else if (node.difficultyRank === 'D') {
-      difficulty = Math.round(700 + rng() * 350) // 700~1050
+      difficulty = Math.round((700 + rng() * 350) * initMult)
     } else if (node.difficultyRank === 'C') {
-      difficulty = Math.round(1400 + rng() * 450) // 1400~1850
+      difficulty = Math.round((1400 + rng() * 450) * initMult)
     } else if (node.difficultyRank === 'S') {
-      difficulty = Math.round(5000 + rng() * 5000) // 5000~10000
+      difficulty = Math.round(5000 + rng() * 5000) // S급은 이미 높으므로 배율 제외
     } else {
-      difficulty = Math.round(300 + rng() * 1500)
+      difficulty = Math.round((300 + rng() * 1500) * initMult)
     }
 
     const deadline = Math.round(10 + rng() * 6) // 10~15일 시한
