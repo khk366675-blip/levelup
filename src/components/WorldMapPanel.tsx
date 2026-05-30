@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import {
   Globe,
   Lock,
@@ -12,7 +12,15 @@ import {
   Zap,
   Trophy,
 } from 'lucide-react'
-import { useGame } from '../lib/store'
+import {
+  useGame,
+  COOP_HELP_ATK_FACTOR,
+  COOP_HELP_DEF_FACTOR,
+  COOP_HELP_DR_FACTOR,
+  COOP_HELP_DR_CAP,
+  COOP_REWARD_PENALTY_PER_HELPER,
+  COOP_REWARD_MIN_RATIO,
+} from '../lib/store'
 import { RIFT_REGIONS, RIFT_NODES } from '../lib/seed'
 import { MONARCHS, FINAL_ANGEL } from '../lib/monarchs'
 import { getRegionProgress, RIFT_NODE_STATUS_META } from '../lib/riftWorld'
@@ -117,18 +125,9 @@ export function WorldMapPanel() {
   const coopHelperCount = activeHelpers.length
   const coopHelperPower = activeHelpers.reduce((sum, h) => sum + h.power, 0)
 
-  const COOP_HELP_ATK_FACTOR = 0.005
-  const COOP_HELP_DEF_FACTOR = 0.005
-  const COOP_HELP_DR_FACTOR = 0.05
-  const COOP_HELP_DR_CAP = 0.5
-  const COOP_REWARD_PENALTY_PER_HELPER = 0.15
-  const COOP_REWARD_MIN_RATIO = 0.3
-
-  const playerBaseAtk = hunter.stats.STR * 4 + hunter.stats.AGI * 2
-  const playerBaseDef = hunter.stats.VIT * 4 + hunter.stats.PER * 2
   const coopBuffs = {
-    atk: Math.round(playerBaseAtk * COOP_HELP_ATK_FACTOR * coopHelperPower),
-    def: Math.round(playerBaseDef * COOP_HELP_DEF_FACTOR * coopHelperPower),
+    atk: Math.round(COOP_HELP_ATK_FACTOR * coopHelperPower),
+    def: Math.round(COOP_HELP_DEF_FACTOR * coopHelperPower),
     dr: Math.min(COOP_HELP_DR_CAP, COOP_HELP_DR_FACTOR * coopHelperCount),
     rewardRatio: Math.max(COOP_REWARD_MIN_RATIO, 1 - COOP_REWARD_PENALTY_PER_HELPER * coopHelperCount)
   }
@@ -136,6 +135,31 @@ export function WorldMapPanel() {
   // 로컬 확인 모달 제어용 상태
   const [showRecklessConfirm, setShowRecklessConfirm] = useState(false)
   const [recklessConfirmType, setRecklessConfirmType] = useState<'auto' | 'manual'>('auto')
+
+  // 1. selectedNode 유효성 검증 (존재하지 않는 노드 정리)
+  useEffect(() => {
+    if (selectedNode) {
+      if (selectedNode.id === 'angel') {
+        if (!livingWorld?.angelReady) {
+          setSelectedNode(null)
+          setSelectedHelpers([])
+        }
+      } else {
+        const exists = livingWorld?.riftNodes[selectedNode.id]
+        if (!exists) {
+          setSelectedNode(null)
+          setSelectedHelpers([])
+        }
+      }
+    }
+  }, [selectedNode, livingWorld])
+
+  // 2. 세계 시드 변경(=새 회차/리셋) 감지 시 로컬 상태 초기화
+  useEffect(() => {
+    setSelectedNode(null)
+    setSelectedHelpers([])
+    setShowRecklessConfirm(false)
+  }, [livingWorld?.seed])
 
   // 토스트 메시지 도우미
   const triggerToast = (msg: string) => {

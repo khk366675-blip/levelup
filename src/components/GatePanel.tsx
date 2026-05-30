@@ -22,7 +22,13 @@ import {
   Heart,
   Sparkles,
 } from 'lucide-react'
-import { useGame } from '../lib/store'
+import {
+  useGame,
+  COOP_HELP_ATK_FACTOR,
+  COOP_HELP_DEF_FACTOR,
+  COOP_HELP_DR_FACTOR,
+  COOP_HELP_DR_CAP,
+} from '../lib/store'
 import { calculateRealityPressure } from '../lib/realityPressure'
 import { FocusSessionPanel } from './FocusSessionPanel'
 import { CinematicLogOverlay, type CinematicLogData, type CinematicLogTone } from './CinematicLogOverlay'
@@ -1939,11 +1945,6 @@ export function GatePanel() {
       }
     }
 
-    // Constants identical to store.ts/sim-monarch-battle.ts
-    const COOP_HELP_ATK_FACTOR = 0.04
-    const COOP_HELP_DEF_FACTOR = 0.04
-    const COOP_HELP_DR_FACTOR = 0.05
-    const COOP_HELP_DR_CAP = 0.5
 
     if (helperCount > 0) {
       buffCoopAtk = Math.round(COOP_HELP_ATK_FACTOR * helperPower)
