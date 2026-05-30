@@ -13208,7 +13208,7 @@ export const useGame = create<GameState>()(
     }),
     {
       name: 'levelup-save',
-      version: 23,
+      version: 24,
       partialize: (state) => ({
         ...state,
         manualBattleSession: undefined,
@@ -13226,6 +13226,11 @@ export const useGame = create<GameState>()(
         }, 0)
       },
       migrate: (persistedState: any, version: number) => {
+        if (version < 24) {
+          if (persistedState) {
+            persistedState.activeWorldBattle = undefined;
+          }
+        }
         // Ensure hunter has title fields
         if (persistedState?.hunter) {
           if (!persistedState.hunter.ownedTitleIds) {

@@ -955,6 +955,7 @@ export interface ActiveGate {
   status: 'active' | 'cleared' | 'failed' | 'expired'
   source: 'random' | 'dungeon_clear' | 'event' | 'worldmap'
   runState?: GateRunState
+  helperHunterIds?: string[]
 }
 
 export type GateRunEncounterType =

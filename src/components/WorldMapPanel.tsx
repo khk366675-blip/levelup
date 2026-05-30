@@ -201,7 +201,7 @@ export function WorldMapPanel() {
     activeGate &&
     activeGate.status === 'active' &&
     activeRiftNodeId &&
-    RIFT_NODES.some((rn: any) => rn.id === activeRiftNodeId) &&
+    (RIFT_NODES.some((rn: any) => rn.id === activeRiftNodeId) || MONARCHS.some((m) => m.id === activeRiftNodeId) || activeRiftNodeId === 'angel') &&
     (!manualSession || manualSession.source !== 'world_map')
 
   // 위험도 계산 함수 (0.6 미만 시 무모, recommendedPower 이상 시 안전, 그 사이 위험)

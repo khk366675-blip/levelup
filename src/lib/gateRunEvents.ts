@@ -1,6 +1,7 @@
-import { GateRunEncounterType, GateRunEventChoice, GateRunRewardBundle, GateReward, GateRunState, GateRunEncounter, GateRank, RedGateState, HunterGradeTier } from './types'
+import { GateRunEncounterType, GateRunEventChoice, GateRunRewardBundle, GateReward, GateRunState, GateRunEncounter, GateRank, RedGateState, HunterGradeTier, GateDefinition } from './types'
 import { GATE_DEFINITIONS, MONSTER_DEFINITIONS } from './seed'
 import { PROMOTION_EXAM_DEFINITIONS } from './promotionExams'
+import { MONARCHS, FINAL_ANGEL } from './monarchs'
 
 
 export interface GateTheme {
@@ -561,9 +562,9 @@ export function createSeededRandom(seed: string) {
 }
 
 // Seed 기반 Dungeon Run 생성 함수
-export function generateGateRunState(gateId: string, seed: string, examGrade?: HunterGradeTier): GateRunState {
+export function generateGateRunState(gateId: string, seed: string, examGrade?: HunterGradeTier, customGateDef?: GateDefinition): GateRunState {
   const rand = createSeededRandom(seed)
-  const gate = GATE_DEFINITIONS.find(g => g.id === gateId)
+  const gate = customGateDef || GATE_DEFINITIONS.find(g => g.id === gateId)
   const rank: GateRank = gate?.rank ?? 'E'
 
   // 1. Theme 선택
@@ -585,7 +586,12 @@ export function generateGateRunState(gateId: string, seed: string, examGrade?: H
   let encounterCount = 0
   let typesList: GateRunEncounterType[] = []
   const examDef = examGrade && examGrade !== 'E' ? PROMOTION_EXAM_DEFINITIONS[examGrade] : undefined
-  if (examDef) {
+  const isMonarchId = MONARCHS.some(m => m.id === gateId) || gateId === 'angel'
+
+  if (isMonarchId) {
+    encounterCount = 1
+    typesList = ['boss']
+  } else if (examDef) {
     encounterCount = examDef.encounterCount
     if (examGrade === 'D') {
       typesList = ['battle', 'battle', 'boss']
@@ -610,7 +616,7 @@ export function generateGateRunState(gateId: string, seed: string, examGrade?: H
   const encounters: GateRunEncounter[] = []
   
   // E/D 랭크는 간소한 몬스터 조합, S/A 랭크 및 보스 게이트는 보스 무조건 배치
-  const isBossGate = gateId.includes('boss') || rank === 'S' || gate?.rewardTableId?.includes('boss') || Boolean(examDef)
+  const isBossGate = gateId.includes('boss') || rank === 'S' || gate?.rewardTableId?.includes('boss') || Boolean(examDef) || isMonarchId
 
   // 인카운터 타입 풀 가중치 빌드
   const getNextEncounterType = (index: number): GateRunEncounterType => {
@@ -701,7 +707,10 @@ export function generateGateRunState(gateId: string, seed: string, examGrade?: H
       if (encType === 'boss') {
         title = isBossGate ? '심연의 군주 방 [BOSS]' : '구역 지배자 결전 [BOSS]'
         description = '이 던전의 모든 에너지가 집결된 보스 몬스터가 웅크리고 있습니다. 모든 전술을 총동원해야 합니다.'
-        if (examDef) {
+        if (isMonarchId) {
+          title = `심연의 군주 - ${gate?.name} 결전 [BOSS]`
+          description = `살아있는 세계의 파멸을 획책하는 심연의 군주 [${gate?.name}]과의 피할 수 없는 피비린내 나는 전쟁이 시작됩니다.`
+        } else if (examDef) {
           title = `${examDef.name} - 최종 심사 [BOSS]`
           description = `[${examDef.bossEmphasisName ?? '최종 보스'}]가 헌터님의 승격 자격을 최후 검증하기 위해 기다리고 있습니다.`
         }
@@ -713,7 +722,7 @@ export function generateGateRunState(gateId: string, seed: string, examGrade?: H
         
         monsterIds = [bossId]
         // 보스 보좌진 추가
-        if (gateMonsters.length > 1 && rank !== 'E') {
+        if (gateMonsters.length > 1 && rank !== 'E' && !isMonarchId) {
           const minionId = gateMonsters.find(mId => mId !== bossId)
           if (minionId) monsterIds.push(minionId)
         }
