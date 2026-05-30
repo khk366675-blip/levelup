@@ -33,6 +33,7 @@ export interface BattleActorViewModel {
   isNamed?: boolean
   telegraph?: any
   presentationId?: string
+  sourceId?: string
 }
 
 /**
@@ -98,6 +99,7 @@ export function mapUnitToViewModel(
     isNamed: named,
     telegraph: unit.telegraph,
     presentationId: (isShadow && unit.unitId === activeUnitId) ? 'shadow-skill' : undefined,
+    sourceId: unit.sourceId,
   }
 }
 

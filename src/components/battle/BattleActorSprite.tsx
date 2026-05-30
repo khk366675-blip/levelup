@@ -8,6 +8,7 @@ import { ShadowBattleSprite } from './ShadowBattleSprite'
 import { HunterBattleSprite } from './HunterBattleSprite'
 import { MonsterBattleSprite } from './MonsterBattleSprite'
 import type { ActorMotionType, TargetReactionType } from '../../lib/skillMotionPresets'
+import { isMonarchVisualBoss, getMonarchAuraClass } from '../../lib/monarchVisualEffects'
 
 type Props = {
   actor: BattleActorViewModel
@@ -274,11 +275,29 @@ export function BattleActorSprite({
     },
   }
 
+  // Monarch visual phase calculation
+  const isMonarch = isMonarchVisualBoss(actor.sourceId)
+  let monarchPhase = 1
+  if (isMonarch && actor.sourceId) {
+    const id = actor.sourceId.toLowerCase()
+    const hpPct = actor.hp / actor.maxHp
+    if (id === 'nox') {
+      monarchPhase = hpPct < 0.3 ? 3 : hpPct < 0.7 ? 2 : 1
+    } else if (id === 'angel') {
+      monarchPhase = hpPct < 0.4 ? 3 : hpPct < 0.7 ? 2 : 1
+    } else {
+      const threshold = ['grellic', 'igris', 'dorga'].includes(id) ? 0.6 : 0.5
+      monarchPhase = hpPct <= threshold ? 2 : 1
+    }
+  }
+
   // Shadow classes / Aura based on grade/rarity
   const auraClass = clsx(
     'pointer-events-none absolute -inset-2 rounded-full opacity-40 blur-md',
     actor.isDefeated && 'hidden',
-    isBoss
+    isMonarch
+      ? getMonarchAuraClass(actor.sourceId, monarchPhase)
+      : isBoss
       ? 'bg-[radial-gradient(circle,rgba(239,68,68,0.4),transparent_70%)] animate-pulse'
       : actor.innateGrade === 'S' || actor.rarity === 'legendary'
       ? 'bg-[radial-gradient(circle,rgba(245,158,11,0.35),transparent_70%)]'
@@ -633,6 +652,11 @@ export function BattleActorSprite({
     >
       {/* 2.5D Aura Glow */}
       <div className={auraClass} />
+
+      {/* Monarch Lethal Warning Ring */}
+      {isMonarch && actor.telegraph?.severity === 'lethal' && !actor.isDefeated && (
+        <div className="pointer-events-none absolute inset-0 rounded-full border-4 border-red-500 animate-ping opacity-60 z-10" />
+      )}
 
       {/* Prepare Effect (Signature Prepare Visuals) */}
       {renderPrepareEffect()}

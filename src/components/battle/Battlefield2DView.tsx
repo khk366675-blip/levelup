@@ -7,6 +7,7 @@ import { BattleDamagePopup, type PopupType } from './BattleDamagePopup'
 import { BattlefieldVfxLayer, type VfxType } from './BattlefieldVfxLayer'
 import { getSkillMotionPreset, type ActorMotionType, type TargetReactionType } from '../../lib/skillMotionPresets'
 import { getHunterBattleSpriteUrl } from '../../lib/hunterBattleSprites'
+import { isMonarchVisualBoss, getMonarchFieldClass } from '../../lib/monarchVisualEffects'
 
 type Battlefield2DViewProps = {
   actors: BattleActorViewModel[]
@@ -320,6 +321,27 @@ export function Battlefield2DView({
 
   }, [latestAction, actors, actorCoords])
 
+  // Find active and alive monarch boss
+  const monarchActor = useMemo(() => {
+    return overriddenActors.find(a => a.team === 'enemy' && !a.isDefeated && isMonarchVisualBoss(a.sourceId))
+  }, [overriddenActors])
+
+  const monarchPhase = useMemo(() => {
+    if (!monarchActor || !monarchActor.sourceId) return 1
+    const id = monarchActor.sourceId.toLowerCase()
+    const hpPct = monarchActor.hp / monarchActor.maxHp
+    if (id === 'nox') {
+      return hpPct < 0.3 ? 3 : hpPct < 0.7 ? 2 : 1
+    } else if (id === 'angel') {
+      return hpPct < 0.4 ? 3 : hpPct < 0.7 ? 2 : 1
+    } else {
+      const threshold = ['grellic', 'igris', 'dorga'].includes(id) ? 0.6 : 0.5
+      return hpPct <= threshold ? 2 : 1
+    }
+  }, [monarchActor])
+
+  const activeSeverity = monarchActor?.telegraph?.severity
+
   return (
     <div className={clsx(
       'relative w-full rounded-xl border-2 border-slate-800/80 overflow-hidden bg-gradient-to-b shadow-[inset_0_0_30px_rgba(0,0,0,0.85),0_4px_24px_rgba(0,0,0,0.55)] flex flex-col justify-between select-none',
@@ -328,6 +350,18 @@ export function Battlefield2DView({
     )}>
       {/* Sky atmospheric filter */}
       <div className={clsx('pointer-events-none absolute inset-0 z-0 opacity-80', theme.skyFilter)} />
+
+      {/* Monarch Premium 2.5D Field Vignette & Aura Layer */}
+      {monarchActor && monarchActor.sourceId && (
+        <div 
+          className={clsx(
+            'pointer-events-none absolute inset-0 z-0 transition-all duration-700',
+            getMonarchFieldClass(monarchActor.sourceId, monarchPhase),
+            activeSeverity === 'lethal' && 'monarch-telegraph-lethal',
+            activeSeverity === 'high' && 'monarch-telegraph-high'
+          )}
+        />
+      )}
 
       {/* Fog / Mist layers for arena depth */}
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_bottom,rgba(6,182,212,0.04),transparent_70%)] pointer-events-none z-0" />
