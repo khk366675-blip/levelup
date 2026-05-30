@@ -1286,6 +1286,79 @@ export function WorldMapPanel() {
                   </div>
                 )}
 
+                {/* 대한민국 게이트 특별 합류(협력) 섹션 */}
+                {!hasLoveCall && selectedNode.regionId === 'kr' && (riftNodesState[selectedNode.id] ?? selectedNode.status) === 'active' && (
+                  <div className="mt-4 rounded-lg border border-cyan-500/30 bg-cyan-500/5 p-3 space-y-3 animate-fade-in">
+                    <div className="flex items-center gap-1.5 text-xs font-black text-cyan-300">
+                      <span>🤝 대한민국 헌터 연합 합류</span>
+                    </div>
+                    <p className="text-[10px] text-white/70 leading-normal">
+                      대한민국 헌터 협회 동료들과 함께 게이트 공략을 공조합니다. 참전할 S급 헌터를 선택해 주십시오. (협력 시 전투 안정성이 상승합니다.)
+                    </p>
+                    
+                    {/* 협력 헌터 선택 목록 */}
+                    <div className="space-y-1.5">
+                      <div className="text-[9px] font-bold text-white/40">참전 지원 가능 헌터</div>
+                      {(() => {
+                        const krRegionState = livingWorld?.regions['kr']
+                        const krHelperHunterIds = krRegionState 
+                          ? krRegionState.namedHunterIds.filter(hid => livingWorld?.namedHunters[hid]?.status === 'active') 
+                          : []
+
+                        if (krHelperHunterIds.length === 0) {
+                          return <div className="text-[9px] text-white/40 italic">현재 지원 가능한 헌터가 없습니다.</div>
+                        }
+
+                        return (
+                          <div className="max-h-28 overflow-y-auto space-y-1 pr-1 scrollbar-thin">
+                            {krHelperHunterIds.map(hid => {
+                              const h = livingWorld?.namedHunters[hid]
+                              if (!h) return null
+                              const isSelected = selectedHelpers.includes(hid)
+                              return (
+                                <label key={hid} className="flex items-center justify-between rounded bg-black/35 hover:bg-black/60 px-2 py-1.5 text-[10px] cursor-pointer select-none border border-white/5">
+                                  <div className="flex items-center gap-2">
+                                    <input
+                                      type="checkbox"
+                                      checked={isSelected}
+                                      onChange={() => handleHelperToggle(hid)}
+                                      className="accent-cyan-500 h-3 w-3 cursor-pointer"
+                                    />
+                                    <span className="font-bold text-white/80">{h.name}</span>
+                                    <span className="rounded bg-cyan-500/20 px-1 text-[8px] font-black text-cyan-300 border border-cyan-500/20">
+                                      {h.rank}
+                                    </span>
+                                  </div>
+                                  <span className="text-cyan-300 font-mono font-bold">⚔️{h.power.toLocaleString()}</span>
+                                </label>
+                              )
+                            })}
+                          </div>
+                        )
+                      })()}
+                    </div>
+
+                    {/* 트레이드오프 브리핑 (헬퍼 선택 시에만 표시) */}
+                    {selectedHelpers.length > 0 && (
+                      <div className="rounded border border-cyan-500/20 bg-cyan-500/5 p-2 text-[10px] space-y-1.5">
+                        <div className="text-[9px] font-bold text-cyan-300">⚖️ 협력 전투 트레이드오프 실시간 예측</div>
+                        <div className="grid grid-cols-2 gap-1 font-mono text-[9px] text-white/70">
+                          <div>공격력 보너스:</div>
+                          <div className="text-emerald-400 font-bold">+{coopBuffs.atk.toLocaleString()} ATK</div>
+                          <div>방어력 보너스:</div>
+                          <div className="text-emerald-400 font-bold">+{coopBuffs.def.toLocaleString()} DEF</div>
+                          <div>받는 피해 감소:</div>
+                          <div className="text-emerald-400 font-bold">-{Math.round(coopBuffs.dr * 100)}% DMG</div>
+                          <div>보상 획득 비율:</div>
+                          <div className={coopBuffs.rewardRatio === 1 ? "text-cyan-300 font-bold" : "text-yellow-400 font-bold"}>
+                            {Math.round(coopBuffs.rewardRatio * 100)}% (독식 대비 -{Math.round((1 - coopBuffs.rewardRatio) * 100)}%)
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 <div className="mt-6 space-y-2">
                   {isNodeRetreatedToday(selectedNode.id) ? (
                     <div className="rounded border border-rose-500/25 bg-rose-500/5 p-3 text-xs text-rose-300/85 text-center font-bold">
@@ -1395,47 +1468,90 @@ export function WorldMapPanel() {
               )
             })}
 
-            {/* 노드(Node) 마커 렌더링 */}
-            {RIFT_NODES.map((node: any) => {
-              const status = riftNodesState[node.id] ?? node.status
-              const meta = RIFT_NODE_STATUS_META[status]
-              const worldNode = livingWorld?.riftNodes[node.id]
-              const isNodeRegionOccupied = livingWorld?.activeMonarchs?.some(m => m.status === 'rampaging' && m.occupiedRegionIds.includes(node.regionId))
+            {/* 노드(Node) 마커 렌더링 - 한국 활성 게이트만 노출 */}
+            {Object.values(livingWorld?.riftNodes ?? {})
+              .filter((node: any) => node.regionId === 'kr' && (riftNodesState[node.id] ?? node.status) === 'active')
+              .map((node: any) => {
+                const status = riftNodesState[node.id] ?? node.status
+                const meta = RIFT_NODE_STATUS_META[status]
+                const worldNode = livingWorld?.riftNodes[node.id]
+                const isNodeRegionOccupied = livingWorld?.activeMonarchs?.some(m => m.status === 'rampaging' && m.occupiedRegionIds.includes(node.regionId))
+
+                return (
+                  <button
+                    key={node.id}
+                    onClick={() => handleNodeClick(node)}
+                    className={`absolute -translate-x-1/2 -translate-y-1/2 flex flex-col items-center group transition-all duration-300 z-10`}
+                    style={{ left: `${node.x}%`, top: `${node.y}%` }}
+                  >
+                    {/* 노드 링과 코어 */}
+                    <div
+                      className={`relative h-5 w-5 rounded-full border-2 ${isNodeRegionOccupied ? 'border-red-500 bg-red-950/80 shadow-glow-red animate-pulse' : `${meta.borderClass} ${meta.bgClass}`} flex items-center justify-center transition-all group-hover:scale-125 group-hover:border-purple-400`}
+                    >
+                      {worldNode?.loveCall?.active && (
+                        <span className="absolute -top-3 -right-3 flex h-4 w-4 items-center justify-center rounded-full bg-yellow-500 text-[8px] font-black text-black shadow-glow-yellow animate-bounce z-20">
+                          📞
+                        </span>
+                      )}
+                      {status === 'locked' && (
+                        <Lock className="h-2 w-2 text-zinc-600" />
+                      )}
+                      {status === 'cleared' && (
+                        <CheckCircle className="h-2 text-emerald-400" style={{ width: '8px' }} />
+                      )}
+                      {status === 'undiscovered' && (
+                        <Eye className="h-2 w-2 text-zinc-500" />
+                      )}
+                      {status === 'active' && (
+                        <div className={`h-1.5 w-1.5 rounded-full ${isNodeRegionOccupied ? 'bg-red-400' : 'bg-cyan-400'} animate-ping`} />
+                      )}
+                    </div>
+
+                    {/* 마커 아래 노드명 말풍선 */}
+                    <div className="mt-1 opacity-60 group-hover:opacity-100 transition-all">
+                      <div className={`rounded bg-black/80 border ${isNodeRegionOccupied ? 'border-red-500/40 text-red-300' : 'border-white/5 text-white/70'} px-1.5 py-0.5 text-[9px] font-bold backdrop-blur-sm whitespace-nowrap shadow-md`}>
+                        {node.name}
+                      </div>
+                    </div>
+                  </button>
+                )
+              })}
+
+            {/* 군주 노드 마커 렌더링 */}
+            {livingWorld?.activeMonarchs?.filter((m: any) => m.status === 'rampaging').map((monarch: any) => {
+              const mData = MONARCHS.find(m => m.id === monarch.monarchId)
+              if (!mData) return null
+              const regionId = monarch.occupiedRegionIds[0] || 'kr'
+              const regionMeta = RIFT_REGIONS.find(r => r.id === regionId)
+              const x = regionMeta ? regionMeta.labelX : 50
+              const y = regionMeta ? regionMeta.labelY + 6 : 56
 
               return (
                 <button
-                  key={node.id}
-                  onClick={() => handleNodeClick(node)}
-                  className={`absolute -translate-x-1/2 -translate-y-1/2 flex flex-col items-center group transition-all duration-300 z-10`}
-                  style={{ left: `${node.x}%`, top: `${node.y}%` }}
+                  key={monarch.monarchId}
+                  onClick={() => handleNodeClick({
+                    id: monarch.monarchId,
+                    regionId,
+                    name: mData.name,
+                    x,
+                    y,
+                    status: 'active',
+                    gateDefId: monarch.monarchId,
+                    difficultyRank: 'S',
+                    difficulty: mData.recommendedCP,
+                    deadline: 999,
+                    daysRemaining: 999,
+                    isSGrade: true
+                  })}
+                  className="absolute -translate-x-1/2 -translate-y-1/2 flex flex-col items-center group transition-all duration-300 z-20 animate-pulse cursor-pointer"
+                  style={{ left: `${x}%`, top: `${y}%` }}
                 >
-                  {/* 노드 링과 코어 */}
-                  <div
-                    className={`relative h-5 w-5 rounded-full border-2 ${isNodeRegionOccupied ? 'border-red-500 bg-red-950/80 shadow-glow-red animate-pulse' : `${meta.borderClass} ${meta.bgClass}`} flex items-center justify-center transition-all group-hover:scale-125 group-hover:border-purple-400`}
-                  >
-                    {worldNode?.loveCall?.active && (
-                      <span className="absolute -top-3 -right-3 flex h-4 w-4 items-center justify-center rounded-full bg-yellow-500 text-[8px] font-black text-black shadow-glow-yellow animate-bounce z-20">
-                        📞
-                      </span>
-                    )}
-                    {status === 'locked' && (
-                      <Lock className="h-2 w-2 text-zinc-600" />
-                    )}
-                    {status === 'cleared' && (
-                      <CheckCircle className="h-2 text-emerald-400" style={{ width: '8px' }} />
-                    )}
-                    {status === 'undiscovered' && (
-                      <Eye className="h-2 w-2 text-zinc-500" />
-                    )}
-                    {status === 'active' && (
-                      <div className={`h-1.5 w-1.5 rounded-full ${isNodeRegionOccupied ? 'bg-red-400' : 'bg-cyan-400'} animate-ping`} />
-                    )}
+                  <div className="relative h-6 w-6 rounded-full border-2 border-red-500 bg-red-950/90 shadow-glow-red flex items-center justify-center transition-all group-hover:scale-125">
+                    <span className="text-[10px]">👑</span>
                   </div>
-
-                  {/* 마커 아래 노드명 말풍선 */}
-                  <div className="mt-1 opacity-60 group-hover:opacity-100 transition-all">
-                    <div className={`rounded bg-black/80 border ${isNodeRegionOccupied ? 'border-red-500/40 text-red-300' : 'border-white/5 text-white/70'} px-1.5 py-0.5 text-[9px] font-bold backdrop-blur-sm whitespace-nowrap shadow-md`}>
-                      {node.name}
+                  <div className="mt-1">
+                    <div className="rounded bg-red-950/90 border border-red-500/40 text-red-200 px-1.5 py-0.5 text-[8px] font-black backdrop-blur-sm whitespace-nowrap shadow-md">
+                      {mData.name} (침공)
                     </div>
                   </div>
                 </button>

@@ -3572,19 +3572,9 @@ export const RIFT_REGIONS: RiftRegion[] = [
 ]
 
 export const RIFT_NODES: Omit<RiftNode, 'difficulty' | 'deadline' | 'daysRemaining'>[] = [
-  // 미국
-  { id: 'node-us-manhattan', regionId: 'us', name: '맨해튼 균열', x: 14, y: 40, status: 'active', gateDefId: 'gate-rift-alley', difficultyRank: 'E', adjacentNodeIds: ['node-us-brooklyn'] },
-  { id: 'node-us-brooklyn', regionId: 'us', name: '브루클린 지하도로', x: 22, y: 48, status: 'locked', gateDefId: 'gate-rift-backstreet', difficultyRank: 'E', requiresNodeIds: ['node-us-manhattan'], adjacentNodeIds: ['node-us-manhattan', 'node-us-statue'] },
-  { id: 'node-us-statue', regionId: 'us', name: '자유의 여신상 심연', x: 18, y: 55, status: 'undiscovered', gateDefId: 'gate-rift-nest', difficultyRank: 'E', requiresNodeIds: ['node-us-brooklyn'], adjacentNodeIds: ['node-us-brooklyn'] },
-  // 중국
-  { id: 'node-cn-shanghai', regionId: 'cn', name: '상하이 밤거리', x: 78, y: 48, status: 'active', gateDefId: 'gate-lair-of-sloth', difficultyRank: 'D', adjacentNodeIds: ['node-cn-wall'] },
-  { id: 'node-cn-wall', regionId: 'cn', name: '만리장성의 그림자', x: 84, y: 54, status: 'locked', gateDefId: 'gate-sloth-patrol', difficultyRank: 'D', requiresNodeIds: ['node-cn-shanghai'], adjacentNodeIds: ['node-cn-shanghai'] },
-  // 러시아
-  { id: 'node-ru-moscow', regionId: 'ru', name: '모스크바 서고', x: 72, y: 18, status: 'locked', gateDefId: 'gate-archive-of-forgetting', difficultyRank: 'C', requiresNodeIds: ['node-cn-shanghai'], adjacentNodeIds: ['node-ru-siberia'] },
-  { id: 'node-ru-siberia', regionId: 'ru', name: '시베리아 설원 균열', x: 80, y: 24, status: 'undiscovered', gateDefId: 'gate-corridor-of-fatigue', difficultyRank: 'C', requiresNodeIds: ['node-ru-moscow'], adjacentNodeIds: ['node-ru-moscow'] },
-  // 영국
-  { id: 'node-uk-london', regionId: 'uk', name: '런던 안개 회랑', x: 45, y: 22, status: 'undiscovered', gateDefId: 'gate-rift-training-grounds', difficultyRank: 'C', requiresNodeIds: ['node-us-brooklyn'], adjacentNodeIds: ['node-uk-thames'] },
-  { id: 'node-uk-thames', regionId: 'uk', name: '템스강 금고', x: 50, y: 28, status: 'locked', gateDefId: 'gate-greed-vault', difficultyRank: 'C', requiresNodeIds: ['node-uk-london'], adjacentNodeIds: ['node-uk-london'] },
+  // 한국 초기 게이트
+  { id: 'node-kr-seoul', regionId: 'kr', name: '서울 동대문 균열', x: 84, y: 41, status: 'active', gateDefId: 'gate-rift-alley', difficultyRank: 'E', adjacentNodeIds: ['node-kr-incheon'] },
+  { id: 'node-kr-incheon', regionId: 'kr', name: '인천 송도 참호', x: 82, y: 43, status: 'active', gateDefId: 'gate-rift-backstreet', difficultyRank: 'D', adjacentNodeIds: ['node-kr-seoul'] },
 ]
 
 export const REGION_ADJACENCY: Record<string, string[]> = {

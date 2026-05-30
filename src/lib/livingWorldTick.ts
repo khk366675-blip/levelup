@@ -348,9 +348,11 @@ export function advanceWorldDay(state: LivingWorldState, rng: RngFn): LivingWorl
   }
 
   // 5. 게이트 점진적 생성 & S급 게이트 점진적 추가 (Day 30 이후)
-  // 각 지역별 매일 18%의 확률로 새로운 게이트 생성 롤링
+  // 각 지역별 새로운 게이트 생성 롤링 (한국은 플레이어 활동 보장을 위해 35%로 상향, 타국은 18% 유지)
   for (const regionId in nextRegions) {
-    if (rng() < 0.18) {
+    const isKr = regionId === 'kr'
+    const spawnChance = isKr ? 0.35 : 0.18
+    if (rng() < spawnChance) {
       const region = { ...nextRegions[regionId] }
       // 한 국가당 최대 4개 이하의 활성 게이트를 가질 때만 스폰
       if (region && region.activeGateIds.length < 4) {
@@ -389,12 +391,19 @@ export function advanceWorldDay(state: LivingWorldState, rng: RngFn): LivingWorl
           }
         }
 
+        // 월드맵 지역 표시 좌표 기준으로 약간의 편차(-3 ~ +3)를 주어 근처에 생성되도록 함
+        const regionMeta = RIFT_REGIONS.find(r => r.id === regionId)
+        const baseX = regionMeta ? regionMeta.labelX : 50
+        const baseY = regionMeta ? regionMeta.labelY : 50
+        const gateX = Math.max(5, Math.min(95, Math.round(baseX - 3 + rng() * 6)))
+        const gateY = Math.max(5, Math.min(95, Math.round(baseY - 3 + rng() * 6)))
+
         nextRiftNodes[newGateId] = {
           id: newGateId,
           regionId,
           name: gateName,
-          x: Math.round(20 + rng() * 60),
-          y: Math.round(20 + rng() * 60),
+          x: gateX,
+          y: gateY,
           status: 'active',
           gateDefId: isSGrade ? 'gate-lair-of-sloth' : 'gate-rift-alley',
           difficultyRank: rank,

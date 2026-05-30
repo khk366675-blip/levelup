@@ -4802,6 +4802,7 @@ export const useGame = create<GameState>()(
 
       enterRiftNode: (nodeId) => {
         const s = get()
+        const isMonarchId = MONARCHS.some(m => m.id === nodeId) || nodeId === 'angel'
         const node = {
           difficulty: 500,
           deadline: 7,
@@ -4809,6 +4810,11 @@ export const useGame = create<GameState>()(
           ...(s.livingWorld?.riftNodes[nodeId] || RIFT_NODES.find(n => n.id === nodeId))
         } as RiftNode
         if (!node) return
+
+        // 진입 권한 가드: 대한민국 영역 외의 일반 게이트에는 진입 불가
+        if (!isMonarchId && node.regionId !== 'kr') {
+          return
+        }
 
         set({ activeRiftNodeId: nodeId })
       },
@@ -7145,6 +7151,23 @@ export const useGame = create<GameState>()(
           if (!node || (s.riftNodes[nodeId] ?? node.status) !== 'active') return
         }
 
+        // 진입 권한 가드: 대한민국 외 지역 일반 게이트 진입 차단 (안전장치)
+        if (!isMonarchId && node.regionId !== 'kr') {
+          set({
+            messages: [
+              ...s.messages,
+              {
+                id: uid(),
+                kind: 'info',
+                title: '진입 권한 제한',
+                lines: ['대한민국 영역 외의 게이트에는 직접 개입할 수 없습니다.'],
+                createdAt: todayISO(),
+              }
+            ]
+          })
+          return
+        }
+
         // 후퇴 일일 가드 확인
         const today = todayKey()
         if (s.worldBattleRetreats && s.worldBattleRetreats[nodeId] === today) {
@@ -7942,6 +7965,23 @@ export const useGame = create<GameState>()(
             ...(s.livingWorld?.riftNodes[nodeId] || RIFT_NODES.find(n => n.id === nodeId))
           } as RiftNode
           if (!node || (s.riftNodes[nodeId] ?? node.status) !== 'active') return
+        }
+
+        // 진입 권한 가드: 대한민국 외 지역 일반 게이트 진입 차단 (안전장치)
+        if (!isMonarchId && node.regionId !== 'kr') {
+          set({
+            messages: [
+              ...s.messages,
+              {
+                id: uid(),
+                kind: 'info',
+                title: '진입 권한 제한',
+                lines: ['대한민국 영역 외의 게이트에는 직접 개입할 수 없습니다.'],
+                createdAt: todayISO(),
+              }
+            ]
+          })
+          return
         }
 
         // 후퇴 일일 가드 확인
@@ -13168,7 +13208,7 @@ export const useGame = create<GameState>()(
     }),
     {
       name: 'levelup-save',
-      version: 22,
+      version: 23,
       partialize: (state) => ({
         ...state,
         manualBattleSession: undefined,
@@ -13767,6 +13807,54 @@ export const useGame = create<GameState>()(
             }
             if (!('clearHistory' in hs)) {
               hs.clearHistory = []
+            }
+          }
+        }
+
+        // ── Living Rift World Node Display Clean up & Guards Phase 1 (v23) 마이그레이션 ──
+        if (persistedState && persistedState.livingWorld) {
+          const lw = persistedState.livingWorld
+          if (lw.riftNodes) {
+            // 한국 초기 게이트가 세이브에 없으면 안전하게 주입해줍니다.
+            if (!lw.riftNodes['node-kr-seoul']) {
+              lw.riftNodes['node-kr-seoul'] = {
+                id: 'node-kr-seoul',
+                regionId: 'kr',
+                name: '서울 동대문 균열',
+                x: 84,
+                y: 41,
+                status: 'active',
+                gateDefId: 'gate-rift-alley',
+                difficultyRank: 'E',
+                adjacentNodeIds: ['node-kr-incheon'],
+                difficulty: 450,
+                deadline: 12,
+                daysRemaining: 12,
+                isSGrade: false
+              }
+              if (lw.regions['kr'] && !lw.regions['kr'].activeGateIds.includes('node-kr-seoul')) {
+                lw.regions['kr'].activeGateIds.push('node-kr-seoul')
+              }
+            }
+            if (!lw.riftNodes['node-kr-incheon']) {
+              lw.riftNodes['node-kr-incheon'] = {
+                id: 'node-kr-incheon',
+                regionId: 'kr',
+                name: '인천 송도 참호',
+                x: 82,
+                y: 43,
+                status: 'active',
+                gateDefId: 'gate-rift-backstreet',
+                difficultyRank: 'D',
+                adjacentNodeIds: ['node-kr-seoul'],
+                difficulty: 950,
+                deadline: 14,
+                daysRemaining: 14,
+                isSGrade: false
+              }
+              if (lw.regions['kr'] && !lw.regions['kr'].activeGateIds.includes('node-kr-incheon')) {
+                lw.regions['kr'].activeGateIds.push('node-kr-incheon')
+              }
             }
           }
         }
