@@ -277,8 +277,8 @@ export const WORLD_SHADOW_GUARD_EVASION_FACTOR = 0.05  // 그림자당 헌터 �
 export const WORLD_SHADOW_GUARD_DR_FACTOR = 0.5        // 그림자 탱킹 대미지 감쇄 비율
 
 // ── World Map NPC Cooperation Constants (L1-A) ────────────────
-export const COOP_HELP_ATK_FACTOR = 0.005  // 협력자 합산 CP의 0.5%만큼 플레이어 공격력 버프 추가
-export const COOP_HELP_DEF_FACTOR = 0.005  // 협력자 합산 CP의 0.5%만큼 플레이어 방어력 버프 추가
+export const COOP_HELP_ATK_FACTOR = 0.04  // 협력자 합산 CP의 4%를 플레이어 공격력에 더함
+export const COOP_HELP_DEF_FACTOR = 0.04  // 협력자 합산 CP의 4%를 플레이어 방어력에 더함
 export const COOP_HELP_DR_FACTOR = 0.05    // 협력자 1명당 대미지 감소 5% 추가
 export const COOP_HELP_DR_CAP = 0.5        // 협력자 대미지 감소 최대 50% 상한
 export const COOP_REWARD_PENALTY_PER_HELPER = 0.15 // 협력자 1명당 플레이어 보상 15% 차감
@@ -7163,8 +7163,8 @@ export const useGame = create<GameState>()(
         let buffCoopDef = 0
         let drCoop = 0
         if (helperCount > 0) {
-          buffCoopAtk = Math.round(playerStats.atk * COOP_HELP_ATK_FACTOR * helperPower)
-          buffCoopDef = Math.round(playerStats.def * COOP_HELP_DEF_FACTOR * helperPower)
+          buffCoopAtk = Math.round(COOP_HELP_ATK_FACTOR * helperPower)
+          buffCoopDef = Math.round(COOP_HELP_DEF_FACTOR * helperPower)
           drCoop = Math.min(COOP_HELP_DR_CAP, COOP_HELP_DR_FACTOR * helperCount)
 
           if (buffCoopAtk > 0) {
@@ -7678,8 +7678,8 @@ export const useGame = create<GameState>()(
         let buffCoopDef = 0
         let drCoop = 0
         if (helperCount > 0) {
-          buffCoopAtk = Math.round(playerStats.atk * COOP_HELP_ATK_FACTOR * helperPower)
-          buffCoopDef = Math.round(playerStats.def * COOP_HELP_DEF_FACTOR * helperPower)
+          buffCoopAtk = Math.round(COOP_HELP_ATK_FACTOR * helperPower)
+          buffCoopDef = Math.round(COOP_HELP_DEF_FACTOR * helperPower)
           drCoop = Math.min(COOP_HELP_DR_CAP, COOP_HELP_DR_FACTOR * helperCount)
 
           if (buffCoopAtk > 0) {
