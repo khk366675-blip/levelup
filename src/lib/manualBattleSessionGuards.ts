@@ -24,11 +24,11 @@ export const shouldHideBattleContinueControls = (session?: ManualBattleSession):
   isManualBattleSessionTerminal(session)
 
 export const shouldApplyHardcoreDeathReset = (source?: string): boolean => {
-  return source === 'gate' || source === 'gate_echo' || source === 'echo' || source === 'red_gate'
+  return source === 'gate' || source === 'gate_echo' || source === 'echo' || source === 'red_gate' || source === 'worldmap'
 }
 
 export const shouldApplyShadowCollapse = (source?: string): boolean => {
-  return source === 'gate' || source === 'gate_echo' || source === 'echo' || source === 'red_gate'
+  return source === 'gate' || source === 'gate_echo' || source === 'echo' || source === 'red_gate' || source === 'worldmap'
 }
 
 export const shouldRetrySameFloor = (source?: string): boolean => {
@@ -36,7 +36,7 @@ export const shouldRetrySameFloor = (source?: string): boolean => {
 }
 
 export const isGateHardcoreSource = (source?: string): boolean => {
-  return source === 'gate' || source === 'gate_echo' || source === 'echo' || source === 'red_gate'
+  return source === 'gate' || source === 'gate_echo' || source === 'echo' || source === 'red_gate' || source === 'worldmap'
 }
 
 export const shouldTriggerHardcoreDeathFromSession = (

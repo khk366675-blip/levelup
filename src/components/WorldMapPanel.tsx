@@ -29,43 +29,7 @@ import { GatePanel } from './GatePanel'
 import type { RiftNode, RiftRegion } from '../lib/types'
 import { getHunterCombatPower } from '../lib/combatPower'
 import { todayKey } from '../lib/game'
-import { DramaticReveal, type RevealStep } from './DramaticReveal'
-import { CinematicLogOverlay, type CinematicLogData, type CinematicLogTone } from './CinematicLogOverlay'
 
-// 배틀 로그를 CinematicLogData로 매핑해주는 헬퍼 함수
-const mapTurnsToCinematicLogs = (turns: any[]): CinematicLogData[] => {
-  return turns.map((t, idx) => {
-    let tone: CinematicLogTone = 'system'
-    let badge = `Turn ${t.turnNumber || idx + 1}`
-    let title = t.message || ''
-    let body = ''
-
-    if (t.outcome === 'damage') {
-      tone = t.actorType === 'player' ? 'player' : 'monster'
-      badge = t.actorType === 'player' ? '플레이어 차례' : '몬스터 차례'
-    } else if (t.outcome === 'heal') {
-      tone = 'reward'
-      badge = '치유'
-    } else if (t.outcome === 'miss' || t.outcome === 'evade') {
-      tone = 'defense'
-      badge = '회피/명중 실패'
-    } else if (t.eventType === 'reaction') {
-      tone = 'shadow'
-      badge = '그림자 수호'
-    } else if (t.message && t.message.includes('그림자')) {
-      tone = 'shadow'
-      badge = '그림자 출격'
-    }
-
-    return {
-      id: `world-log-${idx}-${Date.now()}`,
-      tone,
-      badge,
-      title,
-      body,
-    }
-  })
-}
 
 const REGION_FLAGS: Record<string, string> = {
   us: '🇺🇸',
@@ -94,13 +58,9 @@ export function WorldMapPanel() {
   const livingWorld = useGame((s) => s.livingWorld)
 
   // L3 전용 신설 월드맵 상태 및 액션 연동
-  const activeWorldBattle = useGame((s) => s.activeWorldBattle)
   const worldBattleRetreats = useGame((s) => s.worldBattleRetreats ?? {})
   const manualSession = useGame((s) => s.manualBattleSession)
-  const startWorldBattle = useGame((s) => s.startWorldBattle)
   const startWorldManualBattle = useGame((s) => s.startWorldManualBattle)
-  const cancelWorldBattle = useGame((s) => s.cancelWorldBattle)
-  const resolveWorldBattle = useGame((s) => s.resolveWorldBattle)
 
   // 헌터 스펙 및 실효 CP 연동용 상태
   const hunter = useGame((s) => s.hunter)
@@ -214,12 +174,17 @@ export function WorldMapPanel() {
     }
   }
 
-  // 현재 노드의 활성 게이트가 켜져 있는지 여부 (기존 E/D/C 일반 게이트 전선)
+  // 현재 노드의 활성 게이트가 켜져 있는지 여부 (기존 E/D/C 일반 게이트 및 동적 스폰/러브콜 게이트 포함)
   const isGateActive =
     activeGate &&
     activeGate.status === 'active' &&
     activeRiftNodeId &&
-    (RIFT_NODES.some((rn: any) => rn.id === activeRiftNodeId) || MONARCHS.some((m) => m.id === activeRiftNodeId) || activeRiftNodeId === 'angel') &&
+    (
+      RIFT_NODES.some((rn: any) => rn.id === activeRiftNodeId) || 
+      MONARCHS.some((m) => m.id === activeRiftNodeId) || 
+      activeRiftNodeId === 'angel' ||
+      Boolean(livingWorld?.riftNodes[activeRiftNodeId])
+    ) &&
     (!manualSession || manualSession.source !== 'world_map')
 
   // 위험도 계산 함수 (0.6 미만 시 무모, recommendedPower 이상 시 안전, 그 사이 위험)
@@ -364,107 +329,7 @@ export function WorldMapPanel() {
         </div>
       )}
 
-      {/* 자동 전투 시네마틱 오버레이 */}
-      {activeWorldBattle && activeWorldBattle.status === 'revealing' && (
-        <div className="fixed inset-0 z-[80] flex flex-col items-center justify-center bg-black/90 backdrop-blur-md">
-          <div className="text-center mb-10 animate-pulse">
-            <h3 className="text-lg font-black tracking-widest text-purple-400">자동 균열 정화 전투 진행 중</h3>
-            <p className="text-xs text-white/40 mt-1">심연의 파동을 억제하고 정화 전선을 구축하는 중입니다...</p>
-          </div>
-          
-          <div className="relative w-full max-w-lg h-56 flex items-center justify-center">
-            <CinematicLogOverlay
-              visible={true}
-              logs={mapTurnsToCinematicLogs(activeWorldBattle.logs)}
-              onComplete={() => resolveWorldBattle()}
-              intervalMs={2200}
-              position="inline"
-            />
-          </div>
-          
-          <div className="mt-10">
-            <button
-              onClick={() => cancelWorldBattle()}
-              className="rounded border border-rose-500/30 bg-rose-500/10 hover:bg-rose-500/20 px-4 py-2 text-xs font-bold text-rose-200 tracking-wider transition-all cursor-pointer"
-            >
-              🏳️ 전투 후퇴 (당일 재진입 제한)
-            </button>
-          </div>
-        </div>
-      )}
 
-      {/* 자동 전투 결과 Dramatic Reveal */}
-      {activeWorldBattle && activeWorldBattle.status === 'resolved' && activeWorldBattle.result && (
-        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/90 backdrop-blur-md">
-          <div className="max-w-md w-full mx-4">
-            <DramaticReveal
-              isOpen={true}
-              steps={[
-                {
-                  title: activeWorldBattle.result.outcome === 'victory' ? '정화 성공' : '정화 실패',
-                  text: activeWorldBattle.result.outcome === 'victory' 
-                    ? '🎉 균열 정화 완료!' 
-                    : '💀 정화 공략 실패...',
-                  subtext: activeWorldBattle.result.outcome === 'victory'
-                    ? `[${activeWorldBattle.gateName}]의 심연 에너지를 완벽히 차단하고 정화했습니다.`
-                    : `[${activeWorldBattle.gateName}] 공략 도중 부상을 당해 복귀했습니다.`,
-                }
-              ]}
-              tone={activeWorldBattle.result.outcome === 'victory' ? 'success' : 'failure'}
-              position="inline"
-              result={
-                <div className="mt-6 space-y-4">
-                  {activeWorldBattle.result.outcome === 'victory' ? (
-                    <div className="grid gap-2 text-xs font-medium">
-                      <div className="text-white/40 text-center mb-1">획득 보상 목록</div>
-                      {activeWorldBattle.result.rewards.hunterXp ? (
-                        <div className="rounded border border-emerald-500/20 bg-emerald-500/5 px-3 py-2 text-emerald-300 flex justify-between">
-                          <span>전투 정화 XP</span>
-                          <span className="font-bold">+{activeWorldBattle.result.rewards.hunterXp} XP</span>
-                        </div>
-                      ) : null}
-                      {activeWorldBattle.result.rewards.gold ? (
-                        <div className="rounded border border-amber-500/20 bg-amber-500/5 px-3 py-2 text-amber-300 flex justify-between">
-                          <span>정화 지원금</span>
-                          <span className="font-bold">+{activeWorldBattle.result.rewards.gold} Gold</span>
-                        </div>
-                      ) : null}
-                      {activeWorldBattle.result.rewards.shadowEssence ? (
-                        <div className="rounded border border-purple-500/20 bg-purple-500/5 px-3 py-2 text-purple-300 flex justify-between">
-                          <span>어둠의 정수</span>
-                          <span className="font-bold">+{activeWorldBattle.result.rewards.shadowEssence} 정수</span>
-                        </div>
-                      ) : null}
-                      {activeWorldBattle.result.helperHunterIds && activeWorldBattle.result.helperHunterIds.length > 0 && (
-                        <div className="rounded border border-purple-500/20 bg-purple-500/5 px-3 py-2 text-purple-300 text-center text-[10px]">
-                          <span>🤝 협력한 헌터: </span>
-                          <span className="font-bold">
-                            {activeWorldBattle.result.helperHunterIds
-                              .map(hid => livingWorld?.namedHunters[hid]?.name)
-                              .filter(Boolean)
-                              .join(', ')}
-                          </span>
-                        </div>
-                      )}
-                    </div>
-                  ) : (
-                    <div className="rounded border border-rose-500/20 bg-rose-500/5 p-3 text-xs text-rose-300/80 text-center">
-                      6시간 동안 행동 불능 및 부상 상태가 되며, 회복 퀘스트를 3개 클리어하거나 대기 시간이 지나야 공략을 재개할 수 있습니다.
-                    </div>
-                  )}
-                  
-                  <button
-                    onClick={() => cancelWorldBattle()} // 세션 클리어용 호출
-                    className="btn btn-primary mt-4 w-full py-2.5 text-xs font-black tracking-widest text-center cursor-pointer"
-                  >
-                    정화 전선 정리 후 복귀
-                  </button>
-                </div>
-              }
-            />
-          </div>
-        </div>
-      )}
 
       {/* 수동 전투 모드 (전체 오버레이 형태로 GatePanel을 렌더링) */}
       {manualSession && manualSession.source === 'world_map' && (() => {
@@ -1684,7 +1549,7 @@ export function WorldMapPanel() {
           <div className="mb-4">
             <h3 className="text-lg font-black text-white flex items-center gap-2">
               <Swords className="h-5 w-5 text-purple-400" />
-              진입한 구역: {RIFT_NODES.find((rn: any) => rn.id === activeRiftNodeId)?.name}
+              진입한 구역: {RIFT_NODES.find((rn: any) => rn.id === activeRiftNodeId)?.name ?? livingWorld?.riftNodes[activeRiftNodeId]?.name ?? activeGate.customGateDef?.name ?? '미지의 균열'}
             </h3>
             <p className="text-xs text-white/45 mt-1">
               게이트를 클리어하면 해당 월드맵 노드의 정화도가 올라가고 후속 노드가 해제됩니다.

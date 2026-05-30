@@ -290,35 +290,37 @@ export function advanceWorldDay(state: LivingWorldState, rng: RngFn): LivingWorl
         addLog(`⚠️ [${rName}] 게이트 공략 실패의 여파로 지역 오염도가 +${corrupt}% 상승했습니다.`)
       }
     } else {
-      // 자력 불가능 방치 러브콜 플래그
+      // 자력 불가능 방치 러브콜 플래그 (이미 러브콜이 발송된 노드라면 중복 생성을 차단)
       if ((targetGate.daysRemaining ?? 0) <= 5) {
-        const helperHunterIds = region.namedHunterIds.filter(id => {
-          const h = nextNamedHunters[id]
-          return h && h.status === 'active'
-        })
+        if (!targetGate.loveCall?.active) {
+          const helperHunterIds = region.namedHunterIds.filter(id => {
+            const h = nextNamedHunters[id]
+            return h && h.status === 'active'
+          })
 
-        const promisedGold = Math.round(targetGate.difficulty * 0.2 * (1 + (5 - targetGate.daysRemaining) * 0.15))
-        const promisedXp = Math.round(targetGate.difficulty * 0.15 * (1 + (5 - targetGate.daysRemaining) * 0.15))
-        const promisedEssence = targetGate.isSGrade 
-          ? Math.round(6 + (5 - targetGate.daysRemaining))
-          : Math.round(2 + Math.floor((5 - targetGate.daysRemaining) / 2))
+          const promisedGold = Math.round(targetGate.difficulty * 0.2 * (1 + (5 - targetGate.daysRemaining) * 0.15))
+          const promisedXp = Math.round(targetGate.difficulty * 0.15 * (1 + (5 - targetGate.daysRemaining) * 0.15))
+          const promisedEssence = targetGate.isSGrade 
+            ? Math.round(6 + (5 - targetGate.daysRemaining))
+            : Math.round(2 + Math.floor((5 - targetGate.daysRemaining) / 2))
 
-        const gateNode = {
-          ...targetGate,
-          loveCall: {
-            active: true,
-            promisedReward: {
-              gold: promisedGold,
-              shadowEssence: promisedEssence,
-              hunterXp: promisedXp
-            },
-            helperHunterIds,
-            issuedDay: nextDay
+          const gateNode = {
+            ...targetGate,
+            loveCall: {
+              active: true,
+              promisedReward: {
+                gold: promisedGold,
+                shadowEssence: promisedEssence,
+                hunterXp: promisedXp
+              },
+              helperHunterIds,
+              issuedDay: nextDay
+            }
           }
-        }
-        nextRiftNodes[targetGate.id] = gateNode
+          nextRiftNodes[targetGate.id] = gateNode
 
-        addLog(`📞 [${rName}]가 자력으로 공략할 수 없는 게이트 [${targetGate.name}] (권장전력: ${targetGate.difficulty})에 대해 지원 요청(러브콜)을 보냈습니다! (보상 약속: 골드 +${promisedGold}, 정수 +${promisedEssence}, XP +${promisedXp})`)
+          addLog(`📞 [${rName}]가 자력으로 공략할 수 없는 게이트 [${targetGate.name}] (권장전력: ${targetGate.difficulty})에 대해 지원 요청(러브콜)을 보냈습니다! (보상 약속: 골드 +${promisedGold}, 정수 +${promisedEssence}, XP +${promisedXp})`)
+        }
       }
     }
 
