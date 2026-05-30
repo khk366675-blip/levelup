@@ -78,6 +78,7 @@ import type {
 
 import { initLivingWorld } from './livingWorld'
 import { advanceWorldDay } from './livingWorldTick'
+import { MONARCHS, FINAL_ANGEL } from './monarchs'
 
 import {
   AiCoachMemoryState,
@@ -275,6 +276,13 @@ import { registerLegionNodeLevelResolver } from './shadowStats'
 export const WORLD_SHADOW_GUARD_DEF_FACTOR = 0.25      // 그림자당 헌터 방어력 버프 비율
 export const WORLD_SHADOW_GUARD_EVASION_FACTOR = 0.05  // 그림자당 헌터 회피 버프 비율
 export const WORLD_SHADOW_GUARD_DR_FACTOR = 0.5        // 그림자 탱킹 대미지 감쇄 비율
+
+// ── Monarch Shadow Guard Constants (L4-B) ─────────────────────
+export const MONARCH_SHADOW_GUARD_DEF_BASE = 5000       // 군주전 그림자 탱킹 기본 방어 가산치
+export const MONARCH_SHADOW_GUARD_DEF_PER_SHADOW = 2000 // 군주전 그림자 탱킹 그림자당 추가 방어
+export const MONARCH_SHADOW_GUARD_EVASION_BASE = 0.40   // 군주전 그림자 탱킹 기본 회피 가산치
+export const MONARCH_SHADOW_GUARD_EVASION_PER_SHADOW = 0.05 // 군주전 그림자 탱킹 그림자당 추가 회피
+export const MONARCH_SHADOW_GUARD_DR_FACTOR = 0.5       // 군주전 그림자 탱킹 대미지 감쇄 비율
 
 // ── World Map NPC Cooperation Constants (L1-A) ────────────────
 export const COOP_HELP_ATK_FACTOR = 0.04  // 협력자 합산 CP의 4%를 플레이어 공격력에 더함
@@ -3382,6 +3390,15 @@ const createHardcoreDeathResetState = (
     activeShadowExpeditionId: undefined,
     shadowLegionNodes: {},
     infiniteTower: createInitialTowerState(),
+    activeRiftNodeId: undefined,
+    riftNodes: (() => {
+      const nodes: Record<string, RiftNodeStatus> = {}
+      RIFT_NODES.forEach((n) => {
+        nodes[n.id] = n.status
+      })
+      return nodes
+    })(),
+    livingWorld: initLivingWorld(Math.floor(Math.random() * 99999999) + 1),
     activeWorldBattle: undefined,
     worldBattleRetreats: {},
     rewardBoxes: [],
@@ -7055,13 +7072,42 @@ export const useGame = create<GameState>()(
 
       startWorldBattle: (nodeId, helperHunterIds) => {
         const s = get()
-        const node = {
-          difficulty: 500,
-          deadline: 7,
-          daysRemaining: 7,
-          ...(s.livingWorld?.riftNodes[nodeId] || RIFT_NODES.find(n => n.id === nodeId))
-        } as RiftNode
-        if (!node || (s.riftNodes[nodeId] ?? node.status) !== 'active') return
+        
+        const isMonarchId = MONARCHS.some(m => m.id === nodeId) || nodeId === 'angel'
+        let monarchRegionId = 'kr'
+        if (isMonarchId && s.livingWorld?.activeMonarchs) {
+          const activeMon = s.livingWorld.activeMonarchs.find(m => m.monarchId === nodeId)
+          if (activeMon && activeMon.occupiedRegionIds.length > 0) {
+            monarchRegionId = activeMon.occupiedRegionIds[0]
+          }
+        }
+
+        let node: RiftNode
+        if (isMonarchId) {
+          const monarchData = nodeId === 'angel' ? FINAL_ANGEL : MONARCHS.find(m => m.id === nodeId)!
+          node = {
+            id: monarchData.id,
+            regionId: monarchRegionId,
+            name: monarchData.name,
+            x: 50,
+            y: 50,
+            status: 'active',
+            gateDefId: monarchData.id,
+            difficultyRank: 'S',
+            difficulty: monarchData.recommendedCP,
+            deadline: 999,
+            daysRemaining: 999,
+            isSGrade: true
+          }
+        } else {
+          node = {
+            difficulty: 500,
+            deadline: 7,
+            daysRemaining: 7,
+            ...(s.livingWorld?.riftNodes[nodeId] || RIFT_NODES.find(n => n.id === nodeId))
+          } as RiftNode
+          if (!node || (s.riftNodes[nodeId] ?? node.status) !== 'active') return
+        }
 
         // 후퇴 일일 가드 확인
         const today = todayKey()
@@ -7081,8 +7127,33 @@ export const useGame = create<GameState>()(
           return
         }
 
-        const floor = Math.max(1, Math.round(((node.difficulty ?? 500) - 200) / 80))
-        const monsters = getTowerMonstersForFloor(floor)
+        let monsters: MonsterDefinition[]
+        if (isMonarchId) {
+          const monarchData = nodeId === 'angel' ? FINAL_ANGEL : MONARCHS.find(m => m.id === nodeId)!
+          const cp = monarchData.recommendedCP
+          const stats = {
+            maxHp: Math.round(cp * 0.45),
+            atk: Math.round(cp * 0.12),
+            def: Math.round(cp * 0.04),
+            speed: Math.round(20 + cp * 0.0001),
+            critRate: 0.15,
+            accuracy: 0.95,
+            evasionRate: 0.10
+          }
+          monsters = [
+            {
+              id: monarchData.id,
+              name: monarchData.name,
+              description: monarchData.concept,
+              rank: 'S',
+              stats,
+              skillIds: ['monster-rift-scratch', 'monster-lazy-curse', 'monster-memory-fog']
+            }
+          ]
+        } else {
+          const floor = Math.max(1, Math.round(((node.difficulty ?? 500) - 200) / 80))
+          monsters = getTowerMonstersForFloor(floor)
+        }
         if (monsters.length === 0) return
 
         const equippedItems = getEquippedItems(s.items, s.equipment)
@@ -7116,33 +7187,63 @@ export const useGame = create<GameState>()(
         // 2순위 그림자 탱킹 (수호 효과 버프 적용)
         const initialActiveEffects: ActiveCombatEffect[] = []
         if (equippedShadows.length > 0) {
-          const buffDef = Math.round(playerStats.def * WORLD_SHADOW_GUARD_DEF_FACTOR * equippedShadows.length)
-          const buffEvasion = WORLD_SHADOW_GUARD_EVASION_FACTOR * equippedShadows.length
-          initialActiveEffects.push(
-            {
-              sourceSkillId: 'world-map-shadow-guard-def',
-              kind: 'stat',
-              stat: 'def',
-              value: buffDef,
-              remainingTurns: 999,
-              targetId: 'player',
-            },
-            {
-              sourceSkillId: 'world-map-shadow-guard-eva',
-              kind: 'stat',
-              stat: 'evasionRate',
-              value: buffEvasion,
-              remainingTurns: 999,
-              targetId: 'player',
-            },
-            {
-              sourceSkillId: 'world-map-shadow-guard-dr',
-              kind: 'damage_reduction',
-              value: WORLD_SHADOW_GUARD_DR_FACTOR,
-              remainingTurns: 999,
-              targetId: 'player',
-            }
-          )
+          if (isMonarchId) {
+            const buffDef = MONARCH_SHADOW_GUARD_DEF_BASE + MONARCH_SHADOW_GUARD_DEF_PER_SHADOW * equippedShadows.length
+            const buffEvasion = MONARCH_SHADOW_GUARD_EVASION_BASE + MONARCH_SHADOW_GUARD_EVASION_PER_SHADOW * equippedShadows.length
+            initialActiveEffects.push(
+              {
+                sourceSkillId: 'monarch-shadow-guard-def',
+                kind: 'stat',
+                stat: 'def',
+                value: buffDef,
+                remainingTurns: 999,
+                targetId: 'player',
+              },
+              {
+                sourceSkillId: 'monarch-shadow-guard-eva',
+                kind: 'stat',
+                stat: 'evasionRate',
+                value: buffEvasion,
+                remainingTurns: 999,
+                targetId: 'player',
+              },
+              {
+                sourceSkillId: 'monarch-shadow-guard-dr',
+                kind: 'damage_reduction',
+                value: MONARCH_SHADOW_GUARD_DR_FACTOR,
+                remainingTurns: 999,
+                targetId: 'player',
+              }
+            )
+          } else {
+            const buffDef = Math.round(playerStats.def * WORLD_SHADOW_GUARD_DEF_FACTOR * equippedShadows.length)
+            const buffEvasion = WORLD_SHADOW_GUARD_EVASION_FACTOR * equippedShadows.length
+            initialActiveEffects.push(
+              {
+                sourceSkillId: 'world-map-shadow-guard-def',
+                kind: 'stat',
+                stat: 'def',
+                value: buffDef,
+                remainingTurns: 999,
+                targetId: 'player',
+              },
+              {
+                sourceSkillId: 'world-map-shadow-guard-eva',
+                kind: 'stat',
+                stat: 'evasionRate',
+                value: buffEvasion,
+                remainingTurns: 999,
+                targetId: 'player',
+              },
+              {
+                sourceSkillId: 'world-map-shadow-guard-dr',
+                kind: 'damage_reduction',
+                value: WORLD_SHADOW_GUARD_DR_FACTOR,
+                remainingTurns: 999,
+                targetId: 'player',
+              }
+            )
+          }
         }
 
         // [L1-A] NPC 협력 버프 주입
@@ -7210,9 +7311,15 @@ export const useGame = create<GameState>()(
         })
 
         // 보상 계산 (난이도 CP 비례 & 협력 페널티 트레이드오프 적용)
-        const baseGold = node.loveCall?.promisedReward.gold ?? Math.round((node.difficulty ?? 500) * 0.15)
-        const baseHunterXp = node.loveCall?.promisedReward.hunterXp ?? Math.round((node.difficulty ?? 500) * 0.12)
-        const baseEssence = node.loveCall?.promisedReward.shadowEssence ?? (node.isSGrade ? 5 : 2)
+        let baseGold = node.loveCall?.promisedReward.gold ?? Math.round((node.difficulty ?? 500) * 0.15)
+        let baseHunterXp = node.loveCall?.promisedReward.hunterXp ?? Math.round((node.difficulty ?? 500) * 0.12)
+        let baseEssence = node.loveCall?.promisedReward.shadowEssence ?? (node.isSGrade ? 5 : 2)
+
+        if (isMonarchId) {
+          baseGold = Math.round(node.difficulty * 1.5)
+          baseHunterXp = Math.round(node.difficulty * 1.2)
+          baseEssence = Math.round(node.difficulty * 0.001) * 3
+        }
 
         const rewardRatio = Math.max(COOP_REWARD_MIN_RATIO, 1 - COOP_REWARD_PENALTY_PER_HELPER * helperCount)
 
@@ -7248,9 +7355,19 @@ export const useGame = create<GameState>()(
 
         // 로그 연출 보강 (그림자 탱킹 로그 주입)
         if (equippedShadows.length > 0) {
+          const defPercent = isMonarchId
+            ? `고정 +${MONARCH_SHADOW_GUARD_DEF_BASE.toLocaleString()} (그림자당 +${MONARCH_SHADOW_GUARD_DEF_PER_SHADOW.toLocaleString()})`
+            : `+${Math.round(WORLD_SHADOW_GUARD_DEF_FACTOR * equippedShadows.length * 100)}%`
+          const evaPercent = isMonarchId
+            ? `고정 +${Math.round(MONARCH_SHADOW_GUARD_EVASION_BASE * 100)}% (그림자당 +${Math.round(MONARCH_SHADOW_GUARD_EVASION_PER_SHADOW * 100)}%)`
+            : `+${Math.round(WORLD_SHADOW_GUARD_EVASION_FACTOR * equippedShadows.length * 100)}%`
+          const drPercent = isMonarchId
+            ? `${Math.round(MONARCH_SHADOW_GUARD_DR_FACTOR * 100)}%`
+            : `${Math.round(WORLD_SHADOW_GUARD_DR_FACTOR * 100)}%`
+
           combatLog.turns.unshift(
             createManualSystemLog(
-              `🛡️ 그림자 군단(${equippedShadows.length}명)이 전방에 배치되었습니다! [그림자 탱킹] 수호가 작동하여 방어력 +${Math.round(WORLD_SHADOW_GUARD_DEF_FACTOR * equippedShadows.length * 100)}%, 회피율 +${Math.round(WORLD_SHADOW_GUARD_EVASION_FACTOR * equippedShadows.length * 100)}%, 받는 피해 ${Math.round(WORLD_SHADOW_GUARD_DR_FACTOR * 100)}%가 감소합니다.`,
+              `🛡️ [그림자 탱킹] 그림자 군단(${equippedShadows.length}명)이 전방에 배치되었습니다! 수호 장막이 작동하여 플레이어 방어력 ${defPercent}, 회피율 ${evaPercent}, 받는 피해 대미지 감쇄 ${drPercent}가 적용되어 즉사를 방지합니다.`,
               0,
               1,
               createMonsterBattleActor(monsters[0])
@@ -7299,6 +7416,11 @@ export const useGame = create<GameState>()(
         let updatedRiftNodes = s.livingWorld ? { ...s.livingWorld.riftNodes } : undefined
         let worldLogs = s.livingWorld ? [...s.livingWorld.eventLogs] : []
 
+        const isMonarchId = MONARCHS.some(m => m.id === nodeId) || nodeId === 'angel'
+        let updatedActiveMonarchs = s.livingWorld?.activeMonarchs ? [...s.livingWorld.activeMonarchs] : undefined
+        let nextHomeReachedMonarchId = s.livingWorld?.homeReachedMonarchId
+        let nextAngelReady = s.livingWorld?.angelReady
+
         if (isVictory) {
           const rewards = result.rewards
           if (rewards.hunterXp && rewards.hunterXp > 0) {
@@ -7342,15 +7464,40 @@ export const useGame = create<GameState>()(
           newMessages.push({
             id: uid(),
             kind: 'quest',
-            title: `균열 정화 성공`,
+            title: isMonarchId ? `군주 격퇴 성공` : `균열 정화 성공`,
             lines: [
-              `[${activeBattle.gateName}] 균열 정화에 성공했습니다!`,
+              isMonarchId 
+                ? `[${activeBattle.gateName}] 군주 격퇴에 성공했습니다!`
+                : `[${activeBattle.gateName}] 균열 정화에 성공했습니다!`,
               ...(rewards.hunterXp ? [`XP +${rewards.hunterXp}`] : []),
               ...(rewards.gold ? [`Gold +${rewards.gold}`] : []),
               ...(rewards.shadowEssence ? [`정수 +${rewards.shadowEssence}`] : []),
             ],
             createdAt: todayISO(),
           })
+
+          if (isMonarchId && updatedActiveMonarchs) {
+            const mIdx = updatedActiveMonarchs.findIndex(m => m.monarchId === nodeId)
+            if (mIdx !== -1) {
+              const updatedMonarch = {
+                ...updatedActiveMonarchs[mIdx],
+                status: 'defeated' as const,
+                occupiedRegionIds: []
+              }
+              updatedActiveMonarchs[mIdx] = updatedMonarch
+            }
+            
+            // Re-evaluate homeReachedMonarchId
+            const krInvader = updatedActiveMonarchs.find(m => m.status === 'rampaging' && m.occupiedRegionIds.includes('kr'))
+            nextHomeReachedMonarchId = krInvader ? krInvader.monarchId : undefined
+
+            // Check if all 8 are defeated
+            const allDefeated = updatedActiveMonarchs.length === 8 && updatedActiveMonarchs.every(m => m.status === 'defeated')
+            if (allDefeated) {
+              nextAngelReady = true
+              worldLogs.push(`[Day ${s.livingWorld?.day ?? 0}] [지고의 예언] 대균열의 심연에서 지고의 심판자(천사)가 강림을 예고하며 장엄한 빛이 쏟아집니다.`)
+            }
+          }
 
           // [L1-A] 협력 헌터 성장 및 러브콜 해제
           if (activeBattle.helperHunterIds && activeBattle.helperHunterIds.length > 0 && s.livingWorld && updatedNamedHunters && updatedRiftNodes) {
@@ -7390,6 +7537,9 @@ export const useGame = create<GameState>()(
               namedHunters: updatedNamedHunters ?? s.livingWorld.namedHunters,
               riftNodes: updatedRiftNodes ?? s.livingWorld.riftNodes,
               eventLogs: worldLogs,
+              activeMonarchs: updatedActiveMonarchs ?? s.livingWorld.activeMonarchs,
+              homeReachedMonarchId: nextHomeReachedMonarchId,
+              angelReady: nextAngelReady ?? s.livingWorld.angelReady,
             } : undefined,
             activeWorldBattle: {
               ...activeBattle,
@@ -7400,6 +7550,12 @@ export const useGame = create<GameState>()(
           })
         } else {
           // 패배 시: 기존 게이트 패배의 부상 규칙 동일 적용
+          if (isMonarchId && s.hardcoreState?.enabled) {
+            const monarchName = nodeId === 'angel' ? '지고의 심판자(천사)' : (MONARCHS.find(m => m.id === nodeId)?.name || nodeId)
+            set(createHardcoreDeathResetState(s, 'player_death', monarchName))
+            return
+          }
+
           const now = new Date()
           const injuredUntil = new Date(now.getTime() + 6 * 60 * 60 * 1000).toISOString()
           const nextGateStatus = {
@@ -7412,11 +7568,11 @@ export const useGame = create<GameState>()(
           newMessages.push({
             id: uid(),
             kind: 'info',
-            title: `균열 공략 실패`,
+            title: isMonarchId ? `군주 격퇴 실패` : `균열 공략 실패`,
             lines: [
               result.outcome === 'defeat'
-                ? `[${activeBattle.gateName}] 정화에 실패했습니다.`
-                : `[${activeBattle.gateName}] 정화 시간 초과.`,
+                ? `[${activeBattle.gateName}] 공략에 실패했습니다.`
+                : `[${activeBattle.gateName}] 공략 시간 초과.`,
               '6시간 부상을 입었습니다. 퀘스트 3개 완료로 회복하거나 대기하십시오.',
             ],
             createdAt: todayISO(),
@@ -7568,13 +7724,42 @@ export const useGame = create<GameState>()(
 
       startWorldManualBattle: (nodeId, helperHunterIds) => {
         const s = get()
-        const node = {
-          difficulty: 500,
-          deadline: 7,
-          daysRemaining: 7,
-          ...(s.livingWorld?.riftNodes[nodeId] || RIFT_NODES.find(n => n.id === nodeId))
-        } as RiftNode
-        if (!node || (s.riftNodes[nodeId] ?? node.status) !== 'active') return
+
+        const isMonarchId = MONARCHS.some(m => m.id === nodeId) || nodeId === 'angel'
+        let monarchRegionId = 'kr'
+        if (isMonarchId && s.livingWorld?.activeMonarchs) {
+          const activeMon = s.livingWorld.activeMonarchs.find(m => m.monarchId === nodeId)
+          if (activeMon && activeMon.occupiedRegionIds.length > 0) {
+            monarchRegionId = activeMon.occupiedRegionIds[0]
+          }
+        }
+
+        let node: RiftNode
+        if (isMonarchId) {
+          const monarchData = nodeId === 'angel' ? FINAL_ANGEL : MONARCHS.find(m => m.id === nodeId)!
+          node = {
+            id: monarchData.id,
+            regionId: monarchRegionId,
+            name: monarchData.name,
+            x: 50,
+            y: 50,
+            status: 'active',
+            gateDefId: monarchData.id,
+            difficultyRank: 'S',
+            difficulty: monarchData.recommendedCP,
+            deadline: 999,
+            daysRemaining: 999,
+            isSGrade: true
+          }
+        } else {
+          node = {
+            difficulty: 500,
+            deadline: 7,
+            daysRemaining: 7,
+            ...(s.livingWorld?.riftNodes[nodeId] || RIFT_NODES.find(n => n.id === nodeId))
+          } as RiftNode
+          if (!node || (s.riftNodes[nodeId] ?? node.status) !== 'active') return
+        }
 
         // 후퇴 일일 가드 확인
         const today = todayKey()
@@ -7594,8 +7779,33 @@ export const useGame = create<GameState>()(
           return
         }
 
-        const floor = Math.max(1, Math.round(((node.difficulty ?? 500) - 200) / 80))
-        const monsters = getTowerMonstersForFloor(floor)
+        let monsters: MonsterDefinition[]
+        if (isMonarchId) {
+          const monarchData = nodeId === 'angel' ? FINAL_ANGEL : MONARCHS.find(m => m.id === nodeId)!
+          const cp = monarchData.recommendedCP
+          const stats = {
+            maxHp: Math.round(cp * 0.45),
+            atk: Math.round(cp * 0.12),
+            def: Math.round(cp * 0.04),
+            speed: Math.round(20 + cp * 0.0001),
+            critRate: 0.15,
+            accuracy: 0.95,
+            evasionRate: 0.10
+          }
+          monsters = [
+            {
+              id: monarchData.id,
+              name: monarchData.name,
+              description: monarchData.concept,
+              rank: 'S',
+              stats,
+              skillIds: ['monster-rift-scratch', 'monster-lazy-curse', 'monster-memory-fog']
+            }
+          ]
+        } else {
+          const floor = Math.max(1, Math.round(((node.difficulty ?? 500) - 200) / 80))
+          monsters = getTowerMonstersForFloor(floor)
+        }
         if (monsters.length === 0) return
         const monsterDef = monsters[0]
         if (!monsterDef) return
@@ -7631,33 +7841,63 @@ export const useGame = create<GameState>()(
         // 2순위 그림자 탱킹 (수호 효과 버프 적용)
         const initialActiveEffects: ActiveCombatEffect[] = []
         if (equippedShadows.length > 0) {
-          const buffDef = Math.round(playerStats.def * WORLD_SHADOW_GUARD_DEF_FACTOR * equippedShadows.length)
-          const buffEvasion = WORLD_SHADOW_GUARD_EVASION_FACTOR * equippedShadows.length
-          initialActiveEffects.push(
-            {
-              sourceSkillId: 'world-map-shadow-guard-def',
-              kind: 'stat',
-              stat: 'def',
-              value: buffDef,
-              remainingTurns: 999,
-              targetId: 'player',
-            },
-            {
-              sourceSkillId: 'world-map-shadow-guard-eva',
-              kind: 'stat',
-              stat: 'evasionRate',
-              value: buffEvasion,
-              remainingTurns: 999,
-              targetId: 'player',
-            },
-            {
-              sourceSkillId: 'world-map-shadow-guard-dr',
-              kind: 'damage_reduction',
-              value: WORLD_SHADOW_GUARD_DR_FACTOR,
-              remainingTurns: 999,
-              targetId: 'player',
-            }
-          )
+          if (isMonarchId) {
+            const buffDef = MONARCH_SHADOW_GUARD_DEF_BASE + MONARCH_SHADOW_GUARD_DEF_PER_SHADOW * equippedShadows.length
+            const buffEvasion = MONARCH_SHADOW_GUARD_EVASION_BASE + MONARCH_SHADOW_GUARD_EVASION_PER_SHADOW * equippedShadows.length
+            initialActiveEffects.push(
+              {
+                sourceSkillId: 'monarch-shadow-guard-def',
+                kind: 'stat',
+                stat: 'def',
+                value: buffDef,
+                remainingTurns: 999,
+                targetId: 'player',
+              },
+              {
+                sourceSkillId: 'monarch-shadow-guard-eva',
+                kind: 'stat',
+                stat: 'evasionRate',
+                value: buffEvasion,
+                remainingTurns: 999,
+                targetId: 'player',
+              },
+              {
+                sourceSkillId: 'monarch-shadow-guard-dr',
+                kind: 'damage_reduction',
+                value: MONARCH_SHADOW_GUARD_DR_FACTOR,
+                remainingTurns: 999,
+                targetId: 'player',
+              }
+            )
+          } else {
+            const buffDef = Math.round(playerStats.def * WORLD_SHADOW_GUARD_DEF_FACTOR * equippedShadows.length)
+            const buffEvasion = WORLD_SHADOW_GUARD_EVASION_FACTOR * equippedShadows.length
+            initialActiveEffects.push(
+              {
+                sourceSkillId: 'world-map-shadow-guard-def',
+                kind: 'stat',
+                stat: 'def',
+                value: buffDef,
+                remainingTurns: 999,
+                targetId: 'player',
+              },
+              {
+                sourceSkillId: 'world-map-shadow-guard-eva',
+                kind: 'stat',
+                stat: 'evasionRate',
+                value: buffEvasion,
+                remainingTurns: 999,
+                targetId: 'player',
+              },
+              {
+                sourceSkillId: 'world-map-shadow-guard-dr',
+                kind: 'damage_reduction',
+                value: WORLD_SHADOW_GUARD_DR_FACTOR,
+                remainingTurns: 999,
+                targetId: 'player',
+              }
+            )
+          }
         }
 
         // [L1-A] NPC 협력 버프 주입
@@ -7715,9 +7955,19 @@ export const useGame = create<GameState>()(
 
         const logs: BattleTurn[] = []
         if (equippedShadows.length > 0) {
+          const defPercent = isMonarchId
+            ? `고정 +${MONARCH_SHADOW_GUARD_DEF_BASE.toLocaleString()} (그림자당 +${MONARCH_SHADOW_GUARD_DEF_PER_SHADOW.toLocaleString()})`
+            : `+${Math.round(WORLD_SHADOW_GUARD_DEF_FACTOR * equippedShadows.length * 100)}%`
+          const evaPercent = isMonarchId
+            ? `고정 +${Math.round(MONARCH_SHADOW_GUARD_EVASION_BASE * 100)}% (그림자당 +${Math.round(MONARCH_SHADOW_GUARD_EVASION_PER_SHADOW * 100)}%)`
+            : `+${Math.round(WORLD_SHADOW_GUARD_EVASION_FACTOR * equippedShadows.length * 100)}%`
+          const drPercent = isMonarchId
+            ? `${Math.round(MONARCH_SHADOW_GUARD_DR_FACTOR * 100)}%`
+            : `${Math.round(WORLD_SHADOW_GUARD_DR_FACTOR * 100)}%`
+
           logs.push(
             createManualSystemLog(
-              `🛡️ 그림자 군단이 전방에 배치되어 엄호하고 있습니다! 플레이어의 방어력 +${Math.round(WORLD_SHADOW_GUARD_DEF_FACTOR * equippedShadows.length * 100)}%, 회피율 +${Math.round(WORLD_SHADOW_GUARD_EVASION_FACTOR * equippedShadows.length * 100)}%, 받는 피해 ${Math.round(WORLD_SHADOW_GUARD_DR_FACTOR * 100)}%가 감소합니다.`,
+              `🛡️ [그림자 탱킹] 그림자 군단이 전방에 배치되어 엄호하고 있습니다! 플레이어의 방어력 ${defPercent}, 회피율 ${evaPercent}, 받는 피해 대미지 감쇄 ${drPercent}가 적용되어 즉사를 방지합니다.`,
               0,
               1,
               monster
@@ -8017,7 +8267,7 @@ export const useGame = create<GameState>()(
             },
           })
 
-          get().resolveDirectWorldBattle(combatLog, nodeId)
+          get().resolveDirectWorldBattle(combatLog, nodeId, session.helperHunterIds)
         } else {
           set({
             items: nextItems,
@@ -8226,7 +8476,7 @@ export const useGame = create<GameState>()(
           },
         })
 
-        get().resolveDirectWorldBattle(combatLog, nodeId)
+        get().resolveDirectWorldBattle(combatLog, nodeId, session.helperHunterIds)
       },
 
       attemptShadowExtraction: (gateInstanceId) => {
@@ -11598,6 +11848,7 @@ export const useGame = create<GameState>()(
         })(),
         livingWorld: initLivingWorld(Math.floor(Math.random() * 99999999) + 1),
         activeWorldBattle: undefined,
+        worldBattleRetreats: {},
         combatLogs: [],
         manualBattleSession: undefined,
         ownedShadows: [],
@@ -12629,7 +12880,7 @@ export const useGame = create<GameState>()(
     }),
     {
       name: 'levelup-save',
-      version: 20,
+      version: 21,
       partialize: (state) => ({
         ...state,
         manualBattleSession: undefined,
@@ -13199,6 +13450,14 @@ export const useGame = create<GameState>()(
           }
           if (!('homeReachedMonarchId' in lw)) {
             lw.homeReachedMonarchId = undefined
+          }
+        }
+
+        // ── Living Rift World Monarch L4-B (v21) 마이그레이션 ──
+        if (persistedState && persistedState.livingWorld) {
+          const lw = persistedState.livingWorld
+          if (!('angelReady' in lw)) {
+            lw.angelReady = false
           }
         }
 

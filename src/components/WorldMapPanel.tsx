@@ -13,7 +13,7 @@ import {
 } from 'lucide-react'
 import { useGame } from '../lib/store'
 import { RIFT_REGIONS, RIFT_NODES } from '../lib/seed'
-import { MONARCHS } from '../lib/monarchs'
+import { MONARCHS, FINAL_ANGEL } from '../lib/monarchs'
 import { getRegionProgress, RIFT_NODE_STATUS_META } from '../lib/riftWorld'
 import { getRegionTotalPower } from '../lib/livingWorld'
 import { GatePanel } from './GatePanel'
@@ -344,38 +344,82 @@ export function WorldMapPanel() {
       )}
 
       {/* 수동 전투 모드 (전체 오버레이 형태로 GatePanel을 렌더링) */}
-      {manualSession && manualSession.source === 'world_map' && (
-        <div className="fixed inset-0 z-[90] bg-ink-950 overflow-y-auto p-4 sm:p-6 md:p-8 animate-fade-in scrollbar-thin">
-          <div className="max-w-4xl mx-auto space-y-4">
-            <div className="flex items-center justify-between border-b border-white/5 pb-3">
-              <div className="flex items-center gap-2 text-purple-400">
-                <Swords className="h-5 w-5" />
-                <span className="text-sm font-black tracking-widest">수동 정화 전투 개시</span>
-              </div>
-              <span className="rounded bg-purple-500/25 px-2.5 py-0.5 text-[10px] font-bold text-purple-200 border border-purple-400/20">
-                {manualSession.gateName}
-              </span>
-            </div>
-            
-            {/* 그림자 장착 정보 표시 */}
-            {equippedShadows.length > 0 && (
-              <div className="rounded border border-purple-500/20 bg-purple-500/5 p-3 flex flex-wrap gap-2 items-center text-xs">
-                <Shield className="h-4 w-4 text-purple-400" />
-                <span className="text-white/60 font-medium">🛡️ 그림자 탱킹 작동 중:</span>
-                {equippedShadows.map(shadow => (
-                  <span key={shadow.instanceId} className="rounded bg-purple-500/10 px-2 py-0.5 text-[10px] text-purple-300 font-bold border border-purple-500/10">
-                    {shadow.name} (Lv.{shadow.level})
+      {manualSession && manualSession.source === 'world_map' && (() => {
+        const isMonarchSession = MONARCHS.some(m => m.id === manualSession.gateId) || manualSession.gateId === 'angel'
+        const monarchData = manualSession.gateId === 'angel' ? FINAL_ANGEL : MONARCHS.find(m => m.id === manualSession.gateId)
+        
+        return (
+          <div className="fixed inset-0 z-[90] bg-ink-950 overflow-y-auto p-4 sm:p-6 md:p-8 animate-fade-in scrollbar-thin">
+            <div className="max-w-4xl mx-auto space-y-4">
+              <div className="flex items-center justify-between border-b border-white/5 pb-3">
+                <div className="flex items-center gap-2 text-purple-400">
+                  <Swords className="h-5 w-5" />
+                  <span className="text-sm font-black tracking-widest text-red-400">
+                    {isMonarchSession ? '👑 군주 토벌 작전 개시' : '수동 정화 전투 개시'}
                   </span>
-                ))}
+                </div>
+                <span className={`rounded px-2.5 py-0.5 text-[10px] font-bold border ${
+                  isMonarchSession 
+                    ? 'bg-red-500/25 text-red-200 border-red-500/30' 
+                    : 'bg-purple-500/25 text-purple-200 border-purple-400/20'
+                }`}>
+                  {manualSession.gateName}
+                </span>
               </div>
-            )}
 
-            <div className="bg-ink-900 rounded-xl border border-white/10 p-2 sm:p-4">
-              <GatePanel />
+              {/* 군주 토벌 전용 상단 서사 보드 */}
+              {isMonarchSession && monarchData && (
+                <div className="panel corner-bracket border-red-500/40 bg-red-950/15 p-4 space-y-2.5 shadow-glow-red">
+                  <div className="br" />
+                  <div className="flex justify-between items-center text-xs">
+                    <span className="font-black text-red-400 uppercase tracking-widest">
+                      🚨 BOSS IDENTIFIED: {monarchData.rank === 0 ? 'SPECIAL' : `서열 ${monarchData.rank}위`}
+                    </span>
+                    <span className="font-bold text-pink-300">
+                      권장 전투력: {monarchData.recommendedCP.toLocaleString()} CP
+                    </span>
+                  </div>
+                  <h3 className="text-lg font-black text-white">{monarchData.name}</h3>
+                  <div className="text-xs text-white/70 bg-black/40 rounded p-2.5 border border-white/5 leading-relaxed">
+                    <p className="font-semibold text-rose-300 mb-1">Concept: {monarchData.concept}</p>
+                    <p className="text-white/60">
+                      심연의 군주가 세계를 잠식하고 있습니다. 격렬한 어둠의 기운으로 인해 일반적인 방어력으로는 즉사를 피할 수 없습니다. 그림자 군단의 강력한 수호 장벽 보호가 필수적입니다.
+                    </p>
+                  </div>
+                  
+                  {/* 그림자 탱킹 작동 안내 */}
+                  <div className="rounded border border-cyan-500/20 bg-cyan-950/10 p-3 text-xs text-cyan-200 flex items-start gap-2.5 leading-relaxed shadow-glow-blue">
+                    <Shield className="h-5 w-5 text-cyan-400 shrink-0 mt-0.5" />
+                    <div>
+                      <span className="font-extrabold block text-cyan-300">🛡️ [그림자 탱킹 완성형 장막 활성화]</span>
+                      <span className="text-white/70 block mt-0.5 text-[11px]">
+                        장착된 그림자 수에 비례하여 방어력 <span className="font-bold text-cyan-200">고정 +{(5000 + 2000 * equippedShadows.length).toLocaleString()}</span> 가산, 회피율 <span className="font-bold text-cyan-200">+{Math.round((0.40 + 0.05 * equippedShadows.length) * 100)}%</span> 상승, 대미지 감쇄가 즉각 적용되어 군주의 즉사 대미지를 무력화합니다.
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              )}
+              
+              {/* 그림자 장착 정보 표시 (일반 전투용) */}
+              {!isMonarchSession && equippedShadows.length > 0 && (
+                <div className="rounded border border-purple-500/20 bg-purple-500/5 p-3 flex flex-wrap gap-2 items-center text-xs">
+                  <Shield className="h-4 w-4 text-purple-400" />
+                  <span className="text-white/60 font-medium">🛡️ 그림자 탱킹 작동 중:</span>
+                  {equippedShadows.map(shadow => (
+                    <span key={shadow.instanceId} className="rounded bg-purple-500/10 px-2 py-0.5 text-[10px] text-purple-300 font-bold border border-purple-500/10">
+                      {shadow.name} (Lv.{shadow.level})
+                    </span>
+                  ))}
+                </div>
+              )}
+
+              <div className="bg-ink-900 rounded-xl border border-white/10 p-2 sm:p-4">
+                <GatePanel />
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        )
+      })()}
 
       {/* 헤더 */}
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
@@ -391,26 +435,80 @@ export function WorldMapPanel() {
       </div>
 
       {/* 거점 침공 비상 경고 배너 */}
-      {livingWorld && livingWorld.homeReachedMonarchId && (
-        <div className="panel corner-bracket border-red-500 bg-red-950/20 p-5 shadow-glow-red animate-pulse flex flex-col sm:flex-row items-center justify-between gap-4 mb-6">
-          <div className="br" />
-          <div className="flex items-center gap-3">
-            <AlertCircle className="h-8 w-8 text-red-500 animate-bounce" />
-            <div>
-              <h3 className="text-base font-black text-red-400 tracking-wider">🚨 초비상: 거점 군주 침공</h3>
-              <p className="text-xs text-red-200/80 mt-1 leading-relaxed">
-                군주 <span className="font-extrabold text-white">[{MONARCHS.find(m => m.id === livingWorld.homeReachedMonarchId)?.name || livingWorld.homeReachedMonarchId}]</span>이(가) 대한민국의 방어선을 돌파하고 거점에 진입했습니다! 즉각 대응하지 않으면 세계가 멸망합니다.
-              </p>
+      {livingWorld && livingWorld.homeReachedMonarchId && (() => {
+        const monarchId = livingWorld.homeReachedMonarchId
+        const mData = MONARCHS.find(m => m.id === monarchId) || FINAL_ANGEL
+        return (
+          <div className="panel corner-bracket border-red-500 bg-red-950/25 p-5 shadow-glow-red animate-pulse flex flex-col md:flex-row items-center justify-between gap-5 mb-6">
+            <div className="br" />
+            <div className="flex items-center gap-3">
+              <AlertCircle className="h-8 w-8 text-red-500 animate-bounce shrink-0" />
+              <div>
+                <h3 className="text-base font-black text-red-400 tracking-wider">🚨 초비상: 거점 군주 침공</h3>
+                <p className="text-xs text-red-200/80 mt-1 leading-relaxed">
+                  군주 <span className="font-extrabold text-white">[{mData.name}]</span>이(가) 대한민국의 방어선을 돌파하고 거점에 진입했습니다! 즉각 대응하지 않으면 세계가 멸망합니다.
+                </p>
+              </div>
+            </div>
+            <div className="flex flex-wrap gap-2 shrink-0">
+              <button
+                onClick={() => {
+                  if (playerPower < mData.recommendedCP * 0.6) {
+                    setSelectedNode({
+                      id: monarchId,
+                      regionId: 'kr',
+                      name: mData.name,
+                      x: 50,
+                      y: 50,
+                      status: 'active',
+                      gateDefId: monarchId,
+                      difficultyRank: 'S',
+                      difficulty: mData.recommendedCP,
+                      deadline: 999,
+                      daysRemaining: 999,
+                      isSGrade: true
+                    })
+                    setRecklessConfirmType('auto')
+                    setShowRecklessConfirm(true)
+                  } else {
+                    startWorldBattle(monarchId, [])
+                  }
+                }}
+                className="rounded border border-red-500/50 bg-red-500/20 hover:bg-red-500/35 px-4 py-2.5 text-xs font-black text-white tracking-widest transition-all cursor-pointer shadow-glow-red whitespace-nowrap flex items-center gap-1.5"
+              >
+                <Swords className="h-4 w-4" /> 자동 토벌 개시
+              </button>
+              <button
+                onClick={() => {
+                  if (playerPower < mData.recommendedCP * 0.6) {
+                    setSelectedNode({
+                      id: monarchId,
+                      regionId: 'kr',
+                      name: mData.name,
+                      x: 50,
+                      y: 50,
+                      status: 'active',
+                      gateDefId: monarchId,
+                      difficultyRank: 'S',
+                      difficulty: mData.recommendedCP,
+                      deadline: 999,
+                      daysRemaining: 999,
+                      isSGrade: true
+                    })
+                    setRecklessConfirmType('manual')
+                    setShowRecklessConfirm(true)
+                  } else {
+                    startWorldManualBattle(monarchId, [])
+                  }
+                }}
+                className="rounded border border-cyan-500/50 bg-cyan-950/20 hover:bg-cyan-500/35 px-4 py-2.5 text-xs font-black text-cyan-200 tracking-widest transition-all cursor-pointer shadow-glow-blue whitespace-nowrap flex items-center gap-1.5"
+              >
+                <Zap className="h-4 w-4 text-cyan-400" /> 수동 격퇴 개시
+              </button>
             </div>
           </div>
-          <button
-            onClick={() => triggerToast("⚔️ [L4-B 전투 예고] 군주와의 직접 카드 대결은 다음 업데이트(L4-B)에서 완벽히 오픈됩니다! 현재는 거점 도달 전투 stub 상태입니다.")}
-            className="rounded border border-red-500/50 bg-red-500/20 hover:bg-red-500/35 px-4 py-2.5 text-xs font-black text-white tracking-widest transition-all cursor-pointer shadow-glow-red whitespace-nowrap"
-          >
-            ⚔️ 군주 격퇴전 개시 (L4-B 준비)
-          </button>
-        </div>
-      )}
+        )
+      })()}
 
       {/* MVP-2 World Status Dashboard */}
       {livingWorld && (
@@ -504,14 +602,41 @@ export function WorldMapPanel() {
                   livingWorld.activeMonarchs.map((monarch: any) => {
                     const mData = MONARCHS.find(m => m.id === monarch.monarchId)
                     if (!mData) return null
+                    const isRampaging = monarch.status === 'rampaging'
                     return (
-                      <div key={monarch.monarchId} className="rounded bg-black/35 border border-white/5 p-1.5 flex items-center justify-between text-[10px]">
+                      <div
+                        key={monarch.monarchId}
+                        onClick={() => {
+                          if (isRampaging) {
+                            const monarchRegionId = monarch.occupiedRegionIds[0] || 'kr'
+                            handleNodeClick({
+                              id: monarch.monarchId,
+                              regionId: monarchRegionId,
+                              name: mData.name,
+                              x: 50,
+                              y: 50,
+                              status: 'active',
+                              gateDefId: monarch.monarchId,
+                              difficultyRank: 'S',
+                              difficulty: mData.recommendedCP,
+                              deadline: 999,
+                              daysRemaining: 999,
+                              isSGrade: true
+                            })
+                          }
+                        }}
+                        className={`rounded bg-black/35 border p-1.5 flex items-center justify-between text-[10px] transition-all ${
+                          isRampaging 
+                            ? 'border-red-500/30 hover:border-red-500 hover:bg-red-950/20 cursor-pointer' 
+                            : 'border-white/5 opacity-60'
+                        }`}
+                      >
                         <div className="flex flex-col">
                           <span className="font-bold text-white/80">{mData.name}</span>
                           <span className="text-[8px] text-white/40 font-mono">서열 {mData.rank}위 | {mData.theme}</span>
                         </div>
                         <div className="text-right">
-                          {monarch.status === 'rampaging' ? (
+                          {isRampaging ? (
                             <span className="rounded bg-red-500/15 border border-red-500/25 px-1 py-0.5 text-[8px] font-black text-red-300">
                               {monarch.occupiedRegionIds.length}개국 점령
                             </span>
@@ -635,57 +760,59 @@ export function WorldMapPanel() {
           </div>
 
           {/* 구역 요약 상세 패널 */}
-          {selectedNode ? (
-            <div className="panel corner-bracket border-purple-500/30 bg-purple-950/15 p-4 animate-fade-in">
-              <div className="br" />
-              <div className="flex items-start justify-between">
-                <div>
-                  <span className="rounded border border-purple-400/20 bg-purple-500/10 px-1.5 py-0.5 text-[10px] text-purple-200">
-                    {RIFT_REGIONS.find((r: RiftRegion) => r.id === selectedNode.regionId)?.name}
-                  </span>
-                  <h4 className="mt-1.5 text-base font-bold text-white">
-                    {selectedNode.name}
-                  </h4>
-                </div>
-                <button
-                  onClick={() => setSelectedNode(null)}
-                  className="rounded p-1 hover:bg-white/5 text-white/45 hover:text-white cursor-pointer"
-                >
-                  <X className="h-4 w-4" />
-                </button>
-              </div>
+          {selectedNode ? (() => {
+            const isMonarchNode = MONARCHS.some(m => m.id === selectedNode.id) || selectedNode.id === 'angel'
+            const monarchData = selectedNode.id === 'angel' ? FINAL_ANGEL : MONARCHS.find(m => m.id === selectedNode.id)
 
-              <div className="mt-4 space-y-3">
-                <div className="flex justify-between border-b border-white/5 pb-2 text-xs">
-                  <span className="text-white/45">정화 상태</span>
-                  <span
-                    className={
-                      (riftNodesState[selectedNode.id] ?? selectedNode.status) === 'cleared' ? 'text-emerald-400 font-bold' :
-                      (riftNodesState[selectedNode.id] ?? selectedNode.status) === 'active' ? 'text-cyan-400 font-bold' :
-                      (riftNodesState[selectedNode.id] ?? selectedNode.status) === 'undiscovered' ? 'text-white/55' : 'text-white/30'
-                    }
-                  >
-                    {
-                      (riftNodesState[selectedNode.id] ?? selectedNode.status) === 'cleared' ? '완전 정화' :
-                      (riftNodesState[selectedNode.id] ?? selectedNode.status) === 'active' ? '공략 진행 중' :
-                      (riftNodesState[selectedNode.id] ?? selectedNode.status) === 'undiscovered' ? '탐사 대기' : '잠금'
-                    }
-                  </span>
-                </div>
-                <div className="flex justify-between border-b border-white/5 pb-2 text-xs">
-                  <span className="text-white/45">난이도 랭크</span>
-                  <span className="font-bold text-cyan-300">
-                    {selectedNode.difficultyRank ?? 'E'}-RANK
-                  </span>
-                </div>
-                
-                {/* 권장 CP vs 실효 CP 비교 브리핑 */}
-                {(selectedNode.difficulty ?? 0) > 0 && (
-                  <>
+            if (isMonarchNode && monarchData) {
+              const regionState = livingWorld?.regions[selectedNode.regionId]
+              const namedHuntersInRegion = regionState?.namedHunterIds || []
+              const activeMonarchState = livingWorld?.activeMonarchs?.find(m => m.monarchId === selectedNode.id)
+              const isDefeated = activeMonarchState?.status === 'defeated'
+              
+              return (
+                <div className="panel corner-bracket border-red-500/30 bg-red-950/10 p-4 animate-fade-in">
+                  <div className="br" />
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <span className="rounded border border-red-500/20 bg-red-500/10 px-1.5 py-0.5 text-[10px] text-red-200 font-bold">
+                        👑 군주 출현 지역: {RIFT_REGIONS.find((r: RiftRegion) => r.id === selectedNode.regionId)?.name}
+                      </span>
+                      <h4 className="mt-1.5 text-base font-black text-white">
+                        {monarchData.name}
+                      </h4>
+                    </div>
+                    <button
+                      onClick={() => setSelectedNode(null)}
+                      className="rounded p-1 hover:bg-white/5 text-white/45 hover:text-white cursor-pointer"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  </div>
+
+                  <div className="mt-4 space-y-3">
+                    <div className="flex justify-between border-b border-white/5 pb-2 text-xs">
+                      <span className="text-white/45">군주 상태</span>
+                      <span className={isDefeated ? 'text-emerald-400 font-bold' : 'text-red-400 font-bold animate-pulse'}>
+                        {isDefeated ? '격퇴됨 (평화)' : '점령지 폭주 중'}
+                      </span>
+                    </div>
+                    <div className="flex justify-between border-b border-white/5 pb-2 text-xs">
+                      <span className="text-white/45">서열</span>
+                      <span className="font-bold text-red-300">
+                        {monarchData.rank === 0 ? 'SPECIAL' : `제 ${monarchData.rank}위`}
+                      </span>
+                    </div>
+                    <div className="flex justify-between border-b border-white/5 pb-2 text-xs">
+                      <span className="text-white/45">개념/테마</span>
+                      <span className="font-mono text-purple-300">
+                        {monarchData.theme} ({monarchData.concept})
+                      </span>
+                    </div>
                     <div className="flex justify-between border-b border-white/5 pb-2 text-xs">
                       <span className="text-white/45">권장 전투력</span>
                       <span className="font-bold text-pink-300">
-                        {(selectedNode.difficulty ?? 0).toLocaleString()} CP
+                        {monarchData.recommendedCP.toLocaleString()} CP
                       </span>
                     </div>
                     <div className="flex justify-between border-b border-white/5 pb-2 text-xs">
@@ -695,181 +822,369 @@ export function WorldMapPanel() {
                       </span>
                     </div>
 
-                    {/* 위험도 경고 표시 */}
-                    <div className="mt-2.5 rounded border p-3 flex flex-col gap-1.5">
+                    {/* 위험도 경고 */}
+                    <div className="mt-2.5 rounded border p-3 flex flex-col gap-1.5 bg-black/35 border-white/5">
                       {getDangerLevel(selectedNode) === 'safe' && (
                         <div className="text-emerald-400 flex items-center gap-1.5 text-xs font-bold">
                           <CheckCircle className="h-4 w-4" />
-                          <span>안전: 격파 수월. 안정적인 정화 전선입니다.</span>
+                          <span>안전: 전력이 충분합니다.</span>
                         </div>
                       )}
                       {getDangerLevel(selectedNode) === 'danger' && (
                         <div className="text-yellow-400 flex items-center gap-1.5 text-xs font-bold">
                           <AlertCircle className="h-4 w-4" />
-                          <span>위험: 균열의 압박이 강하나 도전해볼 만합니다.</span>
+                          <span>위험: 격전이 예상됩니다.</span>
                         </div>
                       )}
                       {getDangerLevel(selectedNode) === 'reckless' && (
                         <div className="text-rose-400 flex flex-col gap-1 text-xs font-bold border border-rose-500/20 bg-rose-500/5 rounded p-2">
                           <div className="flex items-center gap-1.5">
                             <AlertCircle className="h-4 w-4 animate-pulse" />
-                            <span>⚠️ 무모: 매우 높은 즉사 위험 구역!</span>
+                            <span>⚠️ 무모: 대단히 위험한 수준!</span>
                           </div>
                           <span className="text-[10px] font-medium text-rose-300/80 leading-normal">
-                            치명적인 즉사 위험이 있으니 그림자를 보강하거나 레벨업 후 진입하십시오.
+                            그림자 수호 장막(그림자 탱킹) 없이는 원킬당합니다.
                           </span>
                         </div>
                       )}
                     </div>
-                  </>
-                )}
 
-                {selectedNode.daysRemaining !== undefined && (
-                  <div className="flex justify-between border-b border-white/5 pb-2 text-xs">
-                    <span className="text-white/45">소멸/폭주 시한</span>
-                    <span className={`font-bold ${(selectedNode.daysRemaining ?? 0) <= 3 ? 'text-red-400 animate-pulse' : 'text-yellow-300'}`}>
-                      {selectedNode.daysRemaining}일 남음 / 총 {selectedNode.deadline}일
-                    </span>
-                  </div>
-                )}
-              </div>
+                    {/* 그림자 탱킹 상태 안내 */}
+                    <div className="rounded border border-purple-500/20 bg-purple-500/5 p-3 text-[11px] text-purple-200">
+                      <div className="font-bold text-purple-300 mb-1">🛡️ 그림자 탱킹 준비 상태</div>
+                      {equippedShadows.length > 0 ? (
+                        <span>
+                          장착 그림자 <span className="font-bold text-cyan-300">{equippedShadows.length}명</span>으로 수호 장막 활성화 완료! 즉사 방지 쉴드가 준비되었습니다.
+                        </span>
+                      ) : (
+                        <span className="text-rose-400 font-bold">
+                          ⚠️ 현재 장착된 그림자가 없습니다! 군주전 진입 시 탱킹 버프가 작동하지 않아 100% 즉사합니다. 그림자를 장착하고 도전하십시오.
+                        </span>
+                      )}
+                    </div>
 
-              {/* [L1-A] 러브콜 특별 섹션 */}
-              {hasLoveCall && loveCallState && (
-                <div className="mt-4 rounded-lg border border-yellow-500/30 bg-yellow-500/5 p-3 space-y-3">
-                  <div className="flex items-center gap-1.5 text-xs font-black text-yellow-300">
-                    <span>📞 긴급 러브콜 지원 요청</span>
-                  </div>
-                  <p className="text-[10px] text-white/70 leading-normal">
-                    {RIFT_REGIONS.find((r: RiftRegion) => r.id === selectedNode.regionId)?.name} 헌터 협회가 자력 방어가 불가능하여 공식 협조를 요청했습니다.
-                  </p>
-                  
-                  {/* 보상 정보 */}
-                  <div className="rounded bg-black/40 p-2 space-y-1 text-[10px]">
-                    <div className="text-[9px] font-bold text-white/40 mb-1">약속 보상 (기본)</div>
-                    <div className="flex justify-between">
-                      <span className="text-white/60">골드 지원금</span>
-                      <span className="font-bold text-amber-300">+{loveCallState.promisedReward.gold} Gold</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-white/60">어둠의 정수</span>
-                      <span className="font-bold text-purple-300">+{loveCallState.promisedReward.shadowEssence} 정수</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-white/60">전투 경험치</span>
-                      <span className="font-bold text-emerald-300">+{loveCallState.promisedReward.hunterXp} XP</span>
-                    </div>
-                  </div>
-
-                  {/* 협력 헌터 선택 목록 */}
-                  <div className="space-y-1.5">
-                    <div className="text-[9px] font-bold text-white/40">협력 헌터 선택 (참전 지원 후보)</div>
-                    {loveCallState.helperHunterIds.length === 0 ? (
-                      <div className="text-[9px] text-white/40 italic">현재 지원 가능한 헌터가 없습니다.</div>
-                    ) : (
-                      <div className="max-h-28 overflow-y-auto space-y-1 pr-1 scrollbar-thin">
-                        {loveCallState.helperHunterIds.map(hid => {
-                          const h = livingWorld?.namedHunters[hid]
-                          if (!h) return null
-                          const isSelected = selectedHelpers.includes(hid)
-                          return (
-                            <label key={hid} className="flex items-center justify-between rounded bg-black/35 hover:bg-black/60 px-2 py-1.5 text-[10px] cursor-pointer select-none border border-white/5">
-                              <div className="flex items-center gap-2">
-                                <input
-                                  type="checkbox"
-                                  checked={isSelected}
-                                  onChange={() => handleHelperToggle(hid)}
-                                  className="accent-purple-500 h-3 w-3 cursor-pointer"
-                                />
-                                <span className="font-bold text-white/80">{h.name}</span>
-                                <span className="rounded bg-purple-500/20 px-1 text-[8px] font-black text-purple-300 border border-purple-500/20">
-                                  {h.rank}
-                                </span>
-                              </div>
-                              <span className="text-cyan-300 font-mono font-bold">⚔️{h.power.toLocaleString()}</span>
-                            </label>
-                          )
-                        })}
+                    {/* 협력 헌터 선택 리스트 */}
+                    {!isDefeated && namedHuntersInRegion.length > 0 && (
+                      <div className="mt-4 rounded-lg border border-yellow-500/30 bg-yellow-500/5 p-3 space-y-2">
+                        <div className="text-xs font-black text-yellow-300">
+                          🤝 연대 전투: {RIFT_REGIONS.find((r: RiftRegion) => r.id === selectedNode.regionId)?.name} 협력 헌터
+                        </div>
+                        <p className="text-[10px] text-white/70 leading-normal">
+                          지역 헌터들과 연합하여 공략 버프(스탯 증가)를 얻을 수 있으나 보상이 일부 분배(차감)됩니다.
+                        </p>
+                        <div className="max-h-24 overflow-y-auto space-y-1 scrollbar-thin">
+                          {namedHuntersInRegion.map(hid => {
+                            const h = livingWorld?.namedHunters[hid]
+                            if (!h) return null
+                            const isSelected = selectedHelpers.includes(hid)
+                            return (
+                              <label key={hid} className="flex items-center justify-between rounded bg-black/35 hover:bg-black/60 px-2 py-1 cursor-pointer select-none text-[10px] border border-white/5">
+                                <div className="flex items-center gap-2">
+                                  <input
+                                    type="checkbox"
+                                    checked={isSelected}
+                                    onChange={() => handleHelperToggle(hid)}
+                                    className="accent-purple-500 h-3 w-3 cursor-pointer"
+                                  />
+                                  <span className="font-bold text-white/80">{h.name}</span>
+                                  <span className="rounded bg-purple-500/20 px-1 text-purple-300 font-bold" style={{ fontSize: '8px' }}>
+                                    {h.rank}
+                                  </span>
+                                </div>
+                                <span className="text-cyan-300 font-mono font-bold">⚔️{h.power.toLocaleString()}</span>
+                              </label>
+                            )
+                          })}
+                        </div>
                       </div>
                     )}
                   </div>
 
-                  {/* 트레이드오프 브리핑 */}
-                  <div className="rounded border border-purple-500/20 bg-purple-500/5 p-2 text-[10px] space-y-1.5">
-                    <div className="text-[9px] font-bold text-purple-300">⚖️ 협력 전투 트레이드오프 실시간 예측</div>
-                    <div className="grid grid-cols-2 gap-1 font-mono text-[9px] text-white/70">
-                      <div>공격력 보너스:</div>
-                      <div className="text-emerald-400 font-bold">+{coopBuffs.atk.toLocaleString()} ATK</div>
-                      <div>방어력 보너스:</div>
-                      <div className="text-emerald-400 font-bold">+{coopBuffs.def.toLocaleString()} DEF</div>
-                      <div>받는 피해 감소:</div>
-                      <div className="text-emerald-400 font-bold">-{Math.round(coopBuffs.dr * 100)}% DMG</div>
-                      <div>보상 획득 비율:</div>
-                      <div className={coopBuffs.rewardRatio === 1 ? "text-cyan-300 font-bold" : "text-yellow-400 font-bold"}>
-                        {Math.round(coopBuffs.rewardRatio * 100)}% (독식 대비 -{Math.round((1 - coopBuffs.rewardRatio) * 100)}%)
+                  <div className="mt-6 space-y-2">
+                    {isNodeRetreatedToday(selectedNode.id) ? (
+                      <div className="rounded border border-rose-500/25 bg-rose-500/5 p-3 text-xs text-rose-300/85 text-center font-bold">
+                        ⚠️ 오늘 이 군주에게서 후퇴하여 다시 도전할 수 없습니다. 내일 다시 도전하십시오.
+                      </div>
+                    ) : isDefeated ? (
+                      <div className="rounded border border-emerald-500/20 bg-emerald-500/5 p-2.5 text-[11px] text-emerald-200 text-center font-bold">
+                        이 군주는 이미 격퇴되었습니다.
+                      </div>
+                    ) : (
+                      <>
+                        <button
+                          onClick={() => {
+                            const level = getDangerLevel(selectedNode)
+                            if (level === 'reckless') {
+                              setRecklessConfirmType('auto')
+                              setShowRecklessConfirm(true)
+                            } else {
+                              startWorldBattle(selectedNode.id, selectedHelpers)
+                            }
+                          }}
+                          className="btn bg-rose-700 hover:bg-rose-600 text-white w-full flex items-center justify-center gap-2 py-2.5 text-xs font-black tracking-widest cursor-pointer shadow-glow-red"
+                        >
+                          <Swords className="h-4 w-4" />
+                          군주 자동 토벌 개시
+                        </button>
+
+                        <button
+                          onClick={() => {
+                            const level = getDangerLevel(selectedNode)
+                            if (level === 'reckless') {
+                              setRecklessConfirmType('manual')
+                              setShowRecklessConfirm(true)
+                            } else {
+                              startWorldManualBattle(selectedNode.id, selectedHelpers)
+                            }
+                          }}
+                          className="btn border border-cyan-500/40 bg-cyan-950/20 hover:bg-cyan-500/15 w-full flex items-center justify-center gap-2 py-2.5 text-xs text-cyan-200 font-black tracking-widest transition-all cursor-pointer shadow-glow-blue"
+                        >
+                          <Zap className="h-4 w-4 text-cyan-400" />
+                          군주 수동 격퇴 개시
+                        </button>
+                      </>
+                    )}
+                  </div>
+                </div>
+              )
+            }
+
+            return (
+              <div className="panel corner-bracket border-purple-500/30 bg-purple-950/15 p-4 animate-fade-in">
+                <div className="br" />
+                <div className="flex items-start justify-between">
+                  <div>
+                    <span className="rounded border border-purple-400/20 bg-purple-500/10 px-1.5 py-0.5 text-[10px] text-purple-200">
+                      {RIFT_REGIONS.find((r: RiftRegion) => r.id === selectedNode.regionId)?.name}
+                    </span>
+                    <h4 className="mt-1.5 text-base font-bold text-white">
+                      {selectedNode.name}
+                    </h4>
+                  </div>
+                  <button
+                    onClick={() => setSelectedNode(null)}
+                    className="rounded p-1 hover:bg-white/5 text-white/45 hover:text-white cursor-pointer"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+
+                <div className="mt-4 space-y-3">
+                  <div className="flex justify-between border-b border-white/5 pb-2 text-xs">
+                    <span className="text-white/45">정화 상태</span>
+                    <span
+                      className={
+                        (riftNodesState[selectedNode.id] ?? selectedNode.status) === 'cleared' ? 'text-emerald-400 font-bold' :
+                        (riftNodesState[selectedNode.id] ?? selectedNode.status) === 'active' ? 'text-cyan-400 font-bold' :
+                        (riftNodesState[selectedNode.id] ?? selectedNode.status) === 'undiscovered' ? 'text-white/55' : 'text-white/30'
+                      }
+                    >
+                      {
+                        (riftNodesState[selectedNode.id] ?? selectedNode.status) === 'cleared' ? '완전 정화' :
+                        (riftNodesState[selectedNode.id] ?? selectedNode.status) === 'active' ? '공략 진행 중' :
+                        (riftNodesState[selectedNode.id] ?? selectedNode.status) === 'undiscovered' ? '탐사 대기' : '잠금'
+                      }
+                    </span>
+                  </div>
+                  <div className="flex justify-between border-b border-white/5 pb-2 text-xs">
+                    <span className="text-white/45">난이도 랭크</span>
+                    <span className="font-bold text-cyan-300">
+                      {selectedNode.difficultyRank ?? 'E'}-RANK
+                    </span>
+                  </div>
+                  
+                  {/* 권장 CP vs 실효 CP 비교 브리핑 */}
+                  {(selectedNode.difficulty ?? 0) > 0 && (
+                    <>
+                      <div className="flex justify-between border-b border-white/5 pb-2 text-xs">
+                        <span className="text-white/45">권장 전투력</span>
+                        <span className="font-bold text-pink-300">
+                          {(selectedNode.difficulty ?? 0).toLocaleString()} CP
+                        </span>
+                      </div>
+                      <div className="flex justify-between border-b border-white/5 pb-2 text-xs">
+                        <span className="text-white/45">헌터 실효 전투력</span>
+                        <span className="font-bold text-cyan-300">
+                          {playerPower.toLocaleString()} CP
+                        </span>
+                      </div>
+
+                      {/* 위험도 경고 표시 */}
+                      <div className="mt-2.5 rounded border p-3 flex flex-col gap-1.5">
+                        {getDangerLevel(selectedNode) === 'safe' && (
+                          <div className="text-emerald-400 flex items-center gap-1.5 text-xs font-bold">
+                            <CheckCircle className="h-4 w-4" />
+                            <span>안전: 격파 수월. 안정적인 정화 전선입니다.</span>
+                          </div>
+                        )}
+                        {getDangerLevel(selectedNode) === 'danger' && (
+                          <div className="text-yellow-400 flex items-center gap-1.5 text-xs font-bold">
+                            <AlertCircle className="h-4 w-4" />
+                            <span>위험: 균열의 압박이 강하나 도전해볼 만합니다.</span>
+                          </div>
+                        )}
+                        {getDangerLevel(selectedNode) === 'reckless' && (
+                          <div className="text-rose-400 flex flex-col gap-1 text-xs font-bold border border-rose-500/20 bg-rose-500/5 rounded p-2">
+                            <div className="flex items-center gap-1.5">
+                              <AlertCircle className="h-4 w-4 animate-pulse" />
+                              <span>⚠️ 무모: 매우 높은 즉사 위험 구역!</span>
+                            </div>
+                            <span className="text-[10px] font-medium text-rose-300/80 leading-normal">
+                              치명적인 즉사 위험이 있으니 그림자를 보강하거나 레벨업 후 진입하십시오.
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    </>
+                  )}
+
+                  {selectedNode.daysRemaining !== undefined && (
+                    <div className="flex justify-between border-b border-white/5 pb-2 text-xs">
+                      <span className="text-white/45">소멸/폭주 시한</span>
+                      <span className={`font-bold ${(selectedNode.daysRemaining ?? 0) <= 3 ? 'text-red-400 animate-pulse' : 'text-yellow-300'}`}>
+                        {selectedNode.daysRemaining}일 남음 / 총 {selectedNode.deadline}일
+                      </span>
+                    </div>
+                  )}
+                </div>
+
+                {/* [L1-A] 러브콜 특별 섹션 */}
+                {hasLoveCall && loveCallState && (
+                  <div className="mt-4 rounded-lg border border-yellow-500/30 bg-yellow-500/5 p-3 space-y-3">
+                    <div className="flex items-center gap-1.5 text-xs font-black text-yellow-300">
+                      <span>📞 긴급 러브콜 지원 요청</span>
+                    </div>
+                    <p className="text-[10px] text-white/70 leading-normal">
+                      {RIFT_REGIONS.find((r: RiftRegion) => r.id === selectedNode.regionId)?.name} 헌터 협회가 자력 방어가 불가능하여 공식 협조를 요청했습니다.
+                    </p>
+                    
+                    {/* 보상 정보 */}
+                    <div className="rounded bg-black/40 p-2 space-y-1 text-[10px]">
+                      <div className="text-[9px] font-bold text-white/40 mb-1">약속 보상 (기본)</div>
+                      <div className="flex justify-between">
+                        <span className="text-white/60">골드 지원금</span>
+                        <span className="font-bold text-amber-300">+{loveCallState.promisedReward.gold} Gold</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-white/60">어둠의 정수</span>
+                        <span className="font-bold text-purple-300">+{loveCallState.promisedReward.shadowEssence} 정수</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-white/60">전투 경험치</span>
+                        <span className="font-bold text-emerald-300">+{loveCallState.promisedReward.hunterXp} XP</span>
+                      </div>
+                    </div>
+
+                    {/* 협력 헌터 선택 목록 */}
+                    <div className="space-y-1.5">
+                      <div className="text-[9px] font-bold text-white/40">협력 헌터 선택 (참전 지원 후보)</div>
+                      {loveCallState.helperHunterIds.length === 0 ? (
+                        <div className="text-[9px] text-white/40 italic">현재 지원 가능한 헌터가 없습니다.</div>
+                      ) : (
+                        <div className="max-h-28 overflow-y-auto space-y-1 pr-1 scrollbar-thin">
+                          {loveCallState.helperHunterIds.map(hid => {
+                            const h = livingWorld?.namedHunters[hid]
+                            if (!h) return null
+                            const isSelected = selectedHelpers.includes(hid)
+                            return (
+                              <label key={hid} className="flex items-center justify-between rounded bg-black/35 hover:bg-black/60 px-2 py-1.5 text-[10px] cursor-pointer select-none border border-white/5">
+                                <div className="flex items-center gap-2">
+                                  <input
+                                    type="checkbox"
+                                    checked={isSelected}
+                                    onChange={() => handleHelperToggle(hid)}
+                                    className="accent-purple-500 h-3 w-3 cursor-pointer"
+                                  />
+                                  <span className="font-bold text-white/80">{h.name}</span>
+                                  <span className="rounded bg-purple-500/20 px-1 text-[8px] font-black text-purple-300 border border-purple-500/20">
+                                    {h.rank}
+                                  </span>
+                                </div>
+                                <span className="text-cyan-300 font-mono font-bold">⚔️{h.power.toLocaleString()}</span>
+                              </label>
+                            )
+                          })}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* 트레이드오프 브리핑 */}
+                    <div className="rounded border border-purple-500/20 bg-purple-500/5 p-2 text-[10px] space-y-1.5">
+                      <div className="text-[9px] font-bold text-purple-300">⚖️ 협력 전투 트레이드오프 실시간 예측</div>
+                      <div className="grid grid-cols-2 gap-1 font-mono text-[9px] text-white/70">
+                        <div>공격력 보너스:</div>
+                        <div className="text-emerald-400 font-bold">+{coopBuffs.atk.toLocaleString()} ATK</div>
+                        <div>방어력 보너스:</div>
+                        <div className="text-emerald-400 font-bold">+{coopBuffs.def.toLocaleString()} DEF</div>
+                        <div>받는 피해 감소:</div>
+                        <div className="text-emerald-400 font-bold">-{Math.round(coopBuffs.dr * 100)}% DMG</div>
+                        <div>보상 획득 비율:</div>
+                        <div className={coopBuffs.rewardRatio === 1 ? "text-cyan-300 font-bold" : "text-yellow-400 font-bold"}>
+                          {Math.round(coopBuffs.rewardRatio * 100)}% (독식 대비 -{Math.round((1 - coopBuffs.rewardRatio) * 100)}%)
+                        </div>
                       </div>
                     </div>
                   </div>
-                </div>
-              )}
-
-              <div className="mt-6 space-y-2">
-                {isNodeRetreatedToday(selectedNode.id) ? (
-                  <div className="rounded border border-rose-500/25 bg-rose-500/5 p-3 text-xs text-rose-300/85 text-center font-bold">
-                    ⚠️ 오늘 이 구역에서 후퇴하여 다시 진입할 수 없습니다. 내일 다시 시도하십시오.
-                  </div>
-                ) : (
-                  <>
-                    {(riftNodesState[selectedNode.id] ?? selectedNode.status) === 'cleared' ? (
-                      <div className="rounded border border-emerald-500/20 bg-emerald-500/5 p-2.5 text-[11px] text-emerald-200 text-center">
-                        이미 완전히 정화된 구역입니다. 재정화가 가능합니다.
-                      </div>
-                    ) : null}
-
-                    {/* 자동 전투 버튼 */}
-                    <button
-                      onClick={() => {
-                        const level = getDangerLevel(selectedNode)
-                        if (level === 'reckless') {
-                          setRecklessConfirmType('auto')
-                          setShowRecklessConfirm(true)
-                        } else {
-                          startWorldBattle(selectedNode.id, selectedHelpers)
-                        }
-                      }}
-                      disabled={
-                        (riftNodesState[selectedNode.id] ?? selectedNode.status) === 'locked'
-                      }
-                      className="btn btn-primary w-full flex items-center justify-center gap-2 py-2 text-xs cursor-pointer"
-                    >
-                      <Swords className="h-4 w-4" />
-                      자동 정화 전투 (시네마틱)
-                    </button>
-
-                    {/* 수동 전투 버튼 */}
-                    <button
-                      onClick={() => {
-                        const level = getDangerLevel(selectedNode)
-                        if (level === 'reckless') {
-                          setRecklessConfirmType('manual')
-                          setShowRecklessConfirm(true)
-                        } else {
-                          startWorldManualBattle(selectedNode.id, selectedHelpers)
-                        }
-                      }}
-                      disabled={
-                        (riftNodesState[selectedNode.id] ?? selectedNode.status) === 'locked'
-                      }
-                      className="btn border border-cyan-500/30 bg-cyan-950/20 hover:bg-cyan-500/15 w-full flex items-center justify-center gap-2 py-2 text-xs text-cyan-200 transition-all cursor-pointer"
-                    >
-                      <Zap className="h-4 w-4 text-cyan-400" />
-                      수동 조작 정화 (카드 전투)
-                    </button>
-                  </>
                 )}
+
+                <div className="mt-6 space-y-2">
+                  {isNodeRetreatedToday(selectedNode.id) ? (
+                    <div className="rounded border border-rose-500/25 bg-rose-500/5 p-3 text-xs text-rose-300/85 text-center font-bold">
+                      ⚠️ 오늘 이 구역에서 후퇴하여 다시 진입할 수 없습니다. 내일 다시 시도하십시오.
+                    </div>
+                  ) : (
+                    <>
+                      {(riftNodesState[selectedNode.id] ?? selectedNode.status) === 'cleared' ? (
+                        <div className="rounded border border-emerald-500/20 bg-emerald-500/5 p-2.5 text-[11px] text-emerald-200 text-center">
+                          이미 완전히 정화된 구역입니다. 재정화가 가능합니다.
+                        </div>
+                      ) : null}
+
+                      {/* 자동 전투 버튼 */}
+                      <button
+                        onClick={() => {
+                          const level = getDangerLevel(selectedNode)
+                          if (level === 'reckless') {
+                            setRecklessConfirmType('auto')
+                            setShowRecklessConfirm(true)
+                          } else {
+                            startWorldBattle(selectedNode.id, selectedHelpers)
+                          }
+                        }}
+                        disabled={
+                          (riftNodesState[selectedNode.id] ?? selectedNode.status) === 'locked'
+                        }
+                        className="btn btn-primary w-full flex items-center justify-center gap-2 py-2 text-xs cursor-pointer"
+                      >
+                        <Swords className="h-4 w-4" />
+                        자동 정화 전투 (시네마틱)
+                      </button>
+
+                      {/* 수동 전투 버튼 */}
+                      <button
+                        onClick={() => {
+                          const level = getDangerLevel(selectedNode)
+                          if (level === 'reckless') {
+                            setRecklessConfirmType('manual')
+                            setShowRecklessConfirm(true)
+                          } else {
+                            startWorldManualBattle(selectedNode.id, selectedHelpers)
+                          }
+                        }}
+                        disabled={
+                          (riftNodesState[selectedNode.id] ?? selectedNode.status) === 'locked'
+                        }
+                        className="btn border border-cyan-500/30 bg-cyan-950/20 hover:bg-cyan-500/15 w-full flex items-center justify-center gap-2 py-2 text-xs text-cyan-200 transition-all cursor-pointer"
+                      >
+                        <Zap className="h-4 w-4 text-cyan-400" />
+                        수동 조작 정화 (카드 전투)
+                      </button>
+                    </>
+                  )}
+                </div>
               </div>
-            </div>
-          ) : (
+            )
+          })() : (
             <div className="panel corner-bracket border-white/5 bg-ink-950/20 p-8 text-center text-white/35 text-xs">
               <HelpCircle className="mx-auto mb-2 h-8 w-8 text-white/20" />
               지도상의 균열 노드를 선택하여 상세 정보를 확인하십시오.

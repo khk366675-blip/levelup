@@ -2384,6 +2384,7 @@ export interface LivingWorldState {
   riftNodes: Record<string, RiftNode> // 시뮬레이션용 게이트 노드 상태
   activeMonarchs?: ActiveMonarch[]    // 활성화된 군주들 상태
   homeReachedMonarchId?: string       // 거점에 도달한 군주 ID
+  angelReady?: boolean                // 모든 군주 격퇴 시 천사 예고 플래그
 }
 
 // 시드용 Base 데이터 타입

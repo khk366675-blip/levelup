@@ -191,6 +191,7 @@ export function initLivingWorld(seed: number): LivingWorldState {
     eventLogs: ['[Day 0] 균열 대각성이 시작되었습니다.'],
     riftNodes,
     activeMonarchs: [],
-    homeReachedMonarchId: undefined
+    homeReachedMonarchId: undefined,
+    angelReady: false
   }
 }
