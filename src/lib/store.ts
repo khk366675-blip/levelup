@@ -11596,6 +11596,8 @@ export const useGame = create<GameState>()(
           })
           return nodes
         })(),
+        livingWorld: initLivingWorld(Math.floor(Math.random() * 99999999) + 1),
+        activeWorldBattle: undefined,
         combatLogs: [],
         manualBattleSession: undefined,
         ownedShadows: [],
@@ -11660,6 +11662,8 @@ export const useGame = create<GameState>()(
           })
           return nodes
         })(),
+        livingWorld: initLivingWorld(Math.floor(Math.random() * 99999999) + 1),
+        activeWorldBattle: undefined,
         combatLogs: [],
         manualBattleSession: undefined,
         ownedShadows: [],
@@ -11677,7 +11681,6 @@ export const useGame = create<GameState>()(
         lastShadowExpeditionDate: undefined,
         activeShadowExpeditionId: undefined,
         infiniteTower: createInitialTowerState(),
-        activeWorldBattle: undefined,
         worldBattleRetreats: {},
         rewardBoxes: [],
         lastDailyBoxDate: undefined,
@@ -11784,6 +11787,8 @@ export const useGame = create<GameState>()(
             })
             return nodes
           })(),
+          livingWorld: initLivingWorld(Math.floor(Math.random() * 99999999) + 1),
+          activeWorldBattle: undefined,
           combatLogs: [],
           manualBattleSession: undefined,
           ownedShadows: [],
@@ -11801,7 +11806,6 @@ export const useGame = create<GameState>()(
           lastShadowExpeditionDate: undefined,
           activeShadowExpeditionId: undefined,
           infiniteTower: createInitialTowerState(),
-          activeWorldBattle: undefined,
           worldBattleRetreats: {},
           rewardBoxes: [],
           lastDailyBoxDate: undefined,
