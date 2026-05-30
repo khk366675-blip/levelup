@@ -67,6 +67,24 @@ const mapTurnsToCinematicLogs = (turns: any[]): CinematicLogData[] => {
   })
 }
 
+const REGION_FLAGS: Record<string, string> = {
+  us: '🇺🇸',
+  ca: '🇨🇦',
+  mx: '🇲🇽',
+  uk: '🇬🇧',
+  de: '🇩🇪',
+  fr: '🇫🇷',
+  it: '🇮🇹',
+  cn: '🇨🇳',
+  jp: '🇯🇵',
+  kr: '🇰🇷',
+  ru: '🇷🇺',
+  in: '🇮🇳',
+  br: '🇧🇷',
+  au: '🇦🇺',
+  eg: '🇪🇬',
+}
+
 export function WorldMapPanel() {
   const riftNodesState = useGame((s) => s.riftNodes ?? {})
   const activeRiftNodeId = useGame((s) => s.activeRiftNodeId)
@@ -779,6 +797,152 @@ export function WorldMapPanel() {
       <div className="grid gap-6 lg:grid-cols-3">
         {/* 국가 진행도 목록 */}
         <div className="space-y-3 lg:col-span-1">
+          {/* 세계 지원 요청 (Rift Help Desk) */}
+          <div className="panel corner-bracket border-amber-500/20 bg-ink-950/40 p-4">
+            <div className="br" />
+            <h3 className="mb-3 text-sm font-bold text-amber-400 flex items-center gap-1.5 font-bold">
+              📞 세계 지원 요청 (Love Calls)
+            </h3>
+            
+            {(() => {
+              const activeLoveCalls = Object.values(livingWorld?.riftNodes ?? {})
+                .filter((node: any) => node.loveCall?.active && (riftNodesState[node.id] ?? node.status) === 'active')
+
+              if (activeLoveCalls.length === 0) {
+                return (
+                  <div className="rounded border border-white/5 bg-ink-950/20 p-4 text-center text-white/35 text-xs py-6">
+                    <Globe className="mx-auto mb-2 h-6 w-6 text-white/15 animate-pulse" />
+                    <p className="font-medium text-white/50 leading-relaxed">
+                      현재 세계는 아직 당신을 직접 부르지 않습니다.
+                    </p>
+                    <p className="text-[10px] text-white/30 mt-0.5">
+                      대한민국 전선을 지키고 감시해 주십시오.
+                    </p>
+                  </div>
+                )
+              }
+
+              return (
+                <div className="space-y-2.5 max-h-[340px] overflow-y-auto pr-1 scrollbar-thin scrollbar-thumb-amber-500/10">
+                  {activeLoveCalls.map((node: any) => {
+                    const rName = RIFT_REGIONS.find((r) => r.id === node.regionId)?.name ?? node.regionId.toUpperCase()
+                    const flag = REGION_FLAGS[node.regionId] || '🌐'
+                    const loveCall = node.loveCall
+                    if (!loveCall) return null
+                    
+                    // CP 비교 지표 계산
+                    let cpLabel = '진입 무모'
+                    let cpColorBadge = 'bg-red-500/10 border-red-500/20 text-red-400'
+                    if (playerPower >= node.difficulty) {
+                      cpLabel = '안전'
+                      cpColorBadge = 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'
+                    } else if (playerPower >= node.difficulty * 0.7) {
+                      cpLabel = '위험'
+                      cpColorBadge = 'bg-yellow-500/10 border-yellow-500/20 text-yellow-400'
+                    }
+
+                    // S급 Named 헌터들 실명 취합
+                    const helpersNameList = loveCall.helperHunterIds
+                      .map((hid: string) => livingWorld?.namedHunters[hid]?.name)
+                      .filter(Boolean)
+                      .join(', ')
+
+                    return (
+                      <div
+                        key={node.id}
+                        className="rounded border border-amber-500/25 bg-amber-500/5 hover:bg-amber-500/10 p-3 transition-all space-y-2 relative shadow-glow-amber/5"
+                      >
+                        {/* 헤더 */}
+                        <div className="flex items-center justify-between">
+                          <span className="font-extrabold text-[11px] text-amber-300 flex items-center gap-1">
+                            {flag} {rName} 협회
+                          </span>
+                          <div className="flex gap-1.5 items-center">
+                            <span className="rounded bg-amber-500/20 px-1.5 py-0.5 text-[8px] font-black text-amber-200 border border-amber-400/20 uppercase tracking-widest animate-pulse">
+                              {node.difficultyRank}급
+                            </span>
+                            <span className={`rounded border px-1.5 py-0.5 text-[8px] font-bold ${
+                              (node.daysRemaining ?? 0) <= 2 ? 'bg-red-500/20 border-red-500/30 text-red-300 animate-pulse' : 'bg-black/30 border-white/5 text-yellow-300'
+                            }`}>
+                              D-{node.daysRemaining}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* 게이트 이름 & CP */}
+                        <div>
+                          <div className="font-bold text-xs text-white/95 truncate">
+                            {node.name}
+                          </div>
+                          <div className="flex justify-between items-center text-[10px] mt-1 bg-black/35 rounded px-2 py-1">
+                            <div className="flex items-center gap-1">
+                              <span className="text-white/40">권장:</span>
+                              <span className="font-bold text-white/80 font-mono text-[9px]">
+                                {node.difficulty?.toLocaleString()}
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-1">
+                              <span className="text-white/40">내 CP:</span>
+                              <span className="font-bold text-white/80 font-mono text-[9px]">
+                                {playerPower?.toLocaleString()}
+                              </span>
+                            </div>
+                            <span className={`rounded border px-1 py-0.2 text-[8px] font-black tracking-tighter ${cpColorBadge}`}>
+                              {cpLabel}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* 협력 헌터 목록 */}
+                        {helpersNameList ? (
+                          <div className="text-[9px] text-white/60 bg-black/20 rounded p-1.5 border border-white/5">
+                            <span className="font-bold text-amber-300/80">🤝 공조: </span>
+                            <span className="font-medium text-white/70 italic">{helpersNameList}</span>
+                          </div>
+                        ) : null}
+
+                        {/* 약속 보상 */}
+                        <div className="flex items-center justify-between text-[9px] bg-black/40 rounded px-2 py-1 border border-white/5 font-mono">
+                          <span className="text-white/40 font-sans">보상:</span>
+                          <span className="font-bold text-amber-400">+{loveCall.promisedReward.gold}G</span>
+                          <span className="font-bold text-purple-400">+{loveCall.promisedReward.shadowEssence}정수</span>
+                          <span className="font-bold text-emerald-400">+{loveCall.promisedReward.hunterXp}XP</span>
+                        </div>
+
+                        {/* 조작 버튼 */}
+                        <div className="grid grid-cols-2 gap-1.5 pt-1">
+                          <button
+                            onClick={() => handleNodeClick(node)}
+                            className="rounded border border-white/10 bg-black/25 hover:bg-black/60 px-2 py-1 text-[9px] font-bold text-white/70 transition-all cursor-pointer text-center"
+                          >
+                            📍 지도 확인
+                          </button>
+                          <button
+                            onClick={() => {
+                              setSelectedNode(node)
+                              setSelectedHelpers(loveCall.helperHunterIds ?? [])
+                              
+                              const level = getDangerLevel(node)
+                              if (level === 'reckless') {
+                                setRecklessConfirmType('manual')
+                                setShowRecklessConfirm(true)
+                              } else {
+                                startWorldManualBattle(node.id, loveCall.helperHunterIds ?? [])
+                              }
+                            }}
+                            className="rounded bg-gradient-to-r from-amber-500/20 to-orange-500/20 hover:from-amber-500/30 hover:to-orange-500/30 border border-amber-500/40 hover:border-amber-400 px-2 py-1 text-[9px] font-black text-amber-200 transition-all cursor-pointer text-center flex items-center justify-center gap-1 shadow-md shadow-amber-950/20"
+                          >
+                            ⚔️ 원정 수락
+                          </button>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              )
+            })()}
+          </div>
+
           <div className="panel corner-bracket border-white/10 bg-ink-950/40 p-4">
             <div className="br" />
             <h3 className="mb-3 text-sm font-bold text-white/80">국가별 정화도</h3>
@@ -1399,14 +1563,15 @@ export function WorldMapPanel() {
               )
             })}
 
-            {/* 노드(Node) 마커 렌더링 - 한국 활성 게이트만 노출 */}
+            {/* 노드(Node) 마커 렌더링 - 한국 활성 게이트 또는 활성화된 러브콜(지원 요청) 노출 */}
             {Object.values(livingWorld?.riftNodes ?? {})
-              .filter((node: any) => node.regionId === 'kr' && (riftNodesState[node.id] ?? node.status) === 'active')
+              .filter((node: any) => (node.regionId === 'kr' || node.loveCall?.active) && (riftNodesState[node.id] ?? node.status) === 'active')
               .map((node: any) => {
                 const status = riftNodesState[node.id] ?? node.status
                 const meta = RIFT_NODE_STATUS_META[status]
                 const worldNode = livingWorld?.riftNodes[node.id]
                 const isNodeRegionOccupied = livingWorld?.activeMonarchs?.some(m => m.status === 'rampaging' && m.occupiedRegionIds.includes(node.regionId))
+                const hasLoveCall = worldNode?.loveCall?.active
 
                 return (
                   <button
@@ -1417,9 +1582,17 @@ export function WorldMapPanel() {
                   >
                     {/* 노드 링과 코어 */}
                     <div
-                      className={`relative h-5 w-5 rounded-full border-2 ${isNodeRegionOccupied ? 'border-red-500 bg-red-950/80 shadow-glow-red animate-pulse' : `${meta.borderClass} ${meta.bgClass}`} flex items-center justify-center transition-all group-hover:scale-125 group-hover:border-purple-400`}
+                      className={`relative h-5 w-5 rounded-full border-2 ${
+                        isNodeRegionOccupied 
+                          ? 'border-red-500 bg-red-950/80 shadow-glow-red animate-pulse' 
+                          : hasLoveCall
+                            ? 'border-amber-400 bg-amber-950/80 shadow-glow-amber'
+                            : `${meta.borderClass} ${meta.bgClass}`
+                      } flex items-center justify-center transition-all group-hover:scale-125 ${
+                        hasLoveCall ? 'group-hover:border-amber-300' : 'group-hover:border-purple-400'
+                      }`}
                     >
-                      {worldNode?.loveCall?.active && (
+                      {hasLoveCall && (
                         <span className="absolute -top-3 -right-3 flex h-4 w-4 items-center justify-center rounded-full bg-yellow-500 text-[8px] font-black text-black shadow-glow-yellow animate-bounce z-20">
                           📞
                         </span>
@@ -1434,14 +1607,20 @@ export function WorldMapPanel() {
                         <Eye className="h-2 w-2 text-zinc-500" />
                       )}
                       {status === 'active' && (
-                        <div className={`h-1.5 w-1.5 rounded-full ${isNodeRegionOccupied ? 'bg-red-400' : 'bg-cyan-400'} animate-ping`} />
+                        <div className={`h-1.5 w-1.5 rounded-full ${isNodeRegionOccupied ? 'bg-red-400' : hasLoveCall ? 'bg-amber-400' : 'bg-cyan-400'} animate-ping`} />
                       )}
                     </div>
 
                     {/* 마커 아래 노드명 말풍선 */}
                     <div className="mt-1 opacity-60 group-hover:opacity-100 transition-all">
-                      <div className={`rounded bg-black/80 border ${isNodeRegionOccupied ? 'border-red-500/40 text-red-300' : 'border-white/5 text-white/70'} px-1.5 py-0.5 text-[9px] font-bold backdrop-blur-sm whitespace-nowrap shadow-md`}>
-                        {node.name}
+                      <div className={`rounded bg-black/80 border ${
+                        isNodeRegionOccupied 
+                          ? 'border-red-500/40 text-red-300' 
+                          : hasLoveCall
+                            ? 'border-amber-500/45 text-amber-200 shadow-glow-amber/10'
+                            : 'border-white/5 text-white/70'
+                      } px-1.5 py-0.5 text-[9px] font-bold backdrop-blur-sm whitespace-nowrap shadow-md`}>
+                        {hasLoveCall ? `📞 [지원요청] ${node.name} (D-${node.daysRemaining})` : node.name}
                       </div>
                     </div>
                   </button>

@@ -4812,8 +4812,8 @@ export const useGame = create<GameState>()(
         } as RiftNode
         if (!node) return
 
-        // 진입 권한 가드: 대한민국 영역 외의 일반 게이트에는 진입 불가
-        if (!isMonarchId && node.regionId !== 'kr') {
+        // 진입 권한 가드: 대한민국 영역 외의 일반 게이트에는 진입 불가 (러브콜인 경우는 허용)
+        if (!isMonarchId && node.regionId !== 'kr' && !node.loveCall?.active) {
           return
         }
 
@@ -7690,7 +7690,8 @@ export const useGame = create<GameState>()(
         }
 
         // 진입 권한 가드: 대한민국 외 지역 일반 게이트 진입 차단 (안전장치)
-        if (!isMonarchId && node.regionId !== 'kr') {
+        // 단, 러브콜(지원 요청)이 활성화되어 있는 게이트는 대한민국 외여도 개입(진입) 가능!
+        if (!isMonarchId && node.regionId !== 'kr' && !node.loveCall?.active) {
           set({
             messages: [
               ...s.messages,
@@ -7698,7 +7699,7 @@ export const useGame = create<GameState>()(
                 id: uid(),
                 kind: 'info',
                 title: '진입 권한 제한',
-                lines: ['대한민국 영역 외의 게이트에는 직접 개입할 수 없습니다.'],
+                lines: ['대한민국 영역 외의 게이트에는 직접 개입할 수 없습니다. (러브콜(지원 요청)이 활성화된 게이트만 진입 가능)'],
                 createdAt: todayISO(),
               }
             ]
