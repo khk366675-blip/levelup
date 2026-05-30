@@ -51,7 +51,7 @@ const cloneUnit = (unit: BattleUnit): BattleUnit => ({
   metadata: { ...unit.metadata, tags: unit.metadata.tags ? [...unit.metadata.tags] : undefined },
 })
 
-const clamp = (value: number, min = 0, max = 99999): number =>
+const clamp = (value: number, min = 0, max = 99999999): number =>
   Math.min(max, Math.max(min, Number.isFinite(value) ? value : min))
 
 const round = (value: number): number =>

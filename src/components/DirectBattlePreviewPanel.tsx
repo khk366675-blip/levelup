@@ -801,11 +801,13 @@ export function DirectBattlePreviewPanel({
       kind = 'shadow'
     }
     
+    const isNumericEvent = log.eventType === 'damage' || log.eventType === 'heal' || log.eventType === 'reaction'
+
     return {
       actorId: log.actorUnitId,
       targetIds: log.targetUnitIds ?? [],
       kind,
-      amount: val > 0 ? Math.round(val) : undefined,
+      amount: isNumericEvent && val > 0 ? Math.round(val) : undefined,
       text: log.message,
       isCrit: Boolean((log as any).isCrit),
       actionId: log.actionId,

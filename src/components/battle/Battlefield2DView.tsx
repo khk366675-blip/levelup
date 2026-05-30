@@ -22,6 +22,7 @@ type Battlefield2DViewProps = {
     text?: string
     isCrit?: boolean
     actionId?: string
+    actionType?: string
   }
   compact?: boolean
   mode?: 'compact' | 'overlay'
@@ -286,18 +287,29 @@ export function Battlefield2DView({
     const newPopups = targets.map((t, idx) => {
       const coords = actorCoords[t.id] ?? { x: 50, y: 50 }
       
-      let pText = 'MISS'
+      let pText = ''
       let pType: PopupType = 'miss'
 
-      if (vfxType === 'heal') {
+      if (latestAction.actionType === 'heal') {
         pText = `+${latestAction.amount ?? 0}`
         pType = 'heal'
-      } else if (latestAction.kind === 'guard') {
+      } else if (latestAction.actionType === 'reaction' || latestAction.kind === 'guard') {
         pText = 'GUARD'
         pType = 'guard'
-      } else if (latestAction.amount !== undefined && latestAction.amount > 0) {
-        pText = `-${latestAction.amount}`
-        pType = 'damage'
+      } else if (latestAction.actionType === 'damage') {
+        if (latestAction.amount !== undefined && latestAction.amount > 0) {
+          pText = `-${latestAction.amount}`
+          pType = 'damage'
+        } else {
+          pText = '0'
+          pType = 'damage'
+        }
+      } else if (latestAction.actionType === 'fizzle') {
+        pText = 'MISS'
+        pType = 'miss'
+      } else {
+        // status 나 기타 이벤트는 숫자 데미지 팝업을 띄우지 않음
+        return null
       }
 
       return {
@@ -310,7 +322,7 @@ export function Battlefield2DView({
         style: popupStyle,
         intensity,
       }
-    })
+    }).filter((p): p is NonNullable<typeof p> => p !== null)
 
     if (newPopups.length > 0) {
       setPopups(prev => [...prev, ...newPopups])
