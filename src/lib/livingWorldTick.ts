@@ -1,6 +1,7 @@
 import type { LivingWorldState, NamedHunter, RegionState, RiftNode, Rank, ActiveMonarch } from './types'
 import { RIFT_REGIONS, REGION_ADJACENCY, RIFT_NODES } from './seed'
 import { MONARCHS } from './monarchs'
+import { getRegionalTheme } from './livingWorldGateContent'
 
 type RngFn = () => number
 
@@ -360,33 +361,40 @@ export function advanceWorldDay(state: LivingWorldState, rng: RngFn): LivingWorl
       if (region && region.activeGateIds.length < 4) {
         const isSGrade = nextDay >= SGRADE_START_DAY && rng() < (nextDay < 60 ? SGRADE_CHANCE_EARLY : nextDay < 90 ? SGRADE_CHANCE_MID : SGRADE_CHANCE_LATE)
         
-        const newGateId = `gate-spawn-${nextDay}-${regionId}-${Math.floor(rng() * 10000)}`
+                const newGateId = `gate-spawn-${nextDay}-${regionId}-${Math.floor(rng() * 10000)}`
         const rName = RIFT_REGIONS.find(r => r.id === regionId)?.name ?? regionId.toUpperCase()
         
+        let subRegionId = regionId
+        if (regionId === 'kr') {
+          const krSubRegions = ['seoul', 'incheon', 'busan', 'jeju']
+          subRegionId = krSubRegions[Math.floor(rng() * krSubRegions.length)]
+        }
+        const theme = getRegionalTheme(subRegionId)
+        
         let gateName = '심연의 균열'
+        if (theme.gateNames && theme.gateNames.length > 0) {
+          gateName = theme.gateNames[Math.floor(rng() * theme.gateNames.length)]
+        }
+        
         let difficulty = 600
         let deadline = 10
         let rank: Rank = 'C'
 
         if (isSGrade) {
-          gateName = rng() < 0.5 ? '초대형 군단의 틈' : '군주의 심연 균열'
           difficulty = Math.round(8000 + rng() * 6000) // 8000~14000 CP (S급 강도 대폭 상향!)
           deadline = Math.round(6 + rng() * 4) // 6~10일 시한
           rank = 'S'
         } else {
           const difficultyRoll = rng()
           if (difficultyRoll < 0.4) {
-            gateName = '보이지 않는 하수구'
             difficulty = Math.round((300 + rng() * 300) * GATE_DIFFICULTY_MULT)
             deadline = Math.round(8 + rng() * 4) // E급 8~12일
             rank = 'E'
           } else if (difficultyRoll < 0.8) {
-            gateName = '나태의 메아리 회랑'
             difficulty = Math.round((700 + rng() * 400) * GATE_DIFFICULTY_MULT)
             deadline = Math.round(7 + rng() * 4) // D급 7~11일
             rank = 'D'
           } else {
-            gateName = '기억 유실의 서고'
             difficulty = Math.round((1300 + rng() * 600) * GATE_DIFFICULTY_MULT)
             deadline = Math.round(6 + rng() * 4) // C급 6~10일
             rank = 'C'
@@ -403,6 +411,7 @@ export function advanceWorldDay(state: LivingWorldState, rng: RngFn): LivingWorl
         nextRiftNodes[newGateId] = {
           id: newGateId,
           regionId,
+          subRegionId,
           name: gateName,
           x: gateX,
           y: gateY,

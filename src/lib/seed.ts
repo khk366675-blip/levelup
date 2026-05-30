@@ -3735,8 +3735,8 @@ export const RIFT_REGIONS: RiftRegion[] = [
 
 export const RIFT_NODES: Omit<RiftNode, 'difficulty' | 'deadline' | 'daysRemaining'>[] = [
   // 한국 초기 게이트
-  { id: 'node-kr-seoul', regionId: 'kr', name: '서울 동대문 균열', x: 84, y: 41, status: 'active', gateDefId: 'gate-rift-alley', difficultyRank: 'E', adjacentNodeIds: ['node-kr-incheon'] },
-  { id: 'node-kr-incheon', regionId: 'kr', name: '인천 송도 참호', x: 82, y: 43, status: 'active', gateDefId: 'gate-rift-backstreet', difficultyRank: 'D', adjacentNodeIds: ['node-kr-seoul'] },
+  { id: 'node-kr-seoul', regionId: 'kr', subRegionId: 'seoul', name: '서울 동대문 균열', x: 84, y: 41, status: 'active', gateDefId: 'gate-rift-alley', difficultyRank: 'E', adjacentNodeIds: ['node-kr-incheon'] },
+  { id: 'node-kr-incheon', regionId: 'kr', subRegionId: 'incheon', name: '인천 송도 참호', x: 82, y: 43, status: 'active', gateDefId: 'gate-rift-backstreet', difficultyRank: 'D', adjacentNodeIds: ['node-kr-seoul'] },
 ]
 
 export const REGION_ADJACENCY: Record<string, string[]> = {

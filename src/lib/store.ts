@@ -7756,6 +7756,7 @@ export const useGame = create<GameState>()(
           customGateDef = {
             id: nodeId,
             name: node.name || '심연의 균열',
+            subRegionId: node.subRegionId || node.regionId,
             description: `${node.name || '심연의 균열'}의 정화 작전입니다.`,
             rank: (rank === 'National' ? 'S' : rank),
             recommendedLevel: rank === 'E' ? 5 : rank === 'D' ? 15 : rank === 'C' ? 30 : rank === 'B' ? 45 : rank === 'A' ? 60 : 80,

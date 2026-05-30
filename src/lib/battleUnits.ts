@@ -68,6 +68,8 @@ export interface BuildMonsterBattleUnitOptions {
   isRedGate?: boolean
   isPromotionExam?: boolean
   targetGrade?: HunterGradeTier
+  isElite?: boolean // [NEW] 엘리트 몬스터 여부
+  difficultyMod?: number // [NEW] 난이도 배율 보정치
 }
 
 const RARITY_MODIFIER: Record<ShadowRarity, number> = {
@@ -109,10 +111,10 @@ const DEFAULT_STATS: BattleStats = {
   synergyPower: 0,
 }
 
-const clamp = (value: number, min = 0, max = 9999): number =>
+const clamp = (value: number, min = 0, max = 99999999): number =>
   Math.min(max, Math.max(min, Number.isFinite(value) ? value : min))
 
-const round = (value: number, min = 0, max = 9999): number =>
+const round = (value: number, min = 0, max = 99999999): number =>
   Math.round(clamp(value, min, max))
 
 const capRatio = (value: number): number =>
@@ -421,7 +423,7 @@ export const convertShadowProfileToBattleStats = (
   const maxHp = round(
     (56 + stats.shadowDurability * 1.25 + stats.shadowSurvival * 0.75 + profile.level * 3.4) * quality * hpRoleModifier * SHADOW_BATTLE_LIFT * guardLift,
     1,
-    9999,
+    99999999,
   )
   const battleStats: BattleStats = {
     maxHp,
@@ -628,6 +630,49 @@ export const buildMonsterBattleUnit = (
    const minionScale = definition.unitType === 'minion' || definition.isMinion ? 0.94 : 1
    const threatScale = bossScale * minionScale
    
+   let hpMultiplier = 1.0
+   let atkMultiplier = 1.0
+   let defMultiplier = 1.0
+
+   const isBoss = definition.unitType === 'boss' || definition.isBoss || definition.role === 'boss'
+   const isMinion = definition.unitType === 'minion' || definition.isMinion || definition.role === 'minion'
+
+   if (isBoss) {
+     hpMultiplier = 2.45
+     atkMultiplier = 1.25
+     defMultiplier = 1.25
+   } else if (definition.role === 'tank') {
+     hpMultiplier = 1.6
+     atkMultiplier = 0.8
+     defMultiplier = 1.4
+   } else if (definition.role === 'bruiser') {
+     hpMultiplier = 1.3
+     atkMultiplier = 1.08
+     defMultiplier = 1.1
+   } else if (definition.role === 'caster') {
+     hpMultiplier = 0.82
+     atkMultiplier = 1.22
+     defMultiplier = 0.8
+   } else if (definition.role === 'assassin') {
+     hpMultiplier = 0.78
+     atkMultiplier = 1.28
+     defMultiplier = 0.75
+   } else if (isMinion) {
+     hpMultiplier = 0.58
+     atkMultiplier = 0.75
+     defMultiplier = 0.7
+   } else {
+     hpMultiplier = 0.9
+     atkMultiplier = 0.9
+     defMultiplier = 0.9
+   }
+
+   if (options.isElite) {
+     hpMultiplier *= 1.45
+     atkMultiplier *= 1.18
+     defMultiplier *= 1.18
+   }
+
    // 현실 각성공명 압박(Reality Pressure) 반영 + 승급 시험 보정 반영
    const monsterRole = definition.unitType || (definition.isBoss ? 'boss' : definition.isMinion ? 'minion' : 'normal')
    const pressure = getMonsterPressureScaling(
@@ -637,13 +682,14 @@ export const buildMonsterBattleUnit = (
      options.isPromotionExam,
      options.targetGrade
    )
+   const diffMod = options.difficultyMod ?? 1.0
  
-   const maxHp = round((115 + level * 23.5) * definition.statBias.hp * scale * threatScale * MONSTER_BATTLE_LIFT * pressure.hp, 1)
+   const maxHp = round((115 + level * 23.5) * definition.statBias.hp * scale * threatScale * hpMultiplier * MONSTER_BATTLE_LIFT * pressure.hp * diffMod, 1)
    const unitId = `${options.unitIdPrefix ?? 'enemy'}-${definition.id}-${level}`
    
-   const isBoss = definition.unitType === 'boss' || definition.isBoss
+   const isBossName = definition.unitType === 'boss' || definition.isBoss
    const examDef = options.isPromotionExam && options.targetGrade && options.targetGrade !== 'E' ? PROMOTION_EXAM_DEFINITIONS[options.targetGrade] : undefined
-   const displayName = (isBoss && examDef?.bossEmphasisName) ? examDef.bossEmphasisName : definition.name
+   const displayName = (isBossName && examDef?.bossEmphasisName) ? examDef.bossEmphasisName : definition.name
   
    return {
      unit: {
@@ -657,10 +703,10 @@ export const buildMonsterBattleUnit = (
        stats: {
          maxHp,
          currentHp: safeCurrentHp(options.currentHp, maxHp),
-         atk: round((16 + level * 4.55) * definition.statBias.atk * scale * threatScale * MONSTER_BATTLE_LIFT * pressure.atk, 1),
-         def: round((10 + level * 2.05) * definition.statBias.def * scale * (definition.isBoss ? 1.12 : 1) * MONSTER_BATTLE_LIFT * pressure.def, 1),
+         atk: round((16 + level * 4.55) * definition.statBias.atk * scale * threatScale * atkMultiplier * MONSTER_BATTLE_LIFT * pressure.atk * diffMod, 1),
+         def: round((10 + level * 2.05) * definition.statBias.def * scale * (definition.isBoss ? 1.12 : 1) * defMultiplier * MONSTER_BATTLE_LIFT * pressure.def * diffMod, 1),
          spd: round((10 + level * 1.05) * definition.statBias.spd * (definition.role === 'assassin' ? 1.08 : 1) * 1.02, 1, 300),
-         skillPower: round((15 + level * 3.95) * definition.statBias.skill * scale * threatScale * MONSTER_BATTLE_LIFT * pressure.atk, 1),
+         skillPower: round((15 + level * 3.95) * definition.statBias.skill * scale * threatScale * atkMultiplier * MONSTER_BATTLE_LIFT * pressure.atk * diffMod, 1),
         crit: capRatio((0.04 + level * 0.003) * (definition.statBias.crit ?? 1)),
         controlPower: round((5 + level * 1.7) * (definition.statBias.control ?? 0.7) * scale * MONSTER_BATTLE_LIFT, 0),
         supportPower: round((4 + level * 1.5) * (definition.statBias.support ?? 0.45) * scale * MONSTER_BATTLE_LIFT, 0),

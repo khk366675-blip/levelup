@@ -29,6 +29,7 @@ import { GatePanel } from './GatePanel'
 import type { RiftNode, RiftRegion } from '../lib/types'
 import { getHunterCombatPower } from '../lib/combatPower'
 import { todayKey } from '../lib/game'
+import { getRegionalTheme } from '../lib/livingWorldGateContent'
 
 
 const REGION_FLAGS: Record<string, string> = {
@@ -758,6 +759,16 @@ export function WorldMapPanel() {
                           </div>
                         </div>
 
+                        {/* 짧은 서사 요약 */}
+                        {(() => {
+                          const nodeTheme = getRegionalTheme(node.subRegionId || node.regionId)
+                          return (
+                            <p className="text-[9.5px] text-white/50 leading-relaxed italic bg-black/20 rounded p-1.5 border border-white/5">
+                              "{nodeTheme.loveCallNarrative}"
+                            </p>
+                          )
+                        })()}
+
                         {/* 협력 헌터 목록 */}
                         {helpersNameList ? (
                           <div className="text-[9px] text-white/60 bg-black/20 rounded p-1.5 border border-white/5">
@@ -1188,83 +1199,115 @@ export function WorldMapPanel() {
                 </div>
 
                 {/* [L1-A] 러브콜 특별 섹션 */}
-                {hasLoveCall && loveCallState && (
-                  <div className="mt-4 rounded-lg border border-yellow-500/30 bg-yellow-500/5 p-3 space-y-3">
-                    <div className="flex items-center gap-1.5 text-xs font-black text-yellow-300">
-                      <span>📞 긴급 러브콜 지원 요청</span>
-                    </div>
-                    <p className="text-[10px] text-white/70 leading-normal">
-                      {RIFT_REGIONS.find((r: RiftRegion) => r.id === selectedNode.regionId)?.name} 헌터 협회가 자력 방어가 불가능하여 공식 협조를 요청했습니다.
-                    </p>
-                    
-                    {/* 보상 정보 */}
-                    <div className="rounded bg-black/40 p-2 space-y-1 text-[10px]">
-                      <div className="text-[9px] font-bold text-white/40 mb-1">약속 보상 (기본)</div>
-                      <div className="flex justify-between">
-                        <span className="text-white/60">골드 지원금</span>
-                        <span className="font-bold text-amber-300">+{loveCallState.promisedReward.gold} Gold</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-white/60">어둠의 정수</span>
-                        <span className="font-bold text-purple-300">+{loveCallState.promisedReward.shadowEssence} 정수</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-white/60">전투 경험치</span>
-                        <span className="font-bold text-emerald-300">+{loveCallState.promisedReward.hunterXp} XP</span>
-                      </div>
-                    </div>
-
-                    {/* 협력 헌터 선택 목록 */}
-                    <div className="space-y-1.5">
-                      <div className="text-[9px] font-bold text-white/40">협력 헌터 선택 (참전 지원 후보)</div>
-                      {loveCallState.helperHunterIds.length === 0 ? (
-                        <div className="text-[9px] text-white/40 italic">현재 지원 가능한 헌터가 없습니다.</div>
-                      ) : (
-                        <div className="max-h-28 overflow-y-auto space-y-1 pr-1 scrollbar-thin">
-                          {loveCallState.helperHunterIds.map(hid => {
-                            const h = livingWorld?.namedHunters[hid]
-                            if (!h) return null
-                            const isSelected = selectedHelpers.includes(hid)
-                            return (
-                              <label key={hid} className="flex items-center justify-between rounded bg-black/35 hover:bg-black/60 px-2 py-1.5 text-[10px] cursor-pointer select-none border border-white/5">
-                                <div className="flex items-center gap-2">
-                                  <input
-                                    type="checkbox"
-                                    checked={isSelected}
-                                    onChange={() => handleHelperToggle(hid)}
-                                    className="accent-purple-500 h-3 w-3 cursor-pointer"
-                                  />
-                                  <span className="font-bold text-white/80">{h.name}</span>
-                                  <span className="rounded bg-purple-500/20 px-1 text-[8px] font-black text-purple-300 border border-purple-500/20">
-                                    {h.rank}
-                                  </span>
-                                </div>
-                                <span className="text-cyan-300 font-mono font-bold">⚔️{h.power.toLocaleString()}</span>
-                              </label>
-                            )
-                          })}
+                {hasLoveCall && loveCallState && (() => {
+                  const nodeTheme = getRegionalTheme(selectedNode.subRegionId || selectedNode.regionId)
+                  const flag = REGION_FLAGS[selectedNode.regionId] || '🌐'
+                  const rName = RIFT_REGIONS.find((r) => r.id === selectedNode.regionId)?.name ?? selectedNode.regionId.toUpperCase()
+                  const subName = nodeTheme.name
+                  
+                  return (
+                    <div className="mt-4 rounded-lg border border-yellow-500/30 bg-yellow-500/5 p-3 space-y-3 animate-fade-in">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-1.5 text-xs font-black text-yellow-300">
+                          <span>📞 긴급 러브콜 지원 요청</span>
                         </div>
-                      )}
-                    </div>
+                        <span className="text-[9px] text-amber-300 font-bold bg-amber-500/10 border border-amber-400/20 px-1.5 py-0.5 rounded">
+                          {flag} {rName} ({subName})
+                        </span>
+                      </div>
 
-                    {/* 트레이드오프 브리핑 */}
-                    <div className="rounded border border-purple-500/20 bg-purple-500/5 p-2 text-[10px] space-y-1.5">
-                      <div className="text-[9px] font-bold text-purple-300">⚖️ 협력 전투 트레이드오프 실시간 예측</div>
-                      <div className="grid grid-cols-2 gap-1 font-mono text-[9px] text-white/70">
-                        <div>공격력 보너스:</div>
-                        <div className="text-emerald-400 font-bold">+{coopBuffs.atk.toLocaleString()} ATK</div>
-                        <div>방어력 보너스:</div>
-                        <div className="text-emerald-400 font-bold">+{coopBuffs.def.toLocaleString()} DEF</div>
-                        <div>받는 피해 감소:</div>
-                        <div className="text-emerald-400 font-bold">-{Math.round(coopBuffs.dr * 100)}% DMG</div>
-                        <div>보상 획득 비율:</div>
-                        <div className={coopBuffs.rewardRatio === 1 ? "text-cyan-300 font-bold" : "text-yellow-400 font-bold"}>
-                          {Math.round(coopBuffs.rewardRatio * 100)}% (독식 대비 -{Math.round((1 - coopBuffs.rewardRatio) * 100)}%)
+                      {/* 서사적 상황 설명 */}
+                      <div className="text-[10px] text-white/70 leading-relaxed border-l-2 border-yellow-500/40 pl-2 py-0.5 bg-black/15 rounded-r">
+                        <p className="font-semibold text-yellow-200/90 mb-1 text-[9px] uppercase tracking-wider">상황 보고:</p>
+                        <p className="italic">"{nodeTheme.loveCallNarrative}"</p>
+                      </div>
+
+                      {/* 방치 위험 경고 */}
+                      <div className="rounded bg-rose-950/20 border border-rose-500/20 p-2 text-[9.5px] leading-relaxed text-rose-200">
+                        <span className="font-bold">⚠️ 방치 시 예상 피해:</span>{' '}
+                        {(selectedNode.daysRemaining ?? 0) <= 2 ? (
+                          <span className="text-red-300 font-bold animate-pulse">
+                            소멸/폭주 직전! {selectedNode.daysRemaining}일 내 격퇴 실패 시 해당 지역 오염도가 급증하고 방어선이 완전 붕괴됩니다.
+                          </span>
+                        ) : (
+                          <span>
+                            D-{selectedNode.daysRemaining}일 이내에 정화하지 못하면 게이트가 폭주하여 주변 전선을 삼켜 오염을 심화시킵니다.
+                          </span>
+                        )}
+                      </div>
+
+                      {/* 보상 정보 */}
+                      <div className="rounded bg-black/40 p-2 space-y-1 text-[10px] border border-white/5">
+                        <div className="flex justify-between items-center text-[9px] font-bold text-white/40 mb-1">
+                          <span>약속 보상 (기본)</span>
+                          <span className="text-amber-400 font-normal scale-90 origin-right">※ 특별 위험 수당 적용됨</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-white/60">골드 지원금</span>
+                          <span className="font-bold text-amber-300">+{loveCallState.promisedReward.gold} Gold</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-white/60">어둠의 정수</span>
+                          <span className="font-bold text-purple-300">+{loveCallState.promisedReward.shadowEssence} 정수</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-white/60">전투 경험치</span>
+                          <span className="font-bold text-emerald-300">+{loveCallState.promisedReward.hunterXp} XP</span>
                         </div>
                       </div>
+
+                      {/* 협력 헌터 선택 목록 */}
+                      <div className="space-y-1.5">
+                        <div className="text-[9px] font-bold text-white/40">협력 헌터 선택 (참전 지원 후보)</div>
+                        {loveCallState.helperHunterIds.length === 0 ? (
+                          <div className="text-[9px] text-white/40 italic">현재 지원 가능한 헌터가 없습니다.</div>
+                        ) : (
+                          <div className="max-h-28 overflow-y-auto space-y-1 pr-1 scrollbar-thin">
+                            {loveCallState.helperHunterIds.map(hid => {
+                              const h = livingWorld?.namedHunters[hid]
+                              if (!h) return null
+                              const isSelected = selectedHelpers.includes(hid)
+                              return (
+                                <label key={hid} className="flex items-center justify-between rounded bg-black/35 hover:bg-black/60 px-2 py-1.5 text-[10px] cursor-pointer select-none border border-white/5">
+                                  <div className="flex items-center gap-2">
+                                    <input
+                                      type="checkbox"
+                                      checked={isSelected}
+                                      onChange={() => handleHelperToggle(hid)}
+                                      className="accent-purple-500 h-3 w-3 cursor-pointer"
+                                    />
+                                    <span className="font-bold text-white/80">{h.name}</span>
+                                    <span className="rounded bg-purple-500/20 px-1 text-[8px] font-black text-purple-300 border border-purple-500/20">
+                                      {h.rank}
+                                    </span>
+                                  </div>
+                                  <span className="text-cyan-300 font-mono font-bold">⚔️{h.power.toLocaleString()}</span>
+                                </label>
+                              )
+                            })}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* 트레이드오프 브리핑 */}
+                      <div className="rounded border border-purple-500/20 bg-purple-500/5 p-2 text-[10px] space-y-1.5">
+                        <div className="text-[9px] font-bold text-purple-300">⚖️ 협력 전투 트레이드오프 실시간 예측</div>
+                        <div className="grid grid-cols-2 gap-1 font-mono text-[9px] text-white/70">
+                          <div>공격력 보너스:</div>
+                          <div className="text-emerald-400 font-bold">+{coopBuffs.atk.toLocaleString()} ATK</div>
+                          <div>방어력 보너스:</div>
+                          <div className="text-emerald-400 font-bold">+{coopBuffs.def.toLocaleString()} DEF</div>
+                          <div>받는 피해 감소:</div>
+                          <div className="text-emerald-400 font-bold">-{Math.round(coopBuffs.dr * 100)}% DMG</div>
+                          <div>보상 획득 비율:</div>
+                          <div className={coopBuffs.rewardRatio === 1 ? "text-cyan-300 font-bold" : "text-yellow-400 font-bold"}>
+                            {Math.round(coopBuffs.rewardRatio * 100)}% (독식 대비 -{Math.round((1 - coopBuffs.rewardRatio) * 100)}%)
+                          </div>
+                        </div>
+                      </div>
                     </div>
-                  </div>
-                )}
+                  )
+                })()}
 
                 {/* 대한민국 게이트 특별 합류(협력) 섹션 */}
                 {!hasLoveCall && selectedNode.regionId === 'kr' && (riftNodesState[selectedNode.id] ?? selectedNode.status) === 'active' && (

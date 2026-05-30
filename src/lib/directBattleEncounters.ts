@@ -908,6 +908,7 @@ export const buildDirectBattleEncounterParty = (
   baseLevel?: number,
   pressureSnapshot?: any,
   isRedGate?: boolean,
+  difficultyMod?: number, // [NEW] 난이도 보정치 추가
 ): DirectBattleEncounterBuildResult => {
   const encounter = getDirectBattleMockEncounter(encounterId) ?? DIRECT_BATTLE_MOCK_ENCOUNTERS[0]
   const warnings: string[] = encounter.encounterId === encounterId || encounter.encounterKey === encounterId
@@ -925,6 +926,8 @@ export const buildDirectBattleEncounterParty = (
       level,
       pressureSnapshot,
       isRedGate,
+      difficultyMod, // [NEW] 난이도 보정치 적용
+      isElite: encounter.tier === 'elite' || encounter.encounterId.includes('elite'), // [NEW] 정예 여부 설정
     })
     return [{
       ...result,

@@ -932,6 +932,7 @@ export type GateRank = 'E' | 'D' | 'C' | 'B' | 'A' | 'S'
 export interface GateDefinition {
   id: string
   name: string
+  subRegionId?: string
   description: string
   rank: GateRank
 
@@ -2320,6 +2321,7 @@ export interface LoveCallState {
 export interface RiftNode {
   id: string
   regionId: string        // 소속 국가 (RiftRegion.id)
+  subRegionId?: string    // [NEW] 한국의 세부 지역 등 테마 매핑용 서브 지역 ID (예: 'seoul', 'incheon')
   name: string            // 한국어 표시명 (예: '맨해튼 균열')
   x: number               // 지도 기준 x 백분율 좌표 (0 ~ 100)
   y: number               // 지도 기준 y 백분율 좌표 (0 ~ 100)

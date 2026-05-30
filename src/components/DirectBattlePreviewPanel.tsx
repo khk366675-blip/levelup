@@ -136,6 +136,7 @@ export interface DirectBattlePreviewPanelProps {
   source?: string
   initialHunterStatsModifier?: Partial<BattleStats>
   initialHunterStatusEffects?: BattleStatusEffect[]
+  difficultyMod?: number // [NEW] 난이도 보정치 추가
 }
 
 const enemyTargetTypes = new Set<BattleTargetType>([
@@ -754,6 +755,7 @@ export function DirectBattlePreviewPanel({
   source,
   initialHunterStatsModifier,
   initialHunterStatusEffects,
+  difficultyMod, // [NEW] 난이도 보정치 추가
 }: DirectBattlePreviewPanelProps) {
   const autoStartedRef = useRef(false)
   const completionSentRef = useRef(false)
@@ -874,7 +876,7 @@ export function DirectBattlePreviewPanel({
     })
     const enemyBuild = customEnemyUnits
       ? { units: customEnemyUnits, warnings: [] as string[] }
-      : buildDirectBattleEncounterParty(encounterKey, enemyBaseLevel, pressureSnapshot, isRedGate)
+      : buildDirectBattleEncounterParty(encounterKey, enemyBaseLevel, pressureSnapshot, isRedGate, difficultyMod)
     const units = [hunterBuild.unit, ...shadowBuilds.map(build => build.unit), ...enemyBuild.units]
     const state = createDirectBattleState(units, {
       battleId: customBattleId ?? `direct-manual-preview-${encounterKey}`,

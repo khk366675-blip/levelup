@@ -21,6 +21,7 @@ import {
   Compass,
   Heart,
   Sparkles,
+  Users,
 } from 'lucide-react'
 import {
   useGame,
@@ -28,6 +29,8 @@ import {
   COOP_HELP_DEF_FACTOR,
   COOP_HELP_DR_FACTOR,
   COOP_HELP_DR_CAP,
+  COOP_REWARD_PENALTY_PER_HELPER,
+  COOP_REWARD_MIN_RATIO,
 } from '../lib/store'
 import { calculateRealityPressure } from '../lib/realityPressure'
 import { FocusSessionPanel } from './FocusSessionPanel'
@@ -2325,6 +2328,83 @@ export function GatePanel() {
   )
 
   if (isDirectGateBattleOpen) {
+    // S급 협력 헌터 버프/공조 효과 계산하여 직접 주입!
+    const helperHunterIds = activeGate.helperHunterIds
+    let helperPower = 0
+    let helperCount = 0
+    let buffCoopAtk = 0
+    let buffCoopDef = 0
+    let drCoop = 0
+
+    const livingWorld = useGame.getState().livingWorld
+    if (helperHunterIds && helperHunterIds.length > 0 && livingWorld) {
+      for (const hid of helperHunterIds) {
+        const h = livingWorld.namedHunters[hid]
+        if (h && h.status === 'active') {
+          helperPower += h.power
+          helperCount++
+        }
+      }
+    }
+
+    if (helperCount > 0) {
+      buffCoopAtk = Math.round(COOP_HELP_ATK_FACTOR * helperPower)
+      buffCoopDef = Math.round(COOP_HELP_DEF_FACTOR * helperPower)
+      drCoop = Math.min(COOP_HELP_DR_CAP, COOP_HELP_DR_FACTOR * helperCount)
+    }
+
+    const statsModifier: Partial<any> = {}
+    if (buffCoopAtk > 0) statsModifier.atk = buffCoopAtk
+    if (buffCoopDef > 0) statsModifier.def = buffCoopDef
+
+    const statusEffects: any[] = []
+    if (drCoop > 0) {
+      statusEffects.push({
+        statusId: `coop-dr-${Date.now()}`,
+        definitionId: 'guard',
+        name: '협력 방어',
+        type: 'guard',
+        targetUnitId: 'direct-preview-hunter',
+        durationRounds: 999,
+        stackCount: 1,
+        maxStacks: 1,
+        effectValue: drCoop,
+        timing: 'round_start',
+      })
+    }
+
+    if (equippedShadows.length > 0) {
+      const firstShadowUnitId = `direct-preview-shadow-${equippedShadows[0].instanceId}`
+      statusEffects.push({
+        statusId: `shadow-guard-protect-${Date.now()}`,
+        definitionId: 'protect',
+        name: '그림자 보호',
+        type: 'protect',
+        sourceUnitId: firstShadowUnitId,
+        targetUnitId: 'direct-preview-hunter',
+        durationRounds: 999,
+        stackCount: 1,
+        maxStacks: 1,
+        effectValue: 0.35,
+        timing: 'round_start',
+      })
+
+      statusEffects.push({
+        statusId: `monarch-safeguard-${Date.now()}`,
+        definitionId: 'guard',
+        name: '그림자 장벽',
+        type: 'guard',
+        targetUnitId: 'direct-preview-hunter',
+        durationRounds: 4,
+        stackCount: 1,
+        maxStacks: 1,
+        effectValue: 0.15,
+        timing: 'round_start',
+      })
+    }
+
+    const currentEnc = activeGate.runState?.encounters[activeGate.runState.currentEncounterIndex]
+
     return (
       <div className="space-y-4">
         <GateStatusPanel />
@@ -2353,6 +2433,9 @@ export function GatePanel() {
           onBattleComplete={handleDirectGateBattleComplete}
           pressureSnapshot={activeGate.runState?.pressureSnapshot}
           isRedGate={Boolean(activeGate.runState?.redGateState)}
+          initialHunterStatsModifier={statsModifier}
+          initialHunterStatusEffects={statusEffects}
+          difficultyMod={currentEnc?.difficultyMod}
         />
       </div>
     )
@@ -2915,6 +2998,85 @@ function GateRunPanel({
           </div>
         </div>
       </div>
+
+      {/* 2.5. 공조 헌터 브리핑 섹션 (러브콜/월드맵 게이트인 경우) */}
+      {(() => {
+        const livingWorld = useGame.getState().livingWorld
+        if (activeGate.source !== 'worldmap') return null
+        
+        const helperHunterIds = activeGate.helperHunterIds
+        let helperPower = 0
+        let helperCount = 0
+        let buffCoopAtk = 0
+        let buffCoopDef = 0
+        let drCoop = 0
+
+        if (helperHunterIds && helperHunterIds.length > 0 && livingWorld) {
+          for (const hid of helperHunterIds) {
+            const h = livingWorld.namedHunters[hid]
+            if (h && h.status === 'active') {
+              helperPower += h.power
+              helperCount++
+            }
+          }
+        }
+
+        if (helperCount > 0) {
+          buffCoopAtk = Math.round(COOP_HELP_ATK_FACTOR * helperPower)
+          buffCoopDef = Math.round(COOP_HELP_DEF_FACTOR * helperPower)
+          drCoop = Math.min(COOP_HELP_DR_CAP, COOP_HELP_DR_FACTOR * helperCount)
+        }
+
+        const rewardRatio = Math.max(COOP_REWARD_MIN_RATIO, 1 - COOP_REWARD_PENALTY_PER_HELPER * helperCount)
+
+        return (
+          <div className={`panel p-4 border ${
+            helperCount > 0
+              ? 'border-cyan-500/25 bg-cyan-950/15 text-cyan-200'
+              : 'border-rose-500/25 bg-rose-950/15 text-rose-200'
+          }`}>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-white/5 pb-2 mb-2.5">
+              <div className="flex items-center gap-2">
+                <Users className="w-4 h-4 text-cyan-400" />
+                <h4 className="text-xs font-bold tracking-wider uppercase">Expedition Cooperation (공조 작전)</h4>
+              </div>
+              <span className={`px-2 py-0.5 rounded text-[9px] font-black tracking-widest ${
+                helperCount > 0 ? 'bg-cyan-500/20 text-cyan-300' : 'bg-rose-500/20 text-rose-300'
+              }`}>
+                {helperCount > 0 ? '🤝 COOP ACTIVE' : '🚨 SOLO EXPEDITION'}
+              </span>
+            </div>
+            {helperCount > 0 ? (
+              <div className="space-y-1.5">
+                <div className="flex flex-wrap gap-2">
+                  {helperHunterIds?.map(hid => {
+                    const h = livingWorld?.namedHunters[hid]
+                    if (!h) return null
+                    return (
+                      <span key={hid} className="inline-flex items-center gap-1 bg-black/45 border border-cyan-500/30 rounded px-2 py-1 text-xs">
+                        <span className="font-bold text-white/90">{h.name}</span>
+                        <span className="text-[9px] bg-cyan-500/10 border border-cyan-400/20 px-1 text-cyan-300 rounded font-black">{h.rank}</span>
+                        <span className="text-[9px] text-cyan-300/70 font-mono font-bold">⚔️{h.power.toLocaleString()}</span>
+                      </span>
+                    )
+                  })}
+                </div>
+                <p className="text-[10px] text-white/60 leading-relaxed mt-1">
+                  S급 Named 헌터들의 긴급 개입으로 플레이어의 전투 능력이 강화되었습니다: {' '}
+                  <span className="font-bold text-cyan-300">공격력 +{buffCoopAtk.toLocaleString()}</span>,{' '}
+                  <span className="font-bold text-cyan-300">방어력 +{buffCoopDef.toLocaleString()}</span>,{' '}
+                  <span className="font-bold text-cyan-300">피해 감소 -{Math.round(drCoop * 100)}%</span>.
+                  (보상 분배에 따라 전리품 배율이 {Math.round(rewardRatio * 100)}%로 차감 반영되었습니다.)
+                </p>
+              </div>
+            ) : (
+              <p className="text-[11px] text-rose-300/80 leading-relaxed font-semibold">
+                ⚠️ 아군의 지원 병력 없이 단독으로 침투한 전선입니다. 극한의 단독 원정 디버프 위험에 주의하십시오!
+              </p>
+            )}
+          </div>
+        )
+      })()}
 
       {/* 3. Dungeon Map / Timeline */}
       <div className="panel p-4 border-zinc-700/40 bg-zinc-900/60">
