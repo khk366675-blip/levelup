@@ -2362,6 +2362,15 @@ export interface RegionState {
   activeGateIds: string[]   // 활성 게이트 ID 리스트 (RiftNode.id 매핑)
 }
 
+export interface ActiveMonarch {
+  monarchId: string        // grellic, celaide, ...
+  rank: number             // 서열 (1~8)
+  occupiedRegionIds: string[]  // 현재 점령한 국가들 (등장 국가 + 확장된 국가)
+  appearedDay: number
+  status: 'rampaging' | 'defeated'
+  lastExpandDay: number    // 마지막 영역 확장일 (확장 주기 계산용)
+}
+
 export interface LivingWorldState {
   seed: number              // 이 회차의 시드 (재현용)
   day: number               // 경과 일수
@@ -2373,6 +2382,8 @@ export interface LivingWorldState {
   lastTickDate?: string     // 마지막으로 틱이 돌아간 날짜 (YYYY-MM-DD)
   eventLogs: string[]       // 최근 사건 로그 리스트
   riftNodes: Record<string, RiftNode> // 시뮬레이션용 게이트 노드 상태
+  activeMonarchs?: ActiveMonarch[]    // 활성화된 군주들 상태
+  homeReachedMonarchId?: string       // 거점에 도달한 군주 ID
 }
 
 // 시드용 Base 데이터 타입

@@ -13,6 +13,7 @@ import {
 } from 'lucide-react'
 import { useGame } from '../lib/store'
 import { RIFT_REGIONS, RIFT_NODES } from '../lib/seed'
+import { MONARCHS } from '../lib/monarchs'
 import { getRegionProgress, RIFT_NODE_STATUS_META } from '../lib/riftWorld'
 import { getRegionTotalPower } from '../lib/livingWorld'
 import { GatePanel } from './GatePanel'
@@ -389,9 +390,31 @@ export function WorldMapPanel() {
         </div>
       </div>
 
+      {/* 거점 침공 비상 경고 배너 */}
+      {livingWorld && livingWorld.homeReachedMonarchId && (
+        <div className="panel corner-bracket border-red-500 bg-red-950/20 p-5 shadow-glow-red animate-pulse flex flex-col sm:flex-row items-center justify-between gap-4 mb-6">
+          <div className="br" />
+          <div className="flex items-center gap-3">
+            <AlertCircle className="h-8 w-8 text-red-500 animate-bounce" />
+            <div>
+              <h3 className="text-base font-black text-red-400 tracking-wider">🚨 초비상: 거점 군주 침공</h3>
+              <p className="text-xs text-red-200/80 mt-1 leading-relaxed">
+                군주 <span className="font-extrabold text-white">[{MONARCHS.find(m => m.id === livingWorld.homeReachedMonarchId)?.name || livingWorld.homeReachedMonarchId}]</span>이(가) 대한민국의 방어선을 돌파하고 거점에 진입했습니다! 즉각 대응하지 않으면 세계가 멸망합니다.
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={() => triggerToast("⚔️ [L4-B 전투 예고] 군주와의 직접 카드 대결은 다음 업데이트(L4-B)에서 완벽히 오픈됩니다! 현재는 거점 도달 전투 stub 상태입니다.")}
+            className="rounded border border-red-500/50 bg-red-500/20 hover:bg-red-500/35 px-4 py-2.5 text-xs font-black text-white tracking-widest transition-all cursor-pointer shadow-glow-red whitespace-nowrap"
+          >
+            ⚔️ 군주 격퇴전 개시 (L4-B 준비)
+          </button>
+        </div>
+      )}
+
       {/* MVP-2 World Status Dashboard */}
       {livingWorld && (
-        <div className="grid gap-4 md:grid-cols-3 animate-fade-in">
+        <div className="grid gap-4 md:grid-cols-4 animate-fade-in">
           {/* Box 1: World Corruption and Monarchs */}
           <div className="panel corner-bracket border-purple-500/20 bg-ink-950/40 p-4 flex flex-col justify-between">
             <div className="br" />
@@ -428,7 +451,7 @@ export function WorldMapPanel() {
               </div>
             </div>
             <p className="mt-3 text-[10px] text-white/40 leading-normal">
-              오염도가 30%, 50%, 70%, 85%, 95%를 초과할 때마다 더 강력한 군주가 강림합니다.
+              오염도가 40%, 60%, 78%, 92%, 99%를 초과할 때마다 더 강력한 군주가 강림합니다.
             </p>
           </div>
 
@@ -463,6 +486,50 @@ export function WorldMapPanel() {
                 </div>
               ))}
             </div>
+          </div>
+
+          {/* Box 3: Monarchs Status Briefing */}
+          <div className="panel corner-bracket border-red-500/25 bg-ink-950/40 p-4 flex flex-col justify-between">
+            <div className="br" />
+            <div>
+              <span className="text-xs font-bold text-red-400 flex items-center gap-1.5 mb-2.5 font-bold">
+                👑 군주 침공 전황 분석
+              </span>
+              <div className="space-y-1.5 max-h-28 overflow-y-auto pr-1 scrollbar-thin scrollbar-thumb-red-500/20">
+                {!livingWorld.activeMonarchs || livingWorld.activeMonarchs.length === 0 ? (
+                  <div className="text-[10px] text-white/40 italic py-5 text-center">
+                    현재 강림한 군주가 없습니다.
+                  </div>
+                ) : (
+                  livingWorld.activeMonarchs.map((monarch: any) => {
+                    const mData = MONARCHS.find(m => m.id === monarch.monarchId)
+                    if (!mData) return null
+                    return (
+                      <div key={monarch.monarchId} className="rounded bg-black/35 border border-white/5 p-1.5 flex items-center justify-between text-[10px]">
+                        <div className="flex flex-col">
+                          <span className="font-bold text-white/80">{mData.name}</span>
+                          <span className="text-[8px] text-white/40 font-mono">서열 {mData.rank}위 | {mData.theme}</span>
+                        </div>
+                        <div className="text-right">
+                          {monarch.status === 'rampaging' ? (
+                            <span className="rounded bg-red-500/15 border border-red-500/25 px-1 py-0.5 text-[8px] font-black text-red-300">
+                              {monarch.occupiedRegionIds.length}개국 점령
+                            </span>
+                          ) : (
+                            <span className="rounded bg-emerald-500/10 border border-emerald-500/20 px-1 py-0.5 text-[8px] font-bold text-emerald-400 font-mono">
+                              격퇴됨
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    )
+                  })
+                )}
+              </div>
+            </div>
+            <p className="mt-2 text-[8px] text-white/40 leading-normal">
+              출현 군주는 3일마다 인접국을 잠식하며, 거점(한국) 도달 시 즉시 강제 전투가 발동됩니다.
+            </p>
           </div>
         </div>
       )}
@@ -829,17 +896,26 @@ export function WorldMapPanel() {
               const prog = getRegionProgress(region.id, riftNodesState)
               const regionState = livingWorld?.regions[region.id]
               const totalPower = regionState ? getRegionTotalPower(regionState, livingWorld.namedHunters) : 0
+              const occupiedMonarch = livingWorld?.activeMonarchs?.find(m => m.status === 'rampaging' && m.occupiedRegionIds.includes(region.id))
+
               return (
                 <div
                   key={region.id}
                   className="absolute pointer-events-none flex flex-col items-center -translate-x-1/2 -translate-y-1/2"
                   style={{ left: `${region.labelX}%`, top: `${region.labelY}%` }}
                 >
-                  <div className="rounded-full bg-black/70 border border-white/5 px-2 py-0.5 text-[10px] font-black text-white/60 backdrop-blur-sm">
-                    {region.name}
+                  {/* 점령 시 붉은 글로우 백그라운드 효과 */}
+                  {occupiedMonarch && (
+                    <div className="absolute -inset-10 rounded-full bg-rose-600/10 blur-xl animate-pulse -z-10" />
+                  )}
+                  <div className={`rounded-full bg-black/75 border ${occupiedMonarch ? 'border-red-500/80 shadow-glow-red animate-pulse' : 'border-white/5'} px-2.5 py-0.5 text-[10px] font-black ${occupiedMonarch ? 'text-red-400' : 'text-white/60'} backdrop-blur-sm`}>
+                    {occupiedMonarch ? `⚠️ ${region.name} (점령됨)` : region.name}
                   </div>
-                  <div className="text-[8px] text-purple-300/80 font-mono mt-0.5 whitespace-nowrap bg-black/40 px-1 rounded">
-                    ({prog.cleared}/{prog.total}){totalPower > 0 ? ` ⚔️${(totalPower / 1000).toFixed(0)}k` : ''}
+                  <div className={`text-[8px] ${occupiedMonarch ? 'text-red-300 font-bold bg-red-950/40 border border-red-500/25 px-1.5' : 'text-purple-300/80 bg-black/45 px-1'} font-mono mt-0.5 whitespace-nowrap rounded`}>
+                    {occupiedMonarch 
+                      ? `군주: ${MONARCHS.find(m => m.id === occupiedMonarch.monarchId)?.name ?? occupiedMonarch.monarchId}`
+                      : `(${prog.cleared}/${prog.total})${totalPower > 0 ? ` ⚔️${(totalPower / 1000).toFixed(0)}k` : ''}`
+                    }
                   </div>
                 </div>
               )
@@ -850,6 +926,7 @@ export function WorldMapPanel() {
               const status = riftNodesState[node.id] ?? node.status
               const meta = RIFT_NODE_STATUS_META[status]
               const worldNode = livingWorld?.riftNodes[node.id]
+              const isNodeRegionOccupied = livingWorld?.activeMonarchs?.some(m => m.status === 'rampaging' && m.occupiedRegionIds.includes(node.regionId))
 
               return (
                 <button
@@ -860,7 +937,7 @@ export function WorldMapPanel() {
                 >
                   {/* 노드 링과 코어 */}
                   <div
-                    className={`relative h-5 w-5 rounded-full border-2 ${meta.borderClass} ${meta.bgClass} flex items-center justify-center transition-all group-hover:scale-125 group-hover:border-purple-400`}
+                    className={`relative h-5 w-5 rounded-full border-2 ${isNodeRegionOccupied ? 'border-red-500 bg-red-950/80 shadow-glow-red animate-pulse' : `${meta.borderClass} ${meta.bgClass}`} flex items-center justify-center transition-all group-hover:scale-125 group-hover:border-purple-400`}
                   >
                     {worldNode?.loveCall?.active && (
                       <span className="absolute -top-3 -right-3 flex h-4 w-4 items-center justify-center rounded-full bg-yellow-500 text-[8px] font-black text-black shadow-glow-yellow animate-bounce z-20">
@@ -877,13 +954,13 @@ export function WorldMapPanel() {
                       <Eye className="h-2 w-2 text-zinc-500" />
                     )}
                     {status === 'active' && (
-                      <div className="h-1.5 w-1.5 rounded-full bg-cyan-400 animate-ping" />
+                      <div className={`h-1.5 w-1.5 rounded-full ${isNodeRegionOccupied ? 'bg-red-400' : 'bg-cyan-400'} animate-ping`} />
                     )}
                   </div>
 
                   {/* 마커 아래 노드명 말풍선 */}
                   <div className="mt-1 opacity-60 group-hover:opacity-100 transition-all">
-                    <div className="rounded bg-black/80 border border-white/5 px-1.5 py-0.5 text-[9px] font-bold text-white/70 backdrop-blur-sm whitespace-nowrap shadow-md">
+                    <div className={`rounded bg-black/80 border ${isNodeRegionOccupied ? 'border-red-500/40 text-red-300' : 'border-white/5 text-white/70'} px-1.5 py-0.5 text-[9px] font-bold backdrop-blur-sm whitespace-nowrap shadow-md`}>
                       {node.name}
                     </div>
                   </div>

@@ -12629,7 +12629,7 @@ export const useGame = create<GameState>()(
     }),
     {
       name: 'levelup-save',
-      version: 19,
+      version: 20,
       partialize: (state) => ({
         ...state,
         manualBattleSession: undefined,
@@ -13188,6 +13188,17 @@ export const useGame = create<GameState>()(
             if (node && node.loveCall === undefined) {
               node.loveCall = undefined
             }
+          }
+        }
+
+        // ── Living Rift World Monarch L4-A (v20) 마이그레이션 ──
+        if (persistedState && persistedState.livingWorld) {
+          const lw = persistedState.livingWorld
+          if (!lw.activeMonarchs) {
+            lw.activeMonarchs = []
+          }
+          if (!('homeReachedMonarchId' in lw)) {
+            lw.homeReachedMonarchId = undefined
           }
         }
 

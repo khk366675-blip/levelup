@@ -1,5 +1,6 @@
-import type { LivingWorldState, NamedHunter, RegionState, RiftNode, Rank } from './types'
+import type { LivingWorldState, NamedHunter, RegionState, RiftNode, Rank, ActiveMonarch } from './types'
 import { RIFT_REGIONS, REGION_ADJACENCY, RIFT_NODES } from './seed'
+import { MONARCHS } from './monarchs'
 
 type RngFn = () => number
 
@@ -34,6 +35,7 @@ const MONARCH_DAILY_CORRUPTION = 0.6
 //   간격이 좁으면 오염 상승 시 군주가 우르르 등장한다. 100일 평균 2~3명이 목표.
 //   5명(천사 직전)은 오염 거의 만렙(plateau)에서만 도달하도록 상한을 높게 둔다.
 const MONARCH_THRESHOLDS = [40, 60, 78, 92, 99]   // 1~5번째 군주 등장 오염도
+const MONARCH_EXPAND_INTERVAL = 3 // 군주 영역 확장 주기 (일)
 
 /**
  * 특정 지역의 가용 총전력을 계산합니다. (사망/부상 헌터 제외)
@@ -68,6 +70,8 @@ export function advanceWorldDay(state: LivingWorldState, rng: RngFn): LivingWorl
   const nextRiftNodes = { ...state.riftNodes }
   const logs: string[] = [...state.eventLogs]
   let nextWorldCorruption = state.worldCorruption
+  let nextActiveMonarchs: ActiveMonarch[] = [...(state.activeMonarchs ?? [])]
+  let nextHomeReachedMonarchId = state.homeReachedMonarchId
 
   function addLog(msg: string) {
     logs.push(`[Day ${nextDay}] ${msg}`)
@@ -166,6 +170,14 @@ export function advanceWorldDay(state: LivingWorldState, rng: RngFn): LivingWorl
 
     const rName = RIFT_REGIONS.find(r => r.id === regionId)?.name ?? regionId.toUpperCase()
 
+    // 군주에게 점령당한 상태인지 판단
+    const isOccupied = nextActiveMonarchs.some(m => m.status === 'rampaging' && m.occupiedRegionIds.includes(regionId))
+
+    // 군주 점령 효과: 매 틱 오염도 추가 급증 (+3%)
+    if (isOccupied) {
+      region.corruption = Math.min(100, region.corruption + 3)
+    }
+
     // 가장 시한이 촉박한 게이트를 최우선 대응 타겟으로 설정
     let targetGate: RiftNode | null = null
     for (const gateId of region.activeGateIds) {
@@ -177,7 +189,10 @@ export function advanceWorldDay(state: LivingWorldState, rng: RngFn): LivingWorl
       }
     }
 
-    if (!targetGate) continue
+    if (!targetGate) {
+      nextRegions[regionId] = region
+      continue
+    }
 
     // 해당 게이트에 대한 승률 산출
     const activePower = getActiveRegionPower(region, nextNamedHunters)
@@ -196,7 +211,8 @@ export function advanceWorldDay(state: LivingWorldState, rng: RngFn): LivingWorl
     // 국가 성향(riskAppetite) 대조 도전 결정
     // riskAppetite가 1이면 승률이 30%여도 도전, 0이면 75% 이상일 때만 도전
     const minRequiredWinChance = 0.75 - region.riskAppetite * 0.45
-    const isChallenging = winChance >= minRequiredWinChance
+    // 점령된 상태에서는 NPC 헌터 게이트 도전이 불가 (자력 방어 수단 완전 상실)
+    const isChallenging = winChance >= minRequiredWinChance && !isOccupied
 
     if (isChallenging) {
       const isSuccess = rng() < winChance
@@ -398,12 +414,12 @@ export function advanceWorldDay(state: LivingWorldState, rng: RngFn): LivingWorl
 
   // 5.5 [레버4] 군주 등장 후 오염 가속 — 등장한 군주 수에 비례해 매일 전역 오염 상승
   // (설계 4장: 1막은 군주 등장 후에도 멈추지 않으며 군주가 압박을 가중한다)
-  if (state.monarchsAppeared > 0) {
+  if (nextActiveMonarchs.length > 0) {
     nextWorldCorruption = Math.min(100, nextWorldCorruption + MONARCH_DAILY_CORRUPTION)
   }
 
   // 6. 군주 등장 조건 판정
-  // 전역 오염도가 30, 50, 70, 85, 95를 초과할 때마다 군주 등장 카운트 증가
+  // 전역 오염도가 40, 60, 78, 92, 99를 초과할 때마다 군주 등장 카운트 증가
   const nextMonarchsLimit =
     nextWorldCorruption >= MONARCH_THRESHOLDS[4] ? 5 :
     nextWorldCorruption >= MONARCH_THRESHOLDS[3] ? 4 :
@@ -411,20 +427,144 @@ export function advanceWorldDay(state: LivingWorldState, rng: RngFn): LivingWorl
     nextWorldCorruption >= MONARCH_THRESHOLDS[1] ? 2 :
     nextWorldCorruption >= MONARCH_THRESHOLDS[0] ? 1 : 0
 
-  let nextMonarchsAppeared = state.monarchsAppeared
-  if (nextMonarchsLimit > nextMonarchsAppeared) {
-    const monarchIndex = nextMonarchsAppeared + 1
-    
-    // 무작위 오염된 국가에 침공 (오염도 10 이상인 국가 중 하나 선택)
-    const highlyCorruptedRegions = Object.keys(nextRegions).filter(id => nextRegions[id].corruption >= 10)
-    const targetRegionId = highlyCorruptedRegions.length > 0 
-      ? highlyCorruptedRegions[Math.floor(rng() * highlyCorruptedRegions.length)]
-      : RIFT_REGIONS[Math.floor(rng() * RIFT_REGIONS.length)].id
-      
-    const rName = RIFT_REGIONS.find(r => r.id === targetRegionId)?.name ?? targetRegionId.toUpperCase()
+  let currentMonarchsCount = nextActiveMonarchs.length
+  if (nextMonarchsLimit > currentMonarchsCount) {
+    // 임계값 초과에 따른 군주 순차 스폰
+    const spawnCount = nextMonarchsLimit - currentMonarchsCount
+    for (let k = 0; k < spawnCount; k++) {
+      const spawnIndex = currentMonarchsCount + k
+      const targetMonarchData = MONARCHS[spawnIndex]
+      if (targetMonarchData) {
+        // 무작위 오염된 국가에 침공 (오염도 10 이상인 국가 중 하나 선택)
+        const highlyCorruptedRegions = Object.keys(nextRegions).filter(id => nextRegions[id].corruption >= 10)
+        const targetRegionId = highlyCorruptedRegions.length > 0 
+          ? highlyCorruptedRegions[Math.floor(rng() * highlyCorruptedRegions.length)]
+          : RIFT_REGIONS[Math.floor(rng() * RIFT_REGIONS.length)].id
+          
+        const rName = RIFT_REGIONS.find(r => r.id === targetRegionId)?.name ?? targetRegionId.toUpperCase()
 
-    addLog(`👑 ⚡ [위험] 심연의 봉인이 파괴되며 제 ${monarchIndex}군주가 [${rName}] 지역으로 침공을 개시했습니다! 세계 종말이 가속화됩니다.`)
-    nextMonarchsAppeared = nextMonarchsLimit
+        // 신규 ActiveMonarch 개체 생성
+        const newMonarch: ActiveMonarch = {
+          monarchId: targetMonarchData.id,
+          rank: targetMonarchData.rank,
+          occupiedRegionIds: [targetRegionId],
+          appearedDay: nextDay,
+          status: 'rampaging',
+          lastExpandDay: nextDay
+        }
+
+        nextActiveMonarchs.push(newMonarch)
+        
+        // 침공당한 지역의 오염도 즉시 급증 (+20%)
+        nextRegions[targetRegionId].corruption = Math.min(100, nextRegions[targetRegionId].corruption + 20)
+
+        addLog(`👑 ⚡ [군주 출현] 제 ${targetMonarchData.rank}위 군주 [${targetMonarchData.name}] (테마: ${targetMonarchData.theme})이(가) [${rName}] 지역으로 침공을 개시했습니다! 해당 국가 오염도 급증 및 세계 종말이 가속화됩니다.`)
+      }
+    }
+  }
+
+  // 7. 군주 영역 확장 & NPC 저항 & 거점 침공 가드
+  // 7-1) 영역 확장
+  for (let mIdx = 0; mIdx < nextActiveMonarchs.length; mIdx++) {
+    const monarch = { ...nextActiveMonarchs[mIdx] }
+    if (monarch.status !== 'rampaging') continue
+
+    // 3일마다 영역 확장
+    if (nextDay - monarch.lastExpandDay >= MONARCH_EXPAND_INTERVAL) {
+      // 점령국들과 인접한 미점령국 목록 확보
+      const allAdjacents: string[] = []
+      for (const regId of monarch.occupiedRegionIds) {
+        const adjacents = REGION_ADJACENCY[regId] || []
+        for (const adj of adjacents) {
+          if (!allAdjacents.includes(adj)) {
+            allAdjacents.push(adj)
+          }
+        }
+      }
+
+      // 군주 본인이 이미 점령한 국가 제외
+      const unassignedAdjacents = allAdjacents.filter(adj => !monarch.occupiedRegionIds.includes(adj))
+
+      if (unassignedAdjacents.length > 0) {
+        // rng()로 무작위 1개 선택
+        const expandRegionId = unassignedAdjacents[Math.floor(rng() * unassignedAdjacents.length)]
+        const expName = RIFT_REGIONS.find(r => r.id === expandRegionId)?.name ?? expandRegionId.toUpperCase()
+        const monarchName = MONARCHS.find(mon => mon.id === monarch.monarchId)?.name ?? monarch.monarchId.toUpperCase()
+
+        monarch.occupiedRegionIds.push(expandRegionId)
+        monarch.lastExpandDay = nextDay
+
+        // 점령당한 지역 오염도 즉시 급증 (+20%)
+        nextRegions[expandRegionId].corruption = Math.min(100, nextRegions[expandRegionId].corruption + 20)
+
+        addLog(`👑 📢 [영역 확장] 군주 [${monarchName}]이(가) 인접한 [${expName}] 지역으로 영역을 확장했습니다!`)
+      }
+    }
+
+    // 7-2) NPC 저항 (세계 천장 반영)
+    // 점령지 내에서 NPC들의 저항 시도
+    if (monarch.occupiedRegionIds.length > 0) {
+      const monarchData = MONARCHS.find(mon => mon.id === monarch.monarchId)
+      if (monarchData) {
+        // 군주의 서열이 7~8위 (그렐릭, 셀라이드)인 경우 가끔 격퇴 가능
+        if (monarchData.rank >= 7) {
+          // 점령지 중 무작위 1곳의 헌터들이 도전
+          const challengeRegId = monarch.occupiedRegionIds[Math.floor(rng() * monarch.occupiedRegionIds.length)]
+          const reg = nextRegions[challengeRegId]
+          if (reg) {
+            const activeRegionPower = getActiveRegionPower(reg, nextNamedHunters)
+            // 총전력이 군주 권장 CP보다 클 때, 30% 확률로 격퇴 성공
+            if (activeRegionPower >= monarchData.recommendedCP && rng() < 0.3) {
+              monarch.status = 'defeated'
+              monarch.occupiedRegionIds = []
+              const expName = RIFT_REGIONS.find(r => r.id === challengeRegId)?.name ?? challengeRegId.toUpperCase()
+
+              addLog(`⚔️ 🎉 [군주 격퇴] [${expName}]의 NPC 헌터들이 연합하여 군주 [${monarchData.name}]을(를) 격퇴하는 기적을 일으켰습니다! 영역이 해방되었습니다.`)
+            }
+          }
+        } else {
+          // 6위 이상 강한 군주는 NPC가 저항해도 무조건 실패 (전멸 처리)
+          if (rng() < 0.1) { // 매 틱 10%의 확률로 NPC가 도전했다가 참패하는 이벤트
+            const challengeRegId = monarch.occupiedRegionIds[Math.floor(rng() * monarch.occupiedRegionIds.length)]
+            const reg = nextRegions[challengeRegId]
+            if (reg) {
+              const regName = RIFT_REGIONS.find(r => r.id === challengeRegId)?.name ?? challengeRegId.toUpperCase()
+              // 부상 또는 사망
+              const activeNamedIds = reg.namedHunterIds.filter(id => nextNamedHunters[id].status === 'active')
+              if (activeNamedIds.length > 0) {
+                const targetHunterId = activeNamedIds[Math.floor(rng() * activeNamedIds.length)]
+                const hunter = { ...nextNamedHunters[targetHunterId] }
+                hunter.status = 'injured'
+                hunter.injuredTurns = 4 // 군주와의 조우로 깊은 내상을 입어 4일간 요양
+                nextNamedHunters[targetHunterId] = hunter
+                
+                // 오염 폭증 (+15%)
+                reg.corruption = Math.min(100, reg.corruption + 15)
+
+                addLog(`💀 [참변] [${regName}]의 헌터들이 군주 [${monarchData.name}]에게 저항을 시도했으나 참패하여 흩어졌습니다! [${hunter.name}] 헌터가 치명적인 부상을 입었습니다.`)
+              }
+            }
+          }
+        }
+      }
+    }
+
+    nextActiveMonarchs[mIdx] = monarch
+  }
+
+  // 7-3) 거점 도달(한국) 감지 및 강제 전투 플래그 세팅
+  // 살아있는(rampaging) 모든 군주 중 occupiedRegionIds에 'kr'이 있는지 스캔
+  const krInvaders = nextActiveMonarchs.filter(m => m.status === 'rampaging' && m.occupiedRegionIds.includes('kr'))
+  if (krInvaders.length > 0) {
+    // 거점에 도달한 군주들 중 rank가 가장 높은(낮은 숫자) 군주를 선택
+    krInvaders.sort((a, b) => a.rank - b.rank)
+    nextHomeReachedMonarchId = krInvaders[0].monarchId
+    const monarchName = MONARCHS.find(mon => mon.id === nextHomeReachedMonarchId)?.name ?? nextHomeReachedMonarchId.toUpperCase()
+    
+    addLog(`🚨 ⚠️ [초비상] 군주 [${monarchName}]이(가) 대한민국의 방어선을 돌파하고 거점에 도달했습니다! 더 이상 도망칠 곳은 없습니다. 강제 전투가 걸립니다!`)
+  } else {
+    // 대한민국 영토가 안전해졌다면 (격퇴 등으로) 플래그를 클리어
+    nextHomeReachedMonarchId = undefined
   }
 
   return {
@@ -434,7 +574,9 @@ export function advanceWorldDay(state: LivingWorldState, rng: RngFn): LivingWorl
     namedHunters: nextNamedHunters,
     riftNodes: nextRiftNodes,
     worldCorruption: nextWorldCorruption,
-    monarchsAppeared: nextMonarchsAppeared,
+    monarchsAppeared: nextActiveMonarchs.length, // 기존 monarchsAppeared 숫자 카운트도 연동
+    activeMonarchs: nextActiveMonarchs,
+    homeReachedMonarchId: nextHomeReachedMonarchId,
     eventLogs: logs
   }
 }

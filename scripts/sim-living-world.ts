@@ -15,11 +15,15 @@ function runSimulation(seed: number): {
   monarchsAppeared: number
   strongestRegion: string
   weakestRegion: string
+  homeInvadedDay: number | null
+  totalOccupiedRegions: number
+  defeatedMonarchsCount: number
 } {
   let state = initLivingWorld(seed)
   const initialNamedCount = Object.keys(state.namedHunters).length
 
   let firstMonarchDay: number | null = null
+  let homeInvadedDay: number | null = null
   let explodedGatesCount = 0
   let clearedGatesCount = 0
 
@@ -29,6 +33,9 @@ function runSimulation(seed: number): {
 
     if (firstMonarchDay === null && state.monarchsAppeared > 0) {
       firstMonarchDay = d
+    }
+    if (homeInvadedDay === null && state.homeReachedMonarchId) {
+      homeInvadedDay = d
     }
   }
 
@@ -68,6 +75,18 @@ function runSimulation(seed: number): {
     }
   }
 
+  let uniqueOccupied = new Set<string>()
+  let defeatedMonarchsCount = 0
+  if (state.activeMonarchs) {
+    state.activeMonarchs.forEach(m => {
+      if (m.status === 'rampaging') {
+        m.occupiedRegionIds.forEach(rid => uniqueOccupied.add(rid))
+      } else if (m.status === 'defeated') {
+        defeatedMonarchsCount++
+      }
+    })
+  }
+
   return {
     firstMonarchDay,
     finalWorldCorruption: state.worldCorruption,
@@ -77,7 +96,10 @@ function runSimulation(seed: number): {
     survivingNamedCount,
     monarchsAppeared: state.monarchsAppeared,
     strongestRegion: strongest,
-    weakestRegion: weakest
+    weakestRegion: weakest,
+    homeInvadedDay,
+    totalOccupiedRegions: uniqueOccupied.size,
+    defeatedMonarchsCount
   }
 }
 
@@ -92,6 +114,9 @@ function main() {
   let clearedGates: number[] = []
   let namedSurvivalRates: number[] = []
   let monarchAppearances: number[] = []
+  let homeInvadedDays: number[] = []
+  let totalOccupiedRegionsList: number[] = []
+  let defeatedMonarchsCountList: number[] = []
 
   const strongestCounts: Record<string, number> = {}
   const weakestCounts: Record<string, number> = {}
@@ -103,11 +128,16 @@ function main() {
     if (result.firstMonarchDay !== null) {
       firstMonarchDays.push(result.firstMonarchDay)
     }
+    if (result.homeInvadedDay !== null) {
+      homeInvadedDays.push(result.homeInvadedDay)
+    }
     finalCorruptions.push(result.finalWorldCorruption)
     explodedGates.push(result.explodedGatesCount)
     clearedGates.push(result.clearedGatesCount)
     namedSurvivalRates.push(result.survivingNamedCount / result.initialNamedCount)
     monarchAppearances.push(result.monarchsAppeared)
+    totalOccupiedRegionsList.push(result.totalOccupiedRegions)
+    defeatedMonarchsCountList.push(result.defeatedMonarchsCount)
 
     strongestCounts[result.strongestRegion] = (strongestCounts[result.strongestRegion] || 0) + 1
     weakestCounts[result.weakestRegion] = (weakestCounts[result.weakestRegion] || 0) + 1
@@ -129,6 +159,10 @@ function main() {
   const avgCleared = average(clearedGates)
   const avgSurvival = average(namedSurvivalRates) * 100
   const avgMonarchs = average(monarchAppearances)
+  const avgHomeInvaded = average(homeInvadedDays)
+  const rateHomeInvaded = (homeInvadedDays.length / RUNS) * 100
+  const avgOccupied = average(totalOccupiedRegionsList)
+  const avgDefeatedMonarchs = average(defeatedMonarchsCountList)
 
   console.log(`\n### 1. 주요 밸런스 지표 실측 결과`);
   console.log(`- 평균 첫 군주 등장 시점: ${avgFirstMonarch > 0 ? `${avgFirstMonarch.toFixed(2)} 일차` : '미등장'}`);
@@ -139,6 +173,10 @@ function main() {
   console.log(`- 평균 폭주 게이트 수: ${avgExploded.toFixed(2)}개`);
   console.log(`- 평균 클리어 게이트 수: ${avgCleared.toFixed(2)}개`);
   console.log(`- 네임드 헌터 평균 생존율: ${avgSurvival.toFixed(2)}%`);
+  console.log(`- 거점(한국) 침공 발생률: ${rateHomeInvaded.toFixed(1)}% (${homeInvadedDays.length} / ${RUNS}회)`);
+  console.log(`- 평균 거점 침공 시점: ${avgHomeInvaded > 0 ? `${avgHomeInvaded.toFixed(2)} 일차` : '미침공'}`);
+  console.log(`- 100일 시점 평균 군주 점령 국가 수: ${avgOccupied.toFixed(2)}개국 / 15개국`);
+  console.log(`- 100일 평균 NPC의 군주 격퇴 수: ${avgDefeatedMonarchs.toFixed(2)}명`);
 
   console.log(`\n### 2. 국가 흥망 빈도 (강국 / 약국 빈도)`);
   console.log(`- 가장 강한 국가 빈도:`);
@@ -170,7 +208,10 @@ function main() {
     run1.survivingNamedCount === run2.survivingNamedCount &&
     run1.monarchsAppeared === run2.monarchsAppeared &&
     run1.strongestRegion === run2.strongestRegion &&
-    run1.weakestRegion === run2.weakestRegion
+    run1.weakestRegion === run2.weakestRegion &&
+    run1.homeInvadedDay === run2.homeInvadedDay &&
+    run1.totalOccupiedRegions === run2.totalOccupiedRegions &&
+    run1.defeatedMonarchsCount === run2.defeatedMonarchsCount
 
   console.log(`- 동일 시드 (${seedForReproducibility}) 2회 실행 결과 일치 여부: ${isIdentical ? '✅ 일치 (재현성 확보)' : '❌ 불일치 (버그 발생)'}`);
   console.log('==================================================');
