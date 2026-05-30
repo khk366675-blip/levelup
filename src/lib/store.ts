@@ -5050,6 +5050,7 @@ export const useGame = create<GameState>()(
             source,
             runState,
             helperHunterIds,
+            customGateDef,
           },
           messages: [...s.messages, {
             id: uid(),
@@ -7431,128 +7432,7 @@ export const useGame = create<GameState>()(
 
       // ── World Map Battle System (L3) ───────────────────────────────
 
-      startWorldBattle: (nodeId, helperHunterIds) => {
-        const s = get()
-        const isMonarchId = MONARCHS.some(m => m.id === nodeId) || nodeId === 'angel'
-        let monarchRegionId = 'kr'
-        if (isMonarchId && s.livingWorld?.activeMonarchs) {
-          const activeMon = s.livingWorld.activeMonarchs.find(m => m.monarchId === nodeId)
-          if (activeMon && activeMon.occupiedRegionIds.length > 0) {
-            monarchRegionId = activeMon.occupiedRegionIds[0]
-          }
-        }
-
-        let node
-        if (isMonarchId) {
-          const monarchData = nodeId === 'angel' ? FINAL_ANGEL : MONARCHS.find(m => m.id === nodeId)!
-          node = {
-            id: monarchData.id,
-            regionId: monarchRegionId,
-            name: monarchData.name,
-            x: 50,
-            y: 50,
-            status: 'active',
-            gateDefId: monarchData.id,
-            difficultyRank: 'S',
-            difficulty: monarchData.recommendedCP,
-            deadline: 999,
-            daysRemaining: 999,
-            isSGrade: true
-          }
-        } else {
-          node = {
-            difficulty: 500,
-            deadline: 7,
-            daysRemaining: 7,
-            ...(s.livingWorld?.riftNodes[nodeId] || RIFT_NODES.find(n => n.id === nodeId))
-          }
-          if (!node || (s.riftNodes[nodeId] ?? node.status) !== 'active') return
-        }
-
-        // 진입 권한 가드: 대한민국 외 지역 일반 게이트 진입 차단 (안전장치)
-        if (!isMonarchId && node.regionId !== 'kr') {
-          set({
-            messages: [
-              ...s.messages,
-              {
-                id: uid(),
-                kind: 'info',
-                title: '진입 권한 제한',
-                lines: ['대한민국 영역 외의 게이트에는 직접 개입할 수 없습니다.'],
-                createdAt: todayISO(),
-              }
-            ]
-          })
-          return
-        }
-
-        // 후퇴 일일 가드 확인
-        const today = todayKey()
-        if (s.worldBattleRetreats && s.worldBattleRetreats[nodeId] === today) {
-          set({
-            messages: [
-              ...s.messages,
-              {
-                id: uid(),
-                kind: 'info',
-                title: '진입 차단',
-                lines: ['오늘 이 구역에서 후퇴하여 다시 진입할 수 없습니다. 내일 다시 시도하십시오.'],
-                createdAt: todayISO(),
-              }
-            ]
-          })
-          return
-        }
-
-        // 1) nodeId로 동적 게이트 정의 구성 (한국 게이트 or 군주)
-        let customGateDef
-        if (isMonarchId) {
-          const monarchData = nodeId === 'angel' ? FINAL_ANGEL : MONARCHS.find(m => m.id === nodeId)!
-          customGateDef = {
-            id: nodeId,
-            name: monarchData.name,
-            description: `${monarchData.name}과의 결전입니다.`,
-            rank: 'S',
-            recommendedLevel: 80,
-            recommendedPower: monarchData.recommendedCP,
-            monsterIds: [nodeId],
-            rewardTableId: 'reward-gate-s-basic',
-            failPenaltyId: 'penalty-gate-basic',
-            expiresInHours: 720,
-          }
-        } else {
-          const rank = node.difficultyRank || 'D'
-          const recommendedPower = node.difficulty || 1000
-          
-          let monsterIds = ['lazy-goblin']
-          if (rank === 'E') monsterIds = ['rift-rat', 'rift-stray']
-          else if (rank === 'D') monsterIds = ['lazy-goblin', 'sloth-brute']
-          else if (rank === 'C') monsterIds = ['forgetting-warden', 'fatigue-warden']
-          else if (rank === 'B') monsterIds = ['memory-tracker', 'memory-scout']
-          else if (rank === 'A') monsterIds = ['greed-warden', 'memory-scout']
-          else if (rank === 'S' || rank === 'National') monsterIds = ['forgetting-warden', 'greed-warden']
-
-          customGateDef = {
-            id: nodeId,
-            name: node.name || '심연의 균열',
-            description: `${node.name || '심연의 균열'}의 정화 작전입니다.`,
-            rank: (rank === 'National' ? 'S' : rank),
-            recommendedLevel: rank === 'E' ? 5 : rank === 'D' ? 15 : rank === 'C' ? 30 : rank === 'B' ? 45 : rank === 'A' ? 60 : 80,
-            recommendedPower: recommendedPower,
-            monsterIds: monsterIds,
-            rewardTableId: `reward-gate-${(rank === 'National' ? 's' : rank).toLowerCase()}-basic` || 'reward-gate-d-basic',
-            failPenaltyId: 'penalty-gate-basic',
-            expiresInHours: 72,
-          }
-        }
-
-        // 2) get().spawnGate(dynamicGateId, 'worldmap', helperHunterIds, customGateDef)
-        get().spawnGate(nodeId, 'worldmap', helperHunterIds, customGateDef)
-        set({ activeRiftNodeId: nodeId })
-
-        // 3) get().startGateBattle()   // 자동
-        get().startGateBattle()
-      },
+      startWorldBattle: (nodeId: string, helperHunterIds?: string[]) => {},
 
       resolveWorldBattle: () => {},
 
@@ -7905,7 +7785,7 @@ export const useGame = create<GameState>()(
         const s = get()
         const activeGate = s.activeGate
         if (!activeGate || activeGate.instanceId !== gateInstanceId) return
-        const gate = GATE_DEFINITIONS.find(item => item.id === activeGate.gateId)
+        const gate = GATE_DEFINITIONS.find(item => item.id === activeGate.gateId) ?? activeGate.customGateDef
         if (!gate) return
         const victoryLog = s.combatLogs.find(log => log.gateInstanceId === gateInstanceId && log.result === 'victory')
         if (!victoryLog) return

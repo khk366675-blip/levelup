@@ -956,6 +956,7 @@ export interface ActiveGate {
   source: 'random' | 'dungeon_clear' | 'event' | 'worldmap'
   runState?: GateRunState
   helperHunterIds?: string[]
+  customGateDef?: GateDefinition
 }
 
 export type GateRunEncounterType =

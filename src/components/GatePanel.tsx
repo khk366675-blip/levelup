@@ -754,7 +754,9 @@ function ShadowExtractionPanel({
   const extractHistory = useGame(s => s.shadowExtractHistory ?? [])
   const lastResult = useGame(s => s.lastShadowExtractResult)
   const attemptShadowExtraction = useGame(s => s.attemptShadowExtraction)
-  const gate = gateId ? GATE_DEFINITIONS.find(item => item.id === gateId) : undefined
+  const activeGate = useGame(s => s.activeGate)
+  const gate = (gateId ? GATE_DEFINITIONS.find(item => item.id === gateId) : undefined)
+    ?? (activeGate?.gateId === gateId ? activeGate?.customGateDef : undefined)
   if (!log || log.result !== 'victory' || !gate) return null
 
   const equippedShadows = getEquippedShadows(ownedShadows, equippedShadowIds, hunter)
@@ -1826,7 +1828,7 @@ export function GatePanel() {
   const playerPower = combatPower.total
   const activeGateOpen = activeGate?.status === 'active'
   const gate = activeGateOpen
-    ? GATE_DEFINITIONS.find(g => g.id === activeGate.gateId)
+    ? (GATE_DEFINITIONS.find(g => g.id === activeGate.gateId) ?? activeGate.customGateDef)
     : undefined
 
   const isMonarchSession = manualBattleSession && manualBattleSession.source === 'world_map' && (MONARCHS.some(m => m.id === manualBattleSession.gateId) || manualBattleSession.gateId === 'angel')
@@ -2068,7 +2070,7 @@ export function GatePanel() {
 
   const manualGateDefinition =
     manualBattleSession && (!manualBattleSession.source || manualBattleSession.source === 'gate')
-      ? GATE_DEFINITIONS.find(g => g.id === manualBattleSession.gateId)
+      ? (GATE_DEFINITIONS.find(g => g.id === manualBattleSession.gateId) ?? activeGate?.customGateDef)
       : undefined
   const terminalGateSession =
     manualBattleSession &&

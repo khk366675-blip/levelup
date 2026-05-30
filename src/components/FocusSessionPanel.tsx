@@ -34,7 +34,7 @@ export function FocusSessionPanel() {
     startFocusSession(finalMin * 60 * 1000, linkedGateId)
   }
 
-  const gateDef = activeGate ? GATE_DEFINITIONS.find((g: any) => g.id === activeGate.gateId) : null
+  const gateDef = activeGate ? (GATE_DEFINITIONS.find((g: any) => g.id === activeGate.gateId) ?? activeGate.customGateDef) : null
 
   // 이탈 허용 시간 계산용 가이드
   const getAllowedInterruptionText = () => {

@@ -616,33 +616,6 @@ export function WorldMapPanel() {
                       daysRemaining: 999,
                       isSGrade: true
                     })
-                    setRecklessConfirmType('auto')
-                    setShowRecklessConfirm(true)
-                  } else {
-                    startWorldBattle(monarchId, [])
-                  }
-                }}
-                className="rounded border border-red-500/50 bg-red-500/20 hover:bg-red-500/35 px-4 py-2.5 text-xs font-black text-white tracking-widest transition-all cursor-pointer shadow-glow-red whitespace-nowrap flex items-center gap-1.5"
-              >
-                <Swords className="h-4 w-4" /> 자동 토벌 개시
-              </button>
-              <button
-                onClick={() => {
-                  if (playerPower < mData.recommendedCP * 0.6) {
-                    setSelectedNode({
-                      id: monarchId,
-                      regionId: 'kr',
-                      name: mData.name,
-                      x: 50,
-                      y: 50,
-                      status: 'active',
-                      gateDefId: monarchId,
-                      difficultyRank: 'S',
-                      difficulty: mData.recommendedCP,
-                      deadline: 999,
-                      daysRemaining: 999,
-                      isSGrade: true
-                    })
                     setRecklessConfirmType('manual')
                     setShowRecklessConfirm(true)
                   } else {
@@ -1069,23 +1042,6 @@ export function WorldMapPanel() {
                         이 군주는 이미 격퇴되었습니다.
                       </div>
                     ) : (
-                      <>
-                        <button
-                          onClick={() => {
-                            const level = getDangerLevel(selectedNode)
-                            if (level === 'reckless') {
-                              setRecklessConfirmType('auto')
-                              setShowRecklessConfirm(true)
-                            } else {
-                              startWorldBattle(selectedNode.id, selectedHelpers)
-                            }
-                          }}
-                          className="btn bg-rose-700 hover:bg-rose-600 text-white w-full flex items-center justify-center gap-2 py-2.5 text-xs font-black tracking-widest cursor-pointer shadow-glow-red"
-                        >
-                          <Swords className="h-4 w-4" />
-                          군주 자동 토벌 개시
-                        </button>
-
                         <button
                           onClick={() => {
                             const level = getDangerLevel(selectedNode)
@@ -1101,7 +1057,6 @@ export function WorldMapPanel() {
                           <Zap className="h-4 w-4 text-cyan-400" />
                           군주 수동 격퇴 개시
                         </button>
-                      </>
                     )}
                   </div>
                 </div>
@@ -1371,26 +1326,6 @@ export function WorldMapPanel() {
                           이미 완전히 정화된 구역입니다. 재정화가 가능합니다.
                         </div>
                       ) : null}
-
-                      {/* 자동 전투 버튼 */}
-                      <button
-                        onClick={() => {
-                          const level = getDangerLevel(selectedNode)
-                          if (level === 'reckless') {
-                            setRecklessConfirmType('auto')
-                            setShowRecklessConfirm(true)
-                          } else {
-                            startWorldBattle(selectedNode.id, selectedHelpers)
-                          }
-                        }}
-                        disabled={
-                          (riftNodesState[selectedNode.id] ?? selectedNode.status) === 'locked'
-                        }
-                        className="btn btn-primary w-full flex items-center justify-center gap-2 py-2 text-xs cursor-pointer"
-                      >
-                        <Swords className="h-4 w-4" />
-                        자동 정화 전투 (시네마틱)
-                      </button>
 
                       {/* 수동 전투 버튼 */}
                       <button
