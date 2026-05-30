@@ -135,7 +135,6 @@ export function WorldMapPanel() {
   // 로컬 확인 모달 제어용 상태
   const [showRecklessConfirm, setShowRecklessConfirm] = useState(false)
   const [recklessConfirmType, setRecklessConfirmType] = useState<'auto' | 'manual'>('auto')
-
   // 1. selectedNode 유효성 검증 (존재하지 않는 노드 정리)
   useEffect(() => {
     if (selectedNode) {
@@ -144,6 +143,8 @@ export function WorldMapPanel() {
           setSelectedNode(null)
           setSelectedHelpers([])
         }
+      } else if (livingWorld?.activeMonarchs?.some((m: any) => m.monarchId === selectedNode.id && m.status === 'rampaging')) {
+        // 활성(rampaging) 군주는 riftNodes가 아닌 activeMonarchs에 존재 → 유효한 선택으로 인정
       } else {
         const exists = livingWorld?.riftNodes[selectedNode.id]
         if (!exists) {
