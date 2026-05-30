@@ -1105,3 +1105,38 @@ export function convertBrokenEventToSafeEncounter(encounter: GateRunEncounter): 
   }
 }
 
+// 선택지의 effectType을 ID 및 텍스트 키워드 기반으로 추론하는 헬퍼
+export function getChoiceEffectType(choice: GateRunEventChoice): 'stabilize' | 'breakthrough' | 'rescue' | 'analyze' | 'coop' | 'solo' | 'cleanse' | 'scout' {
+  if (choice.effectType) return choice.effectType
+
+  const id = choice.id.toLowerCase()
+
+  if (choice.requiresCoop || id.includes('coop')) {
+    return 'coop'
+  }
+  if (choice.requiresSolo || id.includes('solo')) {
+    return 'solo'
+  }
+  if (id.includes('rescue') || id.includes('save') || id.includes('refugee') || id.includes('citizen') || id.includes('hostage')) {
+    return 'rescue'
+  }
+  if (id.includes('cleanse') || id.includes('purify') || id.includes('disinfect')) {
+    return 'cleanse'
+  }
+  if (id.includes('analyze') || id.includes('decode') || id.includes('forecast') || id.includes('foreshadow') || id.includes('weakness')) {
+    return 'analyze'
+  }
+  if (id.includes('scout') || id.includes('radar') || id.includes('recon') || id.includes('search') || id.includes('track') || id.includes('data')) {
+    return 'scout'
+  }
+  if (id.includes('stabilize') || id.includes('bypass') || id.includes('pass') || id.includes('fix') || id.includes('repair') || id.includes('tag') || id.includes('ignore') || id.includes('light') || id.includes('heater') || id.includes('meditate') || id.includes('safe') || id.includes('avoid')) {
+    return 'stabilize'
+  }
+  if (id.includes('breakthrough') || id.includes('dash') || id.includes('smash') || id.includes('force') || id.includes('shatter') || id.includes('strike') || id.includes('charge') || id.includes('crystals') || id.includes('open') || id.includes('loot') || id.includes('fight') || id.includes('extract') || id.includes('leap') || id.includes('clear') || id.includes('rush') || id.includes('speed')) {
+    return 'breakthrough'
+  }
+
+  return 'stabilize'
+}
+
+

@@ -2875,6 +2875,21 @@ function GateRunPanel({
   const rawActiveDetailEnc = encounters.find((e: any) => e.id === (selectedEncId ?? currentEncounter.id)) ?? currentEncounter
   const activeDetailEnc = useMemo(() => hydrateGateRunEncounterChoices(rawActiveDetailEnc, activeGate), [rawActiveDetailEnc, activeGate])
 
+  const computedDiffMod = useMemo(() => {
+    const baseDiff = activeDetailEnc.difficultyMod ?? 1.0
+    if (activeGate.source !== 'worldmap') return baseDiff
+    
+    const isBoss = activeDetailEnc.isBoss || activeDetailEnc.type === 'boss'
+    if (isBoss) {
+      const bossDelta = Math.max(-0.10, Math.min(0.10, runState.bossDifficultyDelta ?? 0))
+      return baseDiff * (1 + bossDelta)
+    } else if (activeDetailEnc.type === 'battle' || activeDetailEnc.type === 'elite') {
+      const combatDelta = Math.max(-0.15, Math.min(0.15, runState.nextCombatDifficultyDelta ?? 0))
+      return baseDiff * (1 + combatDelta)
+    }
+    return baseDiff
+  }, [activeDetailEnc, runState, activeGate])
+
   const eventPack = useMemo(() => {
     if (activeGate.source !== 'worldmap') return null
     const subRegionId = activeGate.customGateDef?.subRegionId
@@ -3138,6 +3153,93 @@ function GateRunPanel({
         )
       })()}
 
+      {/* 2.7. 작전 효과 및 전술 현황판 (A-2) */}
+      {(() => {
+        const hasOutcome = Boolean(runState.lastEventOutcomeText)
+        const hasNextCombatMod = Boolean(runState.nextCombatDifficultyDelta)
+        const hasBossMod = Boolean(runState.bossDifficultyDelta)
+        const hasCleanseMod = Boolean(runState.contaminationRelief)
+        const hasRiskTags = Boolean(runState.riskTags && runState.riskTags.length > 0)
+        
+        if (!hasOutcome && !hasNextCombatMod && !hasBossMod && !hasCleanseMod && !hasRiskTags) return null
+
+        return (
+          <div className="panel p-4 border-cyan-500/20 bg-cyan-950/5 text-zinc-200 space-y-3">
+            <div className="flex items-center gap-2 border-b border-white/5 pb-2">
+              <Activity className="w-4 h-4 text-cyan-400" />
+              <h4 className="text-xs font-bold tracking-wider uppercase text-cyan-300">Operation Status & Tactical Info (작전 효과 및 전술 현황)</h4>
+            </div>
+
+            {runState.lastEventOutcomeText && (
+              <div className="bg-zinc-950/40 border border-zinc-800 p-3 rounded-lg text-xs leading-relaxed text-cyan-200">
+                <span className="font-semibold text-cyan-400">💡 최근 선택 결과:</span>{' '}
+                {runState.lastEventOutcomeText}
+              </div>
+            )}
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5 pt-1 text-xs">
+              {/* 다음 전투 위험도 보정 */}
+              {hasNextCombatMod && (
+                <div className="p-2 border border-zinc-800/80 bg-zinc-900/40 rounded flex items-center justify-between">
+                  <span className="text-zinc-400">다음 전투 난이도</span>
+                  <span className={clsx(
+                    "font-bold",
+                    runState.nextCombatDifficultyDelta! < 0 ? "text-emerald-400" : "text-rose-400"
+                  )}>
+                    {runState.nextCombatDifficultyDelta! < 0 ? '안정화 ' : '위험 상승 '}
+                    ({runState.nextCombatDifficultyDelta! > 0 ? '+' : ''}{Math.round(runState.nextCombatDifficultyDelta! * 100)}%)
+                  </span>
+                </div>
+              )}
+
+              {/* 보스전 위험도 보정 */}
+              {hasBossMod && (
+                <div className="p-2 border border-zinc-800/80 bg-zinc-900/40 rounded flex items-center justify-between">
+                  <span className="text-zinc-400">보스전 난이도</span>
+                  <span className={clsx(
+                    "font-bold",
+                    runState.bossDifficultyDelta! < 0 ? "text-emerald-400" : "text-rose-400"
+                  )}>
+                    {runState.bossDifficultyDelta! < 0 ? '분석 완료 ' : '경보 활성 '}
+                    ({runState.bossDifficultyDelta! > 0 ? '+' : ''}{Math.round(runState.bossDifficultyDelta! * 100)}%)
+                  </span>
+                </div>
+              )}
+
+              {/* 오염 정화 보너스 */}
+              {hasCleanseMod && (
+                <div className="p-2 border border-zinc-800/80 bg-zinc-900/40 rounded flex items-center justify-between">
+                  <span className="text-zinc-400">노드 정화력</span>
+                  <span className="font-bold text-cyan-300">
+                    +{Math.round(runState.contaminationRelief!)}% (증폭)
+                  </span>
+                </div>
+              )}
+            </div>
+
+            {runState.revealedBossHint && (
+              <div className="bg-amber-950/15 border border-amber-500/20 p-2.5 rounded text-xs text-amber-200 flex items-start gap-2">
+                <AlertTriangle className="w-4 h-4 text-amber-400 flex-shrink-0 mt-0.5" />
+                <div>
+                  <span className="font-bold text-amber-300">🔍 보스 약점 징후 확보:</span>{' '}
+                  {runState.revealedBossHint}
+                </div>
+              </div>
+            )}
+
+            {hasRiskTags && (
+              <div className="flex flex-wrap gap-1.5 pt-1">
+                {runState.riskTags?.map((tag: string, idx: number) => (
+                  <span key={idx} className="bg-cyan-500/10 border border-cyan-500/30 text-cyan-300 text-[10px] px-2 py-0.5 rounded font-medium">
+                    #{tag}
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
+        )
+      })()}
+
       {/* 3. Dungeon Map / Timeline */}
       <div className="panel p-4 border-zinc-700/40 bg-zinc-900/60">
         <div className="system-text text-[10px] text-zinc-400 tracking-wider mb-3">DUNGEON TIMELINE MAP</div>
@@ -3237,7 +3339,7 @@ function GateRunPanel({
                         return (
                           <div key={`${mId}-${idx}`} className="text-xs text-rose-200 font-medium flex items-center justify-between border-b border-zinc-800/40 pb-1">
                             <span>• {monster.name} ({monster.rank}-RANK)</span>
-                            <span className="text-[9px] text-rose-400/80">HP 계수 x{(activeDetailEnc.difficultyMod ?? 1.0).toFixed(1)}</span>
+                            <span className="text-[9px] text-rose-400/80">HP 계수 x{computedDiffMod.toFixed(2)}</span>
                           </div>
                         )
                       })}

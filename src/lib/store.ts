@@ -111,7 +111,7 @@ import {
   RIFT_REGIONS,
   RIFT_NODES,
 } from './seed'
-import { generateGateRunState, hydrateGateRunEncounterChoices } from './gateRunEvents'
+import { generateGateRunState, hydrateGateRunEncounterChoices, getChoiceEffectType } from './gateRunEvents'
 import { PROMOTION_EXAM_DEFINITIONS } from './promotionExams'
 import {
   CATEGORY_TO_STAT,
@@ -1643,6 +1643,7 @@ const appendManualWaveClearLogs = (params: {
   isRedGate?: boolean
   isPromotionExam?: boolean
   targetGrade?: HunterGradeTier
+  difficultyMod?: number
 }): {
   logs: BattleTurn[]
   monster: BattleActorState
@@ -1689,10 +1690,17 @@ const appendManualWaveClearLogs = (params: {
       nextMonsterDef,
       params.pressureSnapshot,
       params.isRedGate,
-      undefined,
+      params.difficultyMod,
       params.isPromotionExam,
       params.targetGrade
     )
+    const diffMod = params.difficultyMod ?? 1.0
+    if (diffMod !== 1.0) {
+      monster.maxHp = Math.round(monster.maxHp * diffMod)
+      monster.hp = monster.maxHp
+      monster.atk = Math.round(monster.atk * diffMod)
+      monster.def = Math.round(monster.def * diffMod)
+    }
     logs = [
       ...logs,
       createManualSystemLog(
@@ -4883,8 +4891,16 @@ export const useGame = create<GameState>()(
           const regionId = node.regionId
           const regionState = nextLivingWorld.regions[regionId]
           if (regionState) {
-            // 정화 상수에 맞춘 오염도 차감 (CLEANSE_MIN = 1, CLEANSE_RANGE = 2)
-            const cleanse = Math.round(1 + Math.random() * 2)
+            const activeGate = s.activeGate
+            const relief = (activeGate && activeGate.gateId === nodeId && activeGate.runState)
+              ? (activeGate.runState.contaminationRelief ?? 0)
+              : 0
+            
+            let cleanse = Math.round(1 + Math.random() * 2)
+            if (relief > 0) {
+              cleanse += Math.round(relief / 5)
+            }
+            
             const nextCorruption = Math.max(0, regionState.corruption - cleanse)
             const nextActiveGateIds = regionState.activeGateIds.filter((id) => id !== nodeId)
 
@@ -4900,7 +4916,7 @@ export const useGame = create<GameState>()(
             const rName = RIFT_REGIONS.find((r) => r.id === regionId)?.name ?? regionId.toUpperCase()
             const eventLogs = [
               ...nextLivingWorld.eventLogs,
-              `[Day ${nextLivingWorld.day}] 🛡️ 헌터(플레이어)가 [${node.name}] 정화에 성공했습니다! 지역 오염도 -${cleanse}%`,
+              `[Day ${nextLivingWorld.day}] 🛡️ 헌터(플레이어)가 [${node.name}] 정화에 성공했습니다! 지역 오염도 -${cleanse}%${relief > 0 ? ` (정화 증폭 효과 +${Math.round(relief / 5)}% 반영)` : ''}`,
             ].slice(-60)
 
             nextLivingWorld = {
@@ -6069,17 +6085,43 @@ export const useGame = create<GameState>()(
         const initialActiveEffects = createGateSuccessCombatEffects(gateSuccessBonus, 'player')
         const player = createPlayerBattleActor(s.hunter.name || 'Hunter', playerStats, allPlayerSkills)
         const isRedGate = Boolean(activeGate.runState?.redGateState && (activeGate.runState.redGateState.status === 'opened' || activeGate.runState.redGateState.status === 'cleared'))
+        
+        let runStateMod = activeGate.runState ? { ...activeGate.runState } : undefined
+        let computedDifficultyMod = activeGate.runState?.difficultyMod ?? 1.0
+
+        if (runStateMod && activeEncounter && activeGate.source === 'worldmap') {
+          const isBoss = activeEncounter.isBoss || activeEncounter.type === 'boss'
+          if (isBoss) {
+            const bossDelta = Math.max(-0.10, Math.min(0.10, runStateMod.bossDifficultyDelta ?? 0))
+            computedDifficultyMod = computedDifficultyMod * (1 + bossDelta)
+          } else {
+            const combatDelta = Math.max(-0.15, Math.min(0.15, runStateMod.nextCombatDifficultyDelta ?? 0))
+            computedDifficultyMod = computedDifficultyMod * (1 + combatDelta)
+            // Consume nextCombatDifficultyDelta
+            runStateMod.nextCombatDifficultyDelta = 0
+          }
+        }
+
         const monster = createMonsterBattleActor(
           monsters[0],
           activeGate.runState?.pressureSnapshot,
           isRedGate,
-          activeGate.runState?.difficultyMod,
+          computedDifficultyMod,
           activeGate.runState?.isPromotionExam,
           activeGate.runState?.targetGrade
         )
 
+        // Apply computedDifficultyMod to the monster stats since createMonsterBattleActor in game.ts doesn't apply it
+        if (computedDifficultyMod !== 1.0) {
+          monster.maxHp = Math.round(monster.maxHp * computedDifficultyMod)
+          monster.hp = monster.maxHp
+          monster.atk = Math.round(monster.atk * computedDifficultyMod)
+          monster.def = Math.round(monster.def * computedDifficultyMod)
+        }
+
         set({
           gateStatus,
+          activeGate: runStateMod ? { ...activeGate, runState: runStateMod } : activeGate,
           manualBattleSession: {
             gateId: gate.id,
             gateName: gate.name,
@@ -6102,6 +6144,7 @@ export const useGame = create<GameState>()(
             source: activeGate.runState?.isPromotionExam
               ? 'promotion_exam'
               : (activeGate.runState?.redGateState ? 'red_gate' : 'gate'),
+            difficultyMod: computedDifficultyMod,
           },
         })
       },
@@ -6296,6 +6339,7 @@ export const useGame = create<GameState>()(
             isRedGate,
             isPromotionExam: activeGate.runState?.isPromotionExam,
             targetGrade: activeGate.runState?.targetGrade,
+            difficultyMod: session.difficultyMod,
           })
           logs = waveUpdate.logs
           monster = waveUpdate.monster
@@ -6474,6 +6518,17 @@ export const useGame = create<GameState>()(
 
         if (!choice) return
 
+        // Validate coop/solo locks
+        const isCoopActive = activeGate.helperHunterIds && activeGate.helperHunterIds.length > 0
+        const isLockedByCoop = choice.requiresCoop && !isCoopActive
+        const isLockedBySolo = choice.requiresSolo && isCoopActive
+        if (isLockedByCoop || isLockedBySolo) {
+          if (import.meta.env.DEV) {
+            console.warn('[GateRun] Choice is locked by condition constraints', { choiceId, isCoopActive })
+          }
+          return
+        }
+
         currentEncounter.selectedChoiceId = choiceId
         currentEncounter.status = 'cleared'
         run.clearedEncounterIds = [...run.clearedEncounterIds, currentEncounter.id]
@@ -6493,6 +6548,138 @@ export const useGame = create<GameState>()(
           if (reward.gold) run.accumulatedRewards.gold += reward.gold
           if (reward.essence) run.accumulatedRewards.essence += reward.essence
           if (reward.xp) run.accumulatedRewards.xp += reward.xp
+        }
+
+        // Apply A-2 choices effects for worldmap nodes
+        if (activeGate.source === 'worldmap') {
+          const effectType = getChoiceEffectType(choice)
+          
+          // Get rank scaling multiplier
+          const gate = GATE_DEFINITIONS.find(g => g.id === run.gateId) || activeGate.customGateDef
+          const rank = gate?.rank ?? 'E'
+          const rankMult = rank === 'E' || rank === 'D' ? 0.6 : rank === 'C' || rank === 'B' ? 0.8 : rank === 'A' ? 1.0 : 1.3
+          
+          const contamination = activeGate.customGateDef?.contamination ?? 0
+          const daysRemaining = activeGate.customGateDef?.daysRemaining
+
+          let outcomeText = `선택: "${choice.label}"`
+          
+          switch (effectType) {
+            case 'stabilize': {
+              let baseDelta = 0.05 + Math.random() * 0.05
+              if (contamination > 50) baseDelta *= 1.2
+              if (daysRemaining !== undefined && daysRemaining <= 2) baseDelta += 0.02
+              
+              const delta = baseDelta * rankMult
+              run.nextCombatDifficultyDelta = Math.max(-0.15, Math.min(0.15, (run.nextCombatDifficultyDelta ?? 0) - delta))
+              
+              outcomeText = `피난 및 대피로를 안정적으로 확보했습니다. 다음 전투 난이도가 감소합니다. (${Math.round(-delta * 100)}%)`
+              break
+            }
+            case 'breakthrough': {
+              let baseDiffDelta = 0.05 + Math.random() * 0.07
+              let baseRewardDelta = 0.05 + Math.random() * 0.10
+              
+              if (contamination > 50) baseDiffDelta += 0.03
+              if (daysRemaining !== undefined && daysRemaining <= 2) {
+                baseDiffDelta += 0.04
+                baseRewardDelta += 0.05
+              }
+
+              const diffDelta = baseDiffDelta * rankMult
+              const rewardDelta = baseRewardDelta * rankMult
+
+              run.nextCombatDifficultyDelta = Math.max(-0.15, Math.min(0.15, (run.nextCombatDifficultyDelta ?? 0) + diffDelta))
+              run.rewardMultiplier = Math.max(0.1, Math.min(2.0, run.rewardMultiplier + rewardDelta))
+
+              outcomeText = `균열 중심부로 무리하게 강행 돌파합니다. 다음 전투 난이도가 상승하고 보상 배율이 추가됩니다. (난이도 +${Math.round(diffDelta * 100)}%, 보상 +${Math.round(rewardDelta * 100)}%)`
+              break
+            }
+            case 'rescue': {
+              let goldBonus = Math.round(250 + Math.random() * 150)
+              let essenceBonus = Math.round(50 + Math.random() * 50)
+              if (daysRemaining !== undefined && daysRemaining <= 2) {
+                goldBonus = Math.round(goldBonus * 1.3)
+                essenceBonus = Math.round(essenceBonus * 1.3)
+              }
+              goldBonus = Math.round(goldBonus * rankMult)
+              essenceBonus = Math.round(essenceBonus * rankMult)
+
+              run.accumulatedRewards.gold += goldBonus
+              run.accumulatedRewards.essence += essenceBonus
+
+              const riskDelta = daysRemaining !== undefined && daysRemaining <= 2 ? 0.02 : 0.04
+              run.nextCombatDifficultyDelta = Math.max(-0.15, Math.min(0.15, (run.nextCombatDifficultyDelta ?? 0) + riskDelta))
+
+              outcomeText = `위험 지대의 고립 대원을 구출하여 물자를 입수했습니다. 다음 전투 위험도가 미세하게 증가하지만 자원을 추가 획득합니다. (골드 +${goldBonus}, 정수 +${essenceBonus})`
+              break
+            }
+            case 'analyze': {
+              let baseDelta = 0.05 + Math.random() * 0.05
+              if (contamination !== undefined && contamination <= 30) baseDelta += 0.02
+
+              const delta = baseDelta * rankMult
+              run.bossDifficultyDelta = Math.max(-0.10, Math.min(0.10, (run.bossDifficultyDelta ?? 0) - delta))
+              run.revealedBossHint = `보스의 불안정한 차원 마력 교란 장치를 파악했습니다. 최종 보스전의 체력/공격 계수가 ${Math.round(delta * 100)}% 약화됩니다.`
+
+              outcomeText = `보스의 공격 주파수를 해독하여 약점을 도출했습니다. 보스전의 마력 압박이 감소합니다. (보스 난이도 -${Math.round(delta * 100)}%)`
+              break
+            }
+            case 'coop': {
+              if (isCoopActive) {
+                let baseDelta = 0.06 + Math.random() * 0.06
+                const delta = baseDelta * rankMult
+                run.nextCombatDifficultyDelta = Math.max(-0.15, Math.min(0.15, (run.nextCombatDifficultyDelta ?? 0) - delta))
+                run.rewardMultiplier = Math.max(0.1, run.rewardMultiplier - 0.03)
+
+                const livingWorld = get().livingWorld
+                let radioSenderName = '공조 헌터'
+                if (livingWorld && activeGate.helperHunterIds && activeGate.helperHunterIds.length > 0) {
+                  const firstHelper = livingWorld.namedHunters[activeGate.helperHunterIds[0]]
+                  if (firstHelper) radioSenderName = firstHelper.name
+                }
+                
+                run.radioLine = `${radioSenderName}: "정면 진입로는 확보했다. 우리가 엄호할 테니 안전하게 틈을 뚫고 지나가라!"`
+                outcomeText = `${radioSenderName} 헌터와 연계 작전을 감행하여 위협을 격리했습니다. 다음 전투 난이도가 감소하지만 분배 규정으로 보상이 소폭 하락합니다.`
+              } else {
+                run.nextCombatDifficultyDelta = Math.max(-0.15, (run.nextCombatDifficultyDelta ?? 0) - 0.05)
+                outcomeText = `지원 병력이 복귀하여 독자적으로 전열을 정비했습니다. 다음 전투 난이도가 소폭 완화됩니다.`
+              }
+              break
+            }
+            case 'solo': {
+              const diffDelta = 0.10 * rankMult
+              const rewardDelta = 0.12 * rankMult
+
+              run.nextCombatDifficultyDelta = Math.max(-0.15, Math.min(0.15, (run.nextCombatDifficultyDelta ?? 0) + diffDelta))
+              run.rewardMultiplier = Math.max(0.1, Math.min(2.0, run.rewardMultiplier + rewardDelta))
+
+              outcomeText = `단독 기동으로 지맥 침식 속으로 직접 뛰어듭니다. 적의 포위망에 걸려 다음 전투 난이도가 크게 증가하지만, 모든 보상을 독식합니다.`
+              break
+            }
+            case 'cleanse': {
+              let baseCleanse = 12 + Math.random() * 6
+              if (contamination > 50) baseCleanse *= 1.2
+              const finalCleanse = Math.round(baseCleanse * rankMult)
+
+              run.contaminationRelief = Math.max(0, Math.min(50, (run.contaminationRelief ?? 0) + finalCleanse))
+              run.accumulatedRisk = Math.max(0, run.accumulatedRisk - 10)
+
+              outcomeText = `이계의 정수 여파를 정화하여 지맥 압박을 낮추었습니다. 누적 위험도가 감소하고 최종 클리어 시 노드 오염 정화 강도가 추가 증폭됩니다.`
+              break
+            }
+            case 'scout': {
+              run.riskTags = Array.from(new Set([...(run.riskTags ?? []), '정찰완료', '시야확보']))
+              let baseDelta = 0.03
+              if (contamination !== undefined && contamination <= 30) baseDelta += 0.02
+              
+              run.nextCombatDifficultyDelta = Math.max(-0.15, (run.nextCombatDifficultyDelta ?? 0) - baseDelta)
+              
+              outcomeText = `봉쇄 구역 정밀 정찰에 성공했습니다. 전방 병력 배치 및 이상 왜곡 좌표를 파악하여 안정적인 전진이 가능합니다.`
+              break
+            }
+          }
+          run.lastEventOutcomeText = outcomeText
         }
 
         // Red Gate Instability 롤링 연동
@@ -6585,6 +6772,9 @@ export const useGame = create<GameState>()(
           const rew = choice.immediateReward
           if (rew.gold) lines.push(`골드 획득: +${rew.gold}`)
           if (rew.essence) lines.push(`마력 정수 획득: +${rew.essence}`)
+        }
+        if (run.lastEventOutcomeText) {
+          lines.push(run.lastEventOutcomeText)
         }
 
         set((prev) => ({
@@ -6899,6 +7089,7 @@ export const useGame = create<GameState>()(
             isRedGate,
             isPromotionExam: activeGate.runState?.isPromotionExam,
             targetGrade: activeGate.runState?.targetGrade,
+            difficultyMod: session.difficultyMod,
           })
           logs = waveUpdate.logs
           monster = waveUpdate.monster
@@ -7009,6 +7200,7 @@ export const useGame = create<GameState>()(
               isRedGate,
               isPromotionExam: activeGate.runState?.isPromotionExam,
               targetGrade: activeGate.runState?.targetGrade,
+              difficultyMod: session.difficultyMod,
             })
             logs = waveUpdate.logs
             monster = waveUpdate.monster
@@ -7534,9 +7726,10 @@ export const useGame = create<GameState>()(
           }
 
           const rewardRatio = Math.max(COOP_REWARD_MIN_RATIO, 1 - COOP_REWARD_PENALTY_PER_HELPER * helperCount)
-          const finalGold = Math.round(baseGold * rewardRatio)
-          const finalXp = Math.round(baseHunterXp * rewardRatio)
-          const finalEssence = Math.max(1, Math.round(baseEssence * rewardRatio))
+          const runMultiplier = activeGate.runState?.rewardMultiplier ?? 1.0
+          const finalGold = Math.round(baseGold * rewardRatio * runMultiplier)
+          const finalXp = Math.round(baseHunterXp * rewardRatio * runMultiplier)
+          const finalEssence = Math.max(1, Math.round(baseEssence * rewardRatio * runMultiplier))
 
           if (finalXp > 0) {
             const xpResult = applyXp(s.hunter, finalXp, 'challenge')

@@ -1008,6 +1008,7 @@ export interface GateRunEventChoice {
   requiresCoop?: boolean
   requiresSolo?: boolean
   conditionHint?: string
+  effectType?: 'stabilize' | 'breakthrough' | 'rescue' | 'analyze' | 'coop' | 'solo' | 'cleanse' | 'scout'
 }
 
 export interface GateRunEncounter {
@@ -1074,6 +1075,17 @@ export interface GateRunState {
   difficultyMod?: number
   isPromotionExam?: boolean
   targetGrade?: HunterGradeTier
+  
+  // A-2 Run-level modifiers
+  nextCombatDifficultyDelta?: number
+  bossDifficultyDelta?: number
+  rewardMultiplierDelta?: number
+  contaminationRelief?: number
+  eliteChanceDelta?: number
+  revealedBossHint?: string
+  lastEventOutcomeText?: string
+  radioLine?: string
+  riskTags?: string[]
 }
 
 
@@ -1204,6 +1216,7 @@ export interface ManualBattleSession {
   pressureSnapshot?: RealityPressureSnapshot
   isRedGate?: boolean
   helperHunterIds?: string[]
+  difficultyMod?: number
 }
 
 export type ManualBattleAction =
