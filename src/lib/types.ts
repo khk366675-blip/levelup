@@ -933,6 +933,7 @@ export interface GateDefinition {
   id: string
   name: string
   subRegionId?: string
+  regionId?: string
   description: string
   rank: GateRank
 
@@ -946,6 +947,13 @@ export interface GateDefinition {
   failPenaltyId: string
 
   expiresInHours: number
+
+  // [NEW] Living Rift World dynamic parameters
+  daysRemaining?: number
+  contamination?: number
+  hasHelpers?: boolean
+  helperHunterCount?: number
+  isWorldNode?: boolean
 }
 
 export interface ActiveGate {
@@ -996,6 +1004,10 @@ export interface GateRunEventChoice {
   hpCostPercent?: number
   healPercent?: number
   addEncounterType?: GateRunEncounterType
+  // [NEW] Conditions for regional events
+  requiresCoop?: boolean
+  requiresSolo?: boolean
+  conditionHint?: string
 }
 
 export interface GateRunEncounter {

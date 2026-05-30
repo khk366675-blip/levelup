@@ -5014,12 +5014,28 @@ export const useGame = create<GameState>()(
         const gate = customGateDef || GATE_DEFINITIONS.find(g => g.id === gateId)
         if (!gate) return
 
+        let enrichedGateDef = gate
+        if (source === 'worldmap' && s.livingWorld) {
+          const node = s.livingWorld.riftNodes[gateId] || RIFT_NODES.find(n => n.id === gateId)
+          const region = node ? s.livingWorld.regions[node.regionId] : undefined
+          enrichedGateDef = {
+            ...gate,
+            regionId: node?.regionId || 'kr',
+            subRegionId: node?.subRegionId || node?.regionId || 'default',
+            daysRemaining: node?.daysRemaining,
+            contamination: region?.corruption ?? 0,
+            hasHelpers: (helperHunterIds && helperHunterIds.length > 0) ? true : false,
+            helperHunterCount: helperHunterIds?.length ?? 0,
+            isWorldNode: true
+          }
+        }
+
         const now = new Date()
         const expiresAt = new Date(now)
         expiresAt.setHours(expiresAt.getHours() + gate.expiresInHours)
 
         const seed = `${gate.id}-${Date.now()}-${Math.floor(Math.random() * 100000)}`
-        const runState = generateGateRunState(gate.id, seed, undefined, gate)
+        const runState = generateGateRunState(gate.id, seed, undefined, enrichedGateDef)
 
         // 12-40F: 현실 준비도 보너스를 게이트 런 보상 배율에 적용
         const dp = s.dailyProgression
@@ -5050,7 +5066,7 @@ export const useGame = create<GameState>()(
             source,
             runState,
             helperHunterIds,
-            customGateDef,
+            customGateDef: enrichedGateDef,
           },
           messages: [...s.messages, {
             id: uid(),
@@ -6432,7 +6448,7 @@ export const useGame = create<GameState>()(
         let choice = currentEncounter.eventChoices?.find(c => c.id === choiceId)
         if (!choice) {
           // 1. 현재 encounter 실시간 재수화 복구 시도
-          const hydrated = hydrateGateRunEncounterChoices(currentEncounter)
+          const hydrated = hydrateGateRunEncounterChoices(currentEncounter, activeGate)
           currentEncounter.eventChoices = hydrated.eventChoices
           currentEncounter.eventTemplateId = hydrated.eventTemplateId
           currentEncounter.title = hydrated.title

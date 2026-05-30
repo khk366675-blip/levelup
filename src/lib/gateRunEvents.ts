@@ -3,6 +3,7 @@ import { GATE_DEFINITIONS, MONSTER_DEFINITIONS } from './seed'
 import { PROMOTION_EXAM_DEFINITIONS } from './promotionExams'
 import { MONARCHS, FINAL_ANGEL } from './monarchs'
 import { getRegionalTheme } from './livingWorldGateContent'
+import { getWorldGateEventPack, REGIONAL_EVENT_PACKS } from './livingWorldGateEvents'
 
 
 export interface GateTheme {
@@ -568,9 +569,12 @@ export function generateGateRunState(gateId: string, seed: string, examGrade?: H
   const gate = customGateDef || GATE_DEFINITIONS.find(g => g.id === gateId)
   const rank: GateRank = gate?.rank ?? 'E'
 
-  // [NEW] 지역색 테마 데이터 로드
+  // [NEW] 지역색 테마 데이터 및 국가/지역별 이벤트팩 로드
   const subRegionId = customGateDef?.subRegionId || (gateId.startsWith('node-') ? gateId.split('-')[2] : undefined) || 'default'
   const regionalTheme = getRegionalTheme(subRegionId)
+  const isWorldNode = customGateDef?.isWorldNode || gateId.startsWith('node-') || gateId.startsWith('gate-spawn-')
+  const regionId = (customGateDef as any)?.regionId || (gateId.startsWith('node-') ? 'kr' : undefined)
+  const eventPack = isWorldNode ? getWorldGateEventPack(regionId, subRegionId) : undefined
 
   // 1. Theme 선택
   const theme = GATE_THEMES[Math.floor(rand() * GATE_THEMES.length)]
@@ -764,7 +768,9 @@ export function generateGateRunState(gateId: string, seed: string, examGrade?: H
     }
 
     // 지역 테마 데이터 로드
-    const stepName = regionalTheme.timelineNames[i] || regionalTheme.timelineNames[i % regionalTheme.timelineNames.length] || '심연'
+    const stepName = eventPack
+      ? (eventPack.timelineLabels[i] || eventPack.timelineLabels[i % eventPack.timelineLabels.length])
+      : (regionalTheme.timelineNames[i] || regionalTheme.timelineNames[i % regionalTheme.timelineNames.length] || '심연')
     let rTitle = ''
     let rDesc = ''
     if (regionalTheme.encounterTitles[encType] && regionalTheme.encounterTitles[encType].length > 0) {
@@ -788,6 +794,12 @@ export function generateGateRunState(gateId: string, seed: string, examGrade?: H
         } else if (rTitle) {
           title = `${rTitle} [BOSS]`
           description = rDesc || description
+        }
+
+        // [NEW] 보스 방 진입 전 전조 문구 가리비식 보강
+        if (eventPack && eventPack.bossForeshadowings && eventPack.bossForeshadowings.length > 0) {
+          const foreshadow = eventPack.bossForeshadowings[Math.floor(rand() * eventPack.bossForeshadowings.length)]
+          description = `${foreshadow} ${description}`
         }
         
         // 마지막 몬스터 혹은 가장 무거운 몬스터
@@ -836,32 +848,72 @@ export function generateGateRunState(gateId: string, seed: string, examGrade?: H
         title = `[승급 심사] ${title}`
       }
     } else if (encType === 'event') {
-      // 이벤트 선택 전수 가드 및 검증 (빈 선택지 생성 원천 방지)
-      const validTemplates = GATE_RUN_EVENTS.filter(evt => evt && evt.id && evt.choices && evt.choices.length >= 2)
-      if (validTemplates.length > 0) {
-        const evtTemplate = validTemplates[Math.floor(rand() * validTemplates.length)]
-        title = examDef ? `[승급 심사] 돌발 상황: ${evtTemplate.title}` : `의외의 징후: ${evtTemplate.title}`
+      let evtTemplate: any = undefined
+      if (eventPack && eventPack.eventEncounters.length > 0) {
+        const rankValues: Record<GateRank, number> = { E: 1, D: 2, C: 3, B: 4, A: 5, S: 6 }
+        const currentVal = rankValues[rank] || 1
+        const validRegional = eventPack.eventEncounters.filter(evt => {
+          if (!evt.minGrade) return true
+          const minVal = rankValues[evt.minGrade] || 1
+          return currentVal >= minVal
+        })
+        const pool = validRegional.length > 0 ? validRegional : eventPack.eventEncounters
+        evtTemplate = pool[Math.floor(rand() * pool.length)]
+      }
+
+      if (evtTemplate) {
+        title = evtTemplate.title
         description = evtTemplate.description
-        if (rTitle && !examDef) {
-          title = `의외의 징후: ${rTitle}`
-          description = rDesc || description
-        }
         eventTemplateId = evtTemplate.id
-        eventChoices = evtTemplate.choices.map(c => ({ ...c }))
-      } else {
-        // 극단적 템플릿 부재 상황 시 안전한 treasure로 자동 대체
-        encType = 'treasure'
-        const baseGold = (rank === 'E' || rank === 'D') ? 400 : (rank === 'C' || rank === 'B') ? 800 : 1500
-        const baseEssence = (rank === 'E' || rank === 'D') ? 100 : (rank === 'C' || rank === 'B') ? 200 : 400
-        const goldAmt = Math.round(baseGold * (0.8 + rand() * 0.4))
-        const essAmt = Math.round(baseEssence * (0.8 + rand() * 0.4))
-        title = examDef ? '[승급 심사] 흘러나온 차원 보물 방' : '흘러나온 차원 보물 방'
-        description = '어둡고 비좁은 통로 끝에서 찬란하게 금색 마력 광채를 발하는 오래된 상자를 찾아냈습니다!'
-        if (rTitle && !examDef) {
-          title = rTitle
-          description = rDesc || description
+        
+        // 오염도 및 잔여일 데드라인 상황 묘사 동적 적용
+        if (customGateDef?.contamination && customGateDef.contamination > 50) {
+          description += ` (🚨 경고: 이 지역의 마력 오염도가 ${customGateDef.contamination}%에 달해 위험이 도사리고 있습니다!)`
         }
-        treasureReward = { gold: goldAmt, essence: essAmt, xp: 0, items: [] }
+        if (customGateDef?.daysRemaining !== undefined && customGateDef.daysRemaining <= 2) {
+          description += ` (⏳ D-${customGateDef.daysRemaining}! 전선 붕괴가 임박하여 시야가 좁아지고 위험 기동이 제약을 받습니다.)`
+        }
+
+        eventChoices = evtTemplate.choices.map((c: any) => {
+          const resolved = { ...c }
+          if (customGateDef?.hasHelpers) {
+            if (c.coopLabel) resolved.label = c.coopLabel
+            if (c.coopDescription) resolved.description = c.coopDescription
+            if (c.coopRiskDelta !== undefined) resolved.riskDelta = c.coopRiskDelta
+            if (c.coopRewardMultiplierDelta !== undefined) resolved.rewardMultiplierDelta = c.coopRewardMultiplierDelta
+            if (c.coopImmediateReward) resolved.immediateReward = c.coopImmediateReward
+            if (c.coopNextEncounterModifier) resolved.nextEncounterModifier = c.coopNextEncounterModifier
+          }
+          return resolved
+        })
+      } else {
+        // 이벤트 선택 전수 가드 및 검증 (빈 선택지 생성 원천 방지)
+        const validTemplates = GATE_RUN_EVENTS.filter(evt => evt && evt.id && evt.choices && evt.choices.length >= 2)
+        if (validTemplates.length > 0) {
+          const evtTemplate = validTemplates[Math.floor(rand() * validTemplates.length)]
+          title = examDef ? `[승급 심사] 돌발 상황: ${evtTemplate.title}` : `의외의 징후: ${evtTemplate.title}`
+          description = evtTemplate.description
+          if (rTitle && !examDef) {
+            title = `의외의 징후: ${rTitle}`
+            description = rDesc || description
+          }
+          eventTemplateId = evtTemplate.id
+          eventChoices = evtTemplate.choices.map(c => ({ ...c }))
+        } else {
+          // 극단적 템플릿 부재 상황 시 안전한 treasure로 자동 대체
+          encType = 'treasure'
+          const baseGold = (rank === 'E' || rank === 'D') ? 400 : (rank === 'C' || rank === 'B') ? 800 : 1500
+          const baseEssence = (rank === 'E' || rank === 'D') ? 100 : (rank === 'C' || rank === 'B') ? 200 : 400
+          const goldAmt = Math.round(baseGold * (0.8 + rand() * 0.4))
+          const essAmt = Math.round(baseEssence * (0.8 + rand() * 0.4))
+          title = examDef ? '[승급 심사] 흘러나온 차원 보물 방' : '흘러나온 차원 보물 방'
+          description = '어둡고 비좁은 통로 끝에서 찬란하게 금색 마력 광채를 발하는 오래된 상자를 찾아냈습니다!'
+          if (rTitle && !examDef) {
+            title = rTitle
+            description = rDesc || description
+          }
+          treasureReward = { gold: goldAmt, essence: essAmt, xp: 0, items: [] }
+        }
       }
     } else if (encType === 'rest') {
       const restTypes = [
@@ -966,27 +1018,67 @@ export function generateGateRunState(gateId: string, seed: string, examGrade?: H
 
 // 20개 이벤트 템플릿 탐색 헬퍼
 export function getGateRunEventTemplate(templateId: string): GateRunEventTemplate | undefined {
-  return GATE_RUN_EVENTS.find(t => t.id === templateId)
+  const standard = GATE_RUN_EVENTS.find(t => t.id === templateId)
+  if (standard) return standard
+
+  // Search regional event packs
+  for (const pack of Object.values(REGIONAL_EVENT_PACKS)) {
+    const found = pack.eventEncounters.find(e => e.id === templateId)
+    if (found) {
+      return {
+        id: found.id,
+        title: found.title,
+        description: found.description,
+        choices: found.choices
+      }
+    }
+  }
+  return undefined
 }
 
 // 깨지거나 선택지가 빈 이벤트 방 복구 및 재수화(Hydration) 헬퍼
-export function hydrateGateRunEncounterChoices(encounter: GateRunEncounter): GateRunEncounter {
+export function hydrateGateRunEncounterChoices(encounter: GateRunEncounter, activeGate?: any): GateRunEncounter {
   if (encounter.type !== 'event') return encounter
 
-  // 이미 정상적인 선택지가 2개 이상 채워져 있다면 그대로 반환
+  // 이미 정상적인 선택지가 2개 이상 채워져 있고, 특수 치환이 필요하지 않다면 그대로 반환
   if (encounter.eventChoices && encounter.eventChoices.length >= 2) {
-    return encounter
+    if (!activeGate?.customGateDef?.hasHelpers) {
+      return encounter
+    }
   }
 
   // eventTemplateId가 존재한다면 템플릿 DB 풀에서 원본을 매핑하여 신속 수화 복원
   if (encounter.eventTemplateId) {
     const template = getGateRunEventTemplate(encounter.eventTemplateId)
     if (template && template.choices && template.choices.length >= 2) {
+      const hasHelpers = activeGate?.customGateDef?.hasHelpers
+      const resolvedChoices = template.choices.map((c: any) => {
+        const resolved = { ...c }
+        if (hasHelpers) {
+          if (c.coopLabel) resolved.label = c.coopLabel
+          if (c.coopDescription) resolved.description = c.coopDescription
+          if (c.coopRiskDelta !== undefined) resolved.riskDelta = c.coopRiskDelta
+          if (c.coopRewardMultiplierDelta !== undefined) resolved.rewardMultiplierDelta = c.coopRewardMultiplierDelta
+          if (c.coopImmediateReward) resolved.immediateReward = c.coopImmediateReward
+          if (c.coopNextEncounterModifier) resolved.nextEncounterModifier = c.coopNextEncounterModifier
+        }
+        return resolved
+      })
+
+      let description = encounter.description || template.description
+      const customGateDef = activeGate?.customGateDef
+      if (customGateDef?.contamination && customGateDef.contamination > 50 && !description.includes('오염도')) {
+        description += ` (🚨 경고: 이 지역의 마력 오염도가 ${customGateDef.contamination}%에 달해 위험이 도사리고 있습니다!)`
+      }
+      if (customGateDef?.daysRemaining !== undefined && customGateDef.daysRemaining <= 2 && !description.includes('D-')) {
+        description += ` (⏳ D-${customGateDef.daysRemaining}! 전선 붕괴가 임박하여 시야가 좁아지고 위험 기동이 제약을 받습니다.)`
+      }
+
       return {
         ...encounter,
         title: encounter.title || `의외의 징후: ${template.title}`,
-        description: encounter.description || template.description,
-        eventChoices: template.choices.map(c => ({ ...c })),
+        description,
+        eventChoices: resolvedChoices,
       }
     }
   }

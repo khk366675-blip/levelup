@@ -44,6 +44,7 @@ import { ShadowExtractionReveal } from './shadows/ShadowExtractionReveal'
 import { SkillActionCard, skillSourceSortRank, skillTypeSortRank } from './SkillActionCard'
 import { GATE_DEFINITIONS, GATE_PENALTIES, GATE_REWARD_TABLES, MONSTER_DEFINITIONS, SKILL_DEFINITIONS } from '../lib/seed'
 import { GATE_THEMES, GATE_MODIFIERS, hydrateGateRunEncounterChoices } from '../lib/gateRunEvents'
+import { getWorldGateEventPack } from '../lib/livingWorldGateEvents'
 import { pickDirectGateRunEncounterKey } from '../lib/directBattleEncounters'
 import { MONARCHS, FINAL_ANGEL, buildMonarchBattleUnit } from '../lib/monarchs'
 import {
@@ -2820,7 +2821,7 @@ function GateRunPanel({
   const currentEncounterIndex = runState.currentEncounterIndex
   const encounters = runState.encounters
   const rawCurrentEncounter = encounters[currentEncounterIndex]
-  const currentEncounter = useMemo(() => hydrateGateRunEncounterChoices(rawCurrentEncounter), [rawCurrentEncounter])
+  const currentEncounter = useMemo(() => hydrateGateRunEncounterChoices(rawCurrentEncounter, activeGate), [rawCurrentEncounter, activeGate])
 
   const isRedGate = runState.redGateState && (runState.redGateState.status === 'opened' || runState.redGateState.status === 'cleared')
 
@@ -2872,7 +2873,22 @@ function GateRunPanel({
 
   // UI 상에서 선택된 인카운터의 세부 내용
   const rawActiveDetailEnc = encounters.find((e: any) => e.id === (selectedEncId ?? currentEncounter.id)) ?? currentEncounter
-  const activeDetailEnc = useMemo(() => hydrateGateRunEncounterChoices(rawActiveDetailEnc), [rawActiveDetailEnc])
+  const activeDetailEnc = useMemo(() => hydrateGateRunEncounterChoices(rawActiveDetailEnc, activeGate), [rawActiveDetailEnc, activeGate])
+
+  const eventPack = useMemo(() => {
+    if (activeGate.source !== 'worldmap') return null
+    const subRegionId = activeGate.customGateDef?.subRegionId
+    const regionId = activeGate.customGateDef?.regionId
+    return getWorldGateEventPack(regionId, subRegionId)
+  }, [activeGate])
+
+  const getSeededIndex = (seed: string, length: number): number => {
+    let hash = 0
+    for (let i = 0; i < seed.length; i++) {
+      hash = seed.charCodeAt(i) + ((hash << 5) - hash)
+    }
+    return Math.abs(hash) % length
+  }
 
   // 수동 전투 공략
   const onStartManual = () => {
@@ -2937,14 +2953,38 @@ function GateRunPanel({
               <div className="system-text text-[11px] tracking-wider opacity-85">DUNGEON RUN ACTIVATED</div>
             </div>
             <div className="flex flex-wrap items-center gap-3">
-              <h3 className="text-2xl font-bold tracking-tight">{theme.name}</h3>
+              <h3 className="text-2xl font-bold tracking-tight">
+                {eventPack 
+                  ? `[${eventPack.localeName}] ${activeGate.customGateDef?.name || theme.name}`
+                  : theme.name}
+              </h3>
               <span className="text-xs font-semibold px-2 py-0.5 border rounded opacity-90">
-                {theme.tag}
+                {eventPack ? '세계 원정 작전' : theme.tag}
               </span>
             </div>
-            <p className="text-xs text-white/70 mt-2 leading-relaxed max-w-2xl">{theme.description}</p>
+            <p className="text-xs text-white/70 mt-2 leading-relaxed max-w-2xl">
+              {(() => {
+                if (!eventPack) return theme.description
+                const intro = eventPack.introBriefings[getSeededIndex(runState.seed, eventPack.introBriefings.length)]
+                const threat = eventPack.threatBriefings[getSeededIndex(runState.seed, eventPack.threatBriefings.length)]
+                const hasContamination = activeGate.customGateDef?.contamination !== undefined
+                const loveCallBrief = hasContamination ? eventPack.loveCallBriefings[getSeededIndex(runState.seed, eventPack.loveCallBriefings.length)] : ''
+                return `[작전 브리핑] ${intro} ${threat} ${loveCallBrief}`
+              })()}
+            </p>
             <div className="text-[10px] text-white/45 mt-1 border-t border-white/10 pt-1.5">
-              <span className="font-semibold text-amber-300">특수 룰:</span> {theme.specialVariable}
+              <span className="font-semibold text-amber-300">
+                {eventPack ? '작전 환경:' : '특수 룰:'}
+              </span>{' '}
+              {(() => {
+                if (!eventPack) return theme.specialVariable
+                const cVal = activeGate.customGateDef?.contamination
+                const dVal = activeGate.customGateDef?.daysRemaining
+                let extra = ''
+                if (cVal !== undefined) extra += `지맥 오염도: ${cVal}% | `
+                if (dVal !== undefined) extra += `잔여 폭주 기한: D-${dVal}일 | `
+                return `${extra}${theme.specialVariable}`
+              })()}
             </div>
           </div>
 
@@ -3068,11 +3108,31 @@ function GateRunPanel({
                   <span className="font-bold text-cyan-300">피해 감소 -{Math.round(drCoop * 100)}%</span>.
                   (보상 분배에 따라 전리품 배율이 {Math.round(rewardRatio * 100)}%로 차감 반영되었습니다.)
                 </p>
+                {(() => {
+                  const line = eventPack?.coopLines[getSeededIndex(runState.seed, eventPack.coopLines.length)]
+                  if (!line) return null
+                  return (
+                    <p className="mt-2 text-[10.5px] text-cyan-300 border-l border-cyan-500/35 pl-2 italic">
+                      📡 공조 사냥꾼 무선: "{line}"
+                    </p>
+                  )
+                })()}
               </div>
             ) : (
-              <p className="text-[11px] text-rose-300/80 leading-relaxed font-semibold">
-                ⚠️ 아군의 지원 병력 없이 단독으로 침투한 전선입니다. 극한의 단독 원정 디버프 위험에 주의하십시오!
-              </p>
+              <div className="space-y-1.5">
+                <p className="text-[11px] text-rose-300/80 leading-relaxed font-semibold">
+                  ⚠️ 아군의 지원 병력 없이 단독으로 침투한 전선입니다. 극한의 단독 원정 디버프 위험에 주의하십시오!
+                </p>
+                {(() => {
+                  const warning = eventPack?.soloWarnings[getSeededIndex(runState.seed, eventPack.soloWarnings.length)]
+                  if (!warning) return null
+                  return (
+                    <p className="mt-1 text-[10.5px] text-rose-300 border-l border-rose-500/35 pl-2 italic">
+                      🚨 작전 통제 경고: "{warning}"
+                    </p>
+                  )
+                })()}
+              </div>
             )}
           </div>
         )
@@ -3216,20 +3276,59 @@ function GateRunPanel({
                 <div className="text-xs font-semibold text-cyan-300 tracking-wider">차원의 선택지 수집 완료 — 선택하십시오</div>
                 <div className="grid grid-cols-1 gap-2.5">
                   {/* store.ts나 events 데이터 구조에서 choices 매핑 */}
-                  {activeDetailEnc.eventChoices?.map((choice: any) => (
-                    <button
-                      key={choice.id}
-                      type="button"
-                      onClick={() => chooseGateRunEventChoice(choice.id)}
-                      className="text-left p-3.5 border border-cyan-500/30 bg-cyan-950/10 hover:bg-cyan-950/20 hover:border-cyan-400 rounded-lg transition-all duration-200 group"
-                    >
-                      <div className="font-bold text-cyan-200 group-hover:text-cyan-100 flex items-center gap-2 text-sm">
-                        <ChevronRight className="w-4 h-4 text-cyan-400" />
-                        {choice.label}
-                      </div>
-                      <div className="text-xs text-white/70 mt-1.5 pl-6">{choice.description}</div>
-                    </button>
-                  ))}
+                  {activeDetailEnc.eventChoices?.map((choice: any) => {
+                    const isCoopActive = activeGate.helperHunterIds && activeGate.helperHunterIds.length > 0
+                    const isLockedByCoop = choice.requiresCoop && !isCoopActive
+                    const isLockedBySolo = choice.requiresSolo && isCoopActive
+                    const isLocked = isLockedByCoop || isLockedBySolo
+                    const lockReason = isLockedByCoop
+                      ? (choice.conditionHint || '🚨 [협력 Named 헌터 필요] 이 선택지는 지원 대원이 참가한 상태여야 활성화됩니다.')
+                      : (choice.conditionHint || '🚨 [단독 돌입 필요] 이 선택지는 다른 헌터가 없을 때만 선택 가능합니다.')
+
+                    return (
+                      <button
+                        key={choice.id}
+                        type="button"
+                        onClick={() => !isLocked && chooseGateRunEventChoice(choice.id)}
+                        disabled={isLocked}
+                        className={clsx(
+                          "text-left p-3.5 border rounded-lg transition-all duration-200 group flex flex-col justify-between",
+                          isLocked
+                            ? "border-zinc-800 bg-zinc-950/20 opacity-50 cursor-not-allowed text-zinc-500"
+                            : "border-cyan-500/30 bg-cyan-950/10 hover:bg-cyan-950/20 hover:border-cyan-400 text-cyan-200"
+                        )}
+                      >
+                        <div className={clsx(
+                          "font-bold flex items-center gap-2 text-sm",
+                          isLocked ? "text-zinc-500" : "text-cyan-200 group-hover:text-cyan-100"
+                        )}>
+                          <ChevronRight className={clsx("w-4 h-4", isLocked ? "text-zinc-600" : "text-cyan-400")} />
+                          <span>{choice.label}</span>
+                          {choice.requiresCoop && (
+                            <span className="text-[9px] bg-cyan-500/10 border border-cyan-400/20 text-cyan-300 font-bold px-1.5 py-0.5 rounded">
+                              협력 전용
+                            </span>
+                          )}
+                          {choice.requiresSolo && (
+                            <span className="text-[9px] bg-rose-500/10 border border-rose-400/20 text-rose-300 font-bold px-1.5 py-0.5 rounded">
+                              단독 전용
+                            </span>
+                          )}
+                        </div>
+                        <div className={clsx(
+                          "text-xs mt-1.5 pl-6",
+                          isLocked ? "text-zinc-600" : "text-white/70"
+                        )}>
+                          {choice.description}
+                        </div>
+                        {isLocked && (
+                          <div className="text-[10px] text-amber-400/90 font-bold mt-2 pl-6 animate-pulse">
+                            {lockReason}
+                          </div>
+                        )}
+                      </button>
+                    )
+                  })}
                   {(!activeDetailEnc.eventChoices || activeDetailEnc.eventChoices.length === 0) && (
                     <div className="text-center text-xs text-zinc-500 border border-zinc-800 p-4 rounded-lg">
                       차원 불안정 현상 감지. 마력 공명을 통해 구역 안정화 후 우회하여 다음으로 통과합니다.

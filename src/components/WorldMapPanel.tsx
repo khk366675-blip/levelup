@@ -1224,7 +1224,14 @@ export function WorldMapPanel() {
 
                       {/* 방치 위험 경고 */}
                       <div className="rounded bg-rose-950/20 border border-rose-500/20 p-2 text-[9.5px] leading-relaxed text-rose-200">
-                        <span className="font-bold">⚠️ 방치 시 예상 피해:</span>{' '}
+                        <div className="flex justify-between items-center mb-1">
+                          <span className="font-bold">⚠️ 방치 시 예상 피해:</span>
+                          {selectedNode && livingWorld?.regions[selectedNode.regionId] && (
+                            <span className="text-[9px] bg-rose-500/20 border border-rose-400/30 text-rose-300 font-bold px-1.5 py-0.2 rounded">
+                              현지 오염도: {livingWorld.regions[selectedNode.regionId].corruption}%
+                            </span>
+                          )}
+                        </div>
                         {(selectedNode.daysRemaining ?? 0) <= 2 ? (
                           <span className="text-red-300 font-bold animate-pulse">
                             소멸/폭주 직전! {selectedNode.daysRemaining}일 내 격퇴 실패 시 해당 지역 오염도가 급증하고 방어선이 완전 붕괴됩니다.
