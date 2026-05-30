@@ -1297,6 +1297,14 @@ export interface HardcoreState {
   deathCount: number
   lastHardcoreBackup?: HardcoreBackupMeta
   resetPending?: boolean
+  victoryCount?: number
+  clearHistory?: Array<{
+    day: number
+    seed: number
+    timestamp: number
+    monarchsDefeatedCount: number
+    coopCount: number
+  }>
 }
 
 export interface GateStatus {
@@ -2385,6 +2393,8 @@ export interface LivingWorldState {
   activeMonarchs?: ActiveMonarch[]    // 활성화된 군주들 상태
   homeReachedMonarchId?: string       // 거점에 도달한 군주 ID
   angelReady?: boolean                // 모든 군주 격퇴 시 천사 예고 플래그
+  endingState?: 'none' | 'victory'    // 진엔딩 상태 식별자
+  coopCount?: number                  // 이번 회차 총 협력 횟수
 }
 
 // 시드용 Base 데이터 타입

@@ -10,6 +10,7 @@ import {
   Swords,
   Shield,
   Zap,
+  Trophy,
 } from 'lucide-react'
 import { useGame } from '../lib/store'
 import { RIFT_REGIONS, RIFT_NODES } from '../lib/seed'
@@ -193,6 +194,89 @@ export function WorldMapPanel() {
 
   return (
     <div className="space-y-6 relative">
+      {/* 진엔딩 오버레이 (True Ending Overlay) */}
+      {livingWorld?.endingState === 'victory' && (
+        <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/95 backdrop-blur-lg overflow-y-auto p-4 py-8">
+          <div className="panel corner-bracket border-amber-500/50 bg-ink-950/90 p-8 max-w-2xl w-full shadow-glow-amber animate-scale-in text-center space-y-6">
+            <div className="br" />
+            <div className="flex flex-col items-center gap-2">
+              <div className="rounded-full bg-amber-500/10 border border-amber-500/40 p-4 shadow-glow-amber animate-pulse">
+                <Trophy className="h-10 w-10 text-amber-400 animate-bounce" />
+              </div>
+              <h3 className="text-2xl font-black text-amber-300 tracking-widest mt-4 uppercase">
+                🏆 세계의 위대한 구원자
+              </h3>
+              <div className="text-[10px] text-amber-400 font-mono tracking-widest font-black uppercase">
+                True Ending: Dawn of Dimensional Peace
+              </div>
+            </div>
+
+            <p className="text-sm text-white/80 leading-relaxed max-w-xl mx-auto border-t border-b border-white/5 py-6">
+              인류 역사상 가장 거대했던 차원의 위기가 마침내 막을 내렸습니다.<br/>
+              당신은 심연에서 강림한 8명의 파괴적인 군주들을 모두 물리치고,<br/>
+              마지막으로 강림한 <strong>지고의 심판자(천사)</strong>마저 격퇴하여 대균열의 근원을 완벽히 정화했습니다.<br/>
+              <br/>
+              당신의 흔들리지 않는 의지와 위대한 그림자 군단, 그리고 전 세계 연대 헌터들의 동맹은<br/>
+              멸망의 운명에 쓰러져가던 인류를 구원하고 찬란한 평화의 새벽을 가져왔습니다.<br/>
+              세계의 역사는 영원히 당신의 구원을 기억할 것입니다.
+            </p>
+
+            {/* 이번 회차 기록 브리핑 */}
+            <div className="space-y-3 text-xs max-w-md mx-auto">
+              <div className="text-left font-bold text-white/50 text-[10px] tracking-widest uppercase mb-1">
+                📊 이번 차원 회차 요약 기록
+              </div>
+              <div className="grid grid-cols-2 gap-2 font-medium">
+                <div className="rounded border border-white/5 bg-white/5 px-3 py-2 text-white/70 flex justify-between">
+                  <span>차원 시드(Seed)</span>
+                  <span className="font-bold text-cyan-300">#{livingWorld.seed}</span>
+                </div>
+                <div className="rounded border border-white/5 bg-white/5 px-3 py-2 text-white/70 flex justify-between">
+                  <span>생존/정화 일수</span>
+                  <span className="font-bold text-amber-300">{livingWorld.day}일</span>
+                </div>
+                <div className="rounded border border-white/5 bg-white/5 px-3 py-2 text-white/70 flex justify-between">
+                  <span>격퇴한 군주</span>
+                  <span className="font-bold text-red-400">8 / 8 (완성)</span>
+                </div>
+                <div className="rounded border border-white/5 bg-white/5 px-3 py-2 text-white/70 flex justify-between">
+                  <span>연대 협력 횟수</span>
+                  <span className="font-bold text-purple-300">{livingWorld.coopCount ?? 0}회</span>
+                </div>
+                <div className="rounded border border-white/5 bg-white/5 px-3 py-2 text-white/70 flex justify-between">
+                  <span>최종 헌터 레벨</span>
+                  <span className="font-bold text-emerald-300">Lv.{hunter.level}</span>
+                </div>
+                <div className="rounded border border-white/5 bg-white/5 px-3 py-2 text-white/70 flex justify-between">
+                  <span>복속된 그림자</span>
+                  <span className="font-bold text-purple-300">{ownedShadows.length}명</span>
+                </div>
+              </div>
+              
+              {/* 이전 총 구원 횟수 */}
+              <div className="rounded-lg border border-amber-500/20 bg-amber-500/5 px-3 py-2.5 text-[11px] text-amber-200/90 font-bold flex justify-between items-center font-black">
+                <span>✨ 누적 세계 구원 횟수</span>
+                <span className="text-amber-300 text-sm font-black animate-pulse">
+                  {(useGame.getState().hardcoreState?.victoryCount ?? 0) + 1}회째 구원 완료
+                </span>
+              </div>
+            </div>
+
+            <div className="pt-4 max-w-sm mx-auto">
+              <button
+                onClick={() => {
+                  useGame.getState().triggerVictoryReset()
+                  triggerToast("🌌 차원 이동 완료: 새로운 차원의 세계로 강림했습니다!")
+                }}
+                className="btn btn-primary w-full py-3.5 text-xs font-black tracking-widest text-center cursor-pointer shadow-glow-amber border border-amber-500/50 hover:bg-amber-500/25 hover:text-white transition-all duration-300"
+              >
+                새로운 세계로 차원 이동 (다음 회차 진행)
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* 균열 상태 토스트 안내 */}
       {toastMessage && (
         <div className="fixed bottom-6 right-6 z-50 flex items-center gap-2 rounded-lg border border-purple-500/30 bg-ink-950 px-4 py-3 text-sm text-purple-200 shadow-glow-purple">
@@ -433,6 +517,45 @@ export function WorldMapPanel() {
           </p>
         </div>
       </div>
+
+      {/* 지고의 심판자(천사) 최종전 진입 배너 */}
+      {livingWorld && livingWorld.angelReady && livingWorld.endingState !== 'victory' && (
+        <div className="panel corner-bracket border-amber-500 bg-purple-950/25 p-5 shadow-glow-amber flex flex-col md:flex-row items-center justify-between gap-5 mb-6 animate-pulse">
+          <div className="br" />
+          <div className="flex items-center gap-3">
+            <Trophy className="h-8 w-8 text-amber-400 shrink-0 animate-bounce" />
+            <div>
+              <h3 className="text-base font-black text-amber-300 tracking-wider">🌟 지고의 심판자 강림 (최종 결전)</h3>
+              <p className="text-xs text-purple-200/80 mt-1 leading-relaxed">
+                모든 심연의 군주(8명)가 퇴치되어 차원의 기둥이 무너지고 <strong>지고의 심판자(천사)</strong>가 전역 강림했습니다!<br/>
+                인류의 명운을 건 마지막 격퇴전을 준비하십시오. 이 승리는 차원의 영원한 구원을 의미합니다.
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={() => {
+              setSelectedNode({
+                id: 'angel',
+                regionId: 'kr',
+                name: FINAL_ANGEL.name,
+                x: 50,
+                y: 50,
+                status: 'active',
+                gateDefId: 'angel',
+                difficultyRank: 'S',
+                difficulty: FINAL_ANGEL.recommendedCP,
+                deadline: 999,
+                daysRemaining: 999,
+                isSGrade: true
+              })
+              setSelectedHelpers([])
+            }}
+            className="rounded border border-amber-500/50 bg-amber-500/20 hover:bg-amber-500/35 px-5 py-3 text-xs font-black text-white tracking-widest transition-all cursor-pointer shadow-glow-amber whitespace-nowrap flex items-center gap-1.5 shrink-0"
+          >
+            <Swords className="h-4 w-4 text-amber-300" /> 최종 결전 준비
+          </button>
+        </div>
+      )}
 
       {/* 거점 침공 비상 경고 배너 */}
       {livingWorld && livingWorld.homeReachedMonarchId && (() => {
@@ -766,7 +889,9 @@ export function WorldMapPanel() {
 
             if (isMonarchNode && monarchData) {
               const regionState = livingWorld?.regions[selectedNode.regionId]
-              const namedHuntersInRegion = regionState?.namedHunterIds || []
+              const namedHuntersInRegion = selectedNode.id === 'angel'
+                ? Object.keys(livingWorld?.namedHunters ?? {}).filter(hid => livingWorld?.namedHunters[hid]?.status === 'active')
+                : (regionState?.namedHunterIds || [])
               const activeMonarchState = livingWorld?.activeMonarchs?.find(m => m.monarchId === selectedNode.id)
               const isDefeated = activeMonarchState?.status === 'defeated'
               
@@ -867,10 +992,14 @@ export function WorldMapPanel() {
                     {!isDefeated && namedHuntersInRegion.length > 0 && (
                       <div className="mt-4 rounded-lg border border-yellow-500/30 bg-yellow-500/5 p-3 space-y-2">
                         <div className="text-xs font-black text-yellow-300">
-                          🤝 연대 전투: {RIFT_REGIONS.find((r: RiftRegion) => r.id === selectedNode.regionId)?.name} 협력 헌터
+                          {selectedNode.id === 'angel' 
+                            ? '🤝 인류의 최후 연합: 지고의 심판자 격퇴 연대' 
+                            : `🤝 연대 전투: ${RIFT_REGIONS.find((r: RiftRegion) => r.id === selectedNode.regionId)?.name} 협력 헌터`}
                         </div>
                         <p className="text-[10px] text-white/70 leading-normal">
-                          지역 헌터들과 연합하여 공략 버프(스탯 증가)를 얻을 수 있으나 보상이 일부 분배(차감)됩니다.
+                          {selectedNode.id === 'angel'
+                            ? '전 세계 모든 생존한 정예 헌터들과 연합하여 공략 전력을 극대화할 수 있습니다.'
+                            : '지역 헌터들과 연합하여 공략 버프(스탯 증가)를 얻을 수 있으나 보상이 일부 분배(차감)됩니다.'}
                         </p>
                         <div className="max-h-24 overflow-y-auto space-y-1 scrollbar-thin">
                           {namedHuntersInRegion.map(hid => {
@@ -887,6 +1016,11 @@ export function WorldMapPanel() {
                                     className="accent-purple-500 h-3 w-3 cursor-pointer"
                                   />
                                   <span className="font-bold text-white/80">{h.name}</span>
+                                  {selectedNode.id === 'angel' && (
+                                    <span className="text-[8px] text-white/40 font-bold bg-white/5 px-1.5 py-0.2 rounded border border-white/5">
+                                      {RIFT_REGIONS.find(r => r.id === h.regionId)?.name}
+                                    </span>
+                                  )}
                                   <span className="rounded bg-purple-500/20 px-1 text-purple-300 font-bold" style={{ fontSize: '8px' }}>
                                     {h.rank}
                                   </span>

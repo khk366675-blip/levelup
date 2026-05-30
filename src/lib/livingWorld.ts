@@ -192,6 +192,8 @@ export function initLivingWorld(seed: number): LivingWorldState {
     riftNodes,
     activeMonarchs: [],
     homeReachedMonarchId: undefined,
-    angelReady: false
+    angelReady: false,
+    endingState: 'none',
+    coopCount: 0
   }
 }

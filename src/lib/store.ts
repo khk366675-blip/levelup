@@ -568,6 +568,7 @@ export interface GameState {
   selectSkillUpgrade: (skillId: string, upgradeId: string) => void
   hardResetAll: () => void
   resetGameProgressOnly: () => void
+  triggerVictoryReset: () => void
 
   // metadata sync
   syncDefaultQuestMetadata: () => void
@@ -3456,6 +3457,8 @@ const createHardcoreDeathResetState = (
     hardcoreState: {
       ...createInitialHardcoreState(timestamp),
       deathCount: hardcore.deathCount + 1,
+      victoryCount: hardcore.victoryCount ?? 0,
+      clearHistory: hardcore.clearHistory ?? [],
       lastHardcoreBackup: backupMeta,
       worldThreat: 0,
     },
@@ -7639,6 +7642,15 @@ export const useGame = create<GameState>()(
             }
           }
 
+          if (nodeId === 'angel') {
+            worldLogs.push(`[Day ${s.livingWorld?.day ?? 0}] 🌟 [구원 완료] 지고의 심판자(천사)를 격퇴하고 대균열의 근원을 영원히 정화했습니다! 세계는 멸망의 운명에서 마침내 구원받았습니다.`)
+          }
+
+          let nextCoopCount = s.livingWorld?.coopCount ?? 0
+          if (activeBattle.helperHunterIds && activeBattle.helperHunterIds.length > 0) {
+            nextCoopCount += 1
+          }
+
           // [L1-A] 협력 헌터 성장 및 러브콜 해제
           if (activeBattle.helperHunterIds && activeBattle.helperHunterIds.length > 0 && s.livingWorld && updatedNamedHunters && updatedRiftNodes) {
             const rName = RIFT_REGIONS.find(r => r.id === activeBattle.regionId)?.name ?? activeBattle.regionId.toUpperCase()
@@ -7680,6 +7692,8 @@ export const useGame = create<GameState>()(
               activeMonarchs: updatedActiveMonarchs ?? s.livingWorld.activeMonarchs,
               homeReachedMonarchId: nextHomeReachedMonarchId,
               angelReady: nextAngelReady ?? s.livingWorld.angelReady,
+              endingState: nodeId === 'angel' ? 'victory' : s.livingWorld.endingState,
+              coopCount: nextCoopCount,
             } : undefined,
             activeWorldBattle: {
               ...activeBattle,
@@ -7761,13 +7775,42 @@ export const useGame = create<GameState>()(
       resolveDirectWorldBattle: (combatLog, nodeId, helperHunterIds) => {
         const s = get()
         const outcome = combatLog.result === 'victory' ? 'victory' : (combatLog.result === 'defeat' ? 'defeat' : 'draw')
-        const node = {
-          difficulty: 500,
-          deadline: 7,
-          daysRemaining: 7,
-          ...(s.livingWorld?.riftNodes[nodeId] || RIFT_NODES.find(n => n.id === nodeId))
-        } as RiftNode
-        if (!node) return
+
+        const isMonarchId = MONARCHS.some(m => m.id === nodeId) || nodeId === 'angel'
+        let monarchRegionId = 'kr'
+        if (isMonarchId && s.livingWorld?.activeMonarchs) {
+          const activeMon = s.livingWorld.activeMonarchs.find(m => m.monarchId === nodeId)
+          if (activeMon && activeMon.occupiedRegionIds.length > 0) {
+            monarchRegionId = activeMon.occupiedRegionIds[0]
+          }
+        }
+
+        let node: RiftNode
+        if (isMonarchId) {
+          const monarchData = nodeId === 'angel' ? FINAL_ANGEL : MONARCHS.find(m => m.id === nodeId)!
+          node = {
+            id: monarchData.id,
+            regionId: monarchRegionId,
+            name: monarchData.name,
+            x: 50,
+            y: 50,
+            status: 'active',
+            gateDefId: monarchData.id,
+            difficultyRank: 'S',
+            difficulty: monarchData.recommendedCP,
+            deadline: 999,
+            daysRemaining: 999,
+            isSGrade: true
+          }
+        } else {
+          node = {
+            difficulty: 500,
+            deadline: 7,
+            daysRemaining: 7,
+            ...(s.livingWorld?.riftNodes[nodeId] || RIFT_NODES.find(n => n.id === nodeId))
+          } as RiftNode
+          if (!node) return
+        }
 
         // [L1-A] NPC 협력에 따른 보상 분배 트레이드오프 계산
         let activeHelpers: NamedHunter[] = []
@@ -12187,6 +12230,145 @@ export const useGame = create<GameState>()(
         })
       },
 
+      triggerVictoryReset: () => {
+        const s = get()
+        const timestamp = Date.now()
+
+        // 1. 보존할 자기관리 데이터 추출
+        const preservedAiCoachCoreContext = s.aiCoachCoreContext
+        const preservedAiCoachMemory = s.aiCoachMemory
+        const preservedDailyProgression = s.dailyProgression
+        const preservedFocusSession = s.focusSession
+
+        // 2. quests 복제 및 달성 상태 초기화
+        const resetQuests = s.quests.map((q): Quest => {
+          if (q.type === 'daily') {
+            return {
+              ...q,
+              lastCompletedAt: undefined,
+              completed: false,
+            }
+          } else if (q.type === 'main') {
+            const resetMilestones = q.milestones 
+              ? (q.milestones as MainQuestMilestone[]).map((m, idx): MainQuestMilestone => ({
+                  ...m,
+                  status: idx === 0 ? 'active' : 'locked',
+                  completedAt: undefined,
+                  evidenceNote: undefined,
+                }))
+              : undefined
+
+            return {
+              ...q,
+              completed: false,
+              status: q.status === 'completed' ? 'active' : q.status,
+              completedAt: undefined,
+              progressPercent: 0,
+              milestones: resetMilestones,
+            }
+          }
+          return q
+        })
+
+        // 3. 메타 진행을 위한 hardcoreState 업데이트 (victoryCount 증가 및 clearHistory 추가)
+        const hardcore = ensureHardcoreState(s.hardcoreState)
+        const newHistoryEntry = {
+          day: s.livingWorld?.day ?? 0,
+          seed: s.livingWorld?.seed ?? 0,
+          timestamp,
+          monarchsDefeatedCount: s.livingWorld?.activeMonarchs?.filter(m => m.status === 'defeated').length ?? 0,
+          coopCount: s.livingWorld?.coopCount ?? 0,
+        }
+        
+        const nextHardcoreState = {
+          ...hardcore,
+          victoryCount: (hardcore.victoryCount ?? 0) + 1,
+          clearHistory: [...(hardcore.clearHistory ?? []), newHistoryEntry],
+          worldThreat: 0,
+          gateEchoes: [],
+        }
+
+        // 4. 새로운 세계 생성
+        const nextLivingWorld = initLivingWorld(Math.floor(Math.random() * 99999999) + 1)
+        nextLivingWorld.endingState = 'none'
+
+        set({
+          hunter: initialHunter,
+          quests: resetQuests,
+          items: [],
+          titles: [],
+          messages: [
+            {
+              id: uid(),
+              kind: 'info',
+              title: '🎉 새로운 차원의 세계 강림',
+              lines: [
+                `이전 차원의 세계(Day ${s.livingWorld?.day ?? 0})를 성공적으로 구원하고 새로운 균열 차원에 도달했습니다!`,
+                '레벨, 스탯, 장비, 그림자, 골드가 승리 보상으로 온전히 차원 순화(초기화)되었으며, 새로운 동적 시뮬레이션 세계가 생성되었습니다.',
+                '메타 진행도에 세계 구원 기록이 영구히 각인되었습니다. 새로운 차원에서도 인류를 구해주십시오!'
+              ],
+              createdAt: todayISO()
+            }
+          ],
+          achievementStats: createInitialAchievementStats(),
+          activeRandomQuest: undefined,
+          randomQuestHistory: {},
+          equipment: {},
+          activeConsumableEffects: [],
+          gateStatus: createInitialGateStatus(),
+          activeGate: undefined,
+          activeRiftNodeId: undefined,
+          riftNodes: (() => {
+            const nodes: Record<string, RiftNodeStatus> = {}
+            RIFT_NODES.forEach((n) => {
+              nodes[n.id] = n.status
+            })
+            return nodes
+          })(),
+          livingWorld: nextLivingWorld,
+          activeWorldBattle: undefined,
+          combatLogs: [],
+          manualBattleSession: undefined,
+          ownedShadows: [],
+          equippedShadowIds: [],
+          shadowExtractHistory: [],
+          shadowExtractFailCount: {},
+          lastShadowExtractResult: undefined,
+          gold: 0,
+          shadowEssence: 0,
+          shadowSummonTickets: [],
+          shadowSummonShards: {},
+          shadowFragments: {},
+          shadowAchievementTicketClaims: {},
+          shadowExpeditions: [],
+          lastShadowExpeditionDate: undefined,
+          activeShadowExpeditionId: undefined,
+          infiniteTower: createInitialTowerState(),
+          worldBattleRetreats: {},
+          rewardBoxes: [],
+          lastDailyBoxDate: undefined,
+          lastWeeklyBoxWeek: undefined,
+          todayChallengeCards: [],
+          selectedChallengeCardIds: [],
+          lastChallengeCardDate: undefined,
+          challengeCardHistory: {},
+          shopPurchases: {},
+          skillStates: {},
+          secretProgress: undefined,
+          aiCoachCoreContext: preservedAiCoachCoreContext,
+          aiCoachMemory: preservedAiCoachMemory,
+          dailyProgression: preservedDailyProgression,
+          focusSession: preservedFocusSession,
+          hunterGrade: createInitialHunterGradeState({
+            hunter: initialHunter,
+            focusSession: preservedFocusSession,
+            achievementStats: createInitialAchievementStats(),
+          }),
+          hardcoreState: nextHardcoreState,
+          initialized: true,
+        })
+      },
+
       recordAiCoachSession: (session) => set((s) => {
         const memory = s.aiCoachMemory ?? {
           sessions: [],
@@ -12986,7 +13168,7 @@ export const useGame = create<GameState>()(
     }),
     {
       name: 'levelup-save',
-      version: 21,
+      version: 22,
       partialize: (state) => ({
         ...state,
         manualBattleSession: undefined,
@@ -13564,6 +13746,28 @@ export const useGame = create<GameState>()(
           const lw = persistedState.livingWorld
           if (!('angelReady' in lw)) {
             lw.angelReady = false
+          }
+        }
+
+        // ── Living Rift World Ending & Clear History L4-C (v22) 마이그레이션 ──
+        if (persistedState) {
+          if (persistedState.livingWorld) {
+            const lw = persistedState.livingWorld
+            if (!('endingState' in lw)) {
+              lw.endingState = 'none'
+            }
+            if (!('coopCount' in lw)) {
+              lw.coopCount = 0
+            }
+          }
+          if (persistedState.hardcoreState) {
+            const hs = persistedState.hardcoreState
+            if (!('victoryCount' in hs)) {
+              hs.victoryCount = 0
+            }
+            if (!('clearHistory' in hs)) {
+              hs.clearHistory = []
+            }
           }
         }
 

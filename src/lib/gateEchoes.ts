@@ -32,6 +32,8 @@ export const createInitialHardcoreState = (now = Date.now()): HardcoreState => (
   gateEchoes: [],
   worldThreat: 0,
   deathCount: 0,
+  victoryCount: 0,
+  clearHistory: [],
 })
 
 export const ensureHardcoreState = (state?: HardcoreState): HardcoreState => ({
@@ -40,6 +42,8 @@ export const ensureHardcoreState = (state?: HardcoreState): HardcoreState => ({
   gateEchoes: Array.isArray(state?.gateEchoes) ? state.gateEchoes : [],
   worldThreat: clamp(state?.worldThreat ?? 0, 0, 100),
   deathCount: Math.max(0, state?.deathCount ?? 0),
+  victoryCount: Math.max(0, state?.victoryCount ?? 0),
+  clearHistory: Array.isArray(state?.clearHistory) ? state.clearHistory : [],
 })
 
 const clamp = (value: number, min: number, max: number): number =>
