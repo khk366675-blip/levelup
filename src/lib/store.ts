@@ -270,6 +270,11 @@ import {
 
 import { registerLegionNodeLevelResolver } from './shadowStats'
 
+// ── World Map Shadow Guard Constants (L3 / L4) ────────────────
+export const WORLD_SHADOW_GUARD_DEF_FACTOR = 0.25      // 그림자당 헌터 방어력 버프 비율
+export const WORLD_SHADOW_GUARD_EVASION_FACTOR = 0.05  // 그림자당 헌터 회피 버프 비율
+export const WORLD_SHADOW_GUARD_DR_FACTOR = 0.5        // 그림자 탱킹 대미지 감쇄 비율
+
 function rollRedGateInstability(runState: GateRunState, encounterId: string, customIncrease?: number): boolean {
   if (!runState) return false
   if (!runState.redGateState) {
@@ -7100,8 +7105,8 @@ export const useGame = create<GameState>()(
         // 2순위 그림자 탱킹 (수호 효과 버프 적용)
         const initialActiveEffects: ActiveCombatEffect[] = []
         if (equippedShadows.length > 0) {
-          const buffDef = Math.round(playerStats.def * 0.25 * equippedShadows.length)
-          const buffEvasion = 0.05 * equippedShadows.length
+          const buffDef = Math.round(playerStats.def * WORLD_SHADOW_GUARD_DEF_FACTOR * equippedShadows.length)
+          const buffEvasion = WORLD_SHADOW_GUARD_EVASION_FACTOR * equippedShadows.length
           initialActiveEffects.push(
             {
               sourceSkillId: 'world-map-shadow-guard-def',
@@ -7122,7 +7127,7 @@ export const useGame = create<GameState>()(
             {
               sourceSkillId: 'world-map-shadow-guard-dr',
               kind: 'damage_reduction',
-              value: 0.5,
+              value: WORLD_SHADOW_GUARD_DR_FACTOR,
               remainingTurns: 999,
               targetId: 'player',
             }
@@ -7173,7 +7178,7 @@ export const useGame = create<GameState>()(
         if (equippedShadows.length > 0) {
           combatLog.turns.unshift(
             createManualSystemLog(
-              `🛡️ 그림자 군단(${equippedShadows.length}명)이 전방에 배치되었습니다! [그림자 탱킹] 수호가 작동하여 방어력 +${Math.round(0.25 * equippedShadows.length * 100)}%, 회피율 +${Math.round(0.05 * equippedShadows.length * 100)}%, 받는 피해 50%가 감소합니다.`,
+              `🛡️ 그림자 군단(${equippedShadows.length}명)이 전방에 배치되었습니다! [그림자 탱킹] 수호가 작동하여 방어력 +${Math.round(WORLD_SHADOW_GUARD_DEF_FACTOR * equippedShadows.length * 100)}%, 회피율 +${Math.round(WORLD_SHADOW_GUARD_EVASION_FACTOR * equippedShadows.length * 100)}%, 받는 피해 ${Math.round(WORLD_SHADOW_GUARD_DR_FACTOR * 100)}%가 감소합니다.`,
               0,
               1,
               createMonsterBattleActor(monsters[0])
@@ -7457,8 +7462,8 @@ export const useGame = create<GameState>()(
         // 2순위 그림자 탱킹 (수호 효과 버프 적용)
         const initialActiveEffects: ActiveCombatEffect[] = []
         if (equippedShadows.length > 0) {
-          const buffDef = Math.round(playerStats.def * 0.25 * equippedShadows.length)
-          const buffEvasion = 0.05 * equippedShadows.length
+          const buffDef = Math.round(playerStats.def * WORLD_SHADOW_GUARD_DEF_FACTOR * equippedShadows.length)
+          const buffEvasion = WORLD_SHADOW_GUARD_EVASION_FACTOR * equippedShadows.length
           initialActiveEffects.push(
             {
               sourceSkillId: 'world-map-shadow-guard-def',
@@ -7479,7 +7484,7 @@ export const useGame = create<GameState>()(
             {
               sourceSkillId: 'world-map-shadow-guard-dr',
               kind: 'damage_reduction',
-              value: 0.5,
+              value: WORLD_SHADOW_GUARD_DR_FACTOR,
               remainingTurns: 999,
               targetId: 'player',
             }
@@ -7490,7 +7495,7 @@ export const useGame = create<GameState>()(
         if (equippedShadows.length > 0) {
           logs.push(
             createManualSystemLog(
-              `🛡️ 그림자 군단이 전방에 배치되어 엄호하고 있습니다! 플레이어의 방어력 +${Math.round(0.25 * equippedShadows.length * 100)}%, 회피율 +${Math.round(0.05 * equippedShadows.length * 100)}%, 받는 피해 50%가 감소합니다.`,
+              `🛡️ 그림자 군단이 전방에 배치되어 엄호하고 있습니다! 플레이어의 방어력 +${Math.round(WORLD_SHADOW_GUARD_DEF_FACTOR * equippedShadows.length * 100)}%, 회피율 +${Math.round(WORLD_SHADOW_GUARD_EVASION_FACTOR * equippedShadows.length * 100)}%, 받는 피해 ${Math.round(WORLD_SHADOW_GUARD_DR_FACTOR * 100)}%가 감소합니다.`,
               0,
               1,
               monster
