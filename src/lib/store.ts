@@ -73,6 +73,7 @@ import type {
   WorldBattleSession,
   WorldBattleResult,
   RiftNode,
+  NamedHunter,
 } from './types'
 
 import { initLivingWorld } from './livingWorld'
@@ -274,6 +275,14 @@ import { registerLegionNodeLevelResolver } from './shadowStats'
 export const WORLD_SHADOW_GUARD_DEF_FACTOR = 0.25      // 그림자당 헌터 방어력 버프 비율
 export const WORLD_SHADOW_GUARD_EVASION_FACTOR = 0.05  // 그림자당 헌터 회피 버프 비율
 export const WORLD_SHADOW_GUARD_DR_FACTOR = 0.5        // 그림자 탱킹 대미지 감쇄 비율
+
+// ── World Map NPC Cooperation Constants (L1-A) ────────────────
+export const COOP_HELP_ATK_FACTOR = 0.005  // 협력자 합산 CP의 0.5%만큼 플레이어 공격력 버프 추가
+export const COOP_HELP_DEF_FACTOR = 0.005  // 협력자 합산 CP의 0.5%만큼 플레이어 방어력 버프 추가
+export const COOP_HELP_DR_FACTOR = 0.05    // 협력자 1명당 대미지 감소 5% 추가
+export const COOP_HELP_DR_CAP = 0.5        // 협력자 대미지 감소 최대 50% 상한
+export const COOP_REWARD_PENALTY_PER_HELPER = 0.15 // 협력자 1명당 플레이어 보상 15% 차감
+export const COOP_REWARD_MIN_RATIO = 0.3   // 최소 보상 30% 보장
 
 function rollRedGateInstability(runState: GateRunState, encounterId: string, customIncrease?: number): boolean {
   if (!runState) return false
@@ -522,11 +531,11 @@ export interface GameState {
   switchTowerManualBattleToAuto: () => void
 
   // world map battle (L3)
-  startWorldBattle: (nodeId: string) => void
+  startWorldBattle: (nodeId: string, helperHunterIds?: string[]) => void
   resolveWorldBattle: () => void
-  resolveDirectWorldBattle: (combatLog: CombatLog, nodeId: string) => void
+  resolveDirectWorldBattle: (combatLog: CombatLog, nodeId: string, helperHunterIds?: string[]) => void
   cancelWorldBattle: () => void
-  startWorldManualBattle: (nodeId: string) => void
+  startWorldManualBattle: (nodeId: string, helperHunterIds?: string[]) => void
   performWorldManualBattleAction: (action: ManualBattleAction) => void
   cancelWorldManualBattle: () => void
   switchWorldManualBattleToAuto: () => void
@@ -4788,12 +4797,14 @@ export const useGame = create<GameState>()(
               ...updatedWorldNodes[nodeId],
               status: 'cleared',
               daysRemaining: 0,
+              loveCall: undefined,
             }
           } else {
             updatedWorldNodes[nodeId] = {
               ...node,
               status: 'cleared',
               daysRemaining: 0,
+              loveCall: undefined,
             }
           }
 
@@ -7042,7 +7053,7 @@ export const useGame = create<GameState>()(
 
       // ── World Map Battle System (L3) ───────────────────────────────
 
-      startWorldBattle: (nodeId) => {
+      startWorldBattle: (nodeId, helperHunterIds) => {
         const s = get()
         const node = {
           difficulty: 500,
@@ -7134,6 +7145,59 @@ export const useGame = create<GameState>()(
           )
         }
 
+        // [L1-A] NPC 협력 버프 주입
+        let activeHelpers: NamedHunter[] = []
+        let helperPower = 0
+        if (helperHunterIds && helperHunterIds.length > 0 && s.livingWorld) {
+          for (const hid of helperHunterIds) {
+            const h = s.livingWorld.namedHunters[hid]
+            if (h && h.status === 'active') {
+              activeHelpers.push(h)
+              helperPower += h.power
+            }
+          }
+        }
+        const helperCount = activeHelpers.length
+
+        let buffCoopAtk = 0
+        let buffCoopDef = 0
+        let drCoop = 0
+        if (helperCount > 0) {
+          buffCoopAtk = Math.round(playerStats.atk * COOP_HELP_ATK_FACTOR * helperPower)
+          buffCoopDef = Math.round(playerStats.def * COOP_HELP_DEF_FACTOR * helperPower)
+          drCoop = Math.min(COOP_HELP_DR_CAP, COOP_HELP_DR_FACTOR * helperCount)
+
+          if (buffCoopAtk > 0) {
+            initialActiveEffects.push({
+              sourceSkillId: 'world-map-coop-atk',
+              kind: 'stat',
+              stat: 'atk',
+              value: buffCoopAtk,
+              remainingTurns: 999,
+              targetId: 'player',
+            })
+          }
+          if (buffCoopDef > 0) {
+            initialActiveEffects.push({
+              sourceSkillId: 'world-map-coop-def',
+              kind: 'stat',
+              stat: 'def',
+              value: buffCoopDef,
+              remainingTurns: 999,
+              targetId: 'player',
+            })
+          }
+          if (drCoop > 0) {
+            initialActiveEffects.push({
+              sourceSkillId: 'world-map-coop-dr',
+              kind: 'damage_reduction',
+              value: drCoop,
+              remainingTurns: 999,
+              targetId: 'player',
+            })
+          }
+        }
+
         const combatLog = simulateGateWaveBattle({
           playerName: s.hunter.name || '헌터',
           playerStats,
@@ -7145,11 +7209,17 @@ export const useGame = create<GameState>()(
           initialActiveEffects,
         })
 
-        // 보상 계산 (난이도 CP 비례)
+        // 보상 계산 (난이도 CP 비례 & 협력 페널티 트레이드오프 적용)
+        const baseGold = node.loveCall?.promisedReward.gold ?? Math.round((node.difficulty ?? 500) * 0.15)
+        const baseHunterXp = node.loveCall?.promisedReward.hunterXp ?? Math.round((node.difficulty ?? 500) * 0.12)
+        const baseEssence = node.loveCall?.promisedReward.shadowEssence ?? (node.isSGrade ? 5 : 2)
+
+        const rewardRatio = Math.max(COOP_REWARD_MIN_RATIO, 1 - COOP_REWARD_PENALTY_PER_HELPER * helperCount)
+
         const rewards = {
-          hunterXp: Math.round((node.difficulty ?? 500) * 0.12),
-          gold: Math.round((node.difficulty ?? 500) * 0.15),
-          shadowEssence: node.isSGrade ? 5 : 2,
+          hunterXp: Math.round(baseHunterXp * rewardRatio),
+          gold: Math.round(baseGold * rewardRatio),
+          shadowEssence: Math.max(1, Math.round(baseEssence * rewardRatio)),
           itemDropChance: node.isSGrade ? 0.35 : 0.15,
         }
 
@@ -7158,6 +7228,7 @@ export const useGame = create<GameState>()(
           nodeId,
           gateName: node.name,
           rewards,
+          helperHunterIds: activeHelpers.map(h => h.id),
         }
 
         const nextWorldBattle: WorldBattleSession = {
@@ -7172,6 +7243,7 @@ export const useGame = create<GameState>()(
           logs: combatLog.turns,
           result: worldResult,
           showResult: false,
+          helperHunterIds: activeHelpers.map(h => h.id),
         }
 
         // 로그 연출 보강 (그림자 탱킹 로그 주입)
@@ -7179,6 +7251,19 @@ export const useGame = create<GameState>()(
           combatLog.turns.unshift(
             createManualSystemLog(
               `🛡️ 그림자 군단(${equippedShadows.length}명)이 전방에 배치되었습니다! [그림자 탱킹] 수호가 작동하여 방어력 +${Math.round(WORLD_SHADOW_GUARD_DEF_FACTOR * equippedShadows.length * 100)}%, 회피율 +${Math.round(WORLD_SHADOW_GUARD_EVASION_FACTOR * equippedShadows.length * 100)}%, 받는 피해 ${Math.round(WORLD_SHADOW_GUARD_DR_FACTOR * 100)}%가 감소합니다.`,
+              0,
+              1,
+              createMonsterBattleActor(monsters[0])
+            )
+          )
+        }
+
+        // [L1-A] 협력 전투 연출 로그 주입
+        if (helperCount > 0) {
+          const helperNames = activeHelpers.map(h => h.name).join(', ')
+          combatLog.turns.unshift(
+            createManualSystemLog(
+              `🤝 [협력 전투] ${node.regionId.toUpperCase()}의 헌터 [${helperNames}]이(가) 참전했습니다! (합산 전투력: ${helperPower}) 공격력 +${buffCoopAtk}, 방어력 +${buffCoopDef}, 대미지 감소 +${Math.round(drCoop * 100)}% 버프가 주입되었으나, 보상은 ${Math.round((1 - rewardRatio) * 100)}% 차감됩니다.`,
               0,
               1,
               createMonsterBattleActor(monsters[0])
@@ -7208,6 +7293,11 @@ export const useGame = create<GameState>()(
         let nextGold = s.gold ?? 0
         let nextShadowEssence = s.shadowEssence ?? 0
         const newMessages: SystemMessage[] = []
+
+        // [L1-A] 협력 헌터 결과 처리용
+        let updatedNamedHunters = s.livingWorld ? { ...s.livingWorld.namedHunters } : undefined
+        let updatedRiftNodes = s.livingWorld ? { ...s.livingWorld.riftNodes } : undefined
+        let worldLogs = s.livingWorld ? [...s.livingWorld.eventLogs] : []
 
         if (isVictory) {
           const rewards = result.rewards
@@ -7262,6 +7352,31 @@ export const useGame = create<GameState>()(
             createdAt: todayISO(),
           })
 
+          // [L1-A] 협력 헌터 성장 및 러브콜 해제
+          if (activeBattle.helperHunterIds && activeBattle.helperHunterIds.length > 0 && s.livingWorld && updatedNamedHunters && updatedRiftNodes) {
+            const rName = RIFT_REGIONS.find(r => r.id === activeBattle.regionId)?.name ?? activeBattle.regionId.toUpperCase()
+            
+            for (const hid of activeBattle.helperHunterIds) {
+              const hunter = { ...updatedNamedHunters[hid] }
+              if (hunter && hunter.status === 'active') {
+                const bonusMult = 1.02 + Math.random() * 0.03
+                hunter.power = Math.round(hunter.power * bonusMult)
+                const region = s.livingWorld.regions[hunter.regionId]
+                const cap = 4500 + (region?.growthBias ?? 0.5) * 1000
+                if (hunter.power > cap) hunter.power = Math.round(cap)
+                updatedNamedHunters[hid] = hunter
+                
+                worldLogs.push(`[Day ${s.livingWorld.day}] 🤝 [협력 원정] 참전한 ${rName}의 [${hunter.name}] 헌터가 정화 성공으로 추가 성장했습니다! (전투력: ${hunter.power})`)
+              }
+            }
+
+            if (updatedRiftNodes[nodeId]) {
+              const node = { ...updatedRiftNodes[nodeId] }
+              node.loveCall = undefined
+              updatedRiftNodes[nodeId] = node
+            }
+          }
+
           // 정화 완료 후처리 (NPC 클리어와 공유하는 오염도 감소 및 locked 해제 적용)
           get().markRiftNodeCleared(nodeId)
 
@@ -7270,6 +7385,12 @@ export const useGame = create<GameState>()(
             items: nextItems,
             gold: nextGold,
             shadowEssence: nextShadowEssence,
+            livingWorld: s.livingWorld ? {
+              ...s.livingWorld,
+              namedHunters: updatedNamedHunters ?? s.livingWorld.namedHunters,
+              riftNodes: updatedRiftNodes ?? s.livingWorld.riftNodes,
+              eventLogs: worldLogs,
+            } : undefined,
             activeWorldBattle: {
               ...activeBattle,
               status: 'resolved',
@@ -7301,8 +7422,36 @@ export const useGame = create<GameState>()(
             createdAt: todayISO(),
           })
 
+          // [L1-A] 패배 시 협력 헌터 중 1명 부상 처리
+          if (activeBattle.helperHunterIds && activeBattle.helperHunterIds.length > 0 && s.livingWorld && updatedNamedHunters) {
+            const rName = RIFT_REGIONS.find(r => r.id === activeBattle.regionId)?.name ?? activeBattle.regionId.toUpperCase()
+            const activeHelpers = activeBattle.helperHunterIds.filter(hid => updatedNamedHunters![hid]?.status === 'active')
+            
+            if (activeHelpers.length > 0) {
+              const targetHid = activeHelpers[Math.floor(Math.random() * activeHelpers.length)]
+              const hunter = { ...updatedNamedHunters[targetHid] }
+              hunter.status = 'injured'
+              hunter.injuredTurns = 3
+              updatedNamedHunters[targetHid] = hunter
+
+              worldLogs.push(`[Day ${s.livingWorld.day}] 🩹 [협력 원정 실패] [${activeBattle.gateName}] 공략 실패 과정에서 ${rName}의 [${hunter.name}] 헌터가 심각한 부상을 입어 3일간 요양합니다.`)
+              newMessages.push({
+                id: uid(),
+                kind: 'info',
+                title: '협력자 부상',
+                lines: [`공략 실패 중 함께 싸운 헌터 [${hunter.name}]이(가) 심한 부상을 입었습니다.`],
+                createdAt: todayISO(),
+              })
+            }
+          }
+
           set({
             gateStatus: nextGateStatus,
+            livingWorld: s.livingWorld ? {
+              ...s.livingWorld,
+              namedHunters: updatedNamedHunters ?? s.livingWorld.namedHunters,
+              eventLogs: worldLogs,
+            } : undefined,
             activeWorldBattle: {
               ...activeBattle,
               status: 'resolved',
@@ -7313,7 +7462,7 @@ export const useGame = create<GameState>()(
         }
       },
 
-      resolveDirectWorldBattle: (combatLog, nodeId) => {
+      resolveDirectWorldBattle: (combatLog, nodeId, helperHunterIds) => {
         const s = get()
         const outcome = combatLog.result === 'victory' ? 'victory' : (combatLog.result === 'defeat' ? 'defeat' : 'draw')
         const node = {
@@ -7324,10 +7473,28 @@ export const useGame = create<GameState>()(
         } as RiftNode
         if (!node) return
 
+        // [L1-A] NPC 협력에 따른 보상 분배 트레이드오프 계산
+        let activeHelpers: NamedHunter[] = []
+        if (helperHunterIds && helperHunterIds.length > 0 && s.livingWorld) {
+          for (const hid of helperHunterIds) {
+            const h = s.livingWorld.namedHunters[hid]
+            if (h && h.status === 'active') {
+              activeHelpers.push(h)
+            }
+          }
+        }
+        const helperCount = activeHelpers.length
+
+        const baseGold = node.loveCall?.promisedReward.gold ?? Math.round((node.difficulty ?? 500) * 0.15)
+        const baseHunterXp = node.loveCall?.promisedReward.hunterXp ?? Math.round((node.difficulty ?? 500) * 0.12)
+        const baseEssence = node.loveCall?.promisedReward.shadowEssence ?? (node.isSGrade ? 5 : 2)
+
+        const rewardRatio = Math.max(COOP_REWARD_MIN_RATIO, 1 - COOP_REWARD_PENALTY_PER_HELPER * helperCount)
+
         const rewards = {
-          hunterXp: Math.round((node.difficulty ?? 500) * 0.12),
-          gold: Math.round((node.difficulty ?? 500) * 0.15),
-          shadowEssence: node.isSGrade ? 5 : 2,
+          hunterXp: Math.round(baseHunterXp * rewardRatio),
+          gold: Math.round(baseGold * rewardRatio),
+          shadowEssence: Math.max(1, Math.round(baseEssence * rewardRatio)),
           itemDropChance: node.isSGrade ? 0.35 : 0.15,
         }
 
@@ -7336,6 +7503,7 @@ export const useGame = create<GameState>()(
           nodeId,
           gateName: node.name,
           rewards,
+          helperHunterIds: activeHelpers.map(h => h.id),
         }
 
         const nextWorldBattle: WorldBattleSession = {
@@ -7350,6 +7518,7 @@ export const useGame = create<GameState>()(
           logs: combatLog.turns,
           result: worldResult,
           showResult: false,
+          helperHunterIds: activeHelpers.map(h => h.id),
         }
 
         set({
@@ -7397,7 +7566,7 @@ export const useGame = create<GameState>()(
         }
       }),
 
-      startWorldManualBattle: (nodeId) => {
+      startWorldManualBattle: (nodeId, helperHunterIds) => {
         const s = get()
         const node = {
           difficulty: 500,
@@ -7491,11 +7660,78 @@ export const useGame = create<GameState>()(
           )
         }
 
+        // [L1-A] NPC 협력 버프 주입
+        let activeHelpers: NamedHunter[] = []
+        let helperPower = 0
+        if (helperHunterIds && helperHunterIds.length > 0 && s.livingWorld) {
+          for (const hid of helperHunterIds) {
+            const h = s.livingWorld.namedHunters[hid]
+            if (h && h.status === 'active') {
+              activeHelpers.push(h)
+              helperPower += h.power
+            }
+          }
+        }
+        const helperCount = activeHelpers.length
+
+        let buffCoopAtk = 0
+        let buffCoopDef = 0
+        let drCoop = 0
+        if (helperCount > 0) {
+          buffCoopAtk = Math.round(playerStats.atk * COOP_HELP_ATK_FACTOR * helperPower)
+          buffCoopDef = Math.round(playerStats.def * COOP_HELP_DEF_FACTOR * helperPower)
+          drCoop = Math.min(COOP_HELP_DR_CAP, COOP_HELP_DR_FACTOR * helperCount)
+
+          if (buffCoopAtk > 0) {
+            initialActiveEffects.push({
+              sourceSkillId: 'world-map-coop-atk',
+              kind: 'stat',
+              stat: 'atk',
+              value: buffCoopAtk,
+              remainingTurns: 999,
+              targetId: 'player',
+            })
+          }
+          if (buffCoopDef > 0) {
+            initialActiveEffects.push({
+              sourceSkillId: 'world-map-coop-def',
+              kind: 'stat',
+              stat: 'def',
+              value: buffCoopDef,
+              remainingTurns: 999,
+              targetId: 'player',
+            })
+          }
+          if (drCoop > 0) {
+            initialActiveEffects.push({
+              sourceSkillId: 'world-map-coop-dr',
+              kind: 'damage_reduction',
+              value: drCoop,
+              remainingTurns: 999,
+              targetId: 'player',
+            })
+          }
+        }
+
         const logs: BattleTurn[] = []
         if (equippedShadows.length > 0) {
           logs.push(
             createManualSystemLog(
               `🛡️ 그림자 군단이 전방에 배치되어 엄호하고 있습니다! 플레이어의 방어력 +${Math.round(WORLD_SHADOW_GUARD_DEF_FACTOR * equippedShadows.length * 100)}%, 회피율 +${Math.round(WORLD_SHADOW_GUARD_EVASION_FACTOR * equippedShadows.length * 100)}%, 받는 피해 ${Math.round(WORLD_SHADOW_GUARD_DR_FACTOR * 100)}%가 감소합니다.`,
+              0,
+              1,
+              monster
+            )
+          )
+        }
+
+        // [L1-A] 협력 전투 연출 로그 주입
+        if (helperCount > 0) {
+          const helperNames = activeHelpers.map(h => h.name).join(', ')
+          const rewardRatio = Math.max(COOP_REWARD_MIN_RATIO, 1 - COOP_REWARD_PENALTY_PER_HELPER * helperCount)
+          logs.push(
+            createManualSystemLog(
+              `🤝 [협력 전투] ${node.regionId.toUpperCase()}의 헌터 [${helperNames}]이(가) 참전했습니다! (합산 전투력: ${helperPower}) 공격력 +${buffCoopAtk}, 방어력 +${buffCoopDef}, 대미지 감소 +${Math.round(drCoop * 100)}% 버프가 주입되었으나, 보상은 ${Math.round((1 - rewardRatio) * 100)}% 차감됩니다.`,
               0,
               1,
               monster
@@ -7524,6 +7760,7 @@ export const useGame = create<GameState>()(
             logs,
             startedAt: new Date().toISOString(),
             source: 'world_map',
+            helperHunterIds: activeHelpers.map(h => h.id),
           },
           activeWorldBattle: undefined,
         })
@@ -12388,7 +12625,7 @@ export const useGame = create<GameState>()(
     }),
     {
       name: 'levelup-save',
-      version: 18,
+      version: 19,
       partialize: (state) => ({
         ...state,
         manualBattleSession: undefined,
@@ -12937,6 +13174,16 @@ export const useGame = create<GameState>()(
           }
           if (!persistedState.worldBattleRetreats) {
             persistedState.worldBattleRetreats = {}
+          }
+        }
+
+        // ── World Map NPC Cooperation L1-A (v19) 마이그레이션 ──
+        if (persistedState && persistedState.livingWorld && persistedState.livingWorld.riftNodes) {
+          for (const nodeId in persistedState.livingWorld.riftNodes) {
+            const node = persistedState.livingWorld.riftNodes[nodeId]
+            if (node && node.loveCall === undefined) {
+              node.loveCall = undefined
+            }
           }
         }
 

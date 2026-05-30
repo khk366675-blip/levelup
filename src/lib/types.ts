@@ -1188,6 +1188,7 @@ export interface ManualBattleSession {
   towerFloor?: number
   pressureSnapshot?: RealityPressureSnapshot
   isRedGate?: boolean
+  helperHunterIds?: string[]
 }
 
 export type ManualBattleAction =
@@ -2173,6 +2174,7 @@ export interface WorldBattleResult {
     shadowEssence?: number
     itemDropChance?: number
   }
+  helperHunterIds?: string[]
 }
 
 export interface WorldBattleSession {
@@ -2187,6 +2189,7 @@ export interface WorldBattleSession {
   logs: BattleTurn[]
   result?: WorldBattleResult
   showResult?: boolean
+  helperHunterIds?: string[]
 }
 
 // ── Focus Session / Infiltration (12-41A) ───────────────────────────
@@ -2291,6 +2294,19 @@ export interface RiftRegion {
   learningTags?: string[] // 후속 Phase용 자리 (예: ['economy', 'industry'])
 }
 
+export interface LoveCallPromisedReward {
+  gold: number
+  shadowEssence: number
+  hunterXp: number
+}
+
+export interface LoveCallState {
+  active: boolean
+  promisedReward: LoveCallPromisedReward
+  helperHunterIds: string[] // 해당 국가 소속 액티브 NamedHunter ID 목록
+  issuedDay: number
+}
+
 export interface RiftNode {
   id: string
   regionId: string        // 소속 국가 (RiftRegion.id)
@@ -2306,6 +2322,7 @@ export interface RiftNode {
   deadline: number        // 총 시한 (일)
   daysRemaining: number   // 남은 시한 (일)
   isSGrade?: boolean      // S급 게이트 여부
+  loveCall?: LoveCallState // [L1-A] 러브콜 상태 추가
 }
 
 // ── Living Rift World MVP-1 ──────────────────────────────────────────

@@ -133,6 +133,7 @@ export function advanceWorldDay(state: LivingWorldState, rng: RngFn): LivingWorl
         // 폭주!
         node.status = 'exploded'
         node.daysRemaining = 0
+        node.loveCall = undefined
 
         const region = { ...nextRegions[node.regionId] }
         const rName = RIFT_REGIONS.find(r => r.id === node.regionId)?.name ?? node.regionId.toUpperCase()
@@ -205,6 +206,7 @@ export function advanceWorldDay(state: LivingWorldState, rng: RngFn): LivingWorl
         const gate = { ...targetGate }
         gate.status = 'cleared'
         gate.daysRemaining = 0
+        gate.loveCall = undefined
         nextRiftNodes[gate.id] = gate
 
         region.activeGateIds = region.activeGateIds.filter(id => id !== gate.id)
@@ -274,7 +276,33 @@ export function advanceWorldDay(state: LivingWorldState, rng: RngFn): LivingWorl
     } else {
       // 자력 불가능 방치 러브콜 플래그
       if ((targetGate.daysRemaining ?? 0) <= 5) {
-        addLog(`📞 [${rName}]가 자력으로 공략할 수 없는 게이트 [${targetGate.name}] (권장전력: ${targetGate.difficulty})에 대해 지원 요청(러브콜) 기척을 흘립니다.`)
+        const helperHunterIds = region.namedHunterIds.filter(id => {
+          const h = nextNamedHunters[id]
+          return h && h.status === 'active'
+        })
+
+        const promisedGold = Math.round(targetGate.difficulty * 0.2 * (1 + (5 - targetGate.daysRemaining) * 0.15))
+        const promisedXp = Math.round(targetGate.difficulty * 0.15 * (1 + (5 - targetGate.daysRemaining) * 0.15))
+        const promisedEssence = targetGate.isSGrade 
+          ? Math.round(6 + (5 - targetGate.daysRemaining))
+          : Math.round(2 + Math.floor((5 - targetGate.daysRemaining) / 2))
+
+        const gateNode = {
+          ...targetGate,
+          loveCall: {
+            active: true,
+            promisedReward: {
+              gold: promisedGold,
+              shadowEssence: promisedEssence,
+              hunterXp: promisedXp
+            },
+            helperHunterIds,
+            issuedDay: nextDay
+          }
+        }
+        nextRiftNodes[targetGate.id] = gateNode
+
+        addLog(`📞 [${rName}]가 자력으로 공략할 수 없는 게이트 [${targetGate.name}] (권장전력: ${targetGate.difficulty})에 대해 지원 요청(러브콜)을 보냈습니다! (보상 약속: 골드 +${promisedGold}, 정수 +${promisedEssence}, XP +${promisedXp})`)
       }
     }
 

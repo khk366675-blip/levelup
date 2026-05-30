@@ -97,6 +97,39 @@ export function WorldMapPanel() {
   const [expandedRegionId, setExpandedRegionId] = useState<string | null>(null)
   const [selectedNode, setSelectedNode] = useState<RiftNode | null>(null)
   const [toastMessage, setToastMessage] = useState<string | null>(null)
+  const [selectedHelpers, setSelectedHelpers] = useState<string[]>([])
+
+  const worldNode = selectedNode ? livingWorld?.riftNodes[selectedNode.id] : null
+  const hasLoveCall = worldNode?.loveCall?.active
+  const loveCallState = worldNode?.loveCall
+
+  const handleHelperToggle = (hid: string) => {
+    if (selectedHelpers.includes(hid)) {
+      setSelectedHelpers(selectedHelpers.filter(id => id !== hid))
+    } else {
+      setSelectedHelpers([...selectedHelpers, hid])
+    }
+  }
+
+  const activeHelpers = selectedHelpers.map(hid => livingWorld?.namedHunters[hid]).filter(Boolean) as any[]
+  const coopHelperCount = activeHelpers.length
+  const coopHelperPower = activeHelpers.reduce((sum, h) => sum + h.power, 0)
+
+  const COOP_HELP_ATK_FACTOR = 0.005
+  const COOP_HELP_DEF_FACTOR = 0.005
+  const COOP_HELP_DR_FACTOR = 0.05
+  const COOP_HELP_DR_CAP = 0.5
+  const COOP_REWARD_PENALTY_PER_HELPER = 0.15
+  const COOP_REWARD_MIN_RATIO = 0.3
+
+  const playerBaseAtk = hunter.stats.STR * 4 + hunter.stats.AGI * 2
+  const playerBaseDef = hunter.stats.VIT * 4 + hunter.stats.PER * 2
+  const coopBuffs = {
+    atk: Math.round(playerBaseAtk * COOP_HELP_ATK_FACTOR * coopHelperPower),
+    def: Math.round(playerBaseDef * COOP_HELP_DEF_FACTOR * coopHelperPower),
+    dr: Math.min(COOP_HELP_DR_CAP, COOP_HELP_DR_FACTOR * coopHelperCount),
+    rewardRatio: Math.max(COOP_REWARD_MIN_RATIO, 1 - COOP_REWARD_PENALTY_PER_HELPER * coopHelperCount)
+  }
 
   // 로컬 확인 모달 제어용 상태
   const [showRecklessConfirm, setShowRecklessConfirm] = useState(false)
@@ -117,6 +150,7 @@ export function WorldMapPanel() {
       discoverRiftNode(node.id)
       triggerToast(`[${node.name}] 탐사를 시작하여 구역을 개방했습니다!`)
       setSelectedNode({ ...node, status: 'active' })
+      setSelectedHelpers([])
     } else if (status === 'locked') {
       // 선행 조건 설명 취합
       const reqNames = (node.requiresNodeIds ?? [])
@@ -126,6 +160,12 @@ export function WorldMapPanel() {
     } else {
       // active 또는 cleared
       setSelectedNode(node)
+      const worldNode = livingWorld?.riftNodes[node.id]
+      if (worldNode?.loveCall?.active) {
+        setSelectedHelpers(worldNode.loveCall.helperHunterIds ?? [])
+      } else {
+        setSelectedHelpers([])
+      }
     }
   }
 
@@ -186,9 +226,9 @@ export function WorldMapPanel() {
                 onClick={() => {
                   setShowRecklessConfirm(false)
                   if (recklessConfirmType === 'auto') {
-                    startWorldBattle(selectedNode.id)
+                    startWorldBattle(selectedNode.id, selectedHelpers)
                   } else {
-                    startWorldManualBattle(selectedNode.id)
+                    startWorldManualBattle(selectedNode.id, selectedHelpers)
                   }
                 }}
                 className="rounded border border-rose-500/40 bg-rose-500/10 hover:bg-rose-500/25 px-4 py-2 text-xs font-bold text-rose-200 shadow-glow-red hover:text-white transition-all cursor-pointer"
@@ -271,6 +311,17 @@ export function WorldMapPanel() {
                           <span className="font-bold">+{activeWorldBattle.result.rewards.shadowEssence} 정수</span>
                         </div>
                       ) : null}
+                      {activeWorldBattle.result.helperHunterIds && activeWorldBattle.result.helperHunterIds.length > 0 && (
+                        <div className="rounded border border-purple-500/20 bg-purple-500/5 px-3 py-2 text-purple-300 text-center text-[10px]">
+                          <span>🤝 협력한 헌터: </span>
+                          <span className="font-bold">
+                            {activeWorldBattle.result.helperHunterIds
+                              .map(hid => livingWorld?.namedHunters[hid]?.name)
+                              .filter(Boolean)
+                              .join(', ')}
+                          </span>
+                        </div>
+                      )}
                     </div>
                   ) : (
                     <div className="rounded border border-rose-500/20 bg-rose-500/5 p-3 text-xs text-rose-300/80 text-center">
@@ -616,6 +667,85 @@ export function WorldMapPanel() {
                 )}
               </div>
 
+              {/* [L1-A] 러브콜 특별 섹션 */}
+              {hasLoveCall && loveCallState && (
+                <div className="mt-4 rounded-lg border border-yellow-500/30 bg-yellow-500/5 p-3 space-y-3">
+                  <div className="flex items-center gap-1.5 text-xs font-black text-yellow-300">
+                    <span>📞 긴급 러브콜 지원 요청</span>
+                  </div>
+                  <p className="text-[10px] text-white/70 leading-normal">
+                    {RIFT_REGIONS.find((r: RiftRegion) => r.id === selectedNode.regionId)?.name} 헌터 협회가 자력 방어가 불가능하여 공식 협조를 요청했습니다.
+                  </p>
+                  
+                  {/* 보상 정보 */}
+                  <div className="rounded bg-black/40 p-2 space-y-1 text-[10px]">
+                    <div className="text-[9px] font-bold text-white/40 mb-1">약속 보상 (기본)</div>
+                    <div className="flex justify-between">
+                      <span className="text-white/60">골드 지원금</span>
+                      <span className="font-bold text-amber-300">+{loveCallState.promisedReward.gold} Gold</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-white/60">어둠의 정수</span>
+                      <span className="font-bold text-purple-300">+{loveCallState.promisedReward.shadowEssence} 정수</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-white/60">전투 경험치</span>
+                      <span className="font-bold text-emerald-300">+{loveCallState.promisedReward.hunterXp} XP</span>
+                    </div>
+                  </div>
+
+                  {/* 협력 헌터 선택 목록 */}
+                  <div className="space-y-1.5">
+                    <div className="text-[9px] font-bold text-white/40">협력 헌터 선택 (참전 지원 후보)</div>
+                    {loveCallState.helperHunterIds.length === 0 ? (
+                      <div className="text-[9px] text-white/40 italic">현재 지원 가능한 헌터가 없습니다.</div>
+                    ) : (
+                      <div className="max-h-28 overflow-y-auto space-y-1 pr-1 scrollbar-thin">
+                        {loveCallState.helperHunterIds.map(hid => {
+                          const h = livingWorld?.namedHunters[hid]
+                          if (!h) return null
+                          const isSelected = selectedHelpers.includes(hid)
+                          return (
+                            <label key={hid} className="flex items-center justify-between rounded bg-black/35 hover:bg-black/60 px-2 py-1.5 text-[10px] cursor-pointer select-none border border-white/5">
+                              <div className="flex items-center gap-2">
+                                <input
+                                  type="checkbox"
+                                  checked={isSelected}
+                                  onChange={() => handleHelperToggle(hid)}
+                                  className="accent-purple-500 h-3 w-3 cursor-pointer"
+                                />
+                                <span className="font-bold text-white/80">{h.name}</span>
+                                <span className="rounded bg-purple-500/20 px-1 text-[8px] font-black text-purple-300 border border-purple-500/20">
+                                  {h.rank}
+                                </span>
+                              </div>
+                              <span className="text-cyan-300 font-mono font-bold">⚔️{h.power.toLocaleString()}</span>
+                            </label>
+                          )
+                        })}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* 트레이드오프 브리핑 */}
+                  <div className="rounded border border-purple-500/20 bg-purple-500/5 p-2 text-[10px] space-y-1.5">
+                    <div className="text-[9px] font-bold text-purple-300">⚖️ 협력 전투 트레이드오프 실시간 예측</div>
+                    <div className="grid grid-cols-2 gap-1 font-mono text-[9px] text-white/70">
+                      <div>공격력 보너스:</div>
+                      <div className="text-emerald-400 font-bold">+{coopBuffs.atk.toLocaleString()} ATK</div>
+                      <div>방어력 보너스:</div>
+                      <div className="text-emerald-400 font-bold">+{coopBuffs.def.toLocaleString()} DEF</div>
+                      <div>받는 피해 감소:</div>
+                      <div className="text-emerald-400 font-bold">-{Math.round(coopBuffs.dr * 100)}% DMG</div>
+                      <div>보상 획득 비율:</div>
+                      <div className={coopBuffs.rewardRatio === 1 ? "text-cyan-300 font-bold" : "text-yellow-400 font-bold"}>
+                        {Math.round(coopBuffs.rewardRatio * 100)}% (독식 대비 -{Math.round((1 - coopBuffs.rewardRatio) * 100)}%)
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               <div className="mt-6 space-y-2">
                 {isNodeRetreatedToday(selectedNode.id) ? (
                   <div className="rounded border border-rose-500/25 bg-rose-500/5 p-3 text-xs text-rose-300/85 text-center font-bold">
@@ -637,7 +767,7 @@ export function WorldMapPanel() {
                           setRecklessConfirmType('auto')
                           setShowRecklessConfirm(true)
                         } else {
-                          startWorldBattle(selectedNode.id)
+                          startWorldBattle(selectedNode.id, selectedHelpers)
                         }
                       }}
                       disabled={
@@ -657,7 +787,7 @@ export function WorldMapPanel() {
                           setRecklessConfirmType('manual')
                           setShowRecklessConfirm(true)
                         } else {
-                          startWorldManualBattle(selectedNode.id)
+                          startWorldManualBattle(selectedNode.id, selectedHelpers)
                         }
                       }}
                       disabled={
@@ -719,6 +849,7 @@ export function WorldMapPanel() {
             {RIFT_NODES.map((node: any) => {
               const status = riftNodesState[node.id] ?? node.status
               const meta = RIFT_NODE_STATUS_META[status]
+              const worldNode = livingWorld?.riftNodes[node.id]
 
               return (
                 <button
@@ -729,8 +860,13 @@ export function WorldMapPanel() {
                 >
                   {/* 노드 링과 코어 */}
                   <div
-                    className={`h-5 w-5 rounded-full border-2 ${meta.borderClass} ${meta.bgClass} flex items-center justify-center transition-all group-hover:scale-125 group-hover:border-purple-400`}
+                    className={`relative h-5 w-5 rounded-full border-2 ${meta.borderClass} ${meta.bgClass} flex items-center justify-center transition-all group-hover:scale-125 group-hover:border-purple-400`}
                   >
+                    {worldNode?.loveCall?.active && (
+                      <span className="absolute -top-3 -right-3 flex h-4 w-4 items-center justify-center rounded-full bg-yellow-500 text-[8px] font-black text-black shadow-glow-yellow animate-bounce z-20">
+                        📞
+                      </span>
+                    )}
                     {status === 'locked' && (
                       <Lock className="h-2 w-2 text-zinc-600" />
                     )}
