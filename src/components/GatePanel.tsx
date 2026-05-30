@@ -2014,6 +2014,7 @@ export function GatePanel() {
     return (
       <div className="space-y-4">
         <DirectBattlePreviewPanel
+          key={`direct-monarch-${monarchId}`}
           source="world_map"
           title="군주 격퇴전"
           note="그림자가 전방에서 공격을 받아내어 본체를 수호합니다. 그림자가 모두 쓰러지면 본체가 위험에 처합니다."
@@ -2121,6 +2122,7 @@ export function GatePanel() {
       <div className="space-y-4">
         <GateEchoPanel echoes={activeEchoes} onStart={setSelectedEchoId} />
         <DirectBattlePreviewPanel
+          key={`direct-echo-${selectedEcho.id}`}
           source="gate_echo"
           title="Gate Echo 정화 전투"
           note="미완료 일일퀘스트의 잔향을 먼저 정화해야 주요 행동이 재개됩니다."
@@ -2411,6 +2413,7 @@ export function GatePanel() {
         <GateStatusPanel />
         <ArchiveTraceChip count={traceCount} />
         <DirectBattlePreviewPanel
+          key={`direct-gate-${activeGate.instanceId}`}
           source={activeGate?.runState?.isPromotionExam ? 'promotion_exam' : (activeGate?.runState?.redGateState ? 'red_gate' : 'gate')}
           title="직접 조작 게이트 전투"
           note="실제 게이트 전투 후보입니다. 승리/패배 결과는 기존 게이트 보상/패널티 처리로 한 번만 연결됩니다."

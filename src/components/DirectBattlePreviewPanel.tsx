@@ -760,6 +760,7 @@ export function DirectBattlePreviewPanel({
   const autoStartedRef = useRef(false)
   const completionSentRef = useRef(false)
   const revealApplyTimersRef = useRef<number[]>([])
+  const startedBattleIdRef = useRef<string | null>(null)
   const safeRecommendedKey = DIRECT_BATTLE_MOCK_ENCOUNTERS.some(encounter => encounter.encounterKey === recommendedEncounterKey)
     ? recommendedEncounterKey
     : 'small_duo'
@@ -826,12 +827,17 @@ export function DirectBattlePreviewPanel({
   const enemyUnits = useMemo(() => preview ? livingUnits(preview.state, 'enemy') : [], [preview])
 
   useEffect(() => {
+    const activeBattleId = customBattleId ?? `direct-manual-preview-${safeRecommendedKey}`
+    if (startedBattleIdRef.current === activeBattleId && preview) {
+      return
+    }
     setEncounterKey(safeRecommendedKey)
     setPreview(undefined)
     setRoundReveal(undefined)
     autoStartedRef.current = false
     completionSentRef.current = false
-  }, [safeRecommendedKey])
+    startedBattleIdRef.current = null
+  }, [safeRecommendedKey, customBattleId])
 
   useEffect(() => () => {
     for (const timer of revealApplyTimersRef.current) window.clearTimeout(timer)
@@ -839,10 +845,12 @@ export function DirectBattlePreviewPanel({
   }, [])
 
   const startBattle = () => {
+    const activeBattleId = customBattleId ?? `direct-manual-preview-${encounterKey}`
     setRoundReveal(undefined)
     completionSentRef.current = false
     if (!canStartBattle) {
       setPreview(undefined)
+      startedBattleIdRef.current = null
       return
     }
 
@@ -874,12 +882,26 @@ export function DirectBattlePreviewPanel({
     const shadowBuilds = buildShadowBattleUnits(previewShadows, shadowDefinitions, {
       unitIdPrefix: 'direct-preview-shadow',
     })
-    const enemyBuild = customEnemyUnits
-      ? { units: customEnemyUnits, warnings: [] as string[] }
+
+    // customEnemyUnits를 Deep Clone하여 부모 리렌더링으로 인한 침투 완벽 방어!
+    const clonedEnemyUnits = customEnemyUnits
+      ? customEnemyUnits.map(unit => ({
+          ...unit,
+          stats: { ...unit.stats },
+          statusEffects: unit.statusEffects.map(status => ({ ...status })),
+          cooldowns: { ...unit.cooldowns },
+          actionList: unit.actionList.map(action => ({ ...action })),
+          passiveList: unit.passiveList.map(action => ({ ...action })),
+          metadata: { ...unit.metadata, tags: unit.metadata.tags ? [...unit.metadata.tags] : undefined },
+        }))
+      : undefined
+
+    const enemyBuild = clonedEnemyUnits
+      ? { units: clonedEnemyUnits, warnings: [] as string[] }
       : buildDirectBattleEncounterParty(encounterKey, enemyBaseLevel, pressureSnapshot, isRedGate, difficultyMod)
     const units = [hunterBuild.unit, ...shadowBuilds.map(build => build.unit), ...enemyBuild.units]
     const state = createDirectBattleState(units, {
-      battleId: customBattleId ?? `direct-manual-preview-${encounterKey}`,
+      battleId: activeBattleId,
       maxRounds: maxRoundsOverride ?? Math.max(6, selectedEncounter.maxRounds),
     })
     const buildWarnings = [
@@ -888,6 +910,7 @@ export function DirectBattlePreviewPanel({
       ...enemyBuild.warnings,
     ]
 
+    startedBattleIdRef.current = activeBattleId
     setPreview({
       encounterKey,
       state,
@@ -916,7 +939,8 @@ export function DirectBattlePreviewPanel({
   }
 
   useEffect(() => {
-    if (!autoStart || preview || !canStartBattle || autoStartedRef.current) return
+    const activeBattleId = customBattleId ?? `direct-manual-preview-${encounterKey}`
+    if (!autoStart || preview || !canStartBattle || autoStartedRef.current || startedBattleIdRef.current === activeBattleId) return
     autoStartedRef.current = true
     startBattle()
   })
@@ -1087,6 +1111,8 @@ export function DirectBattlePreviewPanel({
     }
     setPreview(undefined)
     setOverlayOpen(false)
+    startedBattleIdRef.current = null
+    autoStartedRef.current = false
   }
 
   const closeOverlay = () => {
@@ -1099,6 +1125,8 @@ export function DirectBattlePreviewPanel({
         getPanelOutcome(preview.state),
       ))
       setPreview(undefined)
+      startedBattleIdRef.current = null
+      autoStartedRef.current = false
     }
     setOverlayOpen(false)
   }

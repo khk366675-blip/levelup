@@ -15,7 +15,7 @@ export const MONARCHS: MonarchData[] = [
     rank: 8,
     name: '부패의 모왕 그렐릭',
     theme: '벌레 군단',
-    recommendedCP: 15000,
+    recommendedCP: 14200,
     concept: '다수 소환 · 머릿수 압박'
   },
   {
@@ -23,7 +23,7 @@ export const MONARCHS: MonarchData[] = [
     rank: 7,
     name: '빙결의 여군주 셀라이드',
     theme: '빙결',
-    recommendedCP: 18000,
+    recommendedCP: 17100,
     concept: '행동 둔화 · 빙결 상태이상'
   },
   {
@@ -31,7 +31,7 @@ export const MONARCHS: MonarchData[] = [
     rank: 6,
     name: '백염의 군주 이그리스',
     theme: '화염',
-    recommendedCP: 21000,
+    recommendedCP: 19900,
     concept: '지속 화염 장판 · 광역 폭발'
   },
   {
@@ -39,7 +39,7 @@ export const MONARCHS: MonarchData[] = [
     rank: 5,
     name: '강철의 패왕 도르가',
     theme: '강철 / 방어',
-    recommendedCP: 25000,
+    recommendedCP: 23700,
     concept: '초고방어 · 반격 · 약점 공략 요구'
   },
   {
