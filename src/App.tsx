@@ -37,6 +37,7 @@ import { ShopPanel } from './components/ShopPanel'
 import { AiCoachPanel } from './components/AiCoachPanel'
 import { FocusSessionOverlay } from './components/FocusSessionOverlay'
 import { WorldMapPanel } from './components/WorldMapPanel'
+import { DevCheatPanel } from './components/dev/DevCheatPanel'
 
 type Tab = 'rewards' | 'shop' | 'daily' | 'main' | 'gate' | 'shadows' | 'inventory' | 'grade' | 'tower' | 'coach' | 'worldmap'
 
@@ -503,6 +504,13 @@ export default function App() {
             )}
           </motion.div>
         </AnimatePresence>
+
+        {/* ── TEMP DEV CHEAT: DevCheatPanel 렌더링 ── */}
+        {import.meta.env.DEV && (
+          <div className="mt-8 border-t border-rose-500/20 pt-6">
+            <DevCheatPanel />
+          </div>
+        )}
 
         <footer className="text-center text-[10px] text-cyan-300/30 system-text py-6">
           ── SYSTEM // {initialized ? 'ONLINE' : 'BOOTING'} ──

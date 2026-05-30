@@ -161,6 +161,21 @@ public/               # 정적 파일
 
 ---
 
+## TEMP DEV CHEAT (임시 검증용 치트)
+
+Living Rift World 군주 및 Angel 결전 검증을 위한 임시 치트 모듈이 내장되어 있습니다. 이 기능은 개발 모드(`import.meta.env.DEV`)에서만 작동하며 프로덕션 빌드 번들에서는 원천 제외됩니다.
+
+- **치트 UI 위치**: `src/components/dev/DevCheatPanel.tsx` (App 최하단 렌더링)
+- **치트 로직 위치**: `src/lib/devCheats.ts` (백업/복원/삭제 및 Monarch/Angel 프로필 주입)
+- **치트 백업 Key**: `levelup-save-dev-cheat-backup` (로컬스토리지 복사본)
+- **검증 완료 후 기능 완전 롤백/삭제 방법**:
+  1. `src/lib/devCheats.ts` 파일 삭제
+  2. `src/components/dev/DevCheatPanel.tsx` 파일 삭제
+  3. `src/App.tsx`에서 `DevCheatPanel` import문과 최하단 렌더링 코드 제거
+  4. 검색어 `DEV_CHEAT`로 확인 및 잔여 제거
+
+---
+
 ## 참고 문서
 
 `docs/` 폴더에 시스템별 설계 문서가 있습니다(전투, 게이트, 직업 v2, 그림자 스킬/전투/장비/원정, AI 성장 코치 등). 해당 시스템을 수정하기 전에 관련 설계 문서를 먼저 확인하면 의도를 빠르게 파악할 수 있습니다.
