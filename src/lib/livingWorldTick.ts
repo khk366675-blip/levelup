@@ -170,6 +170,7 @@ export function advanceWorldDay(state: LivingWorldState, rng: RngFn): LivingWorl
   let nextWorldCorruption = state.worldCorruption
   let nextActiveMonarchs: ActiveMonarch[] = [...(state.activeMonarchs ?? [])]
   let nextHomeReachedMonarchId = state.homeReachedMonarchId
+  let nextMonarchsSpawnedTotal = state.monarchsSpawnedTotal ?? 0
 
   // [NEW] 틱 시작 전 통계 계산 (플레이어 클리어 반영)
   const initialClearedCount = Object.values(state.riftNodes).filter(n => n.status === 'cleared').length
@@ -660,11 +661,11 @@ export function advanceWorldDay(state: LivingWorldState, rng: RngFn): LivingWorl
   // 각 지역별 새로운 게이트 생성 롤링 (한국은 플레이어 활동 보장을 위해 35%로 상향, 타국은 18% 유지)
   for (const regionId in nextRegions) {
     const isKr = regionId === 'kr'
-    const spawnChance = isKr ? 0.35 : 0.18
+    const spawnChance = (isKr ? 0.35 : 0.18) + nextDay * 0.006
     if (rng() < spawnChance) {
       const region = { ...nextRegions[regionId] }
-      // 한 국가당 최대 4개 이하의 활성 게이트를 가질 때만 스폰
-      if (region && region.activeGateIds.length < 4) {
+      // 한 국가당 점증하는 활성 게이트 상한 체크
+      if (region && region.activeGateIds.length < (4 + Math.floor(nextDay / 16))) {
         const isSGrade = nextDay >= SGRADE_START_DAY && rng() < (nextDay < 60 ? SGRADE_CHANCE_EARLY : nextDay < 90 ? SGRADE_CHANCE_MID : SGRADE_CHANCE_LATE)
         
                 const newGateId = `gate-spawn-${nextDay}-${regionId}-${Math.floor(rng() * 10000)}`
@@ -752,21 +753,26 @@ export function advanceWorldDay(state: LivingWorldState, rng: RngFn): LivingWorl
     nextWorldCorruption = Math.min(100, nextWorldCorruption + MONARCH_DAILY_CORRUPTION)
   }
 
-  // 6. 군주 등장 조건 판정
-  // 전역 오염도가 40, 60, 78, 92, 99를 초과할 때마다 군주 등장 카운트 증가
-  const nextMonarchsLimit =
-    nextWorldCorruption >= MONARCH_THRESHOLDS[4] ? 5 :
-    nextWorldCorruption >= MONARCH_THRESHOLDS[3] ? 4 :
-    nextWorldCorruption >= MONARCH_THRESHOLDS[2] ? 3 :
-    nextWorldCorruption >= MONARCH_THRESHOLDS[1] ? 2 :
-    nextWorldCorruption >= MONARCH_THRESHOLDS[0] ? 1 : 0
+  // 6. 군주 등장 조건 판정 (하이브리드 트리거)
+  const TH8 = [38, 48, 57, 66, 74, 82, 90, 97]
+  let corruptionStage = 0
+  for (let i = 0; i < 8; i++) {
+    if (nextWorldCorruption >= TH8[i]) {
+      corruptionStage = i + 1
+    }
+  }
+  // 시간 상한: Day50 첫 군주 보장, 이후 7일마다 +1 강제
+  let timeStage = 0
+  if (nextDay >= 50) {
+    timeStage = Math.min(8, 1 + Math.floor((nextDay - 50) / 7))
+  }
+  const nextMonarchsLimit = Math.min(8, Math.max(corruptionStage, timeStage))
 
-  let currentMonarchsCount = nextActiveMonarchs.length
-  if (nextMonarchsLimit > currentMonarchsCount) {
+  if (nextMonarchsLimit > nextMonarchsSpawnedTotal) {
     // 임계값 초과에 따른 군주 순차 스폰
-    const spawnCount = nextMonarchsLimit - currentMonarchsCount
+    const spawnCount = nextMonarchsLimit - nextMonarchsSpawnedTotal
     for (let k = 0; k < spawnCount; k++) {
-      const spawnIndex = currentMonarchsCount + k
+      const spawnIndex = nextMonarchsSpawnedTotal + k
       const targetMonarchData = MONARCHS[spawnIndex]
       if (targetMonarchData) {
         // 무작위 오염된 국가에 침공 (오염도 10 이상인 국가 중 하나 선택)
@@ -788,6 +794,7 @@ export function advanceWorldDay(state: LivingWorldState, rng: RngFn): LivingWorl
         }
 
         nextActiveMonarchs.push(newMonarch)
+        nextMonarchsSpawnedTotal++
         
         // 침공당한 지역의 오염도 즉시 급증 (+20%)
         nextRegions[targetRegionId].corruption = Math.min(100, nextRegions[targetRegionId].corruption + 20)
@@ -847,8 +854,8 @@ export function advanceWorldDay(state: LivingWorldState, rng: RngFn): LivingWorl
           const reg = nextRegions[challengeRegId]
           if (reg) {
             const activeRegionPower = getActiveRegionPower(reg, nextNamedHunters)
-            // 총전력이 군주 권장 CP보다 클 때, 30% 확률로 격퇴 성공
-            if (activeRegionPower >= monarchData.recommendedCP && rng() < 0.3) {
+            // 총전력이 군주 권장 CP보다 클 때, 12% 확률로 격퇴 성공
+            if (activeRegionPower >= monarchData.recommendedCP && rng() < 0.12) {
               monarch.status = 'defeated'
               monarch.occupiedRegionIds = []
               const expName = RIFT_REGIONS.find(r => r.id === challengeRegId)?.name ?? challengeRegId.toUpperCase()
@@ -944,6 +951,7 @@ export function advanceWorldDay(state: LivingWorldState, rng: RngFn): LivingWorl
     activeMonarchs: nextActiveMonarchs,
     homeReachedMonarchId: nextHomeReachedMonarchId,
     eventLogs: logs,
-    dailySummaries: nextSummaries
+    dailySummaries: nextSummaries,
+    monarchsSpawnedTotal: nextMonarchsSpawnedTotal
   }
 }

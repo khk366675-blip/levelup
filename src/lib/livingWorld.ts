@@ -222,6 +222,7 @@ export function initLivingWorld(seed: number): LivingWorldState {
     angelReady: false,
     endingState: 'none',
     coopCount: 0,
-    dailySummaries: []
+    dailySummaries: [],
+    monarchsSpawnedTotal: 0
   }
 }

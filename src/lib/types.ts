@@ -2447,6 +2447,7 @@ export interface LivingWorldState {
   endingState?: 'none' | 'victory'    // 진엔딩 상태 식별자
   coopCount?: number                  // 이번 회차 총 협력 횟수
   dailySummaries?: DailySummary[]     // [NEW] 일일 정세 요약 스냅샷 리스트
+  monarchsSpawnedTotal?: number       // [NEW] 누적 등장 군주 총수 (격퇴 여부 무관)
 }
 
 // 시드용 Base 데이터 타입

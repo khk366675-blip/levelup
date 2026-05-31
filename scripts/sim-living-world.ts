@@ -12,7 +12,7 @@ function runSimulation(seed: number): {
   clearedGatesCount: number
   initialNamedCount: number
   survivingNamedCount: number
-  monarchsAppeared: number
+  monarchsSpawnedTotal: number
   strongestRegion: string
   weakestRegion: string
   homeInvadedDay: number | null
@@ -31,7 +31,7 @@ function runSimulation(seed: number): {
     const dayRng = createSeededRng(state.seed + state.day)
     state = advanceWorldDay(state, dayRng)
 
-    if (firstMonarchDay === null && state.monarchsAppeared > 0) {
+    if (firstMonarchDay === null && (state.monarchsSpawnedTotal ?? 0) > 0) {
       firstMonarchDay = d
     }
     if (homeInvadedDay === null && state.homeReachedMonarchId) {
@@ -94,7 +94,7 @@ function runSimulation(seed: number): {
     clearedGatesCount,
     initialNamedCount,
     survivingNamedCount,
-    monarchsAppeared: state.monarchsAppeared,
+    monarchsSpawnedTotal: state.monarchsSpawnedTotal ?? 0,
     strongestRegion: strongest,
     weakestRegion: weakest,
     homeInvadedDay,
@@ -113,7 +113,7 @@ function main() {
   let explodedGates: number[] = []
   let clearedGates: number[] = []
   let namedSurvivalRates: number[] = []
-  let monarchAppearances: number[] = []
+  let monarchSpawnedTotals: number[] = []
   let homeInvadedDays: number[] = []
   let totalOccupiedRegionsList: number[] = []
   let defeatedMonarchsCountList: number[] = []
@@ -139,7 +139,7 @@ function main() {
     explodedGates.push(result.explodedGatesCount)
     clearedGates.push(result.clearedGatesCount)
     namedSurvivalRates.push(result.survivingNamedCount / result.initialNamedCount)
-    monarchAppearances.push(result.monarchsAppeared)
+    monarchSpawnedTotals.push(result.monarchsSpawnedTotal)
     totalOccupiedRegionsList.push(result.totalOccupiedRegions)
     defeatedMonarchsCountList.push(result.defeatedMonarchsCount)
 
@@ -162,7 +162,8 @@ function main() {
   const avgExploded = average(explodedGates)
   const avgCleared = average(clearedGates)
   const avgSurvival = average(namedSurvivalRates) * 100
-  const avgMonarchs = average(monarchAppearances)
+  const avgMonarchs = average(monarchSpawnedTotals)
+  const rate8Monarchs = (monarchSpawnedTotals.filter(c => c >= 8).length / RUNS) * 100
   const avgHomeInvaded = average(homeInvadedDays)
   const rateHomeInvaded = (homeInvadedDays.length / RUNS) * 100
   const avgOccupied = average(totalOccupiedRegionsList)
@@ -173,7 +174,8 @@ function main() {
   console.log(`- 중앙값 첫 군주 등장 시점: ${medFirstMonarch > 0 ? `${medFirstMonarch} 일차` : '미등장'}`);
   console.log(`- 100일 시점 평균 세계 오염도: ${avgCorruption.toFixed(2)}%`);
   console.log(`- 100일 시점 중앙값 세계 오염도: ${medCorruption}%`);
-  console.log(`- 100일 평균 군주 등장 수: ${avgMonarchs.toFixed(2)}명 / 5명`);
+  console.log(`- 100일 평균 군주 등장 수: ${avgMonarchs.toFixed(2)}명 / 8명`);
+  console.log(`- 8군주 등장 완료율 (100% 보장 목표): ${rate8Monarchs.toFixed(2)}%`);
   console.log(`- 평균 폭주 게이트 수: ${avgExploded.toFixed(2)}개`);
   console.log(`- 평균 클리어 게이트 수: ${avgCleared.toFixed(2)}개`);
   console.log(`- 네임드 헌터 평균 생존율: ${avgSurvival.toFixed(2)}%`);
@@ -210,7 +212,7 @@ function main() {
     run1.explodedGatesCount === run2.explodedGatesCount &&
     run1.clearedGatesCount === run2.clearedGatesCount &&
     run1.survivingNamedCount === run2.survivingNamedCount &&
-    run1.monarchsAppeared === run2.monarchsAppeared &&
+    run1.monarchsSpawnedTotal === run2.monarchsSpawnedTotal &&
     run1.strongestRegion === run2.strongestRegion &&
     run1.weakestRegion === run2.weakestRegion &&
     run1.homeInvadedDay === run2.homeInvadedDay &&
