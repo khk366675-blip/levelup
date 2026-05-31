@@ -2043,8 +2043,8 @@ export function GatePanel() {
     )
   }
 
-  // 12-29I: 월드맵 수동 전투 세션에 대한 최상단 렌더링 예외 가드 추가
-  if (manualBattleSession && manualBattleSession.source === 'world_map') {
+  // 12-29I: 월드맵 수동 전투 세션에 대한 최상단 렌더링 예외 가드 추가 (종료되지 않은 세션만 렌더링)
+  if (manualBattleSession && manualBattleSession.source === 'world_map' && !isManualBattleSessionTerminal(manualBattleSession)) {
     const worldMonsterDef = MONSTER_DEFINITIONS.find(monster => monster.id === manualBattleSession.gateId) || MONSTER_DEFINITIONS[0]
     return (
       <div className="space-y-4">
@@ -2079,7 +2079,7 @@ export function GatePanel() {
       : undefined
   const terminalGateSession =
     manualBattleSession &&
-    (!manualBattleSession.source || manualBattleSession.source === 'gate') &&
+    (!manualBattleSession.source || manualBattleSession.source === 'gate' || manualBattleSession.source === 'world_map') &&
     isManualBattleSessionTerminal(manualBattleSession)
   const terminalGateSessionKey = terminalGateSession ? `${manualBattleSession.gateInstanceId}:${manualBattleSession.startedAt}` : undefined
   const finalizedTerminalSessionsRef = useRef(new Set<string>())

@@ -8111,6 +8111,12 @@ export const useGame = create<GameState>()(
           })
         } else {
           // 패배 시
+          const monarchLog: CombatLog = { ...combatLog, source: combatLog.source || 'worldmap' }
+          if (shouldHardcoreResetForCombat(s, monarchLog)) {
+            set(createHardcoreDeathResetState(s, 'monarch_player_death', gate.name))
+            return
+          }
+
           if (isMonarchId && s.livingWorld) {
             const worldLogs = [...s.livingWorld.eventLogs]
             worldLogs.push(`[Day ${s.livingWorld.day}] ⚠️ [군주 토벌 실패] 플레이어가 군주 [${gate.name}] 토벌에 실패하고 부상을 입은 채 후퇴했습니다.`)
