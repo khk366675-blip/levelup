@@ -141,6 +141,14 @@ export function WorldMapPanel() {
     setShowRecklessConfirm(false)
   }, [livingWorld?.seed])
 
+  // 3. activeRiftNodeId가 undefined로 정리되면 selectedNode도 로컬 상태에서 닫아줌
+  useEffect(() => {
+    if (!activeRiftNodeId) {
+      setSelectedNode(null)
+      setSelectedHelpers([])
+    }
+  }, [activeRiftNodeId])
+
   // 토스트 메시지 도우미
   const triggerToast = (msg: string) => {
     setToastMessage(msg)
@@ -927,7 +935,9 @@ export function WorldMapPanel() {
                 ? Object.keys(livingWorld?.namedHunters ?? {}).filter(hid => livingWorld?.namedHunters[hid]?.status === 'active')
                 : (regionState?.namedHunterIds || [])
               const activeMonarchState = livingWorld?.activeMonarchs?.find(m => m.monarchId === selectedNode.id)
-              const isDefeated = activeMonarchState?.status === 'defeated'
+              const isDefeated = selectedNode.id === 'angel'
+                ? (livingWorld?.endingState === 'victory')
+                : (activeMonarchState?.status === 'defeated')
               
               return (
                 <div className="panel corner-bracket border-red-500/30 bg-red-950/10 p-4 animate-fade-in">

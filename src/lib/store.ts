@@ -4830,10 +4830,38 @@ export const useGame = create<GameState>()(
 
       markRiftNodeCleared: (nodeId) => {
         const s = get()
+        const isMonarchId = MONARCHS.some(m => m.id === nodeId) || nodeId === 'angel'
+
+        let monarchData = undefined
+        let monarchRegionId = 'kr'
+        if (isMonarchId) {
+          monarchData = nodeId === 'angel' ? FINAL_ANGEL : MONARCHS.find(m => m.id === nodeId)
+          if (s.livingWorld?.activeMonarchs) {
+            const activeMon = s.livingWorld.activeMonarchs.find(m => m.monarchId === nodeId)
+            if (activeMon && activeMon.occupiedRegionIds.length > 0) {
+              monarchRegionId = activeMon.occupiedRegionIds[0]
+            }
+          }
+        }
+
         const node = {
           difficulty: 500,
           deadline: 7,
           daysRemaining: 7,
+          ...(isMonarchId && monarchData ? {
+            id: monarchData.id,
+            regionId: monarchRegionId,
+            name: monarchData.name,
+            x: 50,
+            y: 50,
+            status: 'active' as const,
+            gateDefId: monarchData.id,
+            difficultyRank: 'S' as const,
+            difficulty: monarchData.recommendedCP,
+            deadline: 999,
+            daysRemaining: 999,
+            isSGrade: true
+          } : {}),
           ...(s.livingWorld?.riftNodes[nodeId] || RIFT_NODES.find((n) => n.id === nodeId))
         } as RiftNode
         if (!node) return
@@ -4922,6 +4950,18 @@ export const useGame = create<GameState>()(
             nextLivingWorld = {
               ...nextLivingWorld,
               regions: nextRegions,
+              riftNodes: updatedWorldNodes,
+              eventLogs,
+            }
+          } else {
+            // regionState가 없는 군주/Angel의 경우에도 riftNodes 상태 반영
+            const eventLogs = [
+              ...nextLivingWorld.eventLogs,
+              `[Day ${nextLivingWorld.day}] 🌟 헌터(플레이어)가 [${node.name}] 토벌에 성공했습니다! 차원의 왜곡이 안전하게 소멸되었습니다.`,
+            ].slice(-60)
+            
+            nextLivingWorld = {
+              ...nextLivingWorld,
               riftNodes: updatedWorldNodes,
               eventLogs,
             }
@@ -7690,21 +7730,28 @@ export const useGame = create<GameState>()(
         const isVictory = combatLog.result === 'victory'
         const isMonarchId = MONARCHS.some(m => m.id === nodeId) || nodeId === 'angel'
 
-        let nextHunter = s.hunter
-        let nextGold = s.gold ?? 0
-        let nextShadowEssence = s.shadowEssence ?? 0
-        const newMessages: SystemMessage[] = []
-
-        // [L1-A] 협력 헌터 결과 처리용
-        let updatedNamedHunters = s.livingWorld ? { ...s.livingWorld.namedHunters } : undefined
-        let updatedRiftNodes = s.livingWorld ? { ...s.livingWorld.riftNodes } : undefined
-        let worldLogs = s.livingWorld ? [...s.livingWorld.eventLogs] : []
-
-        let updatedActiveMonarchs = s.livingWorld?.activeMonarchs ? [...s.livingWorld.activeMonarchs] : undefined
-        let nextHomeReachedMonarchId = s.livingWorld?.homeReachedMonarchId
-        let nextAngelReady = s.livingWorld?.angelReady
-
         if (isVictory) {
+          // 1. 먼저 정화 및 오염도 감소 처리를 위해 markRiftNodeCleared를 호출합니다.
+          // 이로써 store.riftNodes와 store.livingWorld.riftNodes/regions/eventLogs가 cleared 처리됩니다.
+          get().markRiftNodeCleared(nodeId)
+
+          // 2. markRiftNodeCleared가 완료된 최신 스토어 상태를 가져옵니다.
+          const freshState = get()
+
+          let nextHunter = freshState.hunter
+          let nextGold = freshState.gold ?? 0
+          let nextShadowEssence = freshState.shadowEssence ?? 0
+          const newMessages: SystemMessage[] = []
+
+          // [L1-A] 협력 헌터 결과 처리용 (이미 markRiftNodeCleared가 완수된 최신 상태 기반)
+          let updatedNamedHunters = freshState.livingWorld ? { ...freshState.livingWorld.namedHunters } : undefined
+          let updatedRiftNodes = freshState.livingWorld ? { ...freshState.livingWorld.riftNodes } : undefined
+          let worldLogs = freshState.livingWorld ? [...freshState.livingWorld.eventLogs] : []
+
+          let updatedActiveMonarchs = freshState.livingWorld?.activeMonarchs ? [...freshState.livingWorld.activeMonarchs] : undefined
+          let nextHomeReachedMonarchId = freshState.livingWorld?.homeReachedMonarchId
+          let nextAngelReady = freshState.livingWorld?.angelReady
+
           // 보상 계산 (난이도 CP 비례 & 협력 페널티 트레이드오프 적용)
           const recommendedPower = gate.recommendedPower || 1000
           const helperHunterIds = activeGate.helperHunterIds || []
@@ -7719,10 +7766,11 @@ export const useGame = create<GameState>()(
             baseHunterXp = Math.round(recommendedPower * 1.2)
             baseEssence = Math.round(recommendedPower * 0.001) * 3
           } else {
-            const node = s.livingWorld?.riftNodes[nodeId]
-            baseGold = node?.loveCall?.promisedReward.gold ?? Math.round(recommendedPower * 0.15)
-            baseHunterXp = node?.loveCall?.promisedReward.hunterXp ?? Math.round(recommendedPower * 0.12)
-            baseEssence = node?.loveCall?.promisedReward.shadowEssence ?? (gate.rank === 'S' ? 5 : 2)
+            // loveCall이 이미 undefined 처리되었을 수 있으므로 첫 진입 s 시점의 원본 노드 참조
+            const originalNode = s.livingWorld?.riftNodes[nodeId]
+            baseGold = originalNode?.loveCall?.promisedReward.gold ?? Math.round(recommendedPower * 0.15)
+            baseHunterXp = originalNode?.loveCall?.promisedReward.hunterXp ?? Math.round(recommendedPower * 0.12)
+            baseEssence = originalNode?.loveCall?.promisedReward.shadowEssence ?? (gate.rank === 'S' ? 5 : 2)
           }
 
           const rewardRatio = Math.max(COOP_REWARD_MIN_RATIO, 1 - COOP_REWARD_PENALTY_PER_HELPER * helperCount)
@@ -7732,7 +7780,7 @@ export const useGame = create<GameState>()(
           const finalEssence = Math.max(1, Math.round(baseEssence * rewardRatio * runMultiplier))
 
           if (finalXp > 0) {
-            const xpResult = applyXp(s.hunter, finalXp, 'challenge')
+            const xpResult = applyXp(freshState.hunter, finalXp, 'challenge')
             nextHunter = xpResult.hunter
             if (xpResult.outcome?.leveledUp) {
               newMessages.push({
@@ -7740,7 +7788,7 @@ export const useGame = create<GameState>()(
                 kind: 'levelup',
                 title: 'LEVEL UP',
                 lines: [
-                  `Lv.${s.hunter.level} → Lv.${xpResult.outcome.newLevel}`,
+                  `Lv.${freshState.hunter.level} → Lv.${xpResult.outcome.newLevel}`,
                   `자동 분배 — ${formatStatGains(xpResult.outcome.autoStatGains)}`,
                   `자유 배분권 +${xpResult.outcome.freeStatPointsGained}`,
                 ],
@@ -7786,22 +7834,22 @@ export const useGame = create<GameState>()(
             const allDefeated = updatedActiveMonarchs.length === 8 && updatedActiveMonarchs.every(m => m.status === 'defeated')
             if (allDefeated) {
               nextAngelReady = true
-              worldLogs.push(`[Day ${s.livingWorld?.day ?? 0}] [지고의 예언] 대균열의 심연에서 지고의 심판자(천사)가 강림을 예고하며 장엄한 빛이 쏟아집니다.`)
+              worldLogs.push(`[Day ${freshState.livingWorld?.day ?? 0}] [지고의 예언] 대균열의 심연에서 지고의 심판자(천사)가 강림을 예고하며 장엄한 빛이 쏟아집니다.`)
             }
           }
 
           if (nodeId === 'angel') {
-            worldLogs.push(`[Day ${s.livingWorld?.day ?? 0}] 🌟 [구원 완료] 지고의 심판자(천사)를 격퇴하고 대균열의 근원을 영원히 정화했습니다! 세계는 멸망의 운명에서 마침내 구원받았습니다.`)
+            worldLogs.push(`[Day ${freshState.livingWorld?.day ?? 0}] 🌟 [구원 완료] 지고의 심판자(천사)를 격퇴하고 대균열의 근원을 영원히 정화했습니다! 세계는 멸망의 운명에서 마침내 구원받았습니다.`)
           }
 
-          let nextCoopCount = s.livingWorld?.coopCount ?? 0
+          let nextCoopCount = freshState.livingWorld?.coopCount ?? 0
           if (helperHunterIds.length > 0) {
             nextCoopCount += 1
           }
 
           // [L1-A] 협력 헌터 성장 및 러브콜 해제
-          if (helperHunterIds.length > 0 && s.livingWorld && updatedNamedHunters && updatedRiftNodes) {
-            const nodeStatus = s.livingWorld.riftNodes[nodeId]
+          if (helperHunterIds.length > 0 && freshState.livingWorld && updatedNamedHunters && updatedRiftNodes) {
+            const nodeStatus = freshState.livingWorld.riftNodes[nodeId]
             const rName = RIFT_REGIONS.find(r => r.id === nodeStatus?.regionId)?.name ?? '해외'
             
             for (const hid of helperHunterIds) {
@@ -7809,12 +7857,12 @@ export const useGame = create<GameState>()(
               if (hunter && hunter.status === 'active') {
                 const bonusMult = 1.02 + Math.random() * 0.03
                 hunter.power = Math.round(hunter.power * bonusMult)
-                const region = s.livingWorld.regions[hunter.regionId]
+                const region = freshState.livingWorld.regions[hunter.regionId]
                 const cap = 4500 + (region?.growthBias ?? 0.5) * 1000
                 if (hunter.power > cap) hunter.power = Math.round(cap)
                 updatedNamedHunters[hid] = hunter
                 
-                worldLogs.push(`[Day ${s.livingWorld.day}] 🤝 [협력 원정] 참전한 ${rName}의 [${hunter.name}] 헌터가 정화 성공으로 추가 성장했습니다! (전투력: ${hunter.power})`)
+                worldLogs.push(`[Day ${freshState.livingWorld.day}] 🤝 [협력 원정] 참전한 ${rName}의 [${hunter.name}] 헌터가 정화 성공으로 추가 성장했습니다! (전투력: ${hunter.power})`)
               }
             }
 
@@ -7825,25 +7873,29 @@ export const useGame = create<GameState>()(
             }
           }
 
-          // 정화 완료 후처리 (NPC 클리어와 공유하는 오염도 감소 및 locked 해제 적용)
-          get().markRiftNodeCleared(nodeId)
+          // UI 렌더링에 영항을 주는 노드 클리어 보장
+          const finalRiftNodes = { ...freshState.riftNodes, [nodeId]: 'cleared' as RiftNodeStatus }
 
           set({
             hunter: nextHunter,
             gold: nextGold,
             shadowEssence: nextShadowEssence,
-            livingWorld: s.livingWorld ? {
-              ...s.livingWorld,
-              namedHunters: updatedNamedHunters ?? s.livingWorld.namedHunters,
-              riftNodes: updatedRiftNodes ?? s.livingWorld.riftNodes,
+            livingWorld: freshState.livingWorld ? {
+              ...freshState.livingWorld,
+              namedHunters: updatedNamedHunters ?? freshState.livingWorld.namedHunters,
+              riftNodes: updatedRiftNodes ?? freshState.livingWorld.riftNodes,
               eventLogs: worldLogs,
-              activeMonarchs: updatedActiveMonarchs ?? s.livingWorld.activeMonarchs,
+              activeMonarchs: updatedActiveMonarchs ?? freshState.livingWorld.activeMonarchs,
               homeReachedMonarchId: nextHomeReachedMonarchId,
-              angelReady: nextAngelReady ?? s.livingWorld.angelReady,
-              endingState: nodeId === 'angel' ? 'victory' : s.livingWorld.endingState,
+              angelReady: nextAngelReady ?? freshState.livingWorld.angelReady,
+              endingState: nodeId === 'angel' ? 'victory' : freshState.livingWorld.endingState,
               coopCount: nextCoopCount,
             } : undefined,
-            messages: [...s.messages, ...newMessages],
+            messages: [...freshState.messages, ...newMessages],
+            riftNodes: finalRiftNodes,
+            activeGate: undefined,
+            manualBattleSession: undefined,
+            activeRiftNodeId: undefined,
           })
         } else {
           // 패배 시
@@ -7854,7 +7906,10 @@ export const useGame = create<GameState>()(
               livingWorld: {
                 ...s.livingWorld,
                 eventLogs: worldLogs
-              }
+              },
+              activeGate: undefined,
+              manualBattleSession: undefined,
+              activeRiftNodeId: undefined,
             })
           }
         }
@@ -7863,6 +7918,66 @@ export const useGame = create<GameState>()(
       startWorldManualBattle: (nodeId, helperHunterIds) => {
         const s = get()
         const isMonarchId = MONARCHS.some(m => m.id === nodeId) || nodeId === 'angel'
+
+        // 군주 및 Angel 진입 권한 및 격퇴 완료 가드
+        if (isMonarchId) {
+          if (nodeId === 'angel') {
+            const angelReady = s.livingWorld?.angelReady
+            const endingState = s.livingWorld?.endingState
+            if (!angelReady) {
+              set({
+                messages: [
+                  ...s.messages,
+                  {
+                    id: uid(),
+                    kind: 'info',
+                    title: '진입 차단',
+                    lines: ['아직 지고의 심판자(천사)가 나타나지 않았습니다. 8명의 군주를 모두 격퇴해야 합니다.'],
+                    createdAt: todayISO(),
+                  }
+                ]
+              })
+              return
+            }
+            if (endingState === 'victory') {
+              set({
+                messages: [
+                  ...s.messages,
+                  {
+                    id: uid(),
+                    kind: 'info',
+                    title: '진입 차단',
+                    lines: ['이미 정화된 결전입니다.'],
+                    createdAt: todayISO(),
+                  }
+                ]
+              })
+              return
+            }
+          } else {
+            // s.livingWorld와 activeMonarchs가 정상적으로 셋업되어 있는 리얼 런타임 환경에서만 이미 패퇴한 군주에 대한 재진입을 막습니다.
+            if (s.livingWorld && s.livingWorld.activeMonarchs && s.livingWorld.activeMonarchs.length > 0) {
+              const activeMonarch = s.livingWorld.activeMonarchs.find(m => m.monarchId === nodeId)
+              const isDefeated = !activeMonarch || activeMonarch.status === 'defeated' || activeMonarch.occupiedRegionIds.length === 0
+              if (isDefeated) {
+                set({
+                  messages: [
+                    ...s.messages,
+                    {
+                      id: uid(),
+                      kind: 'info',
+                      title: '진입 차단',
+                      lines: ['이미 격퇴된 군주입니다.'],
+                      createdAt: todayISO(),
+                    }
+                  ]
+                })
+                return
+              }
+            }
+          }
+        }
+
         let monarchRegionId = 'kr'
         if (isMonarchId && s.livingWorld?.activeMonarchs) {
           const activeMon = s.livingWorld.activeMonarchs.find(m => m.monarchId === nodeId)
