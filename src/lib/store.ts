@@ -7936,6 +7936,8 @@ export const useGame = create<GameState>()(
 
         // 1) nodeId로 동적 게이트 정의 구성 (한국 게이트 or 군주)
         let customGateDef
+        let manualSession = undefined
+
         if (isMonarchId) {
           const monarchData = nodeId === 'angel' ? FINAL_ANGEL : MONARCHS.find(m => m.id === nodeId)!
           customGateDef = {
@@ -7949,6 +7951,72 @@ export const useGame = create<GameState>()(
             rewardTableId: 'reward-gate-s-basic',
             failPenaltyId: 'penalty-gate-basic',
             expiresInHours: 720,
+          }
+
+          // 군주전을 위한 manualBattleSession 구성
+          const equippedItems = getEquippedItems(s.items, s.equipment)
+          const equippedShadows = getEquippedShadows(s.ownedShadows, s.equippedShadowIds, s.hunter)
+          const shadowStatBonuses = getEquippedShadowStatBonuses(equippedShadows)
+          const combatStatsWithShadows = { ...s.hunter.stats }
+          for (const [stat, value] of Object.entries(shadowStatBonuses)) {
+            combatStatsWithShadows[stat as StatKey] = roundStatValue(combatStatsWithShadows[stat as StatKey] + (value ?? 0))
+          }
+          const activeJobId = s.hunter.activeJobId || s.hunter.jobId
+          const jobLevel = s.hunter.jobs?.[activeJobId]?.level ?? 1
+          const playerSkills = getPlayerCombatSkills({
+            jobId: activeJobId,
+            jobLevel,
+            equippedItems,
+            allSkills: SKILL_DEFINITIONS,
+            includeBasicKit: true,
+          })
+          const allPlayerSkills = ensureBasicAttack(playerSkills)
+          const playerStats = calculatePlayerCombatStats({
+            level: s.hunter.level,
+            stats: combatStatsWithShadows,
+            equippedItems,
+            activeConsumableEffects: s.activeConsumableEffects,
+            jobId: activeJobId,
+            skills: playerSkills,
+          })
+
+          const player = createPlayerBattleActor(s.hunter.name || '헌터', playerStats, allPlayerSkills)
+          const monarchUnit = buildMonarchBattleUnit(nodeId, monarchData.recommendedCP)
+          const monster = {
+            id: nodeId,
+            name: monarchUnit.displayName,
+            maxHp: monarchUnit.stats.maxHp,
+            hp: monarchUnit.stats.currentHp,
+            atk: monarchUnit.stats.atk,
+            def: monarchUnit.stats.def,
+            spd: monarchUnit.stats.spd,
+            level: 80,
+            skills: [],
+            cooldowns: {},
+            activeEffects: [],
+          }
+
+          manualSession = {
+            gateId: nodeId,
+            gateName: monarchData.name,
+            gateInstanceId: `worldmap-${nodeId}-${Date.now()}`,
+            waveIndex: 0,
+            turn: 1,
+            maxTurns: 200,
+            player: toManualCombatant(player),
+            monster: toManualCombatant(monster as any),
+            remainingMonsterIds: [],
+            cooldowns: {},
+            monsterCooldowns: {},
+            activeEffects: [],
+            consumableEffects: s.activeConsumableEffects,
+            usedConsumableItemIds: [],
+            usedConsumableEffectTypes: [],
+            consumableUseCount: 0,
+            logs: [],
+            startedAt: todayISO(),
+            source: 'world_map' as const,
+            helperHunterIds: helperHunterIds || [],
           }
         } else {
           const rank = node.difficultyRank || 'D'
@@ -7979,7 +8047,14 @@ export const useGame = create<GameState>()(
 
         // 2) get().spawnGate(dynamicGateId, 'worldmap', helperHunterIds, customGateDef)
         get().spawnGate(nodeId, 'worldmap', helperHunterIds, customGateDef)
-        set({ activeRiftNodeId: nodeId })
+        if (isMonarchId && manualSession) {
+          set({
+            activeRiftNodeId: nodeId,
+            manualBattleSession: manualSession
+          })
+        } else {
+          set({ activeRiftNodeId: nodeId })
+        }
       },
 
       performWorldManualBattleAction: (action) => {},
