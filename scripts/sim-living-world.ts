@@ -125,6 +125,10 @@ function main() {
     const seed = 100000 + i * 7
     const result = runSimulation(seed)
 
+    if ((i + 1) % 50 === 0) {
+      console.log(`- 진행률: ${i + 1}/${RUNS} 완료`)
+    }
+
     if (result.firstMonarchDay !== null) {
       firstMonarchDays.push(result.firstMonarchDay)
     }

@@ -44,36 +44,105 @@ const MONARCH_EXPAND_INTERVAL = 3 // 군주 영역 확장 주기 (일)
 /**
  * 특정 지역의 가용 총전력을 계산합니다. (사망/부상 헌터 제외)
  */
-function getActiveRegionPower(region: RegionState, namedHunters: Record<string, NamedHunter>): number {
-  let namedPower = 0
-  const activeNamedCount = region.namedHunterIds.filter(id => namedHunters[id]?.status === 'active').length
+function getActiveRegionPower(
+  region: RegionState,
+  namedHunters: Record<string, NamedHunter>,
+  gate?: RiftNode,
+  nextRiftNodes?: Record<string, RiftNode>
+): number {
+  const RANK_INDEX: Record<string, number> = {
+    E: 0, D: 1, C: 2, B: 3, A: 4, S: 5, National: 6
+  }
 
-  for (const hunterId of region.namedHunterIds) {
-    const hunter = namedHunters[hunterId]
-    if (hunter && hunter.status === 'active') {
-      let p = hunter.power + (hunter.equipmentScore ?? 0)
-      const trait = getHunterTrait(hunter.traitId)
-      
-      if (trait) {
-        if (trait.winMod) p *= trait.winMod
-        
-        if (activeNamedCount === 1) {
-          if (trait.soloWinMod) p *= trait.soloWinMod
-          if (trait.soloMod) p *= trait.soloMod
-        } else if (activeNamedCount > 1) {
-          if (trait.coopMod) p *= trait.coopMod
-        }
+  function getRankMatchWeight(hunterRank: string, gateRank: string): number {
+    const hIdx = RANK_INDEX[hunterRank] ?? 2
+    const gIdx = RANK_INDEX[gateRank] ?? 2
+    const distance = Math.abs(hIdx - gIdx)
+    if (distance === 0) return 1.0
+    if (distance === 1) return 0.5
+    if (distance === 2) return 0.1
+    return 0.0
+  }
+
+  // 1. 해당 지역의 활성화된 게이트들 목록 추출 (파견 비율 분배용)
+  const activeGates: RiftNode[] = []
+  if (gate && nextRiftNodes) {
+    for (const gid of region.activeGateIds) {
+      const g = nextRiftNodes[gid]
+      if (g && g.status === 'active') {
+        activeGates.push(g)
       }
-      namedPower += p
     }
   }
 
+  let namedPower = 0
+  const activeNamedNamedHunters = region.namedHunterIds
+    .map(id => namedHunters[id])
+    .filter(h => h && h.status === 'active') as NamedHunter[]
+  const activeNamedCount = activeNamedNamedHunters.length
+
+  for (const hunter of activeNamedNamedHunters) {
+    let p = hunter.power + (hunter.equipmentScore ?? 0)
+    const trait = getHunterTrait(hunter.traitId)
+    
+    if (trait) {
+      if (trait.winMod) p *= trait.winMod
+      if (activeNamedCount === 1) {
+        if (trait.soloWinMod) p *= trait.soloWinMod
+        if (trait.soloMod) p *= trait.soloMod
+      } else if (activeNamedCount > 1) {
+        if (trait.coopMod) p *= trait.coopMod
+      }
+    }
+
+    // 파견 비율 계산
+    let ratio = 1.0
+    if (gate && activeGates.length > 0) {
+      let hunterScores: Record<string, number> = {}
+      let totalScore = 0
+      for (const g of activeGates) {
+        const gRank = g.difficultyRank ?? 'C'
+        const weight = getRankMatchWeight(hunter.rank, gRank)
+        const score = weight * (10 / Math.max(1, g.daysRemaining))
+        hunterScores[g.id] = score
+        totalScore += score
+      }
+      ratio = totalScore > 0 ? (hunterScores[gate.id] ?? 0) / totalScore : 0.0
+    }
+
+    namedPower += p * ratio
+  }
+
   const pool = region.pool
-  // 게이트 하나에 일시 동원되는 익명 풀 전력은 실효 기여도인 8% 수준으로 제한
-  const poolPower =
-    (pool.countA * pool.avgPowerA +
-     pool.countB * pool.avgPowerB +
-     pool.countC * pool.avgPowerC) * 0.08
+  let poolPower = 0
+
+  if (gate && activeGates.length > 0) {
+    // 각 익명 풀 등급에 대해서도 매칭 비율 계산
+    const anonGroups = [
+      { rank: 'C', count: pool.countC, avgPower: pool.avgPowerC },
+      { rank: 'B', count: pool.countB, avgPower: pool.avgPowerB },
+      { rank: 'A', count: pool.countA, avgPower: pool.avgPowerA },
+    ]
+
+    for (const grp of anonGroups) {
+      let groupScores: Record<string, number> = {}
+      let totalScore = 0
+      for (const g of activeGates) {
+        const gRank = g.difficultyRank ?? 'C'
+        const weight = getRankMatchWeight(grp.rank, gRank)
+        const score = weight * (10 / Math.max(1, g.daysRemaining))
+        groupScores[g.id] = score
+        totalScore += score
+      }
+      const ratio = totalScore > 0 ? (groupScores[gate.id] ?? 0) / totalScore : 0.0
+      poolPower += (grp.count * grp.avgPower) * 0.08 * ratio
+    }
+  } else {
+    // gate가 지정되지 않은 경우 기존 계산
+    poolPower = (pool.countA * pool.avgPowerA +
+                 pool.countB * pool.avgPowerB +
+                 pool.countC * pool.avgPowerC) * 0.08
+  }
 
   return Math.round(namedPower + poolPower)
 }
@@ -200,197 +269,325 @@ export function advanceWorldDay(state: LivingWorldState, rng: RngFn): LivingWorl
   // 3. 국가별 게이트 대응 판단 및 도전 판정
   for (const regionId in nextRegions) {
     const region = { ...nextRegions[regionId] }
-    if (region.activeGateIds.length === 0) continue
-
     const rName = RIFT_REGIONS.find(r => r.id === regionId)?.name ?? regionId.toUpperCase()
-
-    // 군주에게 점령당한 상태인지 판단
     const isOccupied = nextActiveMonarchs.some(m => m.status === 'rampaging' && m.occupiedRegionIds.includes(regionId))
 
-    // 군주 점령 효과: 매 틱 오염도 추가 급증 (+3%)
     if (isOccupied) {
       region.corruption = Math.min(100, region.corruption + 3)
     }
 
-    // 가장 시한이 촉박한 게이트를 최우선 대응 타겟으로 설정
-    let targetGate: RiftNode | null = null
+    // 1. 해당 지역의 모든 활성 게이트 목록 추출
+    const regionActiveGates: RiftNode[] = []
     for (const gateId of region.activeGateIds) {
       const gate = nextRiftNodes[gateId]
       if (gate && gate.status === 'active') {
-        if (!targetGate || (gate.daysRemaining ?? 0) < (targetGate.daysRemaining ?? 0)) {
-          targetGate = gate
-        }
+        regionActiveGates.push(gate)
       }
     }
 
-    if (!targetGate) {
+    if (regionActiveGates.length === 0) {
       nextRegions[regionId] = region
       continue
     }
 
-    // 해당 게이트에 대한 승률 산출
-    const activePower = getActiveRegionPower(region, nextNamedHunters)
-    const ratio = activePower / Math.max(1, targetGate.difficulty ?? 0)
-
-    let winChance = 0.5
-    if (ratio >= 1.5) {
-      winChance = 0.85 + (ratio - 1.5) * 0.1
-    } else if (ratio >= 1.0) {
-      winChance = 0.5 + (ratio - 1.0) * 0.7
-    } else {
-      winChance = 0.5 * ratio
+    const RANK_INDEX: Record<string, number> = {
+      E: 0, D: 1, C: 2, B: 3, A: 4, S: 5, National: 6
     }
-    winChance = Math.max(0.01, Math.min(0.99, winChance))
-
-    // Berserker 기복 (varianceMod) 반영
-    let avgVarianceMod = 1.0
-    let berserkerCount = 0
-    let activeHunterCount = 0
-    for (const hid of region.namedHunterIds) {
-      const h = nextNamedHunters[hid]
-      if (h && h.status === 'active') {
-        activeHunterCount++
-        const t = getHunterTrait(h.traitId)
-        if (t?.varianceMod) {
-          avgVarianceMod += (t.varianceMod - 1.0)
-          berserkerCount++
-        }
-      }
-    }
-    if (berserkerCount > 0 && activeHunterCount > 0) {
-      const noise = (rng() - 0.5) * 0.4 * (avgVarianceMod - 1.0)
-      winChance = Math.max(0.01, Math.min(0.99, winChance + noise))
+    function getRankMatchWeight(hunterRank: string, gateRank: string): number {
+      const hIdx = RANK_INDEX[hunterRank] ?? 2
+      const gIdx = RANK_INDEX[gateRank] ?? 2
+      const distance = Math.abs(hIdx - gIdx)
+      if (distance === 0) return 1.0
+      if (distance === 1) return 0.5
+      if (distance === 2) return 0.1
+      return 0.0
     }
 
-    // 국가 성향(riskAppetite) 대조 도전 결정 및 헌터들의 riskMod 반영
-    const minRequiredWinChance = 0.75 - region.riskAppetite * 0.45
-    let avgRiskMod = 1.0
-    let riskModSum = 0
-    let activeRiskHunterCount = 0
-    for (const hid of region.namedHunterIds) {
-      const h = nextNamedHunters[hid]
-      if (h && h.status === 'active') {
-        const t = getHunterTrait(h.traitId)
-        riskModSum += t?.riskMod ?? 1.0
-        activeRiskHunterCount++
-      }
-    }
-    if (activeRiskHunterCount > 0) {
-      avgRiskMod = riskModSum / activeRiskHunterCount
-    }
-    const adjustedMinRequiredWinChance = Math.max(0.1, Math.min(0.9, minRequiredWinChance / avgRiskMod))
+    // 2. 각 활성 게이트별로 도전 판정
+    for (const gate of regionActiveGates) {
+      // 해당 게이트에 파견된 헌터들의 전력합 산출
+      const activePower = getActiveRegionPower(region, nextNamedHunters, gate, nextRiftNodes)
+      const ratio = activePower / Math.max(1, gate.difficulty ?? 0)
 
-    // 점령된 상태에서는 NPC 헌터 게이트 도전이 불가 (자력 방어 수단 완전 상실)
-    const isChallenging = winChance >= adjustedMinRequiredWinChance && !isOccupied
-
-    if (isChallenging) {
-      const isSuccess = rng() < winChance
-
-      if (isSuccess) {
-        // 공략 성공!
-        const gate = { ...targetGate }
-        gate.status = 'cleared'
-        gate.daysRemaining = 0
-        gate.loveCall = undefined
-        nextRiftNodes[gate.id] = gate
-        npcClearedToday++
-
-        region.activeGateIds = region.activeGateIds.filter(id => id !== gate.id)
-
-        // 참전 헌터 성장 보너스
-        let hIdx = 0
-        for (const hunterId of region.namedHunterIds) {
-          hIdx++
-          const hunter = { ...nextNamedHunters[hunterId] }
-          if (hunter.status === 'active') {
-            const trait = getHunterTrait(hunter.traitId)
-            const growthMod = trait?.growthMod ?? 1.0
-            const lootMod = trait?.lootMod ?? 1.0
-
-            const bonusMult = 1.01 + (rng() * 0.02) * growthMod
-            hunter.power = Math.round(hunter.power * bonusMult)
-            // 천장 재가드
-            const cap = 4500 + region.growthBias * 1000
-            if (hunter.power > cap) hunter.power = Math.round(cap)
-
-            // 장비 점수 상승 연동: 게이트 난이도에 비례한 점수 획득
-            const difficultyVal = gate.difficulty ?? 500
-            let equipGain = Math.round(difficultyVal * (0.005 + rng() * 0.01))
-
-            // RNG 대박 드랍 (4% * lootMod 확률)
-            const baseLuckyChance = 0.04
-            const adjustedLuckyChance = baseLuckyChance * lootMod
-            const isLuckyDrop = rng() < adjustedLuckyChance
-            if (isLuckyDrop) {
-              const luckyAdd = Math.round(500 + rng() * 600)
-              equipGain += luckyAdd
-              addLog(`🍀 [대박 드랍] [${hunter.name}] 헌터가 전리품으로 고성능 장비를 획득했습니다! (+${luckyAdd} 장비전투력)`)
+      // 파견 전력이 0보다 큰 경우에만 도전 시도
+      if (activePower <= 0) {
+        // 이 게이트에 파견된 헌터가 없다면 (등급 미스매치로 방치됨) -> 도전하지 않고 방치 처리
+        if ((gate.daysRemaining ?? 0) <= 5) {
+          if (!gate.loveCall?.active) {
+            const helperHunterIds: string[] = []
+            for (const hid in nextNamedHunters) {
+              const h = nextNamedHunters[hid]
+              if (h && h.regionId === regionId && h.status === 'active') {
+                helperHunterIds.push(h.id)
+              }
             }
+            const promisedGold = Math.round(gate.difficulty * 0.2 * (1 + (5 - gate.daysRemaining) * 0.15))
+            const promisedEssence = Math.round(gate.difficulty * 0.08 * (1 + (5 - gate.daysRemaining) * 0.15))
+            const promisedXp = Math.round(gate.difficulty * 0.15 * (1 + (5 - gate.daysRemaining) * 0.15))
 
-            const oldScore = hunter.equipmentScore ?? 0
-            const nextScore = oldScore + equipGain
-            hunter.equipmentScore = nextScore
-
-            // 점수 구간 변화에 따른 장비 아이템 목록 갱신 (결정론적 난수 공급)
-            const itemSeed = Math.floor(nextScore + nextDay + hIdx)
-            hunter.equipmentItems = getNPCEquipmentForScore(nextScore, itemSeed)
-
-            nextNamedHunters[hunterId] = hunter
+            gate.loveCall = {
+              active: true,
+              promisedReward: {
+                gold: promisedGold,
+                shadowEssence: promisedEssence,
+                hunterXp: promisedXp
+              },
+              helperHunterIds,
+              issuedDay: nextDay
+            }
+            nextRiftNodes[gate.id] = gate
+            addLog(`📢 [${rName}]에서 긴급 방치 게이트 [${gate.name}] (시한 ${gate.daysRemaining}일)에 대해 용병 헌터 러브콜을 발송했습니다!`)
           }
         }
+        continue
+      }
 
-        // 오염 정화 보너스 (지역 오염도 감소)
-        const cleanse = Math.round(CLEANSE_MIN + rng() * CLEANSE_RANGE)
-        
-        let avgCleanseMod = 1.0
-        let strategistCount = 0
-        let activeCleanseHunterCount = 0
-        for (const hid of region.namedHunterIds) {
-          const h = nextNamedHunters[hid]
-          if (h && h.status === 'active') {
-            activeCleanseHunterCount++
-            const t = getHunterTrait(h.traitId)
-            if (t?.cleanseMod) {
-              avgCleanseMod += (t.cleanseMod - 1.0)
-              strategistCount++
-            }
-          }
-        }
-        
-        let adjustedCleanse = cleanse
-        if (strategistCount > 0 && activeCleanseHunterCount > 0) {
-          adjustedCleanse = Math.round(cleanse * avgCleanseMod)
-        }
-        region.corruption = Math.max(0, region.corruption - adjustedCleanse)
-
-        addLog(`⚔️ [${rName}] 헌터들이 [${gate.name}] 게이트 공략에 성공했습니다! (승률: ${Math.round(winChance * 100)}%) 지역 오염도 -${adjustedCleanse}%`)
+      let winChance = 0.5
+      if (ratio >= 1.5) {
+        winChance = 0.85 + (ratio - 1.5) * 0.1
+      } else if (ratio >= 1.0) {
+        winChance = 0.5 + (ratio - 1.0) * 0.7
       } else {
-        // 공략 실패! (부상 또는 사망)
-        const diffRatio = (targetGate.difficulty ?? 0) / Math.max(1, activePower)
-        // 전력 격차가 크고 무모할수록 사망률 최대 22%
-        const deathChance = 0.02 + Math.max(0, diffRatio - 1.0) * 0.2
+        winChance = 0.5 * ratio
+      }
+      winChance = Math.max(0.01, Math.min(0.99, winChance))
 
-        // 활성 상태인 네임드 중 무작위 1명 타겟
-        const activeNamedIds = region.namedHunterIds.filter(id => nextNamedHunters[id].status === 'active')
-        
-        if (activeNamedIds.length > 0) {
-          const targetHunterId = activeNamedIds[Math.floor(rng() * activeNamedIds.length)]
-          const hunter = { ...nextNamedHunters[targetHunterId] }
+      // Berserker 기복 (varianceMod) 반영 - 이 게이트에 실제 파견된 헌터들의 가중 평균 반영
+      let avgVarianceMod = 1.0
+      let berserkerCount = 0
+      let activeHunterCount = 0
 
-          const trait = getHunterTrait(hunter.traitId)
-          const deathMod = trait?.deathMod ?? 1.0
-          const adjustedDeathChance = deathChance * deathMod
-
-          const isDead = rng() < adjustedDeathChance
-          if (isDead) {
-            hunter.status = 'dead'
-            addLog(`💀 [${rName}] 헌터들이 [${targetGate.name}] 공략 중 패배했습니다. 무모한 전투의 결과로 네임드 헌터 [${hunter.name}]이(가) 전사했습니다!`)
-          } else {
-            hunter.status = 'injured'
-            hunter.injuredTurns = 3
-            addLog(`🩹 [${rName}] 헌터들이 [${targetGate.name}] 공략 중 퇴각했습니다. 네임드 헌터 [${hunter.name}]이(가) 심한 부상을 입어 3일간 요양합니다.`)
+      for (const hid of region.namedHunterIds) {
+        const h = nextNamedHunters[hid]
+        if (h && h.status === 'active') {
+          let totalScore = 0
+          let targetScore = 0
+          for (const g of regionActiveGates) {
+            const gRank = g.difficultyRank ?? 'C'
+            const w = getRankMatchWeight(h.rank, gRank)
+            const s = w * (10 / Math.max(1, g.daysRemaining))
+            totalScore += s
+            if (g.id === gate.id) {
+              targetScore = s
+            }
           }
-          nextNamedHunters[targetHunterId] = hunter
+          const dispatchRatio = totalScore > 0 ? targetScore / totalScore : 0.0
+          
+          if (dispatchRatio > 0) {
+            activeHunterCount += dispatchRatio
+            const t = getHunterTrait(h.traitId)
+            if (t?.varianceMod) {
+              avgVarianceMod += (t.varianceMod - 1.0) * dispatchRatio
+              berserkerCount += dispatchRatio
+            }
+          }
+        }
+      }
+      if (berserkerCount > 0 && activeHunterCount > 0) {
+        const noise = (rng() - 0.5) * 0.4 * ((avgVarianceMod / activeHunterCount) - 1.0)
+        winChance = Math.max(0.01, Math.min(0.99, winChance + noise))
+      }
+
+      // 국가 성향(riskAppetite) 대조 도전 결정 및 이 게이트에 파견된 헌터들의 riskMod 가중 반영
+      const minRequiredWinChance = 0.75 - region.riskAppetite * 0.45
+      let avgRiskMod = 1.0
+      let riskModSum = 0
+      let activeRiskHunterCount = 0
+
+      for (const hid of region.namedHunterIds) {
+        const h = nextNamedHunters[hid]
+        if (h && h.status === 'active') {
+          let totalScore = 0
+          let targetScore = 0
+          for (const g of regionActiveGates) {
+            const gRank = g.difficultyRank ?? 'C'
+            const w = getRankMatchWeight(h.rank, gRank)
+            const s = w * (10 / Math.max(1, g.daysRemaining))
+            totalScore += s
+            if (g.id === gate.id) {
+              targetScore = s
+            }
+          }
+          const dispatchRatio = totalScore > 0 ? targetScore / totalScore : 0.0
+          
+          if (dispatchRatio > 0) {
+            const t = getHunterTrait(h.traitId)
+            riskModSum += (t?.riskMod ?? 1.0) * dispatchRatio
+            activeRiskHunterCount += dispatchRatio
+          }
+        }
+      }
+      if (activeRiskHunterCount > 0) {
+        avgRiskMod = riskModSum / activeRiskHunterCount
+      }
+      const adjustedMinRequiredWinChance = Math.max(0.1, Math.min(0.9, minRequiredWinChance / avgRiskMod))
+
+      // 점령된 상태에서는 NPC 헌터 게이트 도전이 불가 (자력 방어 수단 완전 상실)
+      const isChallenging = winChance >= adjustedMinRequiredWinChance && !isOccupied
+
+      if (isChallenging) {
+        const isSuccess = rng() < winChance
+
+        if (isSuccess) {
+          // 공략 성공!
+          const gNode = { ...gate }
+          gNode.status = 'cleared'
+          gNode.daysRemaining = 0
+          gNode.loveCall = undefined
+          nextRiftNodes[gNode.id] = gNode
+          npcClearedToday++
+
+          region.activeGateIds = region.activeGateIds.filter(id => id !== gNode.id)
+
+          // 참전 헌터 성장 보너스 - 기여도 비례 반영
+          let hIdx = 0
+          for (const hunterId of region.namedHunterIds) {
+            hIdx++
+            const hunter = { ...nextNamedHunters[hunterId] }
+            if (hunter.status === 'active') {
+              let totalScore = 0
+              let targetScore = 0
+              for (const g of regionActiveGates) {
+                const gRank = g.difficultyRank ?? 'C'
+                const w = getRankMatchWeight(hunter.rank, gRank)
+                const s = w * (10 / Math.max(1, g.daysRemaining))
+                totalScore += s
+                if (g.id === gate.id) {
+                  targetScore = s
+                }
+              }
+              const dispatchRatio = totalScore > 0 ? targetScore / totalScore : 0.0
+
+              if (dispatchRatio > 0) {
+                const trait = getHunterTrait(hunter.traitId)
+                const growthMod = trait?.growthMod ?? 1.0
+                const lootMod = trait?.lootMod ?? 1.0
+
+                const bonusMult = 1.01 + (rng() * 0.02) * growthMod * dispatchRatio
+                hunter.power = Math.round(hunter.power * bonusMult)
+                const cap = 4500 + region.growthBias * 1000
+                if (hunter.power > cap) hunter.power = Math.round(cap)
+
+                const difficultyVal = gate.difficulty ?? 500
+                let equipGain = Math.round(difficultyVal * (0.005 + rng() * 0.01) * dispatchRatio)
+
+                const baseLuckyChance = 0.04
+                const adjustedLuckyChance = baseLuckyChance * lootMod * dispatchRatio
+                const isLuckyDrop = rng() < adjustedLuckyChance
+                if (isLuckyDrop) {
+                  const luckyAdd = Math.round(500 + rng() * 600)
+                  equipGain += luckyAdd
+                  addLog(`🍀 [대박 드랍] [${hunter.name}] 헌터가 전리품으로 고성능 장비를 획득했습니다! (+${luckyAdd} 장비전투력)`)
+                }
+
+                const oldScore = hunter.equipmentScore ?? 0
+                const nextScore = oldScore + equipGain
+                hunter.equipmentScore = nextScore
+
+                const itemSeed = Math.floor(nextScore + nextDay + hIdx)
+                hunter.equipmentItems = getNPCEquipmentForScore(nextScore, itemSeed)
+
+                nextNamedHunters[hunterId] = hunter
+              }
+            }
+          }
+
+          // 오염 정화 보너스 (지역 오염도 감소 - 파견 비율 가중치 반영)
+          const cleanse = Math.round(CLEANSE_MIN + rng() * CLEANSE_RANGE)
+          
+          let avgCleanseMod = 1.0
+          let strategistCount = 0
+          let activeCleanseHunterCount = 0
+
+          for (const hid of region.namedHunterIds) {
+            const h = nextNamedHunters[hid]
+            if (h && h.status === 'active') {
+              let totalScore = 0
+              let targetScore = 0
+              for (const g of regionActiveGates) {
+                const gRank = g.difficultyRank ?? 'C'
+                const w = getRankMatchWeight(h.rank, gRank)
+                const s = w * (10 / Math.max(1, g.daysRemaining))
+                totalScore += s
+                if (g.id === gate.id) {
+                  targetScore = s
+                }
+              }
+              const dispatchRatio = totalScore > 0 ? targetScore / totalScore : 0.0
+
+              if (dispatchRatio > 0) {
+                activeCleanseHunterCount += dispatchRatio
+                const t = getHunterTrait(h.traitId)
+                if (t?.cleanseMod) {
+                  avgCleanseMod += (t.cleanseMod - 1.0) * dispatchRatio
+                  strategistCount += dispatchRatio
+                }
+              }
+            }
+          }
+          
+          let adjustedCleanse = cleanse
+          if (strategistCount > 0 && activeCleanseHunterCount > 0) {
+            adjustedCleanse = Math.round(cleanse * (avgCleanseMod / activeCleanseHunterCount))
+          }
+          region.corruption = Math.max(0, region.corruption - adjustedCleanse)
+
+          addLog(`⚔️ [${rName}] 헌터들이 [${gate.name}] 게이트 공략에 성공했습니다! (승률: ${Math.round(winChance * 100)}%) 지역 오염도 -${adjustedCleanse}%`)
+        } else {
+          // 공략 실패! (부상 또는 사망)
+          const diffRatio = (gate.difficulty ?? 0) / Math.max(1, activePower)
+          const deathChance = 0.02 + Math.max(0, diffRatio - 1.0) * 0.2
+
+          const candidateNamedWithRatio: { hunterId: string, ratio: number }[] = []
+          for (const hid of region.namedHunterIds) {
+            const h = nextNamedHunters[hid]
+            if (h && h.status === 'active') {
+              let totalScore = 0
+              let targetScore = 0
+              for (const g of regionActiveGates) {
+                const gRank = g.difficultyRank ?? 'C'
+                const w = getRankMatchWeight(h.rank, gRank)
+                const s = w * (10 / Math.max(1, g.daysRemaining))
+                totalScore += s
+                if (g.id === gate.id) {
+                  targetScore = s
+                }
+              }
+              const dispatchRatio = totalScore > 0 ? targetScore / totalScore : 0.0
+              if (dispatchRatio > 0) {
+                candidateNamedWithRatio.push({ hunterId: hid, ratio: dispatchRatio })
+              }
+            }
+          }
+
+          if (candidateNamedWithRatio.length > 0) {
+            let totalWeight = candidateNamedWithRatio.reduce((sum, item) => sum + item.ratio, 0)
+            let rVal = rng() * totalWeight
+            let targetHunterId = candidateNamedWithRatio[0].hunterId
+            let runningSum = 0
+            for (const item of candidateNamedWithRatio) {
+              runningSum += item.ratio
+              if (rVal <= runningSum) {
+                targetHunterId = item.hunterId
+                break
+              }
+            }
+
+            const hunter = { ...nextNamedHunters[targetHunterId] }
+            const trait = getHunterTrait(hunter.traitId)
+            const deathMod = trait?.deathMod ?? 1.0
+            const adjustedDeathChance = deathChance * deathMod
+
+            const isDead = rng() < adjustedDeathChance
+            if (isDead) {
+              hunter.status = 'dead'
+              addLog(`💀 [${rName}] 헌터들이 [${gate.name}] 공략 중 패배했습니다. 무모한 전투의 결과로 네임드 헌터 [${hunter.name}]이(가) 전사했습니다!`)
+            } else {
+              hunter.status = 'injured'
+              hunter.injuredTurns = 3
+              addLog(`🩹 [${rName}] 헌터들이 [${gate.name}] 공략 중 퇴각했습니다. 네임드 헌터 [${hunter.name}]이(가) 심한 부상을 입어 3일간 요양합니다.`)
+            }
+            nextNamedHunters[targetHunterId] = hunter
         } else {
           // 네임드가 없으면 익명 풀 헌터가 전사 (A/B/C급 중 전력비에 비례해 감축)
           const pool = { ...region.pool }
@@ -412,61 +609,11 @@ export function advanceWorldDay(state: LivingWorldState, rng: RngFn): LivingWorl
         region.corruption = Math.min(100, region.corruption + corrupt)
         addLog(`⚠️ [${rName}] 게이트 공략 실패의 여파로 지역 오염도가 +${corrupt}% 상승했습니다.`)
       }
-    } else {
-      // 자력 불가능 방치 러브콜 플래그 (이미 러브콜이 발송된 노드라면 중복 생성을 차단)
-      if ((targetGate.daysRemaining ?? 0) <= 5) {
-        if (!targetGate.loveCall?.active) {
-          const helperHunterIds: string[] = []
-          for (const hid in nextNamedHunters) {
-            const h = nextNamedHunters[hid]
-            if (!h || h.status !== 'active') continue
-
-            const trait = getHunterTrait(h.traitId)
-            const loveCallMod = trait?.loveCallMod ?? 1.0
-
-            if (h.regionId === region.regionId) {
-              // 자국 헌터: 기본 95% 참여 (은둔형도 자국 방어는 적극 지원)
-              if (rng() < 0.95 * Math.min(1.5, loveCallMod)) {
-                helperHunterIds.push(hid)
-              }
-            } else {
-              // 타국 헌터: 원정을 좋아하는 명예욕(loveCallMod 4.0) 헌터 등은 12% 가량, 은둔형(0.05)은 거의 참여 안 함
-              const baseCrossBorderChance = 0.03
-              const crossBorderChance = baseCrossBorderChance * loveCallMod
-              if (rng() < crossBorderChance) {
-                helperHunterIds.push(hid)
-              }
-            }
-          }
-
-          const promisedGold = Math.round(targetGate.difficulty * 0.2 * (1 + (5 - targetGate.daysRemaining) * 0.15))
-          const promisedXp = Math.round(targetGate.difficulty * 0.15 * (1 + (5 - targetGate.daysRemaining) * 0.15))
-          const promisedEssence = targetGate.isSGrade 
-            ? Math.round(6 + (5 - targetGate.daysRemaining))
-            : Math.round(2 + Math.floor((5 - targetGate.daysRemaining) / 2))
-
-          const gateNode = {
-            ...targetGate,
-            loveCall: {
-              active: true,
-              promisedReward: {
-                gold: promisedGold,
-                shadowEssence: promisedEssence,
-                hunterXp: promisedXp
-              },
-              helperHunterIds,
-              issuedDay: nextDay
-            }
-          }
-          nextRiftNodes[targetGate.id] = gateNode
-
-          addLog(`📞 [${rName}]가 자력으로 공략할 수 없는 게이트 [${targetGate.name}] (권장전력: ${targetGate.difficulty})에 대해 지원 요청(러브콜)을 보냈습니다! (보상 약속: 골드 +${promisedGold}, 정수 +${promisedEssence}, XP +${promisedXp})`)
-        }
-      }
     }
-
-    nextRegions[regionId] = region
   }
+
+  nextRegions[regionId] = region
+}
 
   // 4. 오염 전파
   for (const regionId in nextRegions) {
@@ -526,18 +673,26 @@ export function advanceWorldDay(state: LivingWorldState, rng: RngFn): LivingWorl
           rank = 'S'
         } else {
           const difficultyRoll = rng()
-          if (difficultyRoll < 0.4) {
+          if (difficultyRoll < 0.40) {
             difficulty = Math.round((300 + rng() * 300) * GATE_DIFFICULTY_MULT)
             deadline = Math.round(8 + rng() * 4) // E급 8~12일
             rank = 'E'
-          } else if (difficultyRoll < 0.8) {
+          } else if (difficultyRoll < 0.70) {
             difficulty = Math.round((700 + rng() * 400) * GATE_DIFFICULTY_MULT)
             deadline = Math.round(7 + rng() * 4) // D급 7~11일
             rank = 'D'
-          } else {
+          } else if (difficultyRoll < 0.85) {
             difficulty = Math.round((1300 + rng() * 600) * GATE_DIFFICULTY_MULT)
             deadline = Math.round(6 + rng() * 4) // C급 6~10일
             rank = 'C'
+          } else if (difficultyRoll < 0.95) {
+            difficulty = Math.round((2200 + rng() * 800) * GATE_DIFFICULTY_MULT)
+            deadline = Math.round(5 + rng() * 4) // B급 5~9일
+            rank = 'B'
+          } else {
+            difficulty = Math.round((3500 + rng() * 1200) * GATE_DIFFICULTY_MULT)
+            deadline = Math.round(4 + rng() * 4) // A급 4~8일
+            rank = 'A'
           }
         }
 
