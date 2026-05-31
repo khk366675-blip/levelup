@@ -1181,6 +1181,7 @@ export function WorldMapPanel() {
                             const h = livingWorld?.namedHunters[hid]
                             if (!h) return null
                             const isSelected = selectedHelpers.includes(hid)
+                            const totalPower = h.power + (h.equipmentScore ?? 0)
                             return (
                               <label key={hid} className="flex items-center justify-between rounded bg-black/35 hover:bg-black/60 px-2 py-1 cursor-pointer select-none text-[10px] border border-white/5">
                                 <div className="flex items-center gap-2">
@@ -1200,7 +1201,7 @@ export function WorldMapPanel() {
                                     {h.rank}
                                   </span>
                                 </div>
-                                <span className="text-cyan-300 font-mono font-bold">⚔️{h.power.toLocaleString()}</span>
+                                <span className="text-cyan-300 font-mono font-bold">⚔️{totalPower.toLocaleString()}</span>
                               </label>
                             )
                           })}
@@ -1429,7 +1430,7 @@ export function WorldMapPanel() {
                                       {h.rank}
                                     </span>
                                   </div>
-                                  <span className="text-cyan-300 font-mono font-bold">⚔️{h.power.toLocaleString()}</span>
+                                  <span className="text-cyan-300 font-mono font-bold">⚔️{(h.power + (h.equipmentScore ?? 0)).toLocaleString()}</span>
                                 </label>
                               )
                             })}
@@ -1500,7 +1501,7 @@ export function WorldMapPanel() {
                                       {h.rank}
                                     </span>
                                   </div>
-                                  <span className="text-cyan-300 font-mono font-bold">⚔️{h.power.toLocaleString()}</span>
+                                  <span className="text-cyan-300 font-mono font-bold">⚔️{(h.power + (h.equipmentScore ?? 0)).toLocaleString()}</span>
                                 </label>
                               )
                             })}
@@ -1886,21 +1887,42 @@ export function WorldMapPanel() {
                 {regionState && regionState.namedHunterIds.length > 0 ? (
                   <div className="space-y-2">
                     <span className="text-[10px] font-black text-white/45 tracking-widest uppercase">🤝 소속 네임드 헌터 ({regionState.namedHunterIds.length})</span>
-                    <div className="max-h-24 overflow-y-auto space-y-1 pr-1 scrollbar-thin">
+                    <div className="max-h-48 overflow-y-auto space-y-1.5 pr-1 scrollbar-thin">
                       {regionState.namedHunterIds.map((hunterId) => {
                         const hunterObj = livingWorld?.namedHunters[hunterId]
                         if (!hunterObj) return null
+                        const totalPower = hunterObj.power + (hunterObj.equipmentScore ?? 0)
+                        const hasEquip = hunterObj.equipmentItems && hunterObj.equipmentItems.length > 0
                         return (
-                          <div key={hunterId} className="flex items-center justify-between bg-black/40 border border-white/5 px-2.5 py-1.5 rounded-md text-[10px]">
-                            <span className="font-bold text-white/80">{hunterObj.name}</span>
-                            <div className="flex items-center gap-1.5">
-                              <span className="rounded bg-purple-500/20 px-1.5 py-0.2 text-[8px] font-black text-purple-300 border border-purple-500/30">
-                                {hunterObj.rank}
-                              </span>
-                              <span className="text-cyan-300 font-mono font-bold">
-                                ⚔️{hunterObj.power.toLocaleString()}
-                              </span>
+                          <div key={hunterId} className="flex flex-col gap-1 bg-black/40 border border-white/5 px-2.5 py-2 rounded-md text-[10px]">
+                            <div className="flex items-center justify-between">
+                              <span className="font-bold text-white/80">{hunterObj.name}</span>
+                              <div className="flex items-center gap-1.5">
+                                <span className="rounded bg-purple-500/20 px-1.5 py-0.2 text-[8px] font-black text-purple-300 border border-purple-500/30">
+                                  {hunterObj.rank}
+                                </span>
+                                <span className="text-cyan-300 font-mono font-bold">
+                                  ⚔️{totalPower.toLocaleString()}
+                                </span>
+                              </div>
                             </div>
+                            {hasEquip && (
+                              <div className="flex flex-wrap gap-1 mt-1 border-t border-white/5 pt-1 text-[8px] text-white/55">
+                                <span className="text-purple-400/80 font-bold mr-1">🛡️ 장비:</span>
+                                {hunterObj.equipmentItems?.map((eq, eqIdx) => {
+                                  const rarityColor = 
+                                    eq.rarity === 'legendary' ? 'text-amber-400 font-semibold' :
+                                    eq.rarity === 'epic' ? 'text-purple-400 font-semibold' :
+                                    eq.rarity === 'rare' ? 'text-cyan-400' :
+                                    'text-white/60'
+                                  return (
+                                    <span key={eqIdx} className={`mr-2 ${rarityColor}`}>
+                                      [{eq.name}]
+                                    </span>
+                                  )
+                                })}
+                              </div>
+                            )}
                           </div>
                         )
                       })}

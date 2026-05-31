@@ -2372,7 +2372,12 @@ export interface NamedHunter {
   growthRate: number    // 일일 성장 계수 (회차 랜덤)
   status: 'active' | 'injured' | 'dead'
   injuredTurns?: number // 부상 완치까지 남은 일수
-  // 후속 자리: 보유 장비 등 (MVP-1에선 정의만, 로직 없음)
+  equipmentScore: number // 장비로 인한 추가 전투력
+  equipmentItems?: {
+    name: string
+    rarity: 'common' | 'rare' | 'epic' | 'legendary'
+    slot?: string
+  }[]
 }
 
 export interface HunterPool {

@@ -2,6 +2,7 @@ import type { LivingWorldState, NamedHunter, RegionState, RiftNode, Rank, Active
 import { RIFT_REGIONS, REGION_ADJACENCY, RIFT_NODES } from './seed'
 import { MONARCHS } from './monarchs'
 import { getRegionalTheme } from './livingWorldGateContent'
+import { getNPCEquipmentForScore } from './hunterEquipment'
 
 type RngFn = () => number
 
@@ -46,7 +47,7 @@ function getActiveRegionPower(region: RegionState, namedHunters: Record<string, 
   for (const hunterId of region.namedHunterIds) {
     const hunter = namedHunters[hunterId]
     if (hunter && hunter.status === 'active') {
-      namedPower += hunter.power
+      namedPower += hunter.power + (hunter.equipmentScore ?? 0)
     }
   }
 
@@ -229,7 +230,9 @@ export function advanceWorldDay(state: LivingWorldState, rng: RngFn): LivingWorl
         region.activeGateIds = region.activeGateIds.filter(id => id !== gate.id)
 
         // 참전 헌터 성장 보너스
+        let hIdx = 0
         for (const hunterId of region.namedHunterIds) {
+          hIdx++
           const hunter = { ...nextNamedHunters[hunterId] }
           if (hunter.status === 'active') {
             const bonusMult = 1.01 + rng() * 0.02
@@ -237,6 +240,27 @@ export function advanceWorldDay(state: LivingWorldState, rng: RngFn): LivingWorl
             // 천장 재가드
             const cap = 4500 + region.growthBias * 1000
             if (hunter.power > cap) hunter.power = Math.round(cap)
+
+            // 장비 점수 상승 연동: 게이트 난이도에 비례한 점수 획득
+            const difficultyVal = gate.difficulty ?? 500
+            let equipGain = Math.round(difficultyVal * (0.005 + rng() * 0.01))
+
+            // RNG 대박 드랍 (4% 확률)
+            const isLuckyDrop = rng() < 0.04
+            if (isLuckyDrop) {
+              const luckyAdd = Math.round(500 + rng() * 600)
+              equipGain += luckyAdd
+              addLog(`🍀 [대박 드랍] [${hunter.name}] 헌터가 전리품으로 고성능 장비를 획득했습니다! (+${luckyAdd} 장비전투력)`)
+            }
+
+            const oldScore = hunter.equipmentScore ?? 0
+            const nextScore = oldScore + equipGain
+            hunter.equipmentScore = nextScore
+
+            // 점수 구간 변화에 따른 장비 아이템 목록 갱신 (결정론적 난수 공급)
+            const itemSeed = Math.floor(nextScore + nextDay + hIdx)
+            hunter.equipmentItems = getNPCEquipmentForScore(nextScore, itemSeed)
+
             nextNamedHunters[hunterId] = hunter
           }
         }

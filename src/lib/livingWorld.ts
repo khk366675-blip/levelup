@@ -7,6 +7,7 @@ import type {
   HunterPool,
   RiftNode
 } from './types'
+import { getNPCEquipmentForScore } from './hunterEquipment'
 
 /**
  * 특정 지역의 총전력을 계산합니다. (네임드 헌터 전투력 합 + 익명 풀 전투력 합)
@@ -19,7 +20,7 @@ export function getRegionTotalPower(
   for (const hunterId of regionState.namedHunterIds) {
     const hunter = namedHunters[hunterId]
     if (hunter && hunter.status !== 'dead') {
-      namedPower += hunter.power
+      namedPower += hunter.power + (hunter.equipmentScore ?? 0)
     }
   }
 
@@ -125,6 +126,10 @@ export function initLivingWorld(seed: number): LivingWorldState {
         // 성장률 롤링
         const growthRate = hBase.growthRange[0] + rng() * (hBase.growthRange[1] - hBase.growthRange[0])
 
+        // 초기 장비 롤링
+        const initialEquipmentScore = hBase.rank === 'National' ? 300 : hBase.rank === 'S' ? 150 : 0
+        const initialEquipmentItems = getNPCEquipmentForScore(initialEquipmentScore, seed + idx)
+
         namedHunters[hunterId] = {
           id: hunterId,
           regionId,
@@ -132,7 +137,9 @@ export function initLivingWorld(seed: number): LivingWorldState {
           rank: hBase.rank,
           power,
           growthRate,
-          status: 'active'
+          status: 'active',
+          equipmentScore: initialEquipmentScore,
+          equipmentItems: initialEquipmentItems
         }
       })
 

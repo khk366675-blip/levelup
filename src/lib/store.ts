@@ -77,6 +77,7 @@ import type {
 } from './types'
 
 import { initLivingWorld } from './livingWorld'
+import { getNPCEquipmentForScore } from './hunterEquipment'
 import { advanceWorldDay } from './livingWorldTick'
 import { MONARCHS, FINAL_ANGEL, buildMonarchBattleUnit } from './monarchs'
 import { buildHunterBattleUnit, buildShadowBattleUnits } from './battleUnits'
@@ -5418,7 +5419,7 @@ export const useGame = create<GameState>()(
               const h = s.livingWorld.namedHunters[hid]
               if (h && h.status === 'active') {
                 activeHelpers.push(h)
-                helperPower += h.power
+                helperPower += h.power + (h.equipmentScore ?? 0)
               }
             }
           }
@@ -5505,7 +5506,7 @@ export const useGame = create<GameState>()(
               const h = s.livingWorld.namedHunters[hid]
               if (h && h.status === 'active') {
                 activeHelpers.push(h)
-                helperPower += h.power
+                helperPower += h.power + (h.equipmentScore ?? 0)
               }
             }
           }
@@ -7872,6 +7873,7 @@ export const useGame = create<GameState>()(
           const freshState = get()
 
           let nextHunter = freshState.hunter
+          let nextItems = freshState.items ?? []
           let nextGold = freshState.gold ?? 0
           let nextShadowEssence = freshState.shadowEssence ?? 0
           const newMessages: SystemMessage[] = []
@@ -7933,6 +7935,53 @@ export const useGame = create<GameState>()(
           nextGold += finalGold
           nextShadowEssence += finalEssence
 
+          // 플레이어 월드맵 게이트 클리어 장비 드랍 보상
+          let droppedItemName = ''
+          const dropRng = Math.random()
+          let targetRarity: 'common' | 'uncommon' | 'rare' | 'epic' | 'legendary' | null = null
+
+          if (isMonarchId) {
+            // 군주전: 100% 드랍, 65% Epic / 35% Legendary
+            targetRarity = Math.random() < 0.35 ? 'legendary' : 'epic'
+          } else {
+            const gr = gate.rank ?? 'E'
+            const gd = gate.recommendedPower ?? 500
+            
+            if (gr === 'S' || gd >= 4000) {
+              if (dropRng < 0.70) {
+                const r = Math.random()
+                targetRarity = r < 0.05 ? 'legendary' : r < 0.25 ? 'epic' : 'rare'
+              }
+            } else if (gr === 'A' || gd >= 2500) {
+              if (dropRng < 0.50) {
+                const r = Math.random()
+                targetRarity = r < 0.02 ? 'legendary' : r < 0.20 ? 'epic' : 'rare'
+              }
+            } else if (gr === 'B' || gr === 'C' || gd >= 1200) {
+              if (dropRng < 0.35) {
+                const r = Math.random()
+                targetRarity = r < 0.10 ? 'rare' : r < 0.70 ? 'uncommon' : 'common'
+              }
+            } else {
+              if (dropRng < 0.20) {
+                targetRarity = Math.random() < 0.30 ? 'uncommon' : 'common'
+              }
+            }
+          }
+
+          if (targetRarity) {
+            const pool = ITEM_POOL.filter(item => item.rarity === targetRarity)
+            const pickedTemplate = pool.length > 0 
+              ? pool[Math.floor(Math.random() * pool.length)]
+              : ITEM_POOL[Math.floor(Math.random() * ITEM_POOL.length)]
+            
+            if (pickedTemplate) {
+              const item: Item = { ...pickedTemplate, id: uid(), acquiredAt: todayISO() }
+              nextItems = [...nextItems, item]
+              droppedItemName = `${item.name} (${item.rarity.toUpperCase()})`
+            }
+          }
+
           newMessages.push({
             id: uid(),
             kind: 'quest',
@@ -7944,6 +7993,7 @@ export const useGame = create<GameState>()(
               `XP +${finalXp}`,
               `Gold +${finalGold}`,
               `정수 +${finalEssence}`,
+              ...(droppedItemName ? [`획득 장비: ${droppedItemName}`] : []),
             ],
             createdAt: todayISO(),
           })
@@ -7993,9 +8043,30 @@ export const useGame = create<GameState>()(
                 const region = freshState.livingWorld.regions[hunter.regionId]
                 const cap = 4500 + (region?.growthBias ?? 0.5) * 1000
                 if (hunter.power > cap) hunter.power = Math.round(cap)
+
+                // 협력 헌터 장비 획득 연동: 클리어한 게이트 권장전투력 비례
+                const difficultyVal = nodeStatus?.difficulty ?? 500
+                let equipGain = Math.round(difficultyVal * (0.005 + Math.random() * 0.01))
+                
+                // RNG 대박 드랍 (4% 확률)
+                const isLuckyDrop = Math.random() < 0.04
+                if (isLuckyDrop) {
+                  const luckyAdd = Math.round(500 + Math.random() * 600)
+                  equipGain += luckyAdd
+                  worldLogs.push(`[Day ${freshState.livingWorld.day}] 🤝 [전리품 획득] 참전한 [${hunter.name}] 헌터가 던전에서 고성능 장비를 획득했습니다! (+${luckyAdd} 장비전투력)`)
+                }
+
+                const oldScore = hunter.equipmentScore ?? 0
+                const nextScore = oldScore + equipGain
+                hunter.equipmentScore = nextScore
+
+                // 결정론적 장비 갱신
+                const itemSeed = Math.floor(nextScore + freshState.livingWorld.day)
+                hunter.equipmentItems = getNPCEquipmentForScore(nextScore, itemSeed)
+
                 updatedNamedHunters[hid] = hunter
                 
-                worldLogs.push(`[Day ${freshState.livingWorld.day}] 🤝 [협력 원정] 참전한 ${rName}의 [${hunter.name}] 헌터가 정화 성공으로 추가 성장했습니다! (전투력: ${hunter.power})`)
+                worldLogs.push(`[Day ${freshState.livingWorld.day}] 🤝 [협력 원정] 참전한 ${rName}의 [${hunter.name}] 헌터가 정화 성공으로 추가 성장했습니다! (전투력: ${hunter.power + hunter.equipmentScore})`)
               }
             }
 
@@ -8013,6 +8084,7 @@ export const useGame = create<GameState>()(
             hunter: nextHunter,
             gold: nextGold,
             shadowEssence: nextShadowEssence,
+            items: nextItems,
             livingWorld: freshState.livingWorld ? {
               ...freshState.livingWorld,
               namedHunters: updatedNamedHunters ?? freshState.livingWorld.namedHunters,
