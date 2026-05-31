@@ -128,132 +128,97 @@ export function Battlefield2DView({
 
   const theme = getBattlefieldTheme(battleType, encounterKey)
 
-  // Track coordinates for each actor by ID with overlap avoidance
+  // Track coordinates for each actor by ID with dynamic safe-zone distribution
   const actorCoords = useMemo(() => {
     const coords: Record<string, { x: number; y: number }> = {}
     
+    // Y Safe Zone boundaries to prevent clipping (top overlay vs bottom border)
+    const SAFE_Y_TOP = 28
+    const SAFE_Y_BOTTOM = 72
+
+    // Helper to calculate staggered Y coordinate inside safe zone
+    const getSafeStaggeredY = (idx: number, count: number) => {
+      if (count <= 1) return 50
+      return SAFE_Y_TOP + ((SAFE_Y_BOTTOM - SAFE_Y_TOP) * idx) / (count - 1)
+    }
+
     // 1. Ally Team Positioning
     const allyActors = overriddenActors.filter(a => a.team === 'ally')
     const playerActor = allyActors.find(a => a.id === 'direct-preview-hunter')
     const coopActors = allyActors.filter(a => a.kind === 'hunter' && a.id !== 'direct-preview-hunter')
     const shadowActors = allyActors.filter(a => a.kind === 'shadow')
 
-    // Position Backline (Player + Coop Hunters) - Back Row (Diagonal staggered to prevent overlap)
     const backlineActors = [
       ...(playerActor ? [playerActor] : []),
       ...coopActors
     ]
 
-    if (backlineActors.length > 0) {
+    const countB = backlineActors.length
+    const countF = shadowActors.length
+
+    // Position Backline (Player + Coop Hunters) - Back Row
+    if (countB > 0) {
       backlineActors.forEach((actor, idx) => {
-        const count = backlineActors.length
-        let x = isCompact ? 16 : 14
-        let y = 42
+        const y = getSafeStaggeredY(idx, countB)
+        // Stagger X slightly based on depth to create a subtle 2.5D perspective
+        let x = (isCompact ? 14 : 12) + (countB <= 1 ? 0 : idx * 2.5)
         
-        if (count === 2) {
-          x = idx === 0 ? (isCompact ? 11 : 9) : (isCompact ? 19 : 17)
-          y = idx === 0 ? 41 : 48
-        } else if (count > 2) {
-          const stepX = (isCompact ? 10 : 12) / (count - 1)
-          const stepY = 10 / (count - 1)
-          x = (isCompact ? 10 : 8) + idx * stepX
-          y = 38 + idx * stepY
-        }
-        
-        // If there are no shadows, center the backline slightly more
-        if (shadowActors.length === 0) {
-          x += 6
+        // If there are no shadows, center the backline closer to active zone
+        if (countF === 0) {
+          x += 8
         }
         coords[actor.id] = { x, y }
       })
     }
 
-    // Position Shadows (Left Front) - Front Row (Staggered layout for beautiful 2.5D layout)
-    if (shadowActors.length > 0) {
+    // Position Shadows (Left Front) - Front Row
+    if (countF > 0) {
       shadowActors.forEach((shadow, idx) => {
-        const count = shadowActors.length
-        let x = isCompact ? 33 : 31
-        let y = 62
-        
-        if (count === 2) {
-          x = idx === 0 ? (isCompact ? 28 : 26) : (isCompact ? 38 : 36)
-          y = idx === 0 ? 54 : 66
-        } else if (count === 3) {
-          x = idx === 0 ? (isCompact ? 26 : 24) : idx === 1 ? (isCompact ? 32 : 30) : (isCompact ? 38 : 36)
-          y = idx === 0 ? 54 : idx === 1 ? 62 : 70
-        } else if (count > 3) {
-          const stepX = (isCompact ? 18 : 20) / (count - 1)
-          const stepY = 18 / (count - 1)
-          x = (isCompact ? 25 : 23) + idx * stepX
-          y = 52 + idx * stepY
-        }
+        const y = getSafeStaggeredY(idx, countF)
+        // Stagger X slightly for perspective
+        const x = (isCompact ? 28 : 26) + (countF <= 1 ? 0 : idx * 3)
         coords[shadow.id] = { x, y }
       })
-    } else if (backlineActors.length === 0 && allyActors.length > 0) {
-      // Fallback: If no backline but has other ally actors
+    } else if (countB === 0 && allyActors.length > 0) {
+      // Fallback if we only have other ally actors without formal distinction
       allyActors.forEach((actor, idx) => {
-        const count = allyActors.length
-        let y = 50
-        if (count === 2) y = idx === 0 ? 42 : 62
-        else if (count === 3) y = idx === 0 ? 40 : idx === 1 ? 52 : 64
-        coords[actor.id] = { x: isCompact ? 28 : 24, y }
+        const y = getSafeStaggeredY(idx, allyActors.length)
+        const x = isCompact ? 22 : 18
+        coords[actor.id] = { x, y }
       })
     }
     
-    // 2. Enemy Team Positioning (Rebalanced to prioritize Horizontal Spacing & Prevent Stack overlapping)
+    // 2. Enemy Team Positioning
     const enemyActors = overriddenActors.filter(a => a.team === 'enemy')
     const bossActor = enemyActors.find(a => a.isBoss || a.kind === 'boss')
     const minionActors = enemyActors.filter(a => !(a.isBoss || a.kind === 'boss'))
     
     if (bossActor) {
-      const minionCount = minionActors.length
-      if (minionCount === 0) {
-        // Boss alone: Centered and magnificent
-        coords[bossActor.id] = { x: isCompact ? 73 : 75, y: 50 }
-      } else if (minionCount === 1) {
-        // Boss 1 + Minion 1: Split horizontally with Boss slightly behind
-        coords[bossActor.id] = { x: isCompact ? 78 : 80, y: 47 }
-        coords[minionActors[0].id] = { x: isCompact ? 63 : 65, y: 53 }
-      } else if (minionCount === 2) {
-        // Boss 1 + Minion 2: Horizontal symmetry with Boss as center anchor
-        coords[minionActors[0].id] = { x: isCompact ? 60 : 62, y: 54 }
-        coords[bossActor.id] = { x: isCompact ? 72 : 74, y: 46 }
-        coords[minionActors[1].id] = { x: isCompact ? 83 : 85, y: 50 }
-      } else {
-        // Boss 1 + Minion 3+: Boss in center-back, Minions spread horizontally in front
-        coords[bossActor.id] = { x: isCompact ? 74 : 76, y: 45 }
+      // Boss as Back Row, Minions as Front Row
+      const countM = minionActors.length
+      
+      // 1. Boss Alone or with minions
+      const yBoss = 50
+      const xBoss = (isCompact ? 78 : 80) - (countM === 0 ? 8 : 0)
+      coords[bossActor.id] = { x: xBoss, y: yBoss }
+
+      // 2. Minions (Front Row)
+      if (countM > 0) {
         minionActors.forEach((minion, idx) => {
-          const step = (isCompact ? 22 : 25) / (minionCount - 1)
-          const startX = isCompact ? 59 : 61
-          const x = startX + idx * step
-          const y = idx % 2 === 0 ? 53 : 48
+          const y = getSafeStaggeredY(idx, countM)
+          // Stagger X leftward for perspective (enemies face left)
+          const x = (isCompact ? 64 : 66) - (countM <= 1 ? 0 : idx * 2.5)
           coords[minion.id] = { x, y }
         })
       }
     } else {
-      // Normal Monsters only (No Boss)
-      const count = enemyActors.length
-      if (count === 1) {
-        coords[enemyActors[0].id] = { x: isCompact ? 70 : 72, y: 50 }
-      } else if (count === 2) {
-        // 2 Monsters: Perfectly separated horizontally
-        coords[enemyActors[0].id] = { x: isCompact ? 63 : 65, y: 53 }
-        coords[enemyActors[1].id] = { x: isCompact ? 77 : 79, y: 47 }
-      } else if (count === 3) {
-        // 3 Monsters: Elegant staggered diagonal sweep (fully horizontal, no stacked overlap)
-        coords[enemyActors[0].id] = { x: isCompact ? 61 : 63, y: 54 }
-        coords[enemyActors[1].id] = { x: isCompact ? 71 : 73, y: 47 }
-        coords[enemyActors[2].id] = { x: isCompact ? 81 : 83, y: 51 }
-      } else {
-        // 4+ Monsters: Multi-anchor horizontal wave layout
-        enemyActors.forEach((actor, idx) => {
-          const step = (isCompact ? 24 : 28) / (count - 1)
-          const startX = isCompact ? 60 : 62
-          const x = startX + idx * step
-          const y = idx % 2 === 0 ? 53 : 47
-          coords[actor.id] = { x, y }
-        })
-      }
+      // Normal Monsters only (No Boss) - Single dynamic row distributed in safe zone
+      const countE = enemyActors.length
+      enemyActors.forEach((actor, idx) => {
+        const y = getSafeStaggeredY(idx, countE)
+        const x = (isCompact ? 72 : 74) - (countE <= 1 ? 0 : idx * 2)
+        coords[actor.id] = { x, y }
+      })
     }
     
     return coords
@@ -605,7 +570,11 @@ export function Battlefield2DView({
 
               <BattleActorSprite 
                 actor={actor} 
-                compact={isCompact || (isPlayerTeam && overriddenActors.filter(a => a.team === 'ally').length >= 5)} 
+                compact={
+                  isCompact || 
+                  (actor.team === 'ally' && overriddenActors.filter(a => a.team === 'ally').length >= 4) ||
+                  (actor.team === 'enemy' && overriddenActors.filter(a => a.team === 'enemy').length >= 4 && !actor.isBoss && actor.kind !== 'boss')
+                } 
                 activeMotion={activeMotion}
                 hitReaction={hitReaction}
                 intensity={intensity}
