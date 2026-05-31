@@ -30,7 +30,6 @@ import { GatePanel } from './components/GatePanel'
 import { HunterGradePanel } from './components/HunterGradePanel'
 import { ShadowPanel } from './components/ShadowPanel'
 import { BackupControls } from './components/BackupControls'
-import { InfiniteTowerPanel } from './components/InfiniteTowerPanel'
 import { RewardBoxPanel } from './components/RewardBoxPanel'
 import { ChallengeCardsPanel } from './components/ChallengeCardsPanel'
 import { ShopPanel } from './components/ShopPanel'
@@ -39,7 +38,7 @@ import { FocusSessionOverlay } from './components/FocusSessionOverlay'
 import { WorldMapPanel } from './components/WorldMapPanel'
 import { DevCheatPanel } from './components/dev/DevCheatPanel'
 
-type Tab = 'rewards' | 'shop' | 'daily' | 'main' | 'gate' | 'shadows' | 'inventory' | 'grade' | 'tower' | 'coach' | 'worldmap'
+type Tab = 'rewards' | 'shop' | 'daily' | 'main' | 'gate' | 'shadows' | 'inventory' | 'grade' | 'coach' | 'worldmap'
 
 const TABS: { key: Tab; label: string; icon: typeof Calendar }[] = [
   { key: 'rewards',   label: '보상',           icon: Gift },
@@ -49,7 +48,6 @@ const TABS: { key: Tab; label: string; icon: typeof Calendar }[] = [
   { key: 'main',      label: '메인 퀘스트', icon: Compass },
   { key: 'worldmap',  label: '월드맵',      icon: Globe },
   { key: 'gate',      label: '게이트',      icon: Swords },
-  { key: 'tower',     label: '무한의 탑',   icon: Swords },
   { key: 'inventory', label: '인벤토리',    icon: Package },
   { key: 'grade',     label: '등급/칭호',    icon: Award },
   { key: 'coach',     label: 'AI 코치',      icon: Brain },
@@ -464,12 +462,6 @@ export default function App() {
             {tab === 'gate' && (
               <Section title="게이트" subtitle="출현한 균열과 전투 준비 상태">
                 <GatePanel />
-              </Section>
-            )}
-
-            {tab === 'tower' && (
-              <Section title="무한의 탑" subtitle="헌터와 군단의 성장을 측정하는 전투 콘텐츠">
-                <InfiniteTowerPanel />
               </Section>
             )}
 

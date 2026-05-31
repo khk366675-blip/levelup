@@ -8,7 +8,7 @@
 
 ## 프로젝트 개요
 
-**levelup**은 "솔로 레벨링" 스타일의 현실 자기계발 RPG 웹 게임입니다. 사용자가 운동·학습·커리어·습관 등 현실 퀘스트를 완료하면 헌터 캐릭터가 경험치와 스탯을 얻고, 직업 각성·게이트 전투·그림자 군단·무한의 탑 등 게임 시스템을 통해 성장하는 구조입니다.
+**levelup**은 "솔로 레벨링" 스타일의 현실 자기계발 RPG 웹 게임입니다. 사용자가 운동·학습·커리어·습관 등 현실 퀘스트를 완료하면 헌터 캐릭터가 경험치와 스탯을 얻고, 직업 각성·게이트 전투·그림자 군단·무한의 탑(비활성화됨) 등 게임 시스템을 통해 성장하는 구조입니다.
 
 - **순수 프론트엔드 SPA**입니다. 백엔드 서버가 없으며 모든 상태는 브라우저 `localStorage`에 저장됩니다(`levelup-save`).
 - 선택적 외부 연동: Gemini API(AI 코치), Google Calendar(읽기 전용). 둘 다 없어도 핵심 게임은 동작합니다.
@@ -70,7 +70,7 @@ Windows 편의 배치 파일: `start_levelup.bat`, `stop_levelup.bat`.
 ```
 src/
   main.tsx            # 진입점 (React 마운트)
-  App.tsx             # 루트 컴포넌트, 탭 네비게이션(보상/상점/군단/퀘스트/게이트/탑/...)
+  App.tsx             # 루트 컴포넌트, 탭 네비게이션(보상/상점/군단/퀘스트/게이트/...)
   index.css           # Tailwind 엔트리 + 전역 스타일
 
   lib/                # 게임 로직 핵심 (UI 비의존, 순수 로직 위주)
@@ -85,7 +85,7 @@ src/
     shadow*.ts        # 그림자(군단) 시스템: 스탯/스킬/전투/원정/초상화 에셋 등
     jobs.ts hunterGrade.ts promotionExams.ts   # 직업/등급/승급 시험
     skills.ts skillUpgrades.ts skillMotionPresets.ts
-    infiniteTower.ts gateEchoes.ts gateRunEvents.ts   # 무한의 탑 / 게이트
+    infiniteTower.ts(deprecated) gateEchoes.ts gateRunEvents.ts   # 무한의 탑(deprecated) / 게이트
     shop.ts shopProbabilities.ts   # 상점/확률
     realityPressure.ts secrets.ts secretLore.ts worldSignals.ts expeditionLore.ts
     aiCoach*.ts       # AI 코치 (Gemini 클라이언트/프롬프트/요약/타입)

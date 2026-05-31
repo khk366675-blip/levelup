@@ -1,3 +1,4 @@
+/** @deprecated Kept for typescript and store hydration compliance. */
 import type { MonsterDefinition, MonsterCombatStats, TowerFloorType, TowerReward, InfiniteTowerState, TowerBattleResult } from './types'
 import { MONSTER_DEFINITIONS } from './seed'
 

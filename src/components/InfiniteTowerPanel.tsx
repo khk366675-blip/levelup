@@ -1,3 +1,4 @@
+/** @deprecated Removed from active app routing. Kept for typescript compliance. */
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import clsx from 'clsx'
 import { Swords, Trophy, Zap, Shield, FastForward, X, Lock, ShieldAlert } from 'lucide-react'
