@@ -83,7 +83,7 @@ export function clearDevCheatBackup(): boolean {
  * 4단계: 치트 프로필 적용 핵심 로직
  */
 export function applyDevCheatProfile(profileId: 'monarchTestReady' | 'angelTestReady', state: any): any {
-  if (!import.meta.env.DEV) {
+  if (typeof import.meta.env !== 'undefined' && !import.meta.env.DEV) {
     console.error('[DEV_CHEAT] Cheat actions can only be executed in development mode!')
     return state
   }

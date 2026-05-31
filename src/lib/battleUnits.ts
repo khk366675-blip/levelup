@@ -128,7 +128,8 @@ const compressShadowBattleStat = (value: number): number => {
   return 100 + (value - 100) * 0.55
 }
 
-const SHADOW_BATTLE_LIFT = 1.09
+const SHADOW_BATTLE_LIFT = 1.22
+const SHADOW_HP_BATTLE_LIFT = 1.95
 const MONSTER_BATTLE_LIFT = 1.04
 
 const targetTypeFromShadowTarget = (target: ShadowSkillTarget): BattleTargetType => {
@@ -411,17 +412,17 @@ export const convertShadowProfileToBattleStats = (
   const enhancementGrowth = 1 + Math.max(0, profile.enhancement) * 0.028
   const quality = rarity * grade * levelGrowth * enhancementGrowth
   const hpRoleModifier = profile.role === 'guard'
-    ? 1.12
+    ? 1.65
     : profile.role === 'support' || profile.role === 'analyst'
-      ? 0.9
-      : 1
-  const guardLift = profile.role === 'guard' ? 1.02 : 1
+      ? 1.15
+      : 1.22
+  const guardLift = profile.role === 'guard' ? 1.28 : 1
   const assaultLift = profile.role === 'assault' || profile.role === 'hunter' ? 1.02 : 1
   const speedLift = profile.role === 'scout' || profile.role === 'hunter' ? 1.02 : 1
   const supportLift = profile.role === 'support' || profile.role === 'analyst' ? 1.02 : 1
 
   const maxHp = round(
-    (56 + stats.shadowDurability * 1.25 + stats.shadowSurvival * 0.75 + profile.level * 3.4) * quality * hpRoleModifier * SHADOW_BATTLE_LIFT * guardLift,
+    (165 + stats.shadowDurability * 2.3 + stats.shadowSurvival * 1.55 + profile.level * 7.2) * quality * hpRoleModifier * SHADOW_HP_BATTLE_LIFT * guardLift,
     1,
     99999999,
   )
@@ -541,11 +542,11 @@ export const buildHunterBattleUnit = (
   const equipmentSkill = equipmentValues.reduce((sum, item) => sum + item.skillValue * 0.36 + item.offenseValue * 0.14 + item.shadowSynergyValue * 0.1, 0)
   const equipmentTotal = equipmentValues.reduce((sum, item) => sum + item.totalEquipmentValue, 0)
   const maxHp = round(
-    combatStats.maxHp * 1.42 +
-    stat(hunter.stats, 'VIT') * 4.5 +
-    stat(hunter.stats, 'PER') * 1.8 +
-    equipmentSurvival * 0.72 +
-    equipmentTotal * 0.1,
+    combatStats.maxHp * 2.22 +
+    stat(hunter.stats, 'VIT') * 12.5 +
+    stat(hunter.stats, 'PER') * 4.5 +
+    equipmentSurvival * 1.68 +
+    equipmentTotal * 0.25,
     1,
   )
   const unitId = options.unitId ?? 'hunter-main'
@@ -567,11 +568,11 @@ export const buildHunterBattleUnit = (
       stats: {
         maxHp,
         currentHp: safeCurrentHp(options.currentHp, maxHp),
-        atk: round(combatStats.atk * 1.42 + stat(hunter.stats, 'STR') * 1.2 + stat(hunter.stats, 'AGI') * 0.38 + equipmentOffense, 1),
-        def: round(combatStats.def * 1.22 + stat(hunter.stats, 'VIT') * 0.65 + stat(hunter.stats, 'PER') * 0.35 + equipmentDefense, 1),
+        atk: round(combatStats.atk * 1.52 + stat(hunter.stats, 'STR') * 1.2 + stat(hunter.stats, 'AGI') * 0.38 + equipmentOffense, 1),
+        def: round(combatStats.def * 1.55 + stat(hunter.stats, 'VIT') * 1.25 + stat(hunter.stats, 'PER') * 0.75 + equipmentDefense, 1),
         spd: round(combatStats.speed * 1.08 + stat(hunter.stats, 'AGI') * 0.18, 1, 300),
         skillPower: round(
-          combatStats.skillTotalPower * 1.72 +
+          combatStats.skillTotalPower * 1.82 +
           combatStats.atk * 0.92 +
           stat(hunter.stats, 'INT') * 2.82 +
           stat(hunter.stats, 'STR') * 0.95 +
@@ -581,7 +582,7 @@ export const buildHunterBattleUnit = (
         crit: capRatio(combatStats.critRate),
         controlPower: round(stat(hunter.stats, 'INT') * 2.2 + stat(hunter.stats, 'SEN') * 1.4, 0),
         supportPower: round(stat(hunter.stats, 'INT') * 1.3 + stat(hunter.stats, 'SEN') * 1.9 + equipmentSupport, 0),
-        survivalPower: round(stat(hunter.stats, 'VIT') * 2 + stat(hunter.stats, 'PER') * 1.5 + equipmentSurvival, 0),
+        survivalPower: round(stat(hunter.stats, 'VIT') * 3.5 + stat(hunter.stats, 'PER') * 2.5 + equipmentSurvival, 0),
         bossPower: round(combatStats.skillTotalPower * 0.35 + stat(hunter.stats, 'STR') * 0.8 + stat(hunter.stats, 'SEN') * 0.8, 0),
         synergyPower: round(stat(hunter.stats, 'SEN') * 2.1 + equipmentSupport, 0),
       },
@@ -683,8 +684,21 @@ export const buildMonsterBattleUnit = (
      options.targetGrade
    )
    const diffMod = options.difficultyMod ?? 1.0
+
+   // safe-navigation 가드를 적용한 statBias 디폴트 변수 정의
+   const biasHp = definition.statBias?.hp ?? 1.0
+   const biasAtk = definition.statBias?.atk ?? 1.0
+   const biasDef = definition.statBias?.def ?? 1.0
+   const biasSpd = definition.statBias?.spd ?? 1.0
+   const biasSkill = definition.statBias?.skill ?? 1.0
+   const biasCrit = definition.statBias?.crit ?? 1.0
+   const biasControl = definition.statBias?.control ?? 0.7
+   const biasSupport = definition.statBias?.support ?? 0.45
+   const biasSurvival = definition.statBias?.survival ?? biasDef
+   const biasBoss = definition.statBias?.boss ?? (definition.unitType === 'boss' ? 1.4 : 0.35)
+   const biasSynergy = definition.statBias?.synergy ?? 0.55
  
-   const maxHp = round((115 + level * 23.5) * definition.statBias.hp * scale * threatScale * hpMultiplier * MONSTER_BATTLE_LIFT * pressure.hp * diffMod, 1)
+   const maxHp = round((115 + level * 23.5) * biasHp * scale * threatScale * hpMultiplier * MONSTER_BATTLE_LIFT * pressure.hp * diffMod, 1)
    const unitId = `${options.unitIdPrefix ?? 'enemy'}-${definition.id}-${level}`
    
    const isBossName = definition.unitType === 'boss' || definition.isBoss
@@ -703,16 +717,17 @@ export const buildMonsterBattleUnit = (
        stats: {
          maxHp,
          currentHp: safeCurrentHp(options.currentHp, maxHp),
-         atk: round((16 + level * 4.55) * definition.statBias.atk * scale * threatScale * atkMultiplier * MONSTER_BATTLE_LIFT * pressure.atk * diffMod, 1),
-         def: round((10 + level * 2.05) * definition.statBias.def * scale * (definition.isBoss ? 1.12 : 1) * defMultiplier * MONSTER_BATTLE_LIFT * pressure.def * diffMod, 1),
-         spd: round((10 + level * 1.05) * definition.statBias.spd * (definition.role === 'assassin' ? 1.08 : 1) * 1.02, 1, 300),
-         skillPower: round((15 + level * 3.95) * definition.statBias.skill * scale * threatScale * atkMultiplier * MONSTER_BATTLE_LIFT * pressure.atk * diffMod, 1),
-        crit: capRatio((0.04 + level * 0.003) * (definition.statBias.crit ?? 1)),
-        controlPower: round((5 + level * 1.7) * (definition.statBias.control ?? 0.7) * scale * MONSTER_BATTLE_LIFT, 0),
-        supportPower: round((4 + level * 1.5) * (definition.statBias.support ?? 0.45) * scale * MONSTER_BATTLE_LIFT, 0),
-        survivalPower: round((6 + level * 1.6) * (definition.statBias.survival ?? definition.statBias.def) * scale * MONSTER_BATTLE_LIFT, 0),
-        bossPower: round((level * 2.2) * (definition.statBias.boss ?? (definition.unitType === 'boss' ? 1.4 : 0.35)) * scale * MONSTER_BATTLE_LIFT, 0),
-        synergyPower: round((4 + level * 1.2) * (definition.statBias.synergy ?? 0.55) * scale * MONSTER_BATTLE_LIFT, 0),
+         // 몬스터 공격력/스킬위력 전체 15% 하향 (0.85 배율 적용)
+         atk: round((16 + level * 4.55) * biasAtk * scale * threatScale * atkMultiplier * MONSTER_BATTLE_LIFT * pressure.atk * diffMod * 0.85, 1),
+         def: round((10 + level * 2.05) * biasDef * scale * (definition.isBoss ? 1.12 : 1) * defMultiplier * MONSTER_BATTLE_LIFT * pressure.def * diffMod, 1),
+         spd: round((10 + level * 1.05) * biasSpd * (definition.role === 'assassin' ? 1.08 : 1) * 1.02, 1, 300),
+         skillPower: round((15 + level * 3.95) * biasSkill * scale * threatScale * atkMultiplier * MONSTER_BATTLE_LIFT * pressure.atk * diffMod * 0.85, 1),
+        crit: capRatio((0.04 + level * 0.003) * biasCrit),
+        controlPower: round((5 + level * 1.7) * biasControl * scale * MONSTER_BATTLE_LIFT, 0),
+        supportPower: round((4 + level * 1.5) * biasSupport * scale * MONSTER_BATTLE_LIFT, 0),
+        survivalPower: round((6 + level * 1.6) * biasSurvival * scale * MONSTER_BATTLE_LIFT, 0),
+        bossPower: round((level * 2.2) * biasBoss * scale * MONSTER_BATTLE_LIFT, 0),
+        synergyPower: round((4 + level * 1.2) * biasSynergy * scale * MONSTER_BATTLE_LIFT, 0),
       },
       statusEffects: [],
       cooldowns: {},
