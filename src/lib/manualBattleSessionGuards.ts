@@ -23,12 +23,16 @@ export const isManualBattleSessionTerminal = (session?: ManualBattleSession): bo
 export const shouldHideBattleContinueControls = (session?: ManualBattleSession): boolean =>
   isManualBattleSessionTerminal(session)
 
+export const isWorldMapBattleSource = (source?: string): boolean => {
+  return source === 'worldmap' || source === 'world_map'
+}
+
 export const shouldApplyHardcoreDeathReset = (source?: string): boolean => {
-  return source === 'gate' || source === 'gate_echo' || source === 'echo' || source === 'red_gate' || source === 'worldmap'
+  return source === 'gate' || source === 'gate_echo' || source === 'echo' || source === 'red_gate' || isWorldMapBattleSource(source)
 }
 
 export const shouldApplyShadowCollapse = (source?: string): boolean => {
-  return source === 'gate' || source === 'gate_echo' || source === 'echo' || source === 'red_gate' || source === 'worldmap'
+  return source === 'gate' || source === 'gate_echo' || source === 'echo' || source === 'red_gate' || isWorldMapBattleSource(source)
 }
 
 export const shouldRetrySameFloor = (source?: string): boolean => {
@@ -36,7 +40,7 @@ export const shouldRetrySameFloor = (source?: string): boolean => {
 }
 
 export const isGateHardcoreSource = (source?: string): boolean => {
-  return source === 'gate' || source === 'gate_echo' || source === 'echo' || source === 'red_gate' || source === 'worldmap'
+  return source === 'gate' || source === 'gate_echo' || source === 'echo' || source === 'red_gate' || isWorldMapBattleSource(source)
 }
 
 export const shouldTriggerHardcoreDeathFromSession = (
