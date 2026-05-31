@@ -111,7 +111,7 @@ function classifyEventLog(log: string) {
 export function WorldMapPanel() {
   const riftNodesState = useGame((s) => s.riftNodes ?? {})
   const activeRiftNodeId = useGame((s) => s.activeRiftNodeId)
-  const activeGate = useGame((s) => s.activeGate)
+  const activeGate = useGame((s) => s.activeWorldGate)
   const discoverRiftNode = useGame((s) => s.discoverRiftNode)
   const enterRiftNode = useGame((s) => s.enterRiftNode)
   const livingWorld = useGame((s) => s.livingWorld)
@@ -538,7 +538,7 @@ export function WorldMapPanel() {
               )}
 
               <div className="bg-ink-900 rounded-xl border border-white/10 p-2 sm:p-4">
-                <GatePanel />
+                <GatePanel isWorldMapContext={true} />
               </div>
             </div>
           </div>
@@ -1795,7 +1795,7 @@ export function WorldMapPanel() {
 
           {/* 기존 GatePanel의 전투 모듈을 그대로 인라인 배치하여 자연스럽게 연결 */}
           <div className="border-t border-white/5 pt-4 bg-ink-950/20 rounded-lg p-2 sm:p-4">
-            <GatePanel />
+            <GatePanel isWorldMapContext={true} />
           </div>
         </div>
       )}

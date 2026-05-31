@@ -279,7 +279,7 @@ function runSim(
     }
 
     // 5. Build Monarch unit
-    const monarchUnit = buildMonarchBattleUnit(monarch.id, monarch.recommendedCP)
+    const monarchUnit = buildMonarchBattleUnit(monarch.id, monarch.battleCP)
 
     // 6. Create Direct Battle state
     const dbUnits = [hunterBuild.unit, ...shadowBuilds.map(b => b.unit), monarchUnit]

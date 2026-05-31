@@ -132,17 +132,13 @@ export function Battlefield2DView({
   const actorCoords = useMemo(() => {
     const coords: Record<string, { x: number; y: number }> = {}
     
-    // Dynamic X-axis positions based on device/viewport to handle larger sprites without overlaps
-    const xAllyBack = isCompact ? 18 : 15
-    const xAllyFront = isCompact ? 35 : 33
-    
     // 1. Ally Team Positioning
     const allyActors = overriddenActors.filter(a => a.team === 'ally')
     const playerActor = allyActors.find(a => a.id === 'direct-preview-hunter')
     const coopActors = allyActors.filter(a => a.kind === 'hunter' && a.id !== 'direct-preview-hunter')
     const shadowActors = allyActors.filter(a => a.kind === 'shadow')
 
-    // Position Backline (Player + Coop Hunters)
+    // Position Backline (Player + Coop Hunters) - Back Row (Diagonal staggered to prevent overlap)
     const backlineActors = [
       ...(playerActor ? [playerActor] : []),
       ...coopActors
@@ -151,43 +147,55 @@ export function Battlefield2DView({
     if (backlineActors.length > 0) {
       backlineActors.forEach((actor, idx) => {
         const count = backlineActors.length
-        let y = 50
-        if (count === 1) {
-          y = 50
-        } else if (count === 2) {
-          y = idx === 0 ? 35 : 65
-        } else {
-          const step = 60 / (count - 1)
-          y = 20 + idx * step
+        let x = isCompact ? 16 : 14
+        let y = 42
+        
+        if (count === 2) {
+          x = idx === 0 ? (isCompact ? 11 : 9) : (isCompact ? 19 : 17)
+          y = idx === 0 ? 41 : 48
+        } else if (count > 2) {
+          const stepX = (isCompact ? 10 : 12) / (count - 1)
+          const stepY = 10 / (count - 1)
+          x = (isCompact ? 10 : 8) + idx * stepX
+          y = 38 + idx * stepY
         }
-        coords[actor.id] = { x: shadowActors.length === 0 ? (isCompact ? 26 : 24) : xAllyBack, y }
+        
+        // If there are no shadows, center the backline slightly more
+        if (shadowActors.length === 0) {
+          x += 6
+        }
+        coords[actor.id] = { x, y }
       })
     }
 
-    // Position Shadows (Left Front)
+    // Position Shadows (Left Front) - Front Row (Staggered layout for beautiful 2.5D layout)
     if (shadowActors.length > 0) {
       shadowActors.forEach((shadow, idx) => {
         const count = shadowActors.length
-        let y = 50
-        if (count === 1) {
-          y = 50
-        } else if (count === 2) {
-          y = idx === 0 ? 33 : 67
+        let x = isCompact ? 33 : 31
+        let y = 62
+        
+        if (count === 2) {
+          x = idx === 0 ? (isCompact ? 28 : 26) : (isCompact ? 38 : 36)
+          y = idx === 0 ? 54 : 66
         } else if (count === 3) {
-          y = idx === 0 ? 22 : idx === 1 ? 50 : 78
-        } else {
-          const step = 70 / (count - 1)
-          y = 15 + idx * step
+          x = idx === 0 ? (isCompact ? 26 : 24) : idx === 1 ? (isCompact ? 32 : 30) : (isCompact ? 38 : 36)
+          y = idx === 0 ? 54 : idx === 1 ? 62 : 70
+        } else if (count > 3) {
+          const stepX = (isCompact ? 18 : 20) / (count - 1)
+          const stepY = 18 / (count - 1)
+          x = (isCompact ? 25 : 23) + idx * stepX
+          y = 52 + idx * stepY
         }
-        coords[shadow.id] = { x: xAllyFront, y }
+        coords[shadow.id] = { x, y }
       })
     } else if (backlineActors.length === 0 && allyActors.length > 0) {
       // Fallback: If no backline but has other ally actors
       allyActors.forEach((actor, idx) => {
         const count = allyActors.length
         let y = 50
-        if (count === 2) y = idx === 0 ? 33 : 67
-        else if (count === 3) y = idx === 0 ? 25 : idx === 1 ? 50 : 75
+        if (count === 2) y = idx === 0 ? 42 : 62
+        else if (count === 3) y = idx === 0 ? 40 : idx === 1 ? 52 : 64
         coords[actor.id] = { x: isCompact ? 28 : 24, y }
       })
     }
@@ -380,7 +388,9 @@ export function Battlefield2DView({
     <div className={clsx(
       'relative w-full rounded-xl border-2 border-slate-800/80 overflow-hidden bg-gradient-to-b shadow-[inset_0_0_30px_rgba(0,0,0,0.85),0_4px_24px_rgba(0,0,0,0.55)] flex flex-col justify-between select-none',
       theme.bgGradient,
-      mode === 'overlay' ? 'h-[42vh] min-h-[350px] md:h-[480px] lg:h-[540px]' : (isCompact ? 'h-[225px] sm:h-[250px]' : 'h-[340px] sm:h-[400px]')
+      mode === 'overlay' 
+        ? 'h-[25vh] min-h-[190px] xs:h-[29vh] xs:min-h-[220px] sm:h-[31vh] sm:min-h-[240px] md:h-[420px] lg:h-[480px]' 
+        : (isCompact ? 'h-[190px] sm:h-[220px]' : 'h-[300px] sm:h-[340px]')
     )}>
       {/* Sky atmospheric filter */}
       <div className={clsx('pointer-events-none absolute inset-0 z-0 opacity-80', theme.skyFilter)} />
@@ -552,6 +562,7 @@ export function Battlefield2DView({
             if (!intensity) intensity = preset.intensity
           }
  
+          const isPlayerTeam = actor.team === 'ally'
           return (
             <div
               key={actor.id}
@@ -560,6 +571,7 @@ export function Battlefield2DView({
                 left: `${coords.x}%`,
                 top: `${coords.y}%`,
                 transform: 'translate(-50%, -50%)',
+                zIndex: actor.isActive ? 100 : actor.isTargeted ? 90 : Math.round(coords.y),
               }}
             >
               {actor.telegraph && !actor.isDefeated && (
@@ -593,10 +605,11 @@ export function Battlefield2DView({
 
               <BattleActorSprite 
                 actor={actor} 
-                compact={isCompact} 
+                compact={isCompact || (isPlayerTeam && overriddenActors.filter(a => a.team === 'ally').length >= 5)} 
                 activeMotion={activeMotion}
                 hitReaction={hitReaction}
                 intensity={intensity}
+                yCoord={coords.y}
               />
             </div>
           )

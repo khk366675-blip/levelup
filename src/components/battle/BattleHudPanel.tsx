@@ -34,9 +34,9 @@ export function HudUnitCard({ unit, isActive, isTargeted, isDimmed, onClick, tea
       disabled={!isAlive || !onClick}
       onClick={onClick}
       className={clsx(
-        'relative flex items-center gap-1.5 rounded-lg border bg-black/40 py-1.5 px-2 text-left transition-all',
+        'relative flex items-center gap-1 rounded-md border bg-black/50 py-0.5 px-1.5 text-left transition-all',
         team === 'player' ? 'border-cyan-500/20' : 'border-rose-500/20',
-        !isAlive && 'opacity-40 border-slate-800 bg-slate-950/60',
+        !isAlive && 'opacity-30 border-slate-800 bg-slate-950/60',
         isAlive && isDimmed && 'opacity-55 scale-98 border-slate-800/40 bg-black/20',
         isAlive && isActive && 'opacity-100 border-cyan-400 ring-1 ring-cyan-400 bg-cyan-950/20 shadow-glow shadow-cyan-500/10 scale-102 z-20',
         isAlive && isTargeted && (team === 'player'
@@ -45,11 +45,11 @@ export function HudUnitCard({ unit, isActive, isTargeted, isDimmed, onClick, tea
         ),
         onClick ? 'hover:bg-white/5 cursor-pointer' : 'cursor-default'
       )}
-      style={{ minWidth: '130px', flex: '1 1 0%' }}
+      style={{ minWidth: '78px', flex: '1 1 0%' }}
     >
       {/* Active/Target badge */}
       {isAlive && (
-        <div className="absolute -top-1.5 -right-1 z-10 flex gap-0.5 scale-75">
+        <div className="absolute -top-1.5 -right-1 z-10 flex gap-0.5 scale-[0.65]">
           {isActive && (
             <span className="rounded bg-cyan-400 px-1 py-0.5 text-[8px] font-black text-black">ACT</span>
           )}
@@ -66,33 +66,33 @@ export function HudUnitCard({ unit, isActive, isTargeted, isDimmed, onClick, tea
 
       {/* Avatar Icon */}
       <div className={clsx(
-        'relative flex h-7 w-7 shrink-0 items-center justify-center rounded-md border',
-        !isAlive ? 'border-slate-800 bg-slate-900 text-slate-600' :
-        team === 'player' ? 'border-cyan-500/30 bg-cyan-500/10 text-cyan-300' :
-        isBoss ? 'border-rose-400/50 bg-rose-500/15 text-rose-400' : 'border-rose-500/30 bg-rose-500/10 text-rose-300'
+        'relative flex h-5.5 w-5.5 shrink-0 items-center justify-center rounded bg-slate-900 border text-[10px]',
+        !isAlive ? 'border-slate-800 text-slate-600' :
+        team === 'player' ? 'border-cyan-500/30 text-cyan-300' :
+        isBoss ? 'border-rose-400/50 text-rose-400' : 'border-rose-500/30 text-rose-300'
       )}>
         {team === 'player' ? (
           getRoleIcon(unit.role)
         ) : isBoss ? (
-          <span className="text-sm">👹</span>
+          <span>👹</span>
         ) : (
-          <span className="text-xs">💀</span>
+          <span>💀</span>
         )}
       </div>
 
       {/* HP Info */}
       <div className="min-w-0 flex-1">
-        <div className="flex items-center gap-1.5 justify-between">
-          <span className="truncate text-[10px] font-bold text-white/90">
+        <div className="flex items-center gap-1 justify-between leading-none">
+          <span className="truncate text-[9px] font-bold text-white/90">
             {unit.displayName}
           </span>
-          {isBoss && (
-            <span className="rounded bg-rose-500/80 px-1 py-0.2 text-[7px] font-black text-white shrink-0">BOSS</span>
-          )}
+          <span className="text-[8px] font-mono font-bold text-cyan-300/80 shrink-0">
+            {Math.round(unit.stats.currentHp)}
+          </span>
         </div>
 
         {/* HP Bar */}
-        <div className="mt-1 h-1.5 overflow-hidden rounded bg-white/10 relative">
+        <div className="mt-1 h-1 overflow-hidden rounded bg-white/10 relative">
           <motion.div
             className={clsx(
               'h-full rounded',
@@ -103,11 +103,6 @@ export function HudUnitCard({ unit, isActive, isTargeted, isDimmed, onClick, tea
             animate={{ width: `${hpRatio * 100}%` }}
             transition={{ duration: 0.3 }}
           />
-        </div>
-
-        <div className="mt-0.5 flex justify-between text-[8px] font-semibold text-white/40 tabular-nums">
-          <span>HP</span>
-          <span>{Math.round(unit.stats.currentHp)} / {Math.round(unit.stats.maxHp)}</span>
         </div>
       </div>
     </button>
@@ -142,12 +137,12 @@ export function BattleHudPanel({
 
   return {
     EnemyHud: (
-      <div className="w-full bg-slate-900/60 border-b border-white/5 py-1 px-3">
-        <div className="flex items-center justify-between mb-1">
-          <span className="text-[10px] uppercase font-black tracking-wider text-rose-400/80">Enemy Party HUD</span>
-          <span className="text-[8px] text-white/35">체력바 클릭 시 공격 타겟 선택 가능</span>
+      <div className="w-full bg-slate-900/60 border-b border-white/5 py-0.5 px-3">
+        <div className="flex items-center justify-between mb-0.5">
+          <span className="text-[9px] uppercase font-black tracking-wider text-rose-400/85">Enemy Party ({enemyUnits.length})</span>
+          <span className="text-[8px] text-white/35 hidden sm:inline">체력바 클릭 시 공격 타겟 선택 가능</span>
         </div>
-        <div className="flex flex-wrap gap-1 max-h-[68px] sm:max-h-[76px] overflow-y-auto pr-1">
+        <div className="flex flex-wrap gap-1 max-h-[56px] sm:max-h-[64px] overflow-y-auto pr-1">
           {enemyUnits.map(unit => {
             const isActive = unit.unitId === activeUnitId
             const isTargeted = targetUnitIds.includes(unit.unitId)
@@ -168,12 +163,12 @@ export function BattleHudPanel({
       </div>
     ),
     AllyHud: (
-      <div className="w-full bg-slate-900/60 border-t border-white/5 py-1 px-3">
-        <div className="flex items-center justify-between mb-1">
-          <span className="text-[10px] uppercase font-black tracking-wider text-cyan-400/80">Ally Party HUD</span>
-          <span className="text-[8px] text-white/35">헌터 및 소환 그림자 상태</span>
+      <div className="w-full bg-slate-900/60 border-t border-white/5 py-0.5 px-3">
+        <div className="flex items-center justify-between mb-0.5">
+          <span className="text-[9px] uppercase font-black tracking-wider text-cyan-400/85">Ally Party ({sortedPlayers.length})</span>
+          <span className="text-[8px] text-white/35 hidden sm:inline">헌터 및 소환 그림자 상태</span>
         </div>
-        <div className="flex flex-wrap gap-1 max-h-[68px] sm:max-h-[76px] overflow-y-auto pr-1">
+        <div className="flex flex-wrap gap-1 max-h-[56px] sm:max-h-[64px] overflow-y-auto pr-1">
           {sortedPlayers.map(unit => {
             const isActive = unit.unitId === activeUnitId
             const isTargeted = targetUnitIds.includes(unit.unitId)

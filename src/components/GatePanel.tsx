@@ -758,7 +758,13 @@ function ShadowExtractionPanel({
   const extractHistory = useGame(s => s.shadowExtractHistory ?? [])
   const lastResult = useGame(s => s.lastShadowExtractResult)
   const attemptShadowExtraction = useGame(s => s.attemptShadowExtraction)
-  const activeGate = useGame(s => s.activeGate)
+  const manualBattleSession = useGame(s => s.manualBattleSession)
+  const activeGate = useGame(s => {
+    if (manualBattleSession?.source === 'world_map') {
+      return s.activeWorldGate
+    }
+    return s.activeGate
+  })
   const gate = (gateId ? GATE_DEFINITIONS.find(item => item.id === gateId) : undefined)
     ?? (activeGate?.gateId === gateId ? activeGate?.customGateDef : undefined)
   if (!log || log.result !== 'victory' || !gate) return null
@@ -1753,7 +1759,7 @@ function ManualBattlePanelV2({
   )
 }
 
-export function GatePanel() {
+export function GatePanel({ isWorldMapContext }: { isWorldMapContext?: boolean } = {}) {
   const [isBattleRevealing, setIsBattleRevealing] = useState(false)
   const [isDirectGateBattleOpen, setIsDirectGateBattleOpen] = useState(false)
   const [selectedEchoId, setSelectedEchoId] = useState<string | undefined>()
@@ -1762,7 +1768,13 @@ export function GatePanel() {
   const items = useGame(s => s.items)
   const equipment = useGame(s => s.equipment)
   const activeConsumableEffects = useGame(s => s.activeConsumableEffects)
-  const activeGate = useGame(s => s.activeGate)
+  const manualBattleSession = useGame(s => s.manualBattleSession)
+  const activeGate = useGame(s => {
+    if (isWorldMapContext || manualBattleSession?.source === 'world_map') {
+      return s.activeWorldGate
+    }
+    return s.activeGate
+  })
   const ownedShadows = useGame(s => s.ownedShadows ?? [])
   const equippedShadowIds = useGame(s => s.equippedShadowIds ?? [])
   const gateStatus = useGame(s => s.gateStatus)
@@ -1779,7 +1791,7 @@ export function GatePanel() {
   const latestGateCombatLog = combatLogs.find(
     log => log.source === 'gate' || (!log.source && !log.gateInstanceId?.startsWith('tower-'))
   )
-  const manualBattleSession = useGame(s => s.manualBattleSession)
+
   const startGateBattle = useGame(s => s.startGateBattle)
   const resolveDirectGateBattle = useGame(s => s.resolveDirectGateBattle)
   const startManualGateBattle = useGame(s => s.startManualGateBattle)
@@ -2035,7 +2047,7 @@ export function GatePanel() {
             { label: '군주', value: monarchData?.name ?? monarchId },
             { label: '권장 CP', value: `${recommendedCP.toLocaleString()} CP` },
           ]}
-          customEnemyUnits={[buildMonarchBattleUnit(monarchId, recommendedCP)]}
+          customEnemyUnits={[buildMonarchBattleUnit(monarchId, monarchData?.battleCP ?? recommendedCP)]}
           customBattleId={`direct-monarch-${monarchId}`}
           maxRoundsOverride={25}
           autoStart
@@ -2428,8 +2440,8 @@ export function GatePanel() {
 
     return (
       <div className="space-y-4">
-        <GateStatusPanel />
-        <ArchiveTraceChip count={traceCount} />
+        {!isWorldMapContext && <GateStatusPanel />}
+        {!isWorldMapContext && <ArchiveTraceChip count={traceCount} />}
         <DirectBattlePreviewPanel
           key={`direct-gate-${activeGate.instanceId}`}
           source={activeGate?.runState?.isPromotionExam ? 'promotion_exam' : (activeGate?.runState?.redGateState ? 'red_gate' : 'gate')}
@@ -2470,8 +2482,8 @@ export function GatePanel() {
   ) {
     return (
       <div className="space-y-4">
-        <GateStatusPanel />
-        <ArchiveTraceChip count={traceCount} />
+        {!isWorldMapContext && <GateStatusPanel />}
+        {!isWorldMapContext && <ArchiveTraceChip count={traceCount} />}
         <ManualBattlePanelV2
           session={manualBattleSession}
           skills={manualPlayerSkills.filter(skill => skill.id !== 'basic-attack')}
@@ -2492,9 +2504,9 @@ export function GatePanel() {
   if (activeEchoes.length > 0) {
     return (
       <div className="space-y-4">
-        <FocusSessionPanel />
+        {!isWorldMapContext && <FocusSessionPanel />}
         <GateEchoPanel echoes={activeEchoes} onStart={setSelectedEchoId} />
-        <GateStatusPanel />
+        {!isWorldMapContext && <GateStatusPanel />}
         <div className="rounded-md border border-amber-400/30 bg-amber-400/10 p-3 text-xs text-amber-100">
           Echo 정화 후 게이트 진입이 재개됩니다.
         </div>
@@ -2528,16 +2540,17 @@ export function GatePanel() {
         handleStartManualBattle={handleStartManualBattle}
         handleStartLegacyGateBattle={handleStartLegacyGateBattle}
         handleStartGateBattle={handleStartGateBattle}
+        isWorldMapContext={isWorldMapContext}
       />
     )
   }
 
   return (
     <div className="space-y-4">
-      <FocusSessionPanel />
-      <GateEchoPanel echoes={activeEchoes} onStart={setSelectedEchoId} />
-      <GateStatusPanel />
-      <ArchiveTraceChip count={traceCount} />
+      {!isWorldMapContext && <FocusSessionPanel />}
+      {!isWorldMapContext && <GateEchoPanel echoes={activeEchoes} onStart={setSelectedEchoId} />}
+      {!isWorldMapContext && <GateStatusPanel />}
+      {!isWorldMapContext && <ArchiveTraceChip count={traceCount} />}
 
       <div className="panel corner-bracket p-5 bg-gradient-to-br from-amber-500/10 via-ink-800/60 to-cyan-500/5 border-amber-400/30">
         <div className="br" />
@@ -2807,6 +2820,7 @@ interface GateRunPanelProps {
   handleStartManualBattle: () => void
   handleStartLegacyGateBattle: () => void
   handleStartGateBattle: () => void
+  isWorldMapContext?: boolean
 }
 
 function GateRunPanel({
@@ -2828,6 +2842,7 @@ function GateRunPanel({
   handleStartManualBattle,
   handleStartLegacyGateBattle,
   handleStartGateBattle,
+  isWorldMapContext,
 }: GateRunPanelProps) {
   const [selectedEncId, setSelectedEncId] = useState<string | null>(null)
   const [activeRestOption, setActiveRestOption] = useState<'heal' | 'buff' | 'cooldown'>('heal')
@@ -2943,7 +2958,7 @@ function GateRunPanel({
 
   return (
     <div className="space-y-4">
-      <FocusSessionPanel />
+      {!isWorldMapContext && <FocusSessionPanel />}
       {/* Red Gate Warning Banner */}
       {isRedGate && (
         <div className="mb-4 rounded-lg border border-red-500 bg-red-950/60 p-4 text-red-200 animate-pulse flex items-start gap-3 shadow-[0_0_15px_rgba(239,68,68,0.3)]">

@@ -396,6 +396,7 @@ export interface GameState {
   activeConsumableEffects: ActiveConsumableEffect[]
   gateStatus: GateStatus
   activeGate?: ActiveGate
+  activeWorldGate?: ActiveGate
   riftNodes: Record<string, RiftNodeStatus>
   activeRiftNodeId?: string
   livingWorld?: LivingWorldState
@@ -3433,6 +3434,7 @@ const createHardcoreDeathResetState = (
     activeConsumableEffects: [],
     gateStatus: createInitialGateStatus(),
     activeGate: undefined,
+    activeWorldGate: undefined,
     combatLogs: [],
     manualBattleSession: undefined,
     ownedShadows: [],
@@ -3565,6 +3567,7 @@ export const useGame = create<GameState>()(
       activeConsumableEffects: [],
       gateStatus: createInitialGateStatus(),
       activeGate: undefined,
+      activeWorldGate: undefined,
       riftNodes: (() => {
         const nodes: Record<string, RiftNodeStatus> = {}
         RIFT_NODES.forEach((n) => {
@@ -5084,7 +5087,11 @@ export const useGame = create<GameState>()(
       spawnGate: (gateId: string, source: 'random' | 'dungeon_clear' | 'event' | 'worldmap', helperHunterIds?: string[], customGateDef?: any) => {
         const s = get()
         // 1. 이미 activeGate가 존재하며 active인 경우 중복 생성을 즉시 차단
-        if (s.activeGate && s.activeGate.status === 'active') return
+        if (source === 'worldmap') {
+          if (s.activeWorldGate && s.activeWorldGate.status === 'active') return
+        } else {
+          if (s.activeGate && s.activeGate.status === 'active') return
+        }
 
         // 2. 군주/Angel defeated/cleared/ending victory 상태에서는 게이트 및 출현 알림 생성을 차단
         const isMonarchId = MONARCHS.some(m => m.id === gateId) || gateId === 'angel'
@@ -5154,29 +5161,47 @@ export const useGame = create<GameState>()(
           }
         }
 
-        set({
-          activeGate: {
-            instanceId: `gate-${gate.id}-${Date.now()}`,
-            gateId: gate.id,
-            spawnedAt: now.toISOString(),
-            expiresAt: expiresAt.toISOString(),
-            status: 'active',
-            source,
-            runState,
-            helperHunterIds,
-            customGateDef: enrichedGateDef,
-          },
-          messages: appendMessageOnce(s.messages, {
-            id: uid(),
-            kind: 'info',
-            title: '게이트 출현',
-            lines: [
-              `[${gate.name}]이(가) 열렸습니다. (던전 런 탑재)`,
-              ...(dp && dp.overallReadiness >= 15 ? [`현실 준비도 ${dp.overallReadiness}% — 보상 +${Math.round(dp.gateRewardBonus * 100)}%`] : [])
-            ],
-            createdAt: todayISO(),
-          }),
-        })
+        const gateData = {
+          instanceId: `gate-${gate.id}-${Date.now()}`,
+          gateId: gate.id,
+          spawnedAt: now.toISOString(),
+          expiresAt: expiresAt.toISOString(),
+          status: 'active' as const,
+          source,
+          runState,
+          helperHunterIds,
+          customGateDef: enrichedGateDef,
+        }
+
+        if (source === 'worldmap') {
+          set({
+            activeWorldGate: gateData,
+            messages: appendMessageOnce(s.messages, {
+              id: uid(),
+              kind: 'info',
+              title: '게이트 출현',
+              lines: [
+                `[${gate.name}]이(가) 열렸습니다. (던전 런 탑재)`,
+                ...(dp && dp.overallReadiness >= 15 ? [`현실 준비도 ${dp.overallReadiness}% — 보상 +${Math.round(dp.gateRewardBonus * 100)}%`] : [])
+              ],
+              createdAt: todayISO(),
+            }),
+          })
+        } else {
+          set({
+            activeGate: gateData,
+            messages: appendMessageOnce(s.messages, {
+              id: uid(),
+              kind: 'info',
+              title: '게이트 출현',
+              lines: [
+                `[${gate.name}]이(가) 열렸습니다. (던전 런 탑재)`,
+                ...(dp && dp.overallReadiness >= 15 ? [`현실 준비도 ${dp.overallReadiness}% — 보상 +${Math.round(dp.gateRewardBonus * 100)}%`] : [])
+              ],
+              createdAt: todayISO(),
+            }),
+          })
+        }
       },
 
       recoverGateStamina: () => set((s) => {
@@ -5259,7 +5284,7 @@ export const useGame = create<GameState>()(
 
       startGateBattle: () => {
         const s = get()
-        const activeGate = s.activeGate
+        const activeGate = (s.activeWorldGate && s.activeWorldGate.status === 'active') ? s.activeWorldGate : s.activeGate
         if (!activeGate || activeGate.status !== 'active') return
 
         let gate = GATE_DEFINITIONS.find(g => g.id === activeGate.gateId)
@@ -5729,12 +5754,13 @@ export const useGame = create<GameState>()(
           source: 'gate',
         }
 
+        const isWorldMap = activeGate.source === 'worldmap'
         set({
           hunter: nextHunter,
           items: nextItems,
           ownedShadows: nextOwnedShadows,
           gateStatus: nextGateStatus,
-          activeGate: nextActiveGate,
+          ...(isWorldMap ? { activeWorldGate: nextActiveGate } : { activeGate: nextActiveGate }),
           activeConsumableEffects: nextConsumables,
           combatLogs: [finalLog, ...s.combatLogs].slice(0, 20),
           // Gate battle outcome is revealed in GatePanel one log line at a time.
@@ -5761,7 +5787,9 @@ export const useGame = create<GameState>()(
 
       resolveDirectGateBattle: (combatLog) => {
         const s = get()
-        const activeGate = s.activeGate
+        const activeGate = (s.activeWorldGate && combatLog.gateInstanceId === s.activeWorldGate.instanceId)
+          ? s.activeWorldGate
+          : s.activeGate
         if (!activeGate || activeGate.status !== 'active') return
         if (combatLog.gateInstanceId !== activeGate.instanceId) return
 
@@ -5887,8 +5915,15 @@ export const useGame = create<GameState>()(
           nextHunter = addHiddenSignalToState(nextHunter, sig)
         })
 
+        const isWorldMap = activeGate.source === 'worldmap'
+        const stateUpdate = { ...outcome.state }
+        if (isWorldMap) {
+          stateUpdate.activeWorldGate = stateUpdate.activeGate
+          delete stateUpdate.activeGate
+        }
+
         set({
-          ...outcome.state,
+          ...stateUpdate,
           hunter: nextHunter
         })
         set(current => applyChallengeProgress(current, {
@@ -5897,7 +5932,16 @@ export const useGame = create<GameState>()(
         }))
 
         if (activeGate.source === 'worldmap') {
-          get().resolveWorldGateBattleOutcome(activeGate, gate, combatLog)
+          const isLastWave = activeGate.runState
+            ? (activeGate.runState.currentEncounterIndex === activeGate.runState.encounters.length - 1)
+            : true;
+          if (combatLog.result === 'victory') {
+            if (isLastWave) {
+              get().resolveWorldGateBattleOutcome(activeGate, gate, combatLog)
+            }
+          } else {
+            get().resolveWorldGateBattleOutcome(activeGate, gate, combatLog)
+          }
         }
 
         // 12-41B: 게이트 최종 클리어 성공 연계 및 승급 후킹
@@ -6050,7 +6094,9 @@ export const useGame = create<GameState>()(
 
       startManualGateBattle: (gateId) => {
         const s = get()
-        const activeGate = s.activeGate
+        const activeGate = (s.activeWorldGate && s.activeWorldGate.gateId === gateId)
+          ? s.activeWorldGate
+          : s.activeGate
         if (!activeGate || activeGate.status !== 'active') return
         if (gateId && activeGate.gateId !== gateId) return
 
@@ -6201,9 +6247,14 @@ export const useGame = create<GameState>()(
           monster.def = Math.round(monster.def * computedDifficultyMod)
         }
 
+        const isWorldMap = activeGate.source === 'worldmap'
         set({
           gateStatus,
-          activeGate: runStateMod ? { ...activeGate, runState: runStateMod } : activeGate,
+          ...(isWorldMap ? {
+            activeWorldGate: runStateMod ? { ...activeGate, runState: runStateMod } : activeGate
+          } : {
+            activeGate: runStateMod ? { ...activeGate, runState: runStateMod } : activeGate
+          }),
           manualBattleSession: {
             gateId: gate.id,
             gateName: gate.name,
@@ -6223,9 +6274,9 @@ export const useGame = create<GameState>()(
             consumableUseCount: 0,
             logs: [],
             startedAt: todayISO(),
-            source: activeGate.runState?.isPromotionExam
-              ? 'promotion_exam'
-              : (activeGate.runState?.redGateState ? 'red_gate' : 'gate'),
+            source: isWorldMap
+              ? 'world_map' as const
+              : (activeGate.runState?.isPromotionExam ? 'promotion_exam' as const : (activeGate.runState?.redGateState ? 'red_gate' as const : 'gate' as const)),
             difficultyMod: computedDifficultyMod,
           },
         })
@@ -6239,7 +6290,8 @@ export const useGame = create<GameState>()(
 
         const s = get()
         const existingSession = s.manualBattleSession
-        const activeGate = s.activeGate
+        const isWorldMap = existingSession?.source === 'world_map'
+        const activeGate = isWorldMap ? s.activeWorldGate : s.activeGate
         if (!existingSession || existingSession.result || !activeGate || activeGate.status !== 'active') return
         let session = existingSession
 
@@ -7109,7 +7161,8 @@ export const useGame = create<GameState>()(
       switchManualBattleToAuto: () => {
         const s = get()
         const session = s.manualBattleSession
-        const activeGate = s.activeGate
+        const isWorldMap = session?.source === 'world_map'
+        const activeGate = isWorldMap ? s.activeWorldGate : s.activeGate
         if (!session || !activeGate || activeGate.status !== 'active') return
 
         const gate = GATE_DEFINITIONS.find(g => g.id === session.gateId)
@@ -7324,8 +7377,13 @@ export const useGame = create<GameState>()(
           nextGateStatus,
           combatLog
         )
+        const stateUpdate = { ...outcome.state }
+        if (isWorldMap) {
+          stateUpdate.activeWorldGate = stateUpdate.activeGate
+          delete stateUpdate.activeGate
+        }
         set({
-          ...outcome.state,
+          ...stateUpdate,
           manualBattleSession: {
             ...session,
             waveIndex,
@@ -7728,7 +7786,7 @@ export const useGame = create<GameState>()(
 
       resolveDirectWorldBattle: (combatLog, nodeId, helperHunterIds) => {
         const s = get()
-        const activeGate = s.activeGate
+        const activeGate = s.activeWorldGate || s.activeGate
         const isVictory = combatLog.result === 'victory'
 
         // 1. activeGate가 존재하면 resolveWorldGateBattleOutcome으로 정산 처리를 위임합니다.
@@ -8311,7 +8369,7 @@ export const useGame = create<GameState>()(
           })
 
           const player = createPlayerBattleActor(s.hunter.name || '헌터', playerStats, allPlayerSkills)
-          const monarchUnit = buildMonarchBattleUnit(nodeId, monarchData.recommendedCP)
+          const monarchUnit = buildMonarchBattleUnit(nodeId, monarchData.battleCP)
           const monster = {
             id: nodeId,
             name: monarchUnit.displayName,
@@ -11753,6 +11811,7 @@ export const useGame = create<GameState>()(
         activeConsumableEffects: [],
         gateStatus: createInitialGateStatus(),
         activeGate: undefined,
+        activeWorldGate: undefined,
         activeRiftNodeId: undefined,
         riftNodes: (() => {
           const nodes: Record<string, RiftNodeStatus> = {}
@@ -11820,6 +11879,7 @@ export const useGame = create<GameState>()(
         activeConsumableEffects: [],
         gateStatus: createInitialGateStatus(),
         activeGate: undefined,
+        activeWorldGate: undefined,
         activeRiftNodeId: undefined,
         riftNodes: (() => {
           const nodes: Record<string, RiftNodeStatus> = {}
@@ -11945,6 +12005,7 @@ export const useGame = create<GameState>()(
           activeConsumableEffects: [],
           gateStatus: createInitialGateStatus(),
           activeGate: undefined,
+          activeWorldGate: undefined,
           activeRiftNodeId: undefined,
           riftNodes: (() => {
             const nodes: Record<string, RiftNodeStatus> = {}
@@ -12083,6 +12144,7 @@ export const useGame = create<GameState>()(
           activeConsumableEffects: [],
           gateStatus: createInitialGateStatus(),
           activeGate: undefined,
+          activeWorldGate: undefined,
           activeRiftNodeId: undefined,
           riftNodes: (() => {
             const nodes: Record<string, RiftNodeStatus> = {}
@@ -12922,7 +12984,7 @@ export const useGame = create<GameState>()(
 
           get().recalculateHunterGrade('게이트 공략 성공')
           
-          const activeGate2 = get().activeGate
+          const activeGate2 = get().activeWorldGate || get().activeGate
           const riftNodeId = get().activeRiftNodeId
           if (activeGate2?.source === 'worldmap' && riftNodeId) {
             get().markRiftNodeCleared(riftNodeId)

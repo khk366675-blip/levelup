@@ -16,6 +16,7 @@ type Props = {
   activeMotion?: ActorMotionType
   hitReaction?: TargetReactionType
   intensity?: 'basic' | 'skill' | 'signature'
+  yCoord?: number // [NEW] Y coordinate for 2.5D perspective scaling
 }
 
 /**
@@ -38,6 +39,7 @@ export function BattleActorSprite({
   activeMotion = 'default',
   hitReaction = 'none',
   intensity = 'signature',
+  yCoord,
 }: Props) {
   const isShadow = actor.kind === 'shadow'
   const isHunter = actor.kind === 'hunter'
@@ -682,7 +684,9 @@ export function BattleActorSprite({
         className={clsx(cardBorderClass, hasSprite ? 'overflow-visible' : 'overflow-hidden')}
         style={{
           width: compact ? (isBoss ? 104 : 80) : (isBoss ? 200 : 144),
-          height: compact ? (isBoss ? 136 : 104) : (isBoss ? 250 : 180)
+          height: compact ? (isBoss ? 136 : 104) : (isBoss ? 250 : 180),
+          transform: yCoord !== undefined ? `scale(${0.72 + (yCoord / 100) * 0.4})` : undefined,
+          transformOrigin: 'bottom center',
         }}
       >
         {/* Active highlight sheen */}

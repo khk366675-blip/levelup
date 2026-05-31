@@ -6,6 +6,7 @@ export interface MonarchData {
   name: string
   theme: string
   recommendedCP: number
+  battleCP: number
   concept: string
 }
 
@@ -16,6 +17,7 @@ export const MONARCHS: MonarchData[] = [
     name: '부패의 모왕 그렐릭',
     theme: '벌레 군단',
     recommendedCP: 24140,
+    battleCP: 14200,
     concept: '다수 소환 · 머릿수 압박'
   },
   {
@@ -24,6 +26,7 @@ export const MONARCHS: MonarchData[] = [
     name: '빙결의 여군주 셀라이드',
     theme: '빙결',
     recommendedCP: 29070,
+    battleCP: 17100,
     concept: '행동 둔화 · 빙결 상태이상'
   },
   {
@@ -32,6 +35,7 @@ export const MONARCHS: MonarchData[] = [
     name: '백염의 군주 이그리스',
     theme: '화염',
     recommendedCP: 33830,
+    battleCP: 19900,
     concept: '지속 화염 장판 · 광역 폭발'
   },
   {
@@ -40,6 +44,7 @@ export const MONARCHS: MonarchData[] = [
     name: '강철의 패왕 도르가',
     theme: '강철 / 방어',
     recommendedCP: 40290,
+    battleCP: 23700,
     concept: '초고방어 · 반격 · 약점 공략 요구'
   },
   {
@@ -48,6 +53,7 @@ export const MONARCHS: MonarchData[] = [
     name: '환영의 군주 미라쥬',
     theme: '환영',
     recommendedCP: 49300,
+    battleCP: 29000,
     concept: '분신 생성 · 본체 식별 기믹'
   },
   {
@@ -56,6 +62,7 @@ export const MONARCHS: MonarchData[] = [
     name: '역병의 대공 페스타',
     theme: '독 / 역병',
     recommendedCP: 56100,
+    battleCP: 33000,
     concept: '중첩 독 · 재생 봉쇄 · 장기전'
   },
   {
@@ -64,6 +71,7 @@ export const MONARCHS: MonarchData[] = [
     name: '폭풍의 군주 벨라투스',
     theme: '폭풍 / 속도',
     recommendedCP: 64600,
+    battleCP: 38000,
     concept: '초고속 연타 · 즉사급 일격(그림자 탱킹 시험대)'
   },
   {
@@ -72,6 +80,7 @@ export const MONARCHS: MonarchData[] = [
     name: '공허의 절대자 녹스',
     theme: '공허 / 복합',
     recommendedCP: 73100,
+    battleCP: 43000,
     concept: '전 능력 복합 · 페이즈 전환'
   }
 ]
@@ -82,6 +91,7 @@ export const FINAL_ANGEL: MonarchData = {
   name: '지고의 심판자',
   theme: '신성 / 광휘',
   recommendedCP: 85000,
+  battleCP: 50000,
   concept: '절대적 판정 · 종말의 광선'
 }
 
