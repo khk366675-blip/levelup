@@ -1934,15 +1934,24 @@ export function GatePanel() {
     }
 
     const helperHunterIds = manualBattleSession.helperHunterIds
+    const livingWorld = useGame.getState().livingWorld
+
+    // 1번째 협력자는 실제 BattleUnit으로 참전하고, 버프 가산 대상에서 제외
+    const coopHunter = (helperHunterIds && helperHunterIds.length > 0 && livingWorld) 
+      ? livingWorld.namedHunters[helperHunterIds[0]] 
+      : undefined
+    const buffHelperIds = (helperHunterIds && helperHunterIds.length > 1) 
+      ? helperHunterIds.slice(1) 
+      : []
+
     let helperPower = 0
     let helperCount = 0
     let buffCoopAtk = 0
     let buffCoopDef = 0
     let drCoop = 0
 
-    const livingWorld = useGame.getState().livingWorld
-    if (helperHunterIds && helperHunterIds.length > 0 && livingWorld) {
-      for (const hid of helperHunterIds) {
+    if (buffHelperIds.length > 0 && livingWorld) {
+      for (const hid of buffHelperIds) {
         const h = livingWorld.namedHunters[hid]
         if (h && h.status === 'active') {
           helperPower += h.power
@@ -1950,7 +1959,6 @@ export function GatePanel() {
         }
       }
     }
-
 
     if (helperCount > 0) {
       buffCoopAtk = Math.round(COOP_HELP_ATK_FACTOR * helperPower)
@@ -2038,6 +2046,7 @@ export function GatePanel() {
           onBattleComplete={handleDirectWorldBattleComplete}
           initialHunterStatsModifier={statsModifier}
           initialHunterStatusEffects={statusEffects}
+          coopHunter={coopHunter} // [NEW] 협력 헌터 참전
         />
       </div>
     )
@@ -2333,15 +2342,24 @@ export function GatePanel() {
   if (isDirectGateBattleOpen) {
     // S급 협력 헌터 버프/공조 효과 계산하여 직접 주입!
     const helperHunterIds = activeGate.helperHunterIds
+    const livingWorld = useGame.getState().livingWorld
+
+    // 1번째 협력자는 실제 BattleUnit으로 참전하고, 버프 가산 대상에서 제외
+    const coopHunter = (helperHunterIds && helperHunterIds.length > 0 && livingWorld) 
+      ? livingWorld.namedHunters[helperHunterIds[0]] 
+      : undefined
+    const buffHelperIds = (helperHunterIds && helperHunterIds.length > 1) 
+      ? helperHunterIds.slice(1) 
+      : []
+
     let helperPower = 0
     let helperCount = 0
     let buffCoopAtk = 0
     let buffCoopDef = 0
     let drCoop = 0
 
-    const livingWorld = useGame.getState().livingWorld
-    if (helperHunterIds && helperHunterIds.length > 0 && livingWorld) {
-      for (const hid of helperHunterIds) {
+    if (buffHelperIds.length > 0 && livingWorld) {
+      for (const hid of buffHelperIds) {
         const h = livingWorld.namedHunters[hid]
         if (h && h.status === 'active') {
           helperPower += h.power
@@ -2440,6 +2458,7 @@ export function GatePanel() {
           initialHunterStatsModifier={statsModifier}
           initialHunterStatusEffects={statusEffects}
           difficultyMod={currentEnc?.difficultyMod}
+          coopHunter={coopHunter} // [NEW] 협력 헌터 참전
         />
       </div>
     )

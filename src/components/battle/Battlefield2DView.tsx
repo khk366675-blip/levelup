@@ -138,29 +138,51 @@ export function Battlefield2DView({
     
     // 1. Ally Team Positioning
     const allyActors = overriddenActors.filter(a => a.team === 'ally')
-    const hunterActor = allyActors.find(a => a.kind === 'hunter')
+    const playerActor = allyActors.find(a => a.id === 'direct-preview-hunter')
+    const coopActors = allyActors.filter(a => a.kind === 'hunter' && a.id !== 'direct-preview-hunter')
     const shadowActors = allyActors.filter(a => a.kind === 'shadow')
-    
-    // Position Hunter (Left Back)
-    if (hunterActor) {
-      coords[hunterActor.id] = { x: shadowActors.length === 0 ? (isCompact ? 26 : 24) : xAllyBack, y: 50 }
+
+    // Position Backline (Player + Coop Hunters)
+    const backlineActors = [
+      ...(playerActor ? [playerActor] : []),
+      ...coopActors
+    ]
+
+    if (backlineActors.length > 0) {
+      backlineActors.forEach((actor, idx) => {
+        const count = backlineActors.length
+        let y = 50
+        if (count === 1) {
+          y = 50
+        } else if (count === 2) {
+          y = idx === 0 ? 35 : 65
+        } else {
+          const step = 60 / (count - 1)
+          y = 20 + idx * step
+        }
+        coords[actor.id] = { x: shadowActors.length === 0 ? (isCompact ? 26 : 24) : xAllyBack, y }
+      })
     }
-    
+
     // Position Shadows (Left Front)
     if (shadowActors.length > 0) {
       shadowActors.forEach((shadow, idx) => {
         const count = shadowActors.length
         let y = 50
-        if (count === 1) y = 50
-        else if (count === 2) y = idx === 0 ? 33 : 67
-        else if (count === 3) y = idx === 0 ? 25 : idx === 1 ? 50 : 75
-        else {
+        if (count === 1) {
+          y = 50
+        } else if (count === 2) {
+          y = idx === 0 ? 33 : 67
+        } else if (count === 3) {
+          y = idx === 0 ? 22 : idx === 1 ? 50 : 78
+        } else {
           const step = 70 / (count - 1)
           y = 15 + idx * step
         }
         coords[shadow.id] = { x: xAllyFront, y }
       })
-    } else if (!hunterActor && allyActors.length > 0) {
+    } else if (backlineActors.length === 0 && allyActors.length > 0) {
+      // Fallback: If no backline but has other ally actors
       allyActors.forEach((actor, idx) => {
         const count = allyActors.length
         let y = 50

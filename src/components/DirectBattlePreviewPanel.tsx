@@ -28,6 +28,7 @@ import { Battlefield2DView } from './battle/Battlefield2DView'
 import { BattleArenaOverlay } from './battle/BattleArenaOverlay'
 import { getShadowDefinition } from '../lib/shadows'
 import { buildHunterBattleUnit, buildShadowBattleUnits, validateBattleUnit } from '../lib/battleUnits'
+import { buildNpcHunterBattleUnit } from '../lib/hunterUnified'
 import {
   DIRECT_BATTLE_MOCK_ENCOUNTERS,
   buildDirectBattleEncounterParty,
@@ -137,6 +138,7 @@ export interface DirectBattlePreviewPanelProps {
   initialHunterStatsModifier?: Partial<BattleStats>
   initialHunterStatusEffects?: BattleStatusEffect[]
   difficultyMod?: number // [NEW] 난이도 보정치 추가
+  coopHunter?: any // [NEW] 협력 헌터 실제 참전 데이터
 }
 
 const enemyTargetTypes = new Set<BattleTargetType>([
@@ -771,6 +773,7 @@ export function DirectBattlePreviewPanel({
   initialHunterStatsModifier,
   initialHunterStatusEffects,
   difficultyMod, // [NEW] 난이도 보정치 추가
+  coopHunter, // [NEW] 협력 헌터
 }: DirectBattlePreviewPanelProps) {
   const autoStartedRef = useRef(false)
   const completionSentRef = useRef(false)
@@ -881,6 +884,20 @@ export function DirectBattlePreviewPanel({
       unitId: 'direct-preview-hunter',
     })
 
+    // [NEW] 협력 헌터 실제 참전 BattleUnit 생성
+    let coopHunterUnit: BattleUnit | undefined = undefined
+    let coopWarnings: string[] = []
+    if (coopHunter) {
+      const buildRes = buildNpcHunterBattleUnit(coopHunter, {
+        unitId: 'direct-preview-coop-hunter'
+      })
+      if (buildRes && buildRes.unit) {
+        coopHunterUnit = buildRes.unit
+        coopHunterUnit.team = 'player'  // ally(player) 팀으로 지정
+        coopWarnings = buildRes.warnings ?? []
+      }
+    }
+
     if (initialHunterStatsModifier) {
       for (const [key, val] of Object.entries(initialHunterStatsModifier)) {
         if (typeof val === 'number') {
@@ -916,13 +933,19 @@ export function DirectBattlePreviewPanel({
     const enemyBuild = clonedEnemyUnits
       ? { units: clonedEnemyUnits, warnings: [] as string[] }
       : buildDirectBattleEncounterParty(encounterKey, enemyBaseLevel, pressureSnapshot, isRedGate, difficultyMod)
-    const units = [hunterBuild.unit, ...shadowBuilds.map(build => build.unit), ...enemyBuild.units]
+    const units = [
+      hunterBuild.unit,
+      ...(coopHunterUnit ? [coopHunterUnit] : []),
+      ...shadowBuilds.map(build => build.unit),
+      ...enemyBuild.units
+    ]
     const state = createDirectBattleState(units, {
       battleId: activeBattleId,
       maxRounds: maxRoundsOverride ?? Math.max(6, selectedEncounter.maxRounds),
     })
     const buildWarnings = [
       ...hunterBuild.warnings,
+      ...coopWarnings,
       ...shadowBuilds.flatMap(build => build.warnings),
       ...enemyBuild.warnings,
     ]
