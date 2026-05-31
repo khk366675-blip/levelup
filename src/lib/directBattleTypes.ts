@@ -244,6 +244,7 @@ export interface DirectBattleLogEntry {
   hpAfterByUnitId?: Record<string, DirectBattleHpSnapshot>
   statusBeforeByUnitId?: Record<string, DirectBattleStatusSnapshot[]>
   statusAfterByUnitId?: Record<string, DirectBattleStatusSnapshot[]>
+  metadata?: any
 }
 
 export interface DirectBattleState {

@@ -4,6 +4,7 @@ import type {
   BattleStatusEffect,
   BattleTeam,
   BattleUnit,
+  BattleTargetType,
   DirectBattleActionSelection,
   DirectBattleLogEntry,
   DirectBattleResult,
@@ -265,12 +266,75 @@ const chooseEnemyPreferredTarget = (
   return target ? [target.unitId] : []
 }
 
+const allyTargetTypes = new Set<BattleActionDefinition['targetType']>([
+  'self',
+  'single_ally',
+  'all_allies',
+  'lowest_hp_ally',
+])
+
+const isAllyTargetAction = (action: BattleActionDefinition): boolean =>
+  allyTargetTypes.has(action.targetType)
+
+const isSupportLikeEffect = (action: BattleActionDefinition): boolean =>
+  action.actionType === 'support' ||
+  action.effectKind === 'support' ||
+  action.effectKind === 'guard' ||
+  action.effectKind === 'survival' ||
+  action.effectKind === 'cooldown' ||
+  action.effectKind === 'synergy' ||
+  action.effectKind === 'stat_shift'
+
+const isHostileEffect = (action: BattleActionDefinition): boolean =>
+  action.effectKind === 'damage' ||
+  action.effectKind === 'hybrid' ||
+  action.effectKind === 'control' ||
+  action.effectKind === 'stat_shift' ||
+  action.effectKind === 'bossing' ||
+  action.effectKind === 'basic'
+
+const isHostileAction = (action: BattleActionDefinition): boolean => {
+  const enemyTargetTypes = new Set<BattleTargetType>([
+    'single_enemy',
+    'all_enemies',
+    'lowest_hp_enemy',
+    'highest_threat_enemy',
+    'boss',
+    'minion',
+    'front_lane',
+    'rear_lane',
+  ])
+  if (enemyTargetTypes.has(action.targetType)) return true
+  if (action.targetType === 'self' || allyTargetTypes.has(action.targetType)) return false
+
+  if (action.effectKind === 'damage' || action.effectKind === 'hybrid' || action.effectKind === 'control' || action.effectKind === 'basic') return true
+
+  if (action.effects && action.effects.length > 0) {
+    const hasEnemyEffect = action.effects.some(e => e.target === 'enemy' || e.value < 0)
+    if (hasEnemyEffect) return true
+  }
+  return false
+}
+
 const resolveTargets = (
   state: DirectBattleState,
   actor: BattleUnit,
   action: BattleActionDefinition,
   preferredTargetIds: string[] = [],
 ): string[] => {
+  // AoE 스킬은 preferred 에 관계없이 항상 생존자 전원을 타겟팅하도록 강제합니다.
+  if (action.targetType === 'all_enemies') {
+    const enemies = livingUnits(state, getOpposingTeam(actor.team))
+    return enemies.map(unit => unit.unitId)
+  }
+  if (action.targetType === 'all_allies') {
+    const allies = livingUnits(state, actor.team)
+    return allies.map(unit => unit.unitId)
+  }
+  if (action.targetType === 'self') {
+    return [actor.unitId]
+  }
+
   let preferred = preferredTargetIds
     .map(id => findUnit(state, id))
     .filter((unit): unit is BattleUnit => Boolean(unit && isAlive(unit)))
@@ -278,18 +342,15 @@ const resolveTargets = (
   // [HOTFIX] Runtime Target Validation
   // 공격/디버프 등 적군 대상 스킬인데 preferred 타겟에 아군이 섞여있거나,
   // 버프/힐 등 아군 대상 스킬인데 preferred 타겟에 적군이 섞여있는 경우 정화/격리합니다.
-  const isEnemyTargetType = !allyTargetTypes.has(action.targetType) && action.targetType !== 'self'
-  if (isEnemyTargetType) {
+  const isHostile = isHostileAction(action)
+  if (isHostile) {
     preferred = preferred.filter(unit => unit.team !== actor.team)
   } else {
     preferred = preferred.filter(unit => unit.team === actor.team)
   }
 
   if (preferred.length > 0) {
-    if (action.targetType !== 'all_allies' && action.targetType !== 'all_enemies') {
-      return [preferred[0].unitId]
-    }
-    return preferred.map(unit => unit.unitId)
+    return [preferred[0].unitId]
   }
 
   const allies = livingUnits(state, actor.team)
@@ -297,11 +358,8 @@ const resolveTargets = (
   const enemyBoss = enemies.find(unit => unit.unitType === 'boss')
   const enemyMinion = enemies.find(unit => unit.unitType === 'minion')
 
-  if (action.targetType === 'self') return [actor.unitId]
   if (action.targetType === 'single_ally') return [(lowestHp(allies) ?? actor).unitId]
-  if (action.targetType === 'all_allies') return allies.map(unit => unit.unitId)
   if (action.targetType === 'lowest_hp_ally') return [(lowestHp(allies) ?? actor).unitId]
-  if (action.targetType === 'all_enemies') return enemies.map(unit => unit.unitId)
   if (action.targetType === 'lowest_hp_enemy') return lowestHp(enemies)?.unitId ? [lowestHp(enemies)!.unitId] : []
   if (action.targetType === 'highest_threat_enemy') return highestThreat(enemies)?.unitId ? [highestThreat(enemies)!.unitId] : []
   if (action.targetType === 'boss') return [(enemyBoss ?? firstAlive(enemies))?.unitId].filter((id): id is string => Boolean(id))
@@ -312,7 +370,15 @@ const resolveTargets = (
   if (action.targetType === 'rear_lane') {
     return [(enemies.find(unit => unit.boardLane === 'rear') ?? firstAlive(enemies))?.unitId].filter((id): id is string => Boolean(id))
   }
-  return [(firstAlive(enemies))?.unitId].filter((id): id is string => Boolean(id))
+  if (action.targetType === 'single_enemy') {
+    return [(firstAlive(enemies))?.unitId].filter((id): id is string => Boolean(id))
+  }
+
+  if (isHostile) {
+    return [(firstAlive(enemies))?.unitId].filter((id): id is string => Boolean(id))
+  } else {
+    return [(firstAlive(allies))?.unitId].filter((id): id is string => Boolean(id))
+  }
 }
 
 const resolveShadowPassivesInBattle = (
@@ -374,33 +440,6 @@ const getDefaultAction = (unit: BattleUnit): BattleActionDefinition | undefined 
 
 const getAction = (unit: BattleUnit, actionId?: string): BattleActionDefinition | undefined =>
   unit.actionList.find(action => action.actionId === actionId) ?? getDefaultAction(unit)
-
-const allyTargetTypes = new Set<BattleActionDefinition['targetType']>([
-  'self',
-  'single_ally',
-  'all_allies',
-  'lowest_hp_ally',
-])
-
-const isAllyTargetAction = (action: BattleActionDefinition): boolean =>
-  allyTargetTypes.has(action.targetType)
-
-const isSupportLikeEffect = (action: BattleActionDefinition): boolean =>
-  action.actionType === 'support' ||
-  action.effectKind === 'support' ||
-  action.effectKind === 'guard' ||
-  action.effectKind === 'survival' ||
-  action.effectKind === 'cooldown' ||
-  action.effectKind === 'synergy' ||
-  action.effectKind === 'stat_shift'
-
-const isHostileEffect = (action: BattleActionDefinition): boolean =>
-  action.effectKind === 'damage' ||
-  action.effectKind === 'hybrid' ||
-  action.effectKind === 'control' ||
-  action.effectKind === 'stat_shift' ||
-  action.effectKind === 'bossing' ||
-  action.effectKind === 'basic'
 
 const actionTiming = (action: BattleActionDefinition): QueuedBattleAction['timing'] => {
   if (
@@ -910,11 +949,22 @@ const executeAction = (state: DirectBattleState, queued: QueuedBattleAction) => 
     actor.monsterPatternState.stepIndex += 1
   }
 
-  const targets = queued.targetIds
+  let targets = queued.targetIds
     .map(id => findUnit(state, id))
     .filter((target): target is BattleUnit => Boolean(target && isAlive(target)))
+
+  // 1차 fallback retargeting: 대상이 살아있는데도 targets가 비어있다면, 현재 생존자 기준으로 재평가
+  if (targets.length === 0 && action.targetType !== 'self') {
+    const fallbackIds = resolveTargets(state, actor, action, [])
+    targets = fallbackIds
+      .map(id => findUnit(state, id))
+      .filter((target): target is BattleUnit => Boolean(target && isAlive(target)))
+  }
+
   if (targets.length === 0 && action.targetType !== 'self') {
     const snapshotIds = uniqueUnitIds([actor.unitId, ...queued.targetIds])
+    const livingPlayers = livingUnits(state, 'player').map(u => u.unitId)
+    const livingEnemies = livingUnits(state, 'enemy').map(u => u.unitId)
     addLog(state, {
       actorUnitId: actor.unitId,
       targetUnitIds: queued.targetIds,
@@ -930,6 +980,16 @@ const executeAction = (state: DirectBattleState, queued: QueuedBattleAction) => 
       hpAfterByUnitId: hpSnapshotsFor(state, snapshotIds),
       statusBeforeByUnitId: statusSnapshotsFor(state, snapshotIds),
       statusAfterByUnitId: statusSnapshotsFor(state, snapshotIds),
+      // debug metadata
+      metadata: {
+        debugTargetType: action.targetType,
+        debugActorTeam: actor.team,
+        debugLivingPlayerCount: livingPlayers.length,
+        debugLivingEnemyCount: livingEnemies.length,
+        debugPreferredTargetIds: queued.targetIds,
+        debugLivingPlayers: livingPlayers,
+        debugLivingEnemies: livingEnemies,
+      } as any
     })
     return
   }

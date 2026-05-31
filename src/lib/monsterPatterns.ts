@@ -24,8 +24,23 @@ export function chooseTargetByRule(
   if (enemies.length === 0) return []
 
   switch (rule) {
+    case 'self': {
+      return [actor.unitId]
+    }
+    case 'all_enemies':
+    case 'allEnemies':
+    case 'allPlayers': {
+      return enemies.map(u => u.unitId)
+    }
+    case 'all_allies': {
+      return allies.map(u => u.unitId)
+    }
     case 'lowestHpPercent': {
       const target = [...enemies].sort((a, b) => (a.stats.currentHp / a.stats.maxHp) - (b.stats.currentHp / b.stats.maxHp))[0]
+      return [target.unitId]
+    }
+    case 'lowestHp': {
+      const target = [...enemies].sort((a, b) => a.stats.currentHp - b.stats.currentHp)[0]
       return [target.unitId]
     }
     case 'highestThreat': {

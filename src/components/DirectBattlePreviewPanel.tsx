@@ -508,7 +508,7 @@ const formatBattleLogKo = (
   } else if (log.eventType === 'reaction') {
     message = `${actorName}이/가 ${targetName}을 보호하며 ${value} 피해를 대신 받았다.`
   } else if (log.eventType === 'fizzle') {
-    message = `${actorName}의 ${actionName}은/는 대상이 없어 빗나갔다.`
+    message = `${actorName}의 ${actionName}은/는 대상을 잃고 권능이 흩어졌다.`
   } else if (log.eventType === 'result') {
     message = state.winner === 'player'
       ? '전투가 끝났다. 아군 승리!'
