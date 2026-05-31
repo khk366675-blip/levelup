@@ -17,7 +17,7 @@ type RngFn = () => number
 
 // [레버1] 게이트 난이도 배율. 일반 게이트 기본 난이도에 곱해 NPC 성공률을 낮춘다.
 //   기존 99% 성공률 → 목표 70~80%대. 값↑ = 세계가 더 위험.
-const GATE_DIFFICULTY_MULT = 2.6
+const GATE_DIFFICULTY_MULT = 2.45
 
 // [레버2] S급 게이트 조기화. 시작일을 앞당기고 출현 확률을 올린다.
 const SGRADE_START_DAY = 20
@@ -38,7 +38,7 @@ const MONARCH_DAILY_CORRUPTION = 0.6
 // [레버5] 군주 등장 오염 임계값. 각 군주가 등장하는 전역 오염도 경계.
 //   간격이 좁으면 오염 상승 시 군주가 우르르 등장한다. 100일 평균 2~3명이 목표.
 //   5명(천사 직전)은 오염 거의 만렙(plateau)에서만 도달하도록 상한을 높게 둔다.
-const MONARCH_THRESHOLDS = [40, 60, 78, 92, 99]   // 1~5번째 군주 등장 오염도
+const MONARCH_THRESHOLDS = [45, 63, 80, 92, 98]   // 1~5번째 군주 등장 오염도
 const MONARCH_EXPAND_INTERVAL = 3 // 군주 영역 확장 주기 (일)
 
 /**
@@ -54,14 +54,24 @@ function getActiveRegionPower(
     E: 0, D: 1, C: 2, B: 3, A: 4, S: 5, National: 6
   }
 
-  function getRankMatchWeight(hunterRank: string, gateRank: string): number {
+  function getRankMatchWeight(hunterRank: string, gateRank: string, daysRemaining?: number): number {
     const hIdx = RANK_INDEX[hunterRank] ?? 2
     const gIdx = RANK_INDEX[gateRank] ?? 2
     const distance = Math.abs(hIdx - gIdx)
-    if (distance === 0) return 1.0
-    if (distance === 1) return 0.5
-    if (distance === 2) return 0.1
-    return 0.0
+    
+    let weight = 0.0
+    if (distance === 0) weight = 1.0
+    else if (distance === 1) weight = 0.5
+    else if (distance === 2) weight = 0.1
+    
+    // 긴급 완화 (daysRemaining <= 3 이고 거리 3 이내인 경우 완화계수 0.3~0.4 적용)
+    if (daysRemaining !== undefined && daysRemaining <= 3) {
+      if (distance === 1) weight = 0.7
+      else if (distance === 2) weight = 0.4
+      else if (distance === 3) weight = 0.3
+    }
+    
+    return weight
   }
 
   // 1. 해당 지역의 활성화된 게이트들 목록 추출 (파견 비율 분배용)
@@ -102,7 +112,7 @@ function getActiveRegionPower(
       let totalScore = 0
       for (const g of activeGates) {
         const gRank = g.difficultyRank ?? 'C'
-        const weight = getRankMatchWeight(hunter.rank, gRank)
+        const weight = getRankMatchWeight(hunter.rank, gRank, g.daysRemaining)
         const score = weight * (10 / Math.max(1, g.daysRemaining))
         hunterScores[g.id] = score
         totalScore += score
@@ -129,7 +139,7 @@ function getActiveRegionPower(
       let totalScore = 0
       for (const g of activeGates) {
         const gRank = g.difficultyRank ?? 'C'
-        const weight = getRankMatchWeight(grp.rank, gRank)
+        const weight = getRankMatchWeight(grp.rank, gRank, g.daysRemaining)
         const score = weight * (10 / Math.max(1, g.daysRemaining))
         groupScores[g.id] = score
         totalScore += score
@@ -246,11 +256,11 @@ export function advanceWorldDay(state: LivingWorldState, rng: RngFn): LivingWorl
         const rName = RIFT_REGIONS.find(r => r.id === node.regionId)?.name ?? node.regionId.toUpperCase()
 
         // 오염 가중
-        const corruptionAdd = Math.round(15 + rng() * 10)
+        const corruptionAdd = Math.round(12 + rng() * 6)
         region.corruption = Math.min(100, region.corruption + corruptionAdd)
 
-        // 전역 오염도 가중 (폭주 게이트당 약 12 ~ 18 상승)
-        const globalCorruptionAdd = Math.round(12 + rng() * 6)
+        // 전역 오염도 가중
+        const globalCorruptionAdd = Math.round(10 + rng() * 5)
         nextWorldCorruption = Math.min(100, nextWorldCorruption + globalCorruptionAdd)
 
         // 활성 게이트 목록에서 제거
@@ -293,14 +303,23 @@ export function advanceWorldDay(state: LivingWorldState, rng: RngFn): LivingWorl
     const RANK_INDEX: Record<string, number> = {
       E: 0, D: 1, C: 2, B: 3, A: 4, S: 5, National: 6
     }
-    function getRankMatchWeight(hunterRank: string, gateRank: string): number {
+    function getRankMatchWeight(hunterRank: string, gateRank: string, daysRemaining?: number): number {
       const hIdx = RANK_INDEX[hunterRank] ?? 2
       const gIdx = RANK_INDEX[gateRank] ?? 2
       const distance = Math.abs(hIdx - gIdx)
-      if (distance === 0) return 1.0
-      if (distance === 1) return 0.5
-      if (distance === 2) return 0.1
-      return 0.0
+      
+      let weight = 0.0
+      if (distance === 0) weight = 1.0
+      else if (distance === 1) weight = 0.5
+      else if (distance === 2) weight = 0.1
+      
+      if (daysRemaining !== undefined && daysRemaining <= 3) {
+        if (distance === 1) weight = 0.7
+        else if (distance === 2) weight = 0.4
+        else if (distance === 3) weight = 0.3
+      }
+      
+      return weight
     }
 
     // 2. 각 활성 게이트별로 도전 판정
@@ -364,7 +383,7 @@ export function advanceWorldDay(state: LivingWorldState, rng: RngFn): LivingWorl
           let targetScore = 0
           for (const g of regionActiveGates) {
             const gRank = g.difficultyRank ?? 'C'
-            const w = getRankMatchWeight(h.rank, gRank)
+            const w = getRankMatchWeight(h.rank, gRank, g.daysRemaining)
             const s = w * (10 / Math.max(1, g.daysRemaining))
             totalScore += s
             if (g.id === gate.id) {
@@ -401,7 +420,7 @@ export function advanceWorldDay(state: LivingWorldState, rng: RngFn): LivingWorl
           let targetScore = 0
           for (const g of regionActiveGates) {
             const gRank = g.difficultyRank ?? 'C'
-            const w = getRankMatchWeight(h.rank, gRank)
+            const w = getRankMatchWeight(h.rank, gRank, g.daysRemaining)
             const s = w * (10 / Math.max(1, g.daysRemaining))
             totalScore += s
             if (g.id === gate.id) {
@@ -449,7 +468,7 @@ export function advanceWorldDay(state: LivingWorldState, rng: RngFn): LivingWorl
               let targetScore = 0
               for (const g of regionActiveGates) {
                 const gRank = g.difficultyRank ?? 'C'
-                const w = getRankMatchWeight(hunter.rank, gRank)
+                const w = getRankMatchWeight(hunter.rank, gRank, g.daysRemaining)
                 const s = w * (10 / Math.max(1, g.daysRemaining))
                 totalScore += s
                 if (g.id === gate.id) {
@@ -506,7 +525,7 @@ export function advanceWorldDay(state: LivingWorldState, rng: RngFn): LivingWorl
               let targetScore = 0
               for (const g of regionActiveGates) {
                 const gRank = g.difficultyRank ?? 'C'
-                const w = getRankMatchWeight(h.rank, gRank)
+                const w = getRankMatchWeight(h.rank, gRank, g.daysRemaining)
                 const s = w * (10 / Math.max(1, g.daysRemaining))
                 totalScore += s
                 if (g.id === gate.id) {
@@ -546,7 +565,7 @@ export function advanceWorldDay(state: LivingWorldState, rng: RngFn): LivingWorl
               let targetScore = 0
               for (const g of regionActiveGates) {
                 const gRank = g.difficultyRank ?? 'C'
-                const w = getRankMatchWeight(h.rank, gRank)
+                const w = getRankMatchWeight(h.rank, gRank, g.daysRemaining)
                 const s = w * (10 / Math.max(1, g.daysRemaining))
                 totalScore += s
                 if (g.id === gate.id) {
