@@ -2378,6 +2378,7 @@ export interface NamedHunter {
     rarity: 'common' | 'rare' | 'epic' | 'legendary'
     slot?: string
   }[]
+  traitId?: string      // [NEW] 헌터 입체화 특성 ID
 }
 
 export interface HunterPool {

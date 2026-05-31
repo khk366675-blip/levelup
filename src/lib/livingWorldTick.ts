@@ -3,6 +3,7 @@ import { RIFT_REGIONS, REGION_ADJACENCY, RIFT_NODES } from './seed'
 import { MONARCHS } from './monarchs'
 import { getRegionalTheme } from './livingWorldGateContent'
 import { getNPCEquipmentForScore } from './hunterEquipment'
+import { getHunterTrait } from './hunterTraits'
 
 type RngFn = () => number
 
@@ -44,10 +45,25 @@ const MONARCH_EXPAND_INTERVAL = 3 // 군주 영역 확장 주기 (일)
  */
 function getActiveRegionPower(region: RegionState, namedHunters: Record<string, NamedHunter>): number {
   let namedPower = 0
+  const activeNamedCount = region.namedHunterIds.filter(id => namedHunters[id]?.status === 'active').length
+
   for (const hunterId of region.namedHunterIds) {
     const hunter = namedHunters[hunterId]
     if (hunter && hunter.status === 'active') {
-      namedPower += hunter.power + (hunter.equipmentScore ?? 0)
+      let p = hunter.power + (hunter.equipmentScore ?? 0)
+      const trait = getHunterTrait(hunter.traitId)
+      
+      if (trait) {
+        if (trait.winMod) p *= trait.winMod
+        
+        if (activeNamedCount === 1) {
+          if (trait.soloWinMod) p *= trait.soloWinMod
+          if (trait.soloMod) p *= trait.soloMod
+        } else if (activeNamedCount > 1) {
+          if (trait.coopMod) p *= trait.coopMod
+        }
+      }
+      namedPower += p
     }
   }
 
@@ -104,9 +120,12 @@ export function advanceWorldDay(state: LivingWorldState, rng: RngFn): LivingWorl
         hunter.injuredTurns = turns
       }
     } else if (hunter.status === 'active') {
-      // 성장률 롤링 및 천장 적용 (성향 growthBias 반영)
+      // 성장률 롤링 및 천장 적용 (성향 growthBias 및 특성 growthMod 반영)
+      const trait = getHunterTrait(hunter.traitId)
+      const growthMod = trait?.growthMod ?? 1.0
+
       const biasMultiplier = 1 + (region?.growthBias ?? 0.5) * 0.25
-      const growth = hunter.power * (hunter.growthRate - 1) * biasMultiplier
+      const growth = hunter.power * (hunter.growthRate - 1) * biasMultiplier * growthMod
       let nextPower = Math.round(hunter.power + growth)
 
       // 네임드 S급 성장 천장 (4,500 ~ 5,500 대역)
@@ -217,11 +236,46 @@ export function advanceWorldDay(state: LivingWorldState, rng: RngFn): LivingWorl
     }
     winChance = Math.max(0.01, Math.min(0.99, winChance))
 
-    // 국가 성향(riskAppetite) 대조 도전 결정
-    // riskAppetite가 1이면 승률이 30%여도 도전, 0이면 75% 이상일 때만 도전
+    // Berserker 기복 (varianceMod) 반영
+    let avgVarianceMod = 1.0
+    let berserkerCount = 0
+    let activeHunterCount = 0
+    for (const hid of region.namedHunterIds) {
+      const h = nextNamedHunters[hid]
+      if (h && h.status === 'active') {
+        activeHunterCount++
+        const t = getHunterTrait(h.traitId)
+        if (t?.varianceMod) {
+          avgVarianceMod += (t.varianceMod - 1.0)
+          berserkerCount++
+        }
+      }
+    }
+    if (berserkerCount > 0 && activeHunterCount > 0) {
+      const noise = (rng() - 0.5) * 0.4 * (avgVarianceMod - 1.0)
+      winChance = Math.max(0.01, Math.min(0.99, winChance + noise))
+    }
+
+    // 국가 성향(riskAppetite) 대조 도전 결정 및 헌터들의 riskMod 반영
     const minRequiredWinChance = 0.75 - region.riskAppetite * 0.45
+    let avgRiskMod = 1.0
+    let riskModSum = 0
+    let activeRiskHunterCount = 0
+    for (const hid of region.namedHunterIds) {
+      const h = nextNamedHunters[hid]
+      if (h && h.status === 'active') {
+        const t = getHunterTrait(h.traitId)
+        riskModSum += t?.riskMod ?? 1.0
+        activeRiskHunterCount++
+      }
+    }
+    if (activeRiskHunterCount > 0) {
+      avgRiskMod = riskModSum / activeRiskHunterCount
+    }
+    const adjustedMinRequiredWinChance = Math.max(0.1, Math.min(0.9, minRequiredWinChance / avgRiskMod))
+
     // 점령된 상태에서는 NPC 헌터 게이트 도전이 불가 (자력 방어 수단 완전 상실)
-    const isChallenging = winChance >= minRequiredWinChance && !isOccupied
+    const isChallenging = winChance >= adjustedMinRequiredWinChance && !isOccupied
 
     if (isChallenging) {
       const isSuccess = rng() < winChance
@@ -243,7 +297,11 @@ export function advanceWorldDay(state: LivingWorldState, rng: RngFn): LivingWorl
           hIdx++
           const hunter = { ...nextNamedHunters[hunterId] }
           if (hunter.status === 'active') {
-            const bonusMult = 1.01 + rng() * 0.02
+            const trait = getHunterTrait(hunter.traitId)
+            const growthMod = trait?.growthMod ?? 1.0
+            const lootMod = trait?.lootMod ?? 1.0
+
+            const bonusMult = 1.01 + (rng() * 0.02) * growthMod
             hunter.power = Math.round(hunter.power * bonusMult)
             // 천장 재가드
             const cap = 4500 + region.growthBias * 1000
@@ -253,8 +311,10 @@ export function advanceWorldDay(state: LivingWorldState, rng: RngFn): LivingWorl
             const difficultyVal = gate.difficulty ?? 500
             let equipGain = Math.round(difficultyVal * (0.005 + rng() * 0.01))
 
-            // RNG 대박 드랍 (4% 확률)
-            const isLuckyDrop = rng() < 0.04
+            // RNG 대박 드랍 (4% * lootMod 확률)
+            const baseLuckyChance = 0.04
+            const adjustedLuckyChance = baseLuckyChance * lootMod
+            const isLuckyDrop = rng() < adjustedLuckyChance
             if (isLuckyDrop) {
               const luckyAdd = Math.round(500 + rng() * 600)
               equipGain += luckyAdd
@@ -273,11 +333,31 @@ export function advanceWorldDay(state: LivingWorldState, rng: RngFn): LivingWorl
           }
         }
 
-        // 오염 정화 보너스 (지역 오염도 감소) — [레버3] 축소됨
+        // 오염 정화 보너스 (지역 오염도 감소)
         const cleanse = Math.round(CLEANSE_MIN + rng() * CLEANSE_RANGE)
-        region.corruption = Math.max(0, region.corruption - cleanse)
+        
+        let avgCleanseMod = 1.0
+        let strategistCount = 0
+        let activeCleanseHunterCount = 0
+        for (const hid of region.namedHunterIds) {
+          const h = nextNamedHunters[hid]
+          if (h && h.status === 'active') {
+            activeCleanseHunterCount++
+            const t = getHunterTrait(h.traitId)
+            if (t?.cleanseMod) {
+              avgCleanseMod += (t.cleanseMod - 1.0)
+              strategistCount++
+            }
+          }
+        }
+        
+        let adjustedCleanse = cleanse
+        if (strategistCount > 0 && activeCleanseHunterCount > 0) {
+          adjustedCleanse = Math.round(cleanse * avgCleanseMod)
+        }
+        region.corruption = Math.max(0, region.corruption - adjustedCleanse)
 
-        addLog(`⚔️ [${rName}] 헌터들이 [${gate.name}] 게이트 공략에 성공했습니다! (승률: ${Math.round(winChance * 100)}%) 지역 오염도 -${cleanse}%`)
+        addLog(`⚔️ [${rName}] 헌터들이 [${gate.name}] 게이트 공략에 성공했습니다! (승률: ${Math.round(winChance * 100)}%) 지역 오염도 -${adjustedCleanse}%`)
       } else {
         // 공략 실패! (부상 또는 사망)
         const diffRatio = (targetGate.difficulty ?? 0) / Math.max(1, activePower)
@@ -291,7 +371,11 @@ export function advanceWorldDay(state: LivingWorldState, rng: RngFn): LivingWorl
           const targetHunterId = activeNamedIds[Math.floor(rng() * activeNamedIds.length)]
           const hunter = { ...nextNamedHunters[targetHunterId] }
 
-          const isDead = rng() < deathChance
+          const trait = getHunterTrait(hunter.traitId)
+          const deathMod = trait?.deathMod ?? 1.0
+          const adjustedDeathChance = deathChance * deathMod
+
+          const isDead = rng() < adjustedDeathChance
           if (isDead) {
             hunter.status = 'dead'
             addLog(`💀 [${rName}] 헌터들이 [${targetGate.name}] 공략 중 패배했습니다. 무모한 전투의 결과로 네임드 헌터 [${hunter.name}]이(가) 전사했습니다!`)
@@ -326,10 +410,28 @@ export function advanceWorldDay(state: LivingWorldState, rng: RngFn): LivingWorl
       // 자력 불가능 방치 러브콜 플래그 (이미 러브콜이 발송된 노드라면 중복 생성을 차단)
       if ((targetGate.daysRemaining ?? 0) <= 5) {
         if (!targetGate.loveCall?.active) {
-          const helperHunterIds = region.namedHunterIds.filter(id => {
-            const h = nextNamedHunters[id]
-            return h && h.status === 'active'
-          })
+          const helperHunterIds: string[] = []
+          for (const hid in nextNamedHunters) {
+            const h = nextNamedHunters[hid]
+            if (!h || h.status !== 'active') continue
+
+            const trait = getHunterTrait(h.traitId)
+            const loveCallMod = trait?.loveCallMod ?? 1.0
+
+            if (h.regionId === region.regionId) {
+              // 자국 헌터: 기본 95% 참여 (은둔형도 자국 방어는 적극 지원)
+              if (rng() < 0.95 * Math.min(1.5, loveCallMod)) {
+                helperHunterIds.push(hid)
+              }
+            } else {
+              // 타국 헌터: 원정을 좋아하는 명예욕(loveCallMod 4.0) 헌터 등은 12% 가량, 은둔형(0.05)은 거의 참여 안 함
+              const baseCrossBorderChance = 0.03
+              const crossBorderChance = baseCrossBorderChance * loveCallMod
+              if (rng() < crossBorderChance) {
+                helperHunterIds.push(hid)
+              }
+            }
+          }
 
           const promisedGold = Math.round(targetGate.difficulty * 0.2 * (1 + (5 - targetGate.daysRemaining) * 0.15))
           const promisedXp = Math.round(targetGate.difficulty * 0.15 * (1 + (5 - targetGate.daysRemaining) * 0.15))

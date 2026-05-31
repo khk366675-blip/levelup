@@ -78,6 +78,7 @@ import type {
 
 import { initLivingWorld } from './livingWorld'
 import { getNPCEquipmentForScore } from './hunterEquipment'
+import { getHunterTrait, rollHunterTrait } from './hunterTraits'
 import { advanceWorldDay } from './livingWorldTick'
 import { MONARCHS, FINAL_ANGEL, buildMonarchBattleUnit } from './monarchs'
 import { buildHunterBattleUnit, buildShadowBattleUnits } from './battleUnits'
@@ -8038,7 +8039,11 @@ export const useGame = create<GameState>()(
             for (const hid of helperHunterIds) {
               const hunter = { ...updatedNamedHunters[hid] }
               if (hunter && hunter.status === 'active') {
-                const bonusMult = 1.02 + Math.random() * 0.03
+                const trait = getHunterTrait(hunter.traitId)
+                const growthMod = trait?.growthMod ?? 1.0
+                const lootMod = trait?.lootMod ?? 1.0
+
+                const bonusMult = 1.02 + (Math.random() * 0.03) * growthMod
                 hunter.power = Math.round(hunter.power * bonusMult)
                 const region = freshState.livingWorld.regions[hunter.regionId]
                 const cap = 4500 + (region?.growthBias ?? 0.5) * 1000
@@ -8048,8 +8053,10 @@ export const useGame = create<GameState>()(
                 const difficultyVal = nodeStatus?.difficulty ?? 500
                 let equipGain = Math.round(difficultyVal * (0.005 + Math.random() * 0.01))
                 
-                // RNG 대박 드랍 (4% 확률)
-                const isLuckyDrop = Math.random() < 0.04
+                // RNG 대박 드랍 (4% * lootMod 확률)
+                const baseLuckyChance = 0.04
+                const adjustedLuckyChance = baseLuckyChance * lootMod
+                const isLuckyDrop = Math.random() < adjustedLuckyChance
                 if (isLuckyDrop) {
                   const luckyAdd = Math.round(500 + Math.random() * 600)
                   equipGain += luckyAdd
@@ -12909,7 +12916,7 @@ export const useGame = create<GameState>()(
     }),
     {
       name: 'levelup-save',
-      version: 25,
+      version: 26,
       partialize: (state) => ({
         ...state,
         manualBattleSession: undefined,
@@ -12937,6 +12944,20 @@ export const useGame = create<GameState>()(
             if (!persistedState.livingWorld.dailySummaries) {
               persistedState.livingWorld.dailySummaries = [];
             }
+          }
+        }
+        if (version < 26) {
+          if (persistedState && persistedState.livingWorld && persistedState.livingWorld.namedHunters) {
+            const seed = persistedState.livingWorld.seed ?? 12345
+            const namedHunters = persistedState.livingWorld.namedHunters
+            const hKeys = Object.keys(namedHunters)
+            hKeys.forEach((hid, idx) => {
+              const h = namedHunters[hid]
+              if (h && !h.traitId) {
+                const rng = createSeededRng(seed + idx)
+                h.traitId = rollHunterTrait(rng)
+              }
+            })
           }
         }
         // Ensure hunter has title fields

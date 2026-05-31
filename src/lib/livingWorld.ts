@@ -8,6 +8,7 @@ import type {
   RiftNode
 } from './types'
 import { getNPCEquipmentForScore } from './hunterEquipment'
+import { rollHunterTrait } from './hunterTraits'
 
 /**
  * 특정 지역의 총전력을 계산합니다. (네임드 헌터 전투력 합 + 익명 풀 전투력 합)
@@ -130,6 +131,9 @@ export function initLivingWorld(seed: number): LivingWorldState {
         const initialEquipmentScore = hBase.rank === 'National' ? 300 : hBase.rank === 'S' ? 150 : 0
         const initialEquipmentItems = getNPCEquipmentForScore(initialEquipmentScore, seed + idx)
 
+        // 특성 배정 롤링
+        const traitId = rollHunterTrait(rng)
+
         namedHunters[hunterId] = {
           id: hunterId,
           regionId,
@@ -139,7 +143,8 @@ export function initLivingWorld(seed: number): LivingWorldState {
           growthRate,
           status: 'active',
           equipmentScore: initialEquipmentScore,
-          equipmentItems: initialEquipmentItems
+          equipmentItems: initialEquipmentItems,
+          traitId
         }
       })
 
