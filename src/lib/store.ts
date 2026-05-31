@@ -7793,6 +7793,13 @@ export const useGame = create<GameState>()(
             activeRiftNodeId: undefined,
           })
         } else {
+          const monarchLog: CombatLog = { ...combatLog, source: combatLog.source || 'worldmap' }
+          if (shouldHardcoreResetForCombat(s, monarchLog)) {
+            const monarchName = MONARCHS.find(m => m.id === nodeId)?.name ?? nodeId
+            set(createHardcoreDeathResetState(s, 'monarch_player_death', monarchName))
+            return
+          }
+
           if (isMonarchId && s.livingWorld) {
             const worldLogs = [...s.livingWorld.eventLogs]
             worldLogs.push(`[Day ${s.livingWorld.day}] ⚠️ [군주 토벌 실패] 플레이어가 군주 [${nodeId}] 토벌에 실패하고 부상을 입은 채 후퇴했습니다.`)
@@ -7819,6 +7826,11 @@ export const useGame = create<GameState>()(
         const activeGate = s.activeGate
         const manualSession = s.manualBattleSession
         if (!activeGate && (!manualSession || manualSession.source !== 'world_map')) return {}
+
+        // ⚠️ 플레이어 수동 전투 사망 시 하드코어 사망 리셋 우선 처리
+        if (manualSession && shouldTriggerHardcoreDeathFromSession(s, manualSession)) {
+          return createManualSessionDeathResetState(s, manualSession, 'player_death', manualSession.gateName)
+        }
 
         // ⚠️ 추가 방어막: 이미 승리(victory)로 finalized된 world_map session은 retreat/cancel 처리(메시지 및 날짜 기록)를 하지 않고 cleanup만 수행합니다.
         if (manualSession?.result === 'victory' || manualSession?.logs?.some(l => l.message?.includes('성공') || l.message?.includes('승리'))) {
