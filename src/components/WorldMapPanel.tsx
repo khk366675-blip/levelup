@@ -50,6 +50,63 @@ const REGION_FLAGS: Record<string, string> = {
   eg: '🇪🇬',
 }
 
+function classifyEventLog(log: string) {
+  const isAngel = log.includes('Angel') || log.includes('천사') || log.includes('지고의')
+  const isMonarch = log.includes('군주') || log.includes('침공') || log.includes('거점')
+  const isCollapse = log.includes('폭주') || log.includes('붕괴') || log.includes('위험')
+  const isLoveCall = log.includes('러브콜') || log.includes('지원')
+  const isCleared = log.includes('격퇴') || log.includes('정화') || log.includes('성공') || log.includes('완치')
+  const isAlliance = log.includes('헌터') || log.includes('부상') || log.includes('퇴각') || log.includes('동맹')
+
+  if (isAngel) {
+    return {
+      badge: '🏆 ULTIMATE',
+      badgeClass: 'bg-amber-500/10 border-amber-500/30 text-amber-300 shadow-glow-amber scale-95 origin-left shrink-0',
+      textClass: 'text-amber-200 font-extrabold shadow-glow-amber/5'
+    }
+  }
+  if (isMonarch) {
+    return {
+      badge: '🚨 CRITICAL',
+      badgeClass: 'bg-red-500/20 border-red-500/40 text-red-300 animate-pulse font-black scale-95 origin-left shrink-0',
+      textClass: 'text-red-400 font-black animate-pulse'
+    }
+  }
+  if (isCollapse) {
+    return {
+      badge: '💥 COLLAPSE',
+      badgeClass: 'bg-orange-500/10 border-orange-500/30 text-orange-400 scale-95 origin-left shrink-0',
+      textClass: 'text-orange-400 font-bold'
+    }
+  }
+  if (isLoveCall) {
+    return {
+      badge: '📞 LOVE CALL',
+      badgeClass: 'bg-yellow-500/10 border-yellow-500/20 text-yellow-300 scale-95 origin-left shrink-0',
+      textClass: 'text-yellow-300'
+    }
+  }
+  if (isCleared) {
+    return {
+      badge: '🛡️ CLEARED',
+      badgeClass: 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400 scale-95 origin-left shrink-0',
+      textClass: 'text-emerald-400 font-bold'
+    }
+  }
+  if (isAlliance) {
+    return {
+      badge: '🤝 ALLIANCE',
+      badgeClass: 'bg-cyan-500/10 border-cyan-500/20 text-cyan-400 scale-95 origin-left shrink-0',
+      textClass: 'text-cyan-300/90 font-medium'
+    }
+  }
+  return {
+    badge: '📡 SIGNAL',
+    badgeClass: 'bg-zinc-800/20 border-zinc-700/20 text-zinc-400 scale-95 origin-left shrink-0',
+    textClass: 'text-zinc-400/90'
+  }
+}
+
 export function WorldMapPanel() {
   const riftNodesState = useGame((s) => s.riftNodes ?? {})
   const activeRiftNodeId = useGame((s) => s.activeRiftNodeId)
@@ -84,6 +141,9 @@ export function WorldMapPanel() {
   })
 
   const [expandedRegionId, setExpandedRegionId] = useState<string | null>(null)
+  const [regionSortBy, setRegionSortBy] = useState<'danger' | 'purify' | 'name'>('danger')
+  const [activeDetailRegion, setActiveDetailRegion] = useState<RiftRegion | null>(null)
+  const [isAllLogsExpanded, setIsAllLogsExpanded] = useState(false)
   const [selectedNode, setSelectedNode] = useState<RiftNode | null>(null)
   const [toastMessage, setToastMessage] = useState<string | null>(null)
   const [selectedHelpers, setSelectedHelpers] = useState<string[]>([])
@@ -208,6 +268,34 @@ export function WorldMapPanel() {
   const isNodeRetreatedToday = (nodeId: string) => {
     return worldBattleRetreats[nodeId] === todayKey()
   }
+
+  // 국가 정렬 연산
+  const sortedRegions = [...RIFT_REGIONS].sort((a, b) => {
+    if (regionSortBy === 'name') {
+      return a.name.localeCompare(b.name, 'ko')
+    }
+    const progA = getRegionProgress(a.id, riftNodesState)
+    const progB = getRegionProgress(b.id, riftNodesState)
+    const stateA = livingWorld?.regions[a.id]
+    const stateB = livingWorld?.regions[b.id]
+
+    if (regionSortBy === 'purify') {
+      return progB.percent - progA.percent
+    }
+
+    // danger (위험도 / 오염도 높은 순)
+    const isMonarchA = livingWorld?.activeMonarchs?.some(m => m.status === 'rampaging' && m.occupiedRegionIds.includes(a.id)) ? 1 : 0
+    const isMonarchB = livingWorld?.activeMonarchs?.some(m => m.status === 'rampaging' && m.occupiedRegionIds.includes(b.id)) ? 1 : 0
+    if (isMonarchA !== isMonarchB) return isMonarchB - isMonarchA
+
+    const hasLcA = Object.values(livingWorld?.riftNodes ?? {}).some((node: any) => node.regionId === a.id && node.loveCall?.active && (riftNodesState[node.id] ?? node.status) === 'active') ? 1 : 0
+    const hasLcB = Object.values(livingWorld?.riftNodes ?? {}).some((node: any) => node.regionId === b.id && node.loveCall?.active && (riftNodesState[node.id] ?? node.status) === 'active') ? 1 : 0
+    if (hasLcA !== hasLcB) return hasLcB - hasLcA
+
+    const corrA = stateA?.corruption ?? 0
+    const corrB = stateB?.corruption ?? 0
+    return corrB - corrA
+  })
 
   return (
     <div className="space-y-6 relative">
@@ -562,36 +650,64 @@ export function WorldMapPanel() {
             </p>
           </div>
 
-          {/* Box 2: Incident Logs Terminal */}
-          <div className="panel corner-bracket border-white/10 bg-ink-950/40 p-4 md:col-span-2 flex flex-col justify-between">
+          {/* Box 2: Incident Logs Terminal (WORLD SIGNAL LOG) */}
+          <div className="panel corner-bracket border-white/10 bg-ink-950/40 p-4 md:col-span-2 flex flex-col justify-between min-h-[174px]">
             <div className="br" />
-            <div className="flex items-center justify-between text-xs font-bold text-white/70 mb-2">
-              <span className="text-cyan-300 flex items-center gap-1.5 font-bold">
-                <Swords className="h-4 w-4" /> 세계 동적 사건 로그
+            <div className="flex items-center justify-between text-xs font-bold text-white/70 mb-2.5">
+              <span className="text-cyan-300 flex items-center gap-1.5 font-bold tracking-wider uppercase">
+                <Swords className="h-4 w-4" /> 📡 WORLD SIGNAL LOG
               </span>
-              <button
-                onClick={() => {
-                  useGame.getState().debugAdvanceLivingWorldDay()
-                  triggerToast("🔮 차원의 시간이 하루 흘렀습니다. 세계가 스스로 1틱 시뮬레이션되었습니다.")
-                }}
-                className="rounded-md border border-purple-500/30 bg-purple-500/10 hover:bg-purple-500/25 px-2 py-0.5 text-[9px] font-black text-purple-200 transition-all cursor-pointer"
-              >
-                ⏩ 하루 강제 진행 (디버그)
-              </button>
+              <div className="flex items-center gap-2 scale-90 sm:scale-100 origin-right">
+                <button
+                  onClick={() => setIsAllLogsExpanded(!isAllLogsExpanded)}
+                  className="rounded border border-cyan-500/30 bg-cyan-500/10 hover:bg-cyan-500/25 px-2 py-0.5 text-[9px] font-black text-cyan-200 transition-all cursor-pointer"
+                >
+                  {isAllLogsExpanded ? '▲ 요약 접기' : `▼ 모든 로그 (${livingWorld.eventLogs.length})`}
+                </button>
+                <button
+                  onClick={() => {
+                    useGame.getState().debugAdvanceLivingWorldDay()
+                    triggerToast("🔮 차원의 시간이 하루 흘렀습니다. 세계가 스스로 1틱 시뮬레이션되었습니다.")
+                  }}
+                  className="rounded-md border border-purple-500/30 bg-purple-500/10 hover:bg-purple-500/25 px-2 py-0.5 text-[9px] font-black text-purple-200 transition-all cursor-pointer"
+                >
+                  ⏩ 1일 시뮬레이션
+                </button>
+              </div>
             </div>
             
-            <div className="h-28 overflow-y-auto rounded bg-black/45 border border-white/5 p-2 font-mono text-[9px] text-white/75 space-y-1 scrollbar-thin scrollbar-thumb-purple-500/20">
-              {livingWorld.eventLogs.slice().reverse().map((log, idx) => (
-                <div key={idx} className={`${
-                  log.includes('전사') || log.includes('폭주') || log.includes('위험') ? 'text-red-400' :
-                  log.includes('부상') || log.includes('퇴각') || log.includes('실패') ? 'text-yellow-400' :
-                  log.includes('성공') || log.includes('완치') ? 'text-emerald-400' :
-                  log.includes('군주') ? 'text-purple-300 font-bold' :
-                  'text-white/70'
-                }`}>
-                  {log}
-                </div>
-              ))}
+            <div className="flex-1 rounded bg-black/45 border border-white/5 p-2 scrollbar-thin">
+              {(() => {
+                const displayedLogs = isAllLogsExpanded 
+                  ? livingWorld.eventLogs.slice().reverse() 
+                  : livingWorld.eventLogs.slice().reverse().slice(0, 4)
+
+                if (displayedLogs.length === 0) {
+                  return (
+                    <div className="text-zinc-500 italic py-6 text-center text-xs">
+                      📡 현재 세계 전선은 일시적으로 고요합니다.
+                    </div>
+                  )
+                }
+
+                return (
+                  <div className="space-y-2 max-h-[110px] overflow-y-auto pr-1 scrollbar-thin scrollbar-thumb-cyan-500/20">
+                    {displayedLogs.map((log, idx) => {
+                      const style = classifyEventLog(log)
+                      return (
+                        <div key={idx} className="flex items-center gap-2 text-xs border-b border-white/5 pb-1 leading-normal transition-all hover:bg-white/5 p-1 rounded">
+                          <span className={`chip shrink-0 scale-90 ${style.badgeClass}`} style={{ fontSize: '7.5px', padding: '0.05rem 0.25rem' }}>
+                            {style.badge}
+                          </span>
+                          <span className={`flex-1 font-mono text-[10px] break-all ${style.textClass}`}>
+                            {log}
+                          </span>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )
+              })()}
             </div>
           </div>
 
@@ -829,100 +945,115 @@ export function WorldMapPanel() {
 
           <div className="panel corner-bracket border-white/10 bg-ink-950/40 p-4">
             <div className="br" />
-            <h3 className="mb-3 text-sm font-bold text-white/80">국가별 정화도</h3>
-            <div className="space-y-3">
-              {RIFT_REGIONS.map((region: RiftRegion) => {
+            
+            {/* 정렬 토글 바 */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
+              <h3 className="text-sm font-black text-white/80 tracking-wider">🌐 WORLD PURIFICATION GRID</h3>
+              <div className="flex bg-black/45 rounded-md p-0.5 border border-white/5 text-[9px] font-bold">
+                <button
+                  onClick={() => setRegionSortBy('danger')}
+                  className={`px-2 py-0.5 rounded transition-all cursor-pointer ${regionSortBy === 'danger' ? 'bg-red-500/20 text-red-300 font-extrabold border border-red-500/30' : 'text-white/50 border border-transparent'}`}
+                >
+                  🚨 위험도순
+                </button>
+                <button
+                  onClick={() => setRegionSortBy('purify')}
+                  className={`px-2 py-0.5 rounded transition-all cursor-pointer ${regionSortBy === 'purify' ? 'bg-purple-500/20 text-purple-300 font-extrabold border border-purple-500/30' : 'text-white/50 border border-transparent'}`}
+                >
+                  🛡️ 정화도순
+                </button>
+                <button
+                  onClick={() => setRegionSortBy('name')}
+                  className={`px-2 py-0.5 rounded transition-all cursor-pointer ${regionSortBy === 'name' ? 'bg-cyan-500/20 text-cyan-300 font-extrabold border border-cyan-500/30' : 'text-white/50 border border-transparent'}`}
+                >
+                  🌐 국가명순
+                </button>
+              </div>
+            </div>
+
+            {/* 국가 카드 반응형 그리드 */}
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+              {sortedRegions.map((region: RiftRegion) => {
                 const prog = getRegionProgress(region.id, riftNodesState)
                 const regionState = livingWorld?.regions[region.id]
-                const totalPower = regionState ? getRegionTotalPower(regionState, livingWorld.namedHunters) : 0
-                const isExpanded = expandedRegionId === region.id
+                const flag = REGION_FLAGS[region.id] || '🌐'
+                const occupiedMonarch = livingWorld?.activeMonarchs?.find(m => m.status === 'rampaging' && m.occupiedRegionIds.includes(region.id))
+                const hasLoveCall = Object.values(livingWorld?.riftNodes ?? {}).some((node: any) => node.regionId === region.id && node.loveCall?.active && (riftNodesState[node.id] ?? node.status) === 'active')
 
                 return (
-                  <div key={region.id} className="rounded border border-white/5 bg-ink-950/20 p-2.5 transition-all hover:bg-white/5">
-                    <div
-                      className="flex items-center justify-between text-xs cursor-pointer select-none"
-                      onClick={() => setExpandedRegionId(isExpanded ? null : region.id)}
-                    >
-                      <span className="font-bold text-white/70 flex items-center gap-1.5">
-                        {region.name}
+                  <div
+                    key={region.id}
+                    onClick={() => setActiveDetailRegion(region)}
+                    className={`rounded-lg border p-2 transition-all duration-300 hover:bg-white/5 cursor-pointer flex flex-col justify-between h-[82px] select-none ${
+                      occupiedMonarch 
+                        ? 'border-red-500 bg-red-950/20 shadow-glow-red animate-pulse text-red-300' 
+                        : hasLoveCall 
+                          ? 'border-amber-400/40 bg-amber-950/10 text-amber-200' 
+                          : region.id === 'kr'
+                            ? 'border-sky-500/40 bg-sky-950/10 text-sky-200 shadow-glow-blue/5'
+                            : 'border-white/5 bg-ink-950/30 text-white/70'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between gap-1 overflow-hidden">
+                      <span className="font-extrabold text-[10px] truncate flex items-center gap-1">
+                        <span>{flag}</span>
+                        <span className="truncate">{region.name}</span>
+                      </span>
+                      <div className="flex gap-0.5 shrink-0 scale-90 origin-right">
                         {region.id === 'kr' && (
-                          <span className="rounded bg-sky-500/20 px-1 py-0.2 text-[8px] font-bold text-sky-300 border border-sky-500/30">
+                          <span className="rounded bg-sky-500/25 px-1 py-0.2 text-[6.5px] font-black text-sky-300 border border-sky-500/30 uppercase tracking-tighter">
                             거점
                           </span>
                         )}
-                      </span>
-                      <span className="text-purple-300 font-medium text-[11px]">
-                        {prog.cleared}/{prog.total} 정화 ({prog.percent}%)
-                      </span>
+                        {occupiedMonarch && (
+                          <span className="rounded bg-red-500/25 px-1 py-0.2 text-[6.5px] font-black text-red-200 border border-red-500/30 uppercase tracking-tighter animate-pulse">
+                            🚨침공
+                          </span>
+                        )}
+                        {hasLoveCall && (
+                          <span className="rounded bg-amber-500/25 px-1 py-0.2 text-[6.5px] font-black text-amber-300 border border-amber-500/30 uppercase tracking-tighter">
+                            📞콜
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    
+                    <div className="mt-1 flex items-end justify-between leading-none">
+                      <div className="flex flex-col">
+                        <span className="text-[7.5px] text-white/30 font-bold uppercase tracking-tighter">오염도</span>
+                        <span className={`font-mono text-xs font-black ${
+                          occupiedMonarch ? 'text-red-400' :
+                          regionState && regionState.corruption >= 50 ? 'text-orange-400 font-black animate-pulse' :
+                          regionState && regionState.corruption >= 20 ? 'text-yellow-300 font-bold' :
+                          'text-emerald-400 font-bold'
+                        }`}>
+                          {regionState ? `${regionState.corruption}%` : '0%'}
+                        </span>
+                      </div>
+                      <div className="flex flex-col text-right">
+                        <span className="text-[7.5px] text-white/30 font-bold uppercase tracking-tighter">정화도</span>
+                        <span className="font-mono text-xs font-black text-purple-300">
+                          {prog.percent}%
+                        </span>
+                      </div>
                     </div>
 
-                    <div className="mt-1.5 h-1.5 w-full rounded-full bg-white/5 overflow-hidden">
+                    {/* 얇은 게이지 바 */}
+                    <div className="mt-1 h-1 w-full rounded-full bg-white/5 overflow-hidden">
                       <div
-                        className="h-full bg-gradient-to-r from-purple-500 to-cyan-400 transition-all duration-500"
+                        className={`h-full transition-all duration-500 bg-gradient-to-r ${
+                          occupiedMonarch ? 'from-red-500 to-rose-600' : 'from-purple-500 to-cyan-400'
+                        }`}
                         style={{ width: `${prog.percent}%` }}
                       />
                     </div>
-
-                    <div className="mt-1.5 flex items-center justify-between text-[10px] text-white/45">
-                      <span>총 전력: <span className="font-bold text-cyan-300">{totalPower > 0 ? `${(totalPower / 1000).toFixed(0)}k` : '계산 중'}</span></span>
-                      <span>오염도: <span className={`font-bold ${regionState && regionState.corruption >= 50 ? 'text-red-400 animate-pulse' : regionState && regionState.corruption >= 20 ? 'text-yellow-300' : 'text-emerald-400'}`}>{regionState ? `${regionState.corruption}%` : '0%'}</span></span>
-                      <span>활성 게이트: <span className="font-bold text-purple-300">{regionState ? regionState.activeGateIds.length : 0}개</span></span>
-                    </div>
-
-                    {/* 5축 프로파일 디버그 및 네임드 상세 펼치기 */}
-                    {isExpanded && regionState && (
-                      <div className="mt-2.5 pt-2.5 border-t border-white/5 space-y-2 text-[10px] text-white/60">
-                        <div className="grid grid-cols-2 gap-x-3 gap-y-1.5 bg-black/35 rounded p-2">
-                          <div className="flex justify-between">
-                            <span className="text-white/40">위험 감수성향</span>
-                            <span className="font-bold text-red-400">{(regionState.riskAppetite * 100).toFixed(0)}%</span>
-                          </div>
-                          <div className="flex justify-between">
-                            <span className="text-white/40">정예형성향</span>
-                            <span className="font-bold text-amber-400">{((1 - regionState.populationStyle) * 100).toFixed(0)}%</span>
-                          </div>
-                          <div className="flex justify-between">
-                            <span className="text-white/40">성장성향</span>
-                            <span className="font-bold text-emerald-400">{(regionState.growthBias * 100).toFixed(0)}%</span>
-                          </div>
-                          <div className="flex justify-between">
-                            <span className="text-white/40">결속도</span>
-                            <span className="font-bold text-blue-400">{(regionState.cohesion * 100).toFixed(0)}%</span>
-                          </div>
-                          <div className="flex justify-between col-span-2">
-                            <span className="text-white/40">부유함</span>
-                            <span className="font-bold text-purple-400">{(regionState.wealth * 100).toFixed(0)}%</span>
-                          </div>
-                        </div>
-
-                        {/* 네임드 헌터 명단 */}
-                        <div className="space-y-1">
-                          <div className="text-[9px] font-bold text-white/40 mb-1">소속 네임드 헌터</div>
-                          {regionState.namedHunterIds.map((hunterId) => {
-                            const hunterObj = livingWorld?.namedHunters[hunterId]
-                            if (!hunterObj) return null
-                            return (
-                              <div key={hunterId} className="flex items-center justify-between bg-white/5 px-2 py-1 rounded">
-                                <span className="font-bold text-white/80">{hunterObj.name}</span>
-                                <div className="flex items-center gap-1.5">
-                                  <span className="rounded bg-purple-500/20 px-1 text-[8px] font-black text-purple-300 border border-purple-500/30">
-                                    {hunterObj.rank}
-                                  </span>
-                                  <span className="text-cyan-300 font-mono text-[9px] font-bold">
-                                    ⚔️{(hunterObj.power / 1000).toFixed(0)}k
-                                  </span>
-                                </div>
-                              </div>
-                            )
-                          })}
-                        </div>
-                      </div>
-                    )}
                   </div>
                 )
               })}
             </div>
           </div>
+
+
 
           {/* 구역 요약 상세 패널 */}
           {selectedNode ? (() => {
@@ -1622,6 +1753,179 @@ export function WorldMapPanel() {
           </div>
         </div>
       )}
+
+      {/* 국가 정화 현황 상세 모달 (WORLD PURIFICATION DETAILS) */}
+      {activeDetailRegion && (() => {
+        const region = activeDetailRegion
+        const prog = getRegionProgress(region.id, riftNodesState)
+        const regionState = livingWorld?.regions[region.id]
+        const totalPower = regionState ? getRegionTotalPower(regionState, livingWorld.namedHunters) : 0
+        const flag = REGION_FLAGS[region.id] || '🌐'
+        const occupiedMonarch = livingWorld?.activeMonarchs?.find(m => m.status === 'rampaging' && m.occupiedRegionIds.includes(region.id))
+        const hasLoveCall = Object.values(livingWorld?.riftNodes ?? {}).some((node: any) => node.regionId === region.id && node.loveCall?.active && (riftNodesState[node.id] ?? node.status) === 'active')
+
+        return (
+          <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-fade-in">
+            <div className="panel corner-bracket border-cyan-400/30 bg-ink-950/95 p-6 max-w-md w-full shadow-glow-blue relative animate-scale-in">
+              <div className="br" />
+              
+              {/* 헤더 */}
+              <div className="flex items-start justify-between border-b border-white/5 pb-3">
+                <div className="flex items-center gap-2">
+                  <span className="text-xl">{flag}</span>
+                  <div>
+                    <h4 className="text-base font-black text-white flex items-center gap-1.5">
+                      {region.name}
+                      {region.id === 'kr' && (
+                        <span className="rounded bg-sky-500/20 px-1.5 py-0.5 text-[8px] font-bold text-sky-300 border border-sky-500/30">
+                          거점
+                        </span>
+                      )}
+                    </h4>
+                    <p className="text-[10px] text-white/40 font-mono mt-0.5">REGION CODE: {region.id.toUpperCase()}</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setActiveDetailRegion(null)}
+                  className="rounded p-1 hover:bg-white/5 text-white/45 hover:text-white cursor-pointer transition-all"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+
+              {/* 본문 정보 */}
+              <div className="mt-4 space-y-4">
+                
+                {/* 점령 및 러브콜 경고 */}
+                {occupiedMonarch && (
+                  <div className="rounded border border-red-500/30 bg-red-500/5 p-3 text-xs text-red-400 font-bold animate-pulse flex items-center gap-2">
+                    <AlertCircle className="h-4 w-4 shrink-0" />
+                    <span>경고: 이 국가는 현재 심연의 군주에 의해 점령되어 잠식 중입니다!</span>
+                  </div>
+                )}
+                {hasLoveCall && !occupiedMonarch && (
+                  <div className="rounded border border-amber-500/30 bg-amber-500/5 p-3 text-xs text-amber-300 font-bold flex items-center gap-2">
+                    <HelpCircle className="h-4 w-4 shrink-0 text-amber-400" />
+                    <span>알림: 이 국가의 헌터 협회로부터 지원(러브콜) 요청이 와 있습니다.</span>
+                  </div>
+                )}
+
+                {/* 정화 진척도 */}
+                <div className="space-y-1.5">
+                  <div className="flex justify-between text-xs font-bold text-white/70">
+                    <span>정화 진척도</span>
+                    <span className="text-purple-300 font-mono">
+                      {prog.cleared}/{prog.total} 구역 완료 ({prog.percent}%)
+                    </span>
+                  </div>
+                  <div className="h-2 w-full rounded-full bg-white/5 overflow-hidden">
+                    <div
+                      className="h-full bg-gradient-to-r from-purple-500 to-cyan-400 transition-all duration-500"
+                      style={{ width: `${prog.percent}%` }}
+                    />
+                  </div>
+                </div>
+
+                {/* 핵심 지표 */}
+                <div className="grid grid-cols-3 gap-2 text-center text-xs font-mono">
+                  <div className="rounded bg-black/45 border border-white/5 p-2">
+                    <div className="text-[9px] text-white/40 font-sans uppercase">오염도</div>
+                    <div className={`mt-1 font-black ${
+                      occupiedMonarch ? 'text-red-400' :
+                      regionState && regionState.corruption >= 50 ? 'text-orange-400 animate-pulse' :
+                      regionState && regionState.corruption >= 20 ? 'text-yellow-300' :
+                      'text-emerald-400'
+                    }`}>
+                      {regionState ? `${regionState.corruption}%` : '0%'}
+                    </div>
+                  </div>
+                  <div className="rounded bg-black/45 border border-white/5 p-2">
+                    <div className="text-[9px] text-white/40 font-sans uppercase">총 전력</div>
+                    <div className="mt-1 font-black text-cyan-300">
+                      {totalPower > 0 ? `${(totalPower / 1000).toFixed(0)}k` : '계산 중'}
+                    </div>
+                  </div>
+                  <div className="rounded bg-black/45 border border-white/5 p-2">
+                    <div className="text-[9px] text-white/40 font-sans uppercase">활성 게이트</div>
+                    <div className="mt-1 font-black text-purple-300">
+                      {regionState ? regionState.activeGateIds.length : 0}개
+                    </div>
+                  </div>
+                </div>
+
+                {/* 5축 성향 프로파일 */}
+                {regionState && (
+                  <div className="space-y-2">
+                    <span className="text-[10px] font-black text-white/45 tracking-widest uppercase">📊 지역 성향 매개변수 (Profile)</span>
+                    <div className="grid grid-cols-2 gap-x-4 gap-y-2 bg-black/35 rounded-lg p-3 border border-white/5 text-[10px] text-white/70">
+                      <div className="flex justify-between">
+                        <span className="text-white/40">위험 감수성향</span>
+                        <span className="font-bold text-red-400">{(regionState.riskAppetite * 100).toFixed(0)}%</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-white/40">정예형성향</span>
+                        <span className="font-bold text-amber-400">{((1 - regionState.populationStyle) * 100).toFixed(0)}%</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-white/40">성장성향</span>
+                        <span className="font-bold text-emerald-400">{(regionState.growthBias * 100).toFixed(0)}%</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-white/40">결속도</span>
+                        <span className="font-bold text-blue-400">{(regionState.cohesion * 100).toFixed(0)}%</span>
+                      </div>
+                      <div className="flex justify-between col-span-2 border-t border-white/5 pt-1.5 mt-0.5">
+                        <span className="text-white/40">부유함</span>
+                        <span className="font-bold text-purple-400">{(regionState.wealth * 100).toFixed(0)}%</span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* 소속 네임드 헌터 명단 */}
+                {regionState && regionState.namedHunterIds.length > 0 ? (
+                  <div className="space-y-2">
+                    <span className="text-[10px] font-black text-white/45 tracking-widest uppercase">🤝 소속 네임드 헌터 ({regionState.namedHunterIds.length})</span>
+                    <div className="max-h-24 overflow-y-auto space-y-1 pr-1 scrollbar-thin">
+                      {regionState.namedHunterIds.map((hunterId) => {
+                        const hunterObj = livingWorld?.namedHunters[hunterId]
+                        if (!hunterObj) return null
+                        return (
+                          <div key={hunterId} className="flex items-center justify-between bg-black/40 border border-white/5 px-2.5 py-1.5 rounded-md text-[10px]">
+                            <span className="font-bold text-white/80">{hunterObj.name}</span>
+                            <div className="flex items-center gap-1.5">
+                              <span className="rounded bg-purple-500/20 px-1.5 py-0.2 text-[8px] font-black text-purple-300 border border-purple-500/30">
+                                {hunterObj.rank}
+                              </span>
+                              <span className="text-cyan-300 font-mono font-bold">
+                                ⚔️{hunterObj.power.toLocaleString()}
+                              </span>
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-[10px] text-white/45 italic py-2 text-center border border-dashed border-white/5 rounded">
+                    소속 네임드 헌터가 없습니다.
+                  </div>
+                )}
+              </div>
+
+              {/* 하단 닫기 */}
+              <div className="mt-6">
+                <button
+                  onClick={() => setActiveDetailRegion(null)}
+                  className="rounded border border-white/10 bg-white/5 hover:bg-white/10 w-full py-2 text-xs font-bold text-white/70 transition-all cursor-pointer text-center"
+                >
+                  상세 닫기
+                </button>
+              </div>
+            </div>
+          </div>
+        )
+      })()}
     </div>
   )
 }
