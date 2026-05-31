@@ -145,24 +145,16 @@ export function initLivingWorld(seed: number): LivingWorldState {
           status: 'active',
           equipmentScore: initialEquipmentScore,
           equipmentItems: initialEquipmentItems,
-          traitId
+          traitId,
+          level: hBase.level,
+          stats: hBase.stats,
+          jobId: hBase.jobId,
+          titleId: hBase.titleId,
+          baseEquipmentItemIds: hBase.baseEquipmentItemIds ?? [],
+          skillIds: hBase.skillIds ?? []
         }
 
-        if (hunterId === 'hunter-us-1') {
-          hunterObj.level = 100
-          hunterObj.stats = { STR: 350, VIT: 350, AGI: 280, INT: 150, PER: 180, SEN: 200 }
-          hunterObj.jobId = 'guardian'
-          hunterObj.titleId = 'legend-in-hand'
-          hunterObj.baseEquipmentItemIds = ['왕의 검', '그림자 왕관']
-          hunterObj.skillIds = ['basic-attack', 'basic-focus-slash', 'basic-guard-stance']
-          hunterObj.power = getNamedHunterBasePower(hunterObj)
-        } else if (hunterId === 'hunter-kr-2') {
-          hunterObj.level = 75
-          hunterObj.stats = { STR: 210, VIT: 180, AGI: 160, INT: 90, PER: 100, SEN: 110 }
-          hunterObj.jobId = 'swordsman'
-          hunterObj.titleId = 'hunter'
-          hunterObj.baseEquipmentItemIds = ['왕의 검']
-          hunterObj.skillIds = ['basic-attack', 'basic-focus-slash']
+        if (hunterObj.stats && hunterObj.level && hunterObj.jobId) {
           hunterObj.power = getNamedHunterBasePower(hunterObj)
         }
 
@@ -176,7 +168,9 @@ export function initLivingWorld(seed: number): LivingWorldState {
       const baseCountC = pBase.countCRange[0] + rng() * (pBase.countCRange[1] - pBase.countCRange[0])
 
       const swarmFactor = 0.7 + populationStyle * 0.6
-      const countA = Math.round(baseCountA * swarmFactor)
+      
+      const namedAInRegion = baseData.namedHunters.filter(h => h.rank === 'A').length
+      const countA = Math.max(0, Math.round(baseCountA * swarmFactor) - namedAInRegion)
       const countB = Math.round(baseCountB * swarmFactor)
       const countC = Math.round(baseCountC * swarmFactor)
 

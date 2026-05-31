@@ -2455,6 +2455,12 @@ export interface NamedHunterBase {
   rank: Rank
   powerRange: [number, number]
   growthRange: [number, number]
+  level?: number
+  stats?: Record<string, number>
+  jobId?: JobId
+  titleId?: string
+  baseEquipmentItemIds?: string[]
+  skillIds?: string[]
 }
 
 export interface HunterPoolBase {

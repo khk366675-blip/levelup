@@ -3761,11 +3761,386 @@ export const REGION_HUNTER_BASES: RegionSeedBase[] = [
   {
     regionId: 'us',
     namedHunters: [
-      { name: '토마스 안드레', rank: 'National', powerRange: [3600, 4200], growthRange: [1.02, 1.05] },
-      { name: '데이비드 브라운', rank: 'S', powerRange: [2200, 2500], growthRange: [1.015, 1.035] },
-      { name: '마이클 코너', rank: 'S', powerRange: [2000, 2350], growthRange: [1.015, 1.04] },
-      { name: '엘리자베스 리드', rank: 'S', powerRange: [1800, 2250], growthRange: [1.01, 1.03] },
-      { name: '조나단 켄트', rank: 'S', powerRange: [1700, 2050], growthRange: [1.02, 1.045] }
+      {
+        name: '토마스 안드레',
+        rank: 'National',
+        powerRange: [3600, 4200],
+        growthRange: [1.02, 1.05],
+        level: 100,
+        jobId: 'guardian',
+        titleId: 'national-level-hunter',
+        stats: {
+          STR: 340,
+          VIT: 410,
+          AGI: 190,
+          INT: 120,
+          PER: 260,
+          SEN: 220
+        },
+        baseEquipmentItemIds: [],
+        skillIds: ['basic-attack', 'basic-guard-stance', 'skill-guardian-bash', 'skill-guardian-shield', 'skill-guardian-stance']
+      },
+      {
+        name: '데이비드 브라운',
+        rank: 'S',
+        powerRange: [2200, 2500],
+        growthRange: [1.015, 1.035],
+        level: 88,
+        jobId: 'guardian',
+        titleId: 'veteran-hunter',
+        stats: {
+          STR: 240,
+          VIT: 330,
+          AGI: 120,
+          INT: 150,
+          PER: 230,
+          SEN: 130
+        },
+        baseEquipmentItemIds: [],
+        skillIds: ['basic-attack', 'basic-guard-stance', 'skill-guardian-bash', 'skill-guardian-shield', 'skill-guardian-stance']
+      },
+      {
+        name: '마이클 코너',
+        rank: 'S',
+        powerRange: [2000, 2350],
+        growthRange: [1.015, 1.04],
+        level: 86,
+        jobId: 'warrior',
+        titleId: 'veteran-hunter',
+        stats: {
+          STR: 360,
+          VIT: 270,
+          AGI: 160,
+          INT: 70,
+          PER: 180,
+          SEN: 120
+        },
+        baseEquipmentItemIds: [],
+        skillIds: ['basic-attack', 'basic-focus-slash', 'skill-warrior-strike', 'skill-warrior-earthquake', 'skill-warrior-shout']
+      },
+      {
+        name: '엘리자베스 리드',
+        rank: 'S',
+        powerRange: [1800, 2250],
+        growthRange: [1.01, 1.03],
+        level: 83,
+        jobId: 'mage',
+        titleId: 'veteran-hunter',
+        stats: {
+          STR: 80,
+          VIT: 160,
+          AGI: 130,
+          INT: 360,
+          PER: 160,
+          SEN: 210
+        },
+        baseEquipmentItemIds: [],
+        skillIds: ['basic-attack', 'skill-mage-bolt', 'skill-mage-burst', 'skill-mage-storm']
+      },
+      {
+        name: '조나단 켄트',
+        rank: 'S',
+        powerRange: [1700, 2050],
+        growthRange: [1.02, 1.045],
+        level: 80,
+        jobId: 'tactician',
+        titleId: 'veteran-hunter',
+        stats: {
+          STR: 130,
+          VIT: 190,
+          AGI: 150,
+          INT: 270,
+          PER: 230,
+          SEN: 150
+        },
+        baseEquipmentItemIds: [],
+        skillIds: ['basic-attack', 'skill-tactician-analyze', 'skill-tactician-command', 'skill-tactician-analyze-pulse']
+      },
+      {
+        name: '레이첼 모건',
+        rank: 'A',
+        powerRange: [1200, 1800],
+        growthRange: [1.005, 1.02],
+        level: 69,
+        jobId: 'scout',
+        titleId: 'hunter',
+        stats: {
+          STR: 120,
+          VIT: 130,
+          AGI: 260,
+          INT: 80,
+          PER: 90,
+          SEN: 120
+        },
+        baseEquipmentItemIds: [],
+        skillIds: ['basic-attack', 'basic-focus-slash', 'skill-scout-strike', 'skill-scout-mark']
+      },
+      {
+        name: '에단 워커',
+        rank: 'A',
+        powerRange: [1200, 1800],
+        growthRange: [1.005, 1.02],
+        level: 68,
+        jobId: 'warrior',
+        titleId: 'hunter',
+        stats: {
+          STR: 270,
+          VIT: 210,
+          AGI: 100,
+          INT: 55,
+          PER: 110,
+          SEN: 55
+        },
+        baseEquipmentItemIds: [],
+        skillIds: ['basic-attack', 'basic-focus-slash', 'skill-warrior-strike', 'skill-warrior-earthquake']
+      },
+      {
+        name: '소피아 헤일',
+        rank: 'A',
+        powerRange: [1200, 1800],
+        growthRange: [1.005, 1.02],
+        level: 67,
+        jobId: 'mage',
+        titleId: 'hunter',
+        stats: {
+          STR: 60,
+          VIT: 115,
+          AGI: 105,
+          INT: 280,
+          PER: 80,
+          SEN: 130
+        },
+        baseEquipmentItemIds: [],
+        skillIds: ['basic-attack', 'skill-mage-bolt', 'skill-mage-burst']
+      },
+      {
+        name: '그레이슨 밀러',
+        rank: 'A',
+        powerRange: [1200, 1800],
+        growthRange: [1.005, 1.02],
+        level: 66,
+        jobId: 'guardian',
+        titleId: 'hunter',
+        stats: {
+          STR: 160,
+          VIT: 280,
+          AGI: 75,
+          INT: 55,
+          PER: 170,
+          SEN: 60
+        },
+        baseEquipmentItemIds: [],
+        skillIds: ['basic-attack', 'basic-guard-stance', 'skill-guardian-bash', 'skill-guardian-shield']
+      },
+      {
+        name: '올리비아 체이스',
+        rank: 'A',
+        powerRange: [1200, 1800],
+        growthRange: [1.005, 1.02],
+        level: 65,
+        jobId: 'tactician',
+        titleId: 'hunter',
+        stats: {
+          STR: 75,
+          VIT: 130,
+          AGI: 115,
+          INT: 250,
+          PER: 160,
+          SEN: 70
+        },
+        baseEquipmentItemIds: [],
+        skillIds: ['basic-attack', 'skill-tactician-analyze', 'skill-tactician-command']
+      },
+      {
+        name: '잭슨 리버스',
+        rank: 'A',
+        powerRange: [1200, 1800],
+        growthRange: [1.005, 1.02],
+        level: 64,
+        jobId: 'swordsman',
+        titleId: 'hunter',
+        stats: {
+          STR: 250,
+          VIT: 150,
+          AGI: 210,
+          INT: 60,
+          PER: 80,
+          SEN: 40
+        },
+        baseEquipmentItemIds: [],
+        skillIds: ['basic-attack', 'basic-focus-slash', 'skill-swordsman-flash', 'skill-swordsman-combo']
+      },
+      {
+        name: '노아 벤넷',
+        rank: 'A',
+        powerRange: [1200, 1800],
+        growthRange: [1.005, 1.02],
+        level: 63,
+        jobId: 'guardian',
+        titleId: 'hunter',
+        stats: {
+          STR: 135,
+          VIT: 245,
+          AGI: 80,
+          INT: 115,
+          PER: 170,
+          SEN: 45
+        },
+        baseEquipmentItemIds: [],
+        skillIds: ['basic-attack', 'basic-guard-stance', 'skill-guardian-bash', 'skill-guardian-shield']
+      },
+      {
+        name: '에이바 스톤',
+        rank: 'A',
+        powerRange: [1200, 1800],
+        growthRange: [1.005, 1.02],
+        level: 62,
+        jobId: 'scout',
+        titleId: 'hunter',
+        stats: {
+          STR: 95,
+          VIT: 115,
+          AGI: 245,
+          INT: 85,
+          PER: 75,
+          SEN: 145
+        },
+        baseEquipmentItemIds: [],
+        skillIds: ['basic-attack', 'basic-focus-slash', 'skill-scout-strike', 'skill-scout-mark']
+      },
+      {
+        name: '루크 해리슨',
+        rank: 'A',
+        powerRange: [1200, 1800],
+        growthRange: [1.005, 1.02],
+        level: 61,
+        jobId: 'warrior',
+        titleId: 'hunter',
+        stats: {
+          STR: 285,
+          VIT: 205,
+          AGI: 115,
+          INT: 40,
+          PER: 80,
+          SEN: 35
+        },
+        baseEquipmentItemIds: [],
+        skillIds: ['basic-attack', 'basic-focus-slash', 'skill-warrior-strike', 'skill-warrior-earthquake']
+      },
+      {
+        name: '매디슨 크레인',
+        rank: 'A',
+        powerRange: [1200, 1800],
+        growthRange: [1.005, 1.02],
+        level: 60,
+        jobId: 'mage',
+        titleId: 'hunter',
+        stats: {
+          STR: 50,
+          VIT: 105,
+          AGI: 95,
+          INT: 260,
+          PER: 80,
+          SEN: 150
+        },
+        baseEquipmentItemIds: [],
+        skillIds: ['basic-attack', 'skill-mage-bolt', 'skill-mage-burst']
+      },
+      {
+        name: '케일럽 포드',
+        rank: 'A',
+        powerRange: [1200, 1800],
+        growthRange: [1.005, 1.02],
+        level: 59,
+        jobId: 'guardian',
+        titleId: 'hunter',
+        stats: {
+          STR: 150,
+          VIT: 255,
+          AGI: 65,
+          INT: 55,
+          PER: 155,
+          SEN: 50
+        },
+        baseEquipmentItemIds: [],
+        skillIds: ['basic-attack', 'basic-guard-stance', 'skill-guardian-bash', 'skill-guardian-shield']
+      },
+      {
+        name: '빅토리아 블레이크',
+        rank: 'A',
+        powerRange: [1200, 1800],
+        growthRange: [1.005, 1.02],
+        level: 58,
+        jobId: 'tactician',
+        titleId: 'hunter',
+        stats: {
+          STR: 65,
+          VIT: 115,
+          AGI: 105,
+          INT: 225,
+          PER: 150,
+          SEN: 60
+        },
+        baseEquipmentItemIds: [],
+        skillIds: ['basic-attack', 'skill-tactician-analyze', 'skill-tactician-command']
+      },
+      {
+        name: '헨리 콜',
+        rank: 'A',
+        powerRange: [1200, 1800],
+        growthRange: [1.005, 1.02],
+        level: 56,
+        jobId: 'warrior',
+        titleId: 'hunter',
+        stats: {
+          STR: 240,
+          VIT: 185,
+          AGI: 100,
+          INT: 50,
+          PER: 95,
+          SEN: 40
+        },
+        baseEquipmentItemIds: [],
+        skillIds: ['basic-attack', 'basic-focus-slash', 'skill-warrior-strike']
+      },
+      {
+        name: '스칼렛 웨스트',
+        rank: 'A',
+        powerRange: [1200, 1800],
+        growthRange: [1.005, 1.02],
+        level: 54,
+        jobId: 'scout',
+        titleId: 'hunter',
+        stats: {
+          STR: 85,
+          VIT: 105,
+          AGI: 230,
+          INT: 75,
+          PER: 70,
+          SEN: 125
+        },
+        baseEquipmentItemIds: [],
+        skillIds: ['basic-attack', 'basic-focus-slash', 'skill-scout-strike']
+      },
+      {
+        name: '아이작 로웰',
+        rank: 'A',
+        powerRange: [1200, 1800],
+        growthRange: [1.005, 1.02],
+        level: 52,
+        jobId: 'mage',
+        titleId: 'hunter',
+        stats: {
+          STR: 45,
+          VIT: 100,
+          AGI: 80,
+          INT: 230,
+          PER: 75,
+          SEN: 140
+        },
+        baseEquipmentItemIds: [],
+        skillIds: ['basic-attack', 'skill-mage-burst']
+      }
     ],
     pool: {
       countARange: [12, 18],
@@ -3779,9 +4154,196 @@ export const REGION_HUNTER_BASES: RegionSeedBase[] = [
   {
     regionId: 'ca',
     namedHunters: [
-      { name: '알렉산더 로건', rank: 'S', powerRange: [1700, 2050], growthRange: [1.01, 1.03] },
-      { name: '윌리엄 클라크', rank: 'S', powerRange: [1400, 1750], growthRange: [1.01, 1.025] },
-      { name: '에밀리 파크', rank: 'S', powerRange: [1200, 1500], growthRange: [1.015, 1.035] }
+      {
+        name: '알렉산더 로건',
+        rank: 'S',
+        powerRange: [1700, 2050],
+        growthRange: [1.01, 1.03],
+        level: 80,
+        jobId: 'guardian',
+        titleId: 'veteran-hunter',
+        stats: {
+          STR: 215,
+          VIT: 315,
+          AGI: 110,
+          INT: 95,
+          PER: 215,
+          SEN: 100
+        },
+        baseEquipmentItemIds: [],
+        skillIds: ['basic-attack', 'basic-guard-stance', 'skill-guardian-bash', 'skill-guardian-shield', 'skill-guardian-stance']
+      },
+      {
+        name: '윌리엄 클라크',
+        rank: 'S',
+        powerRange: [1400, 1750],
+        growthRange: [1.01, 1.025],
+        level: 76,
+        jobId: 'scout',
+        titleId: 'veteran-hunter',
+        stats: {
+          STR: 155,
+          VIT: 150,
+          AGI: 300,
+          INT: 90,
+          PER: 120,
+          SEN: 165
+        },
+        baseEquipmentItemIds: [],
+        skillIds: ['basic-attack', 'basic-focus-slash', 'skill-scout-strike', 'skill-scout-mark', 'skill-scout-step']
+      },
+      {
+        name: '에밀리 파크',
+        rank: 'S',
+        powerRange: [1200, 1500],
+        growthRange: [1.015, 1.035],
+        level: 73,
+        jobId: 'mage',
+        titleId: 'veteran-hunter',
+        stats: {
+          STR: 65,
+          VIT: 135,
+          AGI: 120,
+          INT: 310,
+          PER: 135,
+          SEN: 170
+        },
+        baseEquipmentItemIds: [],
+        skillIds: ['basic-attack', 'skill-mage-bolt', 'skill-mage-burst', 'skill-mage-storm']
+      },
+      {
+        name: '매튜 프레이저',
+        rank: 'A',
+        powerRange: [1200, 1800],
+        growthRange: [1.005, 1.02],
+        level: 67,
+        jobId: 'guardian',
+        titleId: 'hunter',
+        stats: {
+          STR: 170,
+          VIT: 290,
+          AGI: 75,
+          INT: 60,
+          PER: 170,
+          SEN: 45
+        },
+        baseEquipmentItemIds: [],
+        skillIds: ['basic-attack', 'basic-guard-stance', 'skill-guardian-bash', 'skill-guardian-shield']
+      },
+      {
+        name: '클레어 맥켄지',
+        rank: 'A',
+        powerRange: [1200, 1800],
+        growthRange: [1.005, 1.02],
+        level: 66,
+        jobId: 'scout',
+        titleId: 'hunter',
+        stats: {
+          STR: 110,
+          VIT: 125,
+          AGI: 275,
+          INT: 80,
+          PER: 85,
+          SEN: 125
+        },
+        baseEquipmentItemIds: [],
+        skillIds: ['basic-attack', 'basic-focus-slash', 'skill-scout-strike', 'skill-scout-mark']
+      },
+      {
+        name: '노아 벨로우',
+        rank: 'A',
+        powerRange: [1200, 1800],
+        growthRange: [1.005, 1.02],
+        level: 64,
+        jobId: 'warrior',
+        titleId: 'hunter',
+        stats: {
+          STR: 280,
+          VIT: 215,
+          AGI: 105,
+          INT: 45,
+          PER: 95,
+          SEN: 40
+        },
+        baseEquipmentItemIds: [],
+        skillIds: ['basic-attack', 'basic-focus-slash', 'skill-warrior-strike', 'skill-warrior-earthquake']
+      },
+      {
+        name: '아멜리아 그랜트',
+        rank: 'A',
+        powerRange: [1200, 1800],
+        growthRange: [1.005, 1.02],
+        level: 62,
+        jobId: 'mage',
+        titleId: 'hunter',
+        stats: {
+          STR: 50,
+          VIT: 110,
+          AGI: 100,
+          INT: 270,
+          PER: 85,
+          SEN: 150
+        },
+        baseEquipmentItemIds: [],
+        skillIds: ['basic-attack', 'skill-mage-bolt', 'skill-mage-burst']
+      },
+      {
+        name: '올리버 하트웰',
+        rank: 'A',
+        powerRange: [1200, 1800],
+        growthRange: [1.005, 1.02],
+        level: 60,
+        jobId: 'guardian',
+        titleId: 'hunter',
+        stats: {
+          STR: 140,
+          VIT: 250,
+          AGI: 75,
+          INT: 115,
+          PER: 155,
+          SEN: 40
+        },
+        baseEquipmentItemIds: [],
+        skillIds: ['basic-attack', 'basic-guard-stance', 'skill-guardian-bash', 'skill-guardian-shield']
+      },
+      {
+        name: '소피아 르블랑',
+        rank: 'A',
+        powerRange: [1200, 1800],
+        growthRange: [1.005, 1.02],
+        level: 58,
+        jobId: 'tactician',
+        titleId: 'hunter',
+        stats: {
+          STR: 70,
+          VIT: 115,
+          AGI: 105,
+          INT: 235,
+          PER: 155,
+          SEN: 50
+        },
+        baseEquipmentItemIds: [],
+        skillIds: ['basic-attack', 'skill-tactician-analyze', 'skill-tactician-command']
+      },
+      {
+        name: '잭 톰슨',
+        rank: 'A',
+        powerRange: [1200, 1800],
+        growthRange: [1.005, 1.02],
+        level: 55,
+        jobId: 'swordsman',
+        titleId: 'hunter',
+        stats: {
+          STR: 240,
+          VIT: 145,
+          AGI: 215,
+          INT: 55,
+          PER: 70,
+          SEN: 35
+        },
+        baseEquipmentItemIds: [],
+        skillIds: ['basic-attack', 'basic-focus-slash', 'skill-swordsman-flash', 'skill-swordsman-combo']
+      }
     ],
     pool: {
       countARange: [5, 8],
@@ -3795,9 +4357,158 @@ export const REGION_HUNTER_BASES: RegionSeedBase[] = [
   {
     regionId: 'mx',
     namedHunters: [
-      { name: '카를로스 산체스', rank: 'S', powerRange: [1350, 1650], growthRange: [1.01, 1.025] },
-      { name: '산티아고 고메즈', rank: 'S', powerRange: [1100, 1400], growthRange: [1.01, 1.03] },
-      { name: '마리아 헤르난데스', rank: 'S', powerRange: [950, 1200], growthRange: [1.01, 1.02] }
+      {
+        name: '카를로스 산체스',
+        rank: 'S',
+        powerRange: [1350, 1650],
+        growthRange: [1.01, 1.025],
+        level: 78,
+        jobId: 'warrior',
+        titleId: 'veteran-hunter',
+        stats: {
+          STR: 295,
+          VIT: 240,
+          AGI: 135,
+          INT: 75,
+          PER: 145,
+          SEN: 90
+        },
+        baseEquipmentItemIds: [],
+        skillIds: ['basic-attack', 'basic-focus-slash', 'skill-warrior-strike', 'skill-warrior-earthquake', 'skill-warrior-shout']
+      },
+      {
+        name: '산티아고 고메즈',
+        rank: 'S',
+        powerRange: [1100, 1400],
+        growthRange: [1.01, 1.03],
+        level: 75,
+        jobId: 'scout',
+        titleId: 'veteran-hunter',
+        stats: {
+          STR: 145,
+          VIT: 135,
+          AGI: 295,
+          INT: 85,
+          PER: 125,
+          SEN: 165
+        },
+        baseEquipmentItemIds: [],
+        skillIds: ['basic-attack', 'basic-focus-slash', 'skill-scout-strike', 'skill-scout-mark', 'skill-scout-step']
+      },
+      {
+        name: '마리아 헤르난데스',
+        rank: 'S',
+        powerRange: [950, 1200],
+        growthRange: [1.01, 1.02],
+        level: 72,
+        jobId: 'mage',
+        titleId: 'veteran-hunter',
+        stats: {
+          STR: 70,
+          VIT: 135,
+          AGI: 115,
+          INT: 305,
+          PER: 135,
+          SEN: 170
+        },
+        baseEquipmentItemIds: [],
+        skillIds: ['basic-attack', 'skill-mage-bolt', 'skill-mage-burst', 'skill-mage-storm']
+      },
+      {
+        name: '발렌티나 로하스',
+        rank: 'A',
+        powerRange: [1200, 1800],
+        growthRange: [1.005, 1.02],
+        level: 66,
+        jobId: 'scout',
+        titleId: 'hunter',
+        stats: {
+          STR: 110,
+          VIT: 120,
+          AGI: 270,
+          INT: 80,
+          PER: 85,
+          SEN: 125
+        },
+        baseEquipmentItemIds: [],
+        skillIds: ['basic-attack', 'basic-focus-slash', 'skill-scout-strike', 'skill-scout-mark']
+      },
+      {
+        name: '디에고 라미레스',
+        rank: 'A',
+        powerRange: [1200, 1800],
+        growthRange: [1.005, 1.02],
+        level: 64,
+        jobId: 'warrior',
+        titleId: 'hunter',
+        stats: {
+          STR: 275,
+          VIT: 215,
+          AGI: 105,
+          INT: 45,
+          PER: 95,
+          SEN: 35
+        },
+        baseEquipmentItemIds: [],
+        skillIds: ['basic-attack', 'basic-focus-slash', 'skill-warrior-strike', 'skill-warrior-earthquake']
+      },
+      {
+        name: '이사벨라 몬테스',
+        rank: 'A',
+        powerRange: [1200, 1800],
+        growthRange: [1.005, 1.02],
+        level: 61,
+        jobId: 'tactician',
+        titleId: 'hunter',
+        stats: {
+          STR: 70,
+          VIT: 115,
+          AGI: 105,
+          INT: 235,
+          PER: 155,
+          SEN: 50
+        },
+        baseEquipmentItemIds: [],
+        skillIds: ['basic-attack', 'skill-tactician-analyze', 'skill-tactician-command']
+      },
+      {
+        name: '라파엘 토레스',
+        rank: 'A',
+        powerRange: [1200, 1800],
+        growthRange: [1.005, 1.02],
+        level: 59,
+        jobId: 'guardian',
+        titleId: 'hunter',
+        stats: {
+          STR: 155,
+          VIT: 260,
+          AGI: 70,
+          INT: 55,
+          PER: 150,
+          SEN: 40
+        },
+        baseEquipmentItemIds: [],
+        skillIds: ['basic-attack', 'basic-guard-stance', 'skill-guardian-bash', 'skill-guardian-shield']
+      },
+      {
+        name: '루시아 알바레스',
+        rank: 'A',
+        powerRange: [1200, 1800],
+        growthRange: [1.005, 1.02],
+        level: 55,
+        jobId: 'mage',
+        titleId: 'hunter',
+        stats: {
+          STR: 45,
+          VIT: 100,
+          AGI: 90,
+          INT: 240,
+          PER: 75,
+          SEN: 140
+        },
+        baseEquipmentItemIds: [],
+        skillIds: ['basic-attack', 'skill-mage-burst']
+      }
     ],
     pool: {
       countARange: [3, 6],
@@ -3811,10 +4522,272 @@ export const REGION_HUNTER_BASES: RegionSeedBase[] = [
   {
     regionId: 'uk',
     namedHunters: [
-      { name: '크리스토퍼 리드', rank: 'National', powerRange: [3300, 4000], growthRange: [1.02, 1.045] },
-      { name: '조지 해ريس', rank: 'S', powerRange: [1950, 2250], growthRange: [1.015, 1.03] },
-      { name: '아서 펜드래건', rank: 'S', powerRange: [1750, 2150], growthRange: [1.015, 1.04] },
-      { name: '리처드 하트', rank: 'S', powerRange: [1500, 1850], growthRange: [1.01, 1.03] }
+      {
+        name: '크리스토퍼 리드',
+        rank: 'National',
+        powerRange: [3300, 4000],
+        growthRange: [1.02, 1.045],
+        level: 99,
+        jobId: 'guardian',
+        titleId: 'national-level-hunter',
+        stats: {
+          STR: 315,
+          VIT: 380,
+          AGI: 160,
+          INT: 180,
+          PER: 280,
+          SEN: 215
+        },
+        baseEquipmentItemIds: [],
+        skillIds: ['basic-attack', 'basic-guard-stance', 'skill-guardian-bash', 'skill-guardian-shield', 'skill-guardian-stance']
+      },
+      {
+        name: '조지 해리스',
+        rank: 'S',
+        powerRange: [1200, 1800],
+        growthRange: [1.005, 1.02],
+        level: 87,
+        jobId: 'mage',
+        titleId: 'veteran-hunter',
+        stats: {
+          STR: 75,
+          VIT: 160,
+          AGI: 125,
+          INT: 380,
+          PER: 175,
+          SEN: 235
+        },
+        baseEquipmentItemIds: [],
+        skillIds: ['basic-attack', 'skill-mage-bolt', 'skill-mage-burst', 'skill-mage-storm']
+      },
+      {
+        name: '아서 펜드래건',
+        rank: 'S',
+        powerRange: [1750, 2150],
+        growthRange: [1.015, 1.04],
+        level: 86,
+        jobId: 'swordsman',
+        titleId: 'veteran-hunter',
+        stats: {
+          STR: 325,
+          VIT: 210,
+          AGI: 270,
+          INT: 90,
+          PER: 145,
+          SEN: 130
+        },
+        baseEquipmentItemIds: [],
+        skillIds: ['basic-attack', 'basic-focus-slash', 'skill-swordsman-flash', 'skill-swordsman-combo', 'skill-swordsman-wave']
+      },
+      {
+        name: '리처드 하트',
+        rank: 'S',
+        powerRange: [1500, 1850],
+        growthRange: [1.01, 1.03],
+        level: 80,
+        jobId: 'tactician',
+        titleId: 'veteran-hunter',
+        stats: {
+          STR: 105,
+          VIT: 155,
+          AGI: 125,
+          INT: 300,
+          PER: 240,
+          SEN: 125
+        },
+        baseEquipmentItemIds: [],
+        skillIds: ['basic-attack', 'skill-tactician-analyze', 'skill-tactician-command', 'skill-tactician-analyze-pulse']
+      },
+      {
+        name: '엘리노어 애쉬크로프트',
+        rank: 'A',
+        powerRange: [1200, 1800],
+        growthRange: [1.005, 1.02],
+        level: 69,
+        jobId: 'mage',
+        titleId: 'hunter',
+        stats: {
+          STR: 55,
+          VIT: 120,
+          AGI: 110,
+          INT: 300,
+          PER: 90,
+          SEN: 165
+        },
+        baseEquipmentItemIds: [],
+        skillIds: ['basic-attack', 'skill-mage-bolt', 'skill-mage-burst']
+      },
+      {
+        name: '윌리엄 블랙우드',
+        rank: 'A',
+        powerRange: [1200, 1800],
+        growthRange: [1.005, 1.02],
+        level: 68,
+        jobId: 'guardian',
+        titleId: 'hunter',
+        stats: {
+          STR: 155,
+          VIT: 285,
+          AGI: 80,
+          INT: 130,
+          PER: 175,
+          SEN: 45
+        },
+        baseEquipmentItemIds: [],
+        skillIds: ['basic-attack', 'basic-guard-stance', 'skill-guardian-bash', 'skill-guardian-shield']
+      },
+      {
+        name: '에드워드 랭커스터',
+        rank: 'A',
+        powerRange: [1200, 1800],
+        growthRange: [1.005, 1.02],
+        level: 66,
+        jobId: 'swordsman',
+        titleId: 'hunter',
+        stats: {
+          STR: 270,
+          VIT: 160,
+          AGI: 235,
+          INT: 60,
+          PER: 80,
+          SEN: 45
+        },
+        baseEquipmentItemIds: [],
+        skillIds: ['basic-attack', 'basic-focus-slash', 'skill-swordsman-flash', 'skill-swordsman-combo']
+      },
+      {
+        name: '샬럿 윈저',
+        rank: 'A',
+        powerRange: [1200, 1800],
+        growthRange: [1.005, 1.02],
+        level: 65,
+        jobId: 'tactician',
+        titleId: 'hunter',
+        stats: {
+          STR: 75,
+          VIT: 125,
+          AGI: 110,
+          INT: 260,
+          PER: 170,
+          SEN: 60
+        },
+        baseEquipmentItemIds: [],
+        skillIds: ['basic-attack', 'skill-tactician-analyze', 'skill-tactician-command']
+      },
+      {
+        name: '헨리 브래드포드',
+        rank: 'A',
+        powerRange: [1200, 1800],
+        growthRange: [1.005, 1.02],
+        level: 64,
+        jobId: 'guardian',
+        titleId: 'hunter',
+        stats: {
+          STR: 170,
+          VIT: 290,
+          AGI: 75,
+          INT: 65,
+          PER: 170,
+          SEN: 45
+        },
+        baseEquipmentItemIds: [],
+        skillIds: ['basic-attack', 'basic-guard-stance', 'skill-guardian-bash', 'skill-guardian-shield']
+      },
+      {
+        name: '빅토리아 헤일',
+        rank: 'A',
+        powerRange: [1200, 1800],
+        growthRange: [1.005, 1.02],
+        level: 62,
+        jobId: 'scout',
+        titleId: 'hunter',
+        stats: {
+          STR: 110,
+          VIT: 120,
+          AGI: 270,
+          INT: 80,
+          PER: 85,
+          SEN: 125
+        },
+        baseEquipmentItemIds: [],
+        skillIds: ['basic-attack', 'basic-focus-slash', 'skill-scout-strike', 'skill-scout-mark']
+      },
+      {
+        name: '올리버 켄싱턴',
+        rank: 'A',
+        powerRange: [1200, 1800],
+        growthRange: [1.005, 1.02],
+        level: 61,
+        jobId: 'mage',
+        titleId: 'hunter',
+        stats: {
+          STR: 50,
+          VIT: 110,
+          AGI: 100,
+          INT: 275,
+          PER: 85,
+          SEN: 150
+        },
+        baseEquipmentItemIds: [],
+        skillIds: ['basic-attack', 'skill-mage-bolt', 'skill-mage-burst']
+      },
+      {
+        name: '아멜리아 로즈웰',
+        rank: 'A',
+        powerRange: [1200, 1800],
+        growthRange: [1.005, 1.02],
+        level: 59,
+        jobId: 'scout',
+        titleId: 'hunter',
+        stats: {
+          STR: 100,
+          VIT: 115,
+          AGI: 255,
+          INT: 80,
+          PER: 80,
+          SEN: 125
+        },
+        baseEquipmentItemIds: [],
+        skillIds: ['basic-attack', 'basic-focus-slash', 'skill-scout-strike']
+      },
+      {
+        name: '토마스 크롬웰',
+        rank: 'A',
+        powerRange: [1200, 1800],
+        growthRange: [1.005, 1.02],
+        level: 57,
+        jobId: 'warrior',
+        titleId: 'hunter',
+        stats: {
+          STR: 265,
+          VIT: 205,
+          AGI: 100,
+          INT: 45,
+          PER: 90,
+          SEN: 35
+        },
+        baseEquipmentItemIds: [],
+        skillIds: ['basic-attack', 'basic-focus-slash', 'skill-warrior-strike', 'skill-warrior-earthquake']
+      },
+      {
+        name: '베아트리스 모건',
+        rank: 'A',
+        powerRange: [1200, 1800],
+        growthRange: [1.005, 1.02],
+        level: 55,
+        jobId: 'guardian',
+        titleId: 'hunter',
+        stats: {
+          STR: 150,
+          VIT: 255,
+          AGI: 70,
+          INT: 60,
+          PER: 150,
+          SEN: 40
+        },
+        baseEquipmentItemIds: [],
+        skillIds: ['basic-attack', 'basic-guard-stance', 'skill-guardian-bash', 'skill-guardian-shield']
+      }
     ],
     pool: {
       countARange: [8, 12],
@@ -3828,10 +4801,234 @@ export const REGION_HUNTER_BASES: RegionSeedBase[] = [
   {
     regionId: 'de',
     namedHunters: [
-      { name: '레너트 니어만', rank: 'S', powerRange: [2000, 2400], growthRange: [1.015, 1.035] },
-      { name: '한스 뮐러', rank: 'S', powerRange: [1600, 1950], growthRange: [1.01, 1.03] },
-      { name: '디터 슈미트', rank: 'S', powerRange: [1400, 1650], growthRange: [1.01, 1.025] },
-      { name: '프란츠 바그너', rank: 'S', powerRange: [1200, 1550], growthRange: [1.015, 1.03] }
+      {
+        name: '레너트 니어만',
+        rank: 'S',
+        powerRange: [2000, 2400],
+        growthRange: [1.015, 1.035],
+        level: 88,
+        jobId: 'guardian',
+        titleId: 'veteran-hunter',
+        stats: {
+          STR: 245,
+          VIT: 335,
+          AGI: 115,
+          INT: 155,
+          PER: 230,
+          SEN: 120
+        },
+        baseEquipmentItemIds: [],
+        skillIds: ['basic-attack', 'basic-guard-stance', 'skill-guardian-bash', 'skill-guardian-shield', 'skill-guardian-stance']
+      },
+      {
+        name: '한스 뮐러',
+        rank: 'S',
+        powerRange: [1600, 1950],
+        growthRange: [1.01, 1.03],
+        level: 84,
+        jobId: 'guardian',
+        titleId: 'veteran-hunter',
+        stats: {
+          STR: 225,
+          VIT: 345,
+          AGI: 95,
+          INT: 95,
+          PER: 245,
+          SEN: 105
+        },
+        baseEquipmentItemIds: [],
+        skillIds: ['basic-attack', 'basic-guard-stance', 'skill-guardian-bash', 'skill-guardian-shield', 'skill-guardian-stance']
+      },
+      {
+        name: '디터 슈미트',
+        rank: 'S',
+        powerRange: [1400, 1650],
+        growthRange: [1.01, 1.025],
+        level: 80,
+        jobId: 'tactician',
+        titleId: 'veteran-hunter',
+        stats: {
+          STR: 105,
+          VIT: 155,
+          AGI: 120,
+          INT: 295,
+          PER: 245,
+          SEN: 125
+        },
+        baseEquipmentItemIds: [],
+        skillIds: ['basic-attack', 'skill-tactician-analyze', 'skill-tactician-command', 'skill-tactician-analyze-pulse']
+      },
+      {
+        name: '프란츠 바그너',
+        rank: 'S',
+        powerRange: [1200, 1550],
+        growthRange: [1.015, 1.03],
+        level: 78,
+        jobId: 'swordsman',
+        titleId: 'veteran-hunter',
+        stats: {
+          STR: 275,
+          VIT: 165,
+          AGI: 245,
+          INT: 80,
+          PER: 105,
+          SEN: 110
+        },
+        baseEquipmentItemIds: [],
+        skillIds: ['basic-attack', 'basic-focus-slash', 'skill-swordsman-flash', 'skill-swordsman-combo', 'skill-swordsman-wave']
+      },
+      {
+        name: '클라우스 베커',
+        rank: 'A',
+        powerRange: [1200, 1800],
+        growthRange: [1.005, 1.02],
+        level: 68,
+        jobId: 'guardian',
+        titleId: 'hunter',
+        stats: {
+          STR: 175,
+          VIT: 300,
+          AGI: 75,
+          INT: 65,
+          PER: 180,
+          SEN: 45
+        },
+        baseEquipmentItemIds: [],
+        skillIds: ['basic-attack', 'basic-guard-stance', 'skill-guardian-bash', 'skill-guardian-shield']
+      },
+      {
+        name: '마티아스 슈나이더',
+        rank: 'A',
+        powerRange: [1200, 1800],
+        growthRange: [1.005, 1.02],
+        level: 67,
+        jobId: 'guardian',
+        titleId: 'hunter',
+        stats: {
+          STR: 150,
+          VIT: 270,
+          AGI: 80,
+          INT: 125,
+          PER: 170,
+          SEN: 45
+        },
+        baseEquipmentItemIds: [],
+        skillIds: ['basic-attack', 'basic-guard-stance', 'skill-guardian-bash', 'skill-guardian-shield']
+      },
+      {
+        name: '엘리자베트 크라우스',
+        rank: 'A',
+        powerRange: [1200, 1800],
+        growthRange: [1.005, 1.02],
+        level: 66,
+        jobId: 'mage',
+        titleId: 'hunter',
+        stats: {
+          STR: 55,
+          VIT: 120,
+          AGI: 105,
+          INT: 295,
+          PER: 90,
+          SEN: 155
+        },
+        baseEquipmentItemIds: [],
+        skillIds: ['basic-attack', 'skill-mage-bolt', 'skill-mage-burst']
+      },
+      {
+        name: '펠릭스 호프만',
+        rank: 'A',
+        powerRange: [1200, 1800],
+        growthRange: [1.005, 1.02],
+        level: 64,
+        jobId: 'tactician',
+        titleId: 'hunter',
+        stats: {
+          STR: 80,
+          VIT: 130,
+          AGI: 110,
+          INT: 255,
+          PER: 175,
+          SEN: 50
+        },
+        baseEquipmentItemIds: [],
+        skillIds: ['basic-attack', 'skill-tactician-analyze', 'skill-tactician-command']
+      },
+      {
+        name: '요나스 리히터',
+        rank: 'A',
+        powerRange: [1200, 1800],
+        growthRange: [1.005, 1.02],
+        level: 62,
+        jobId: 'warrior',
+        titleId: 'hunter',
+        stats: {
+          STR: 280,
+          VIT: 220,
+          AGI: 100,
+          INT: 50,
+          PER: 105,
+          SEN: 35
+        },
+        baseEquipmentItemIds: [],
+        skillIds: ['basic-attack', 'basic-focus-slash', 'skill-warrior-strike', 'skill-warrior-earthquake']
+      },
+      {
+        name: '레나 바이스',
+        rank: 'A',
+        powerRange: [1200, 1800],
+        growthRange: [1.005, 1.02],
+        level: 60,
+        jobId: 'scout',
+        titleId: 'hunter',
+        stats: {
+          STR: 105,
+          VIT: 115,
+          AGI: 260,
+          INT: 80,
+          PER: 85,
+          SEN: 125
+        },
+        baseEquipmentItemIds: [],
+        skillIds: ['basic-attack', 'basic-focus-slash', 'skill-scout-strike', 'skill-scout-mark']
+      },
+      {
+        name: '오스카 브란트',
+        rank: 'A',
+        powerRange: [1200, 1800],
+        growthRange: [1.005, 1.02],
+        level: 58,
+        jobId: 'swordsman',
+        titleId: 'hunter',
+        stats: {
+          STR: 250,
+          VIT: 150,
+          AGI: 220,
+          INT: 55,
+          PER: 75,
+          SEN: 35
+        },
+        baseEquipmentItemIds: [],
+        skillIds: ['basic-attack', 'basic-focus-slash', 'skill-swordsman-flash', 'skill-swordsman-combo']
+      },
+      {
+        name: '카타리나 볼프',
+        rank: 'A',
+        powerRange: [1200, 1800],
+        growthRange: [1.005, 1.02],
+        level: 55,
+        jobId: 'mage',
+        titleId: 'hunter',
+        stats: {
+          STR: 45,
+          VIT: 105,
+          AGI: 90,
+          INT: 245,
+          PER: 80,
+          SEN: 145
+        },
+        baseEquipmentItemIds: [],
+        skillIds: ['basic-attack', 'skill-mage-burst']
+      }
     ],
     pool: {
       countARange: [6, 10],
@@ -3845,10 +5042,234 @@ export const REGION_HUNTER_BASES: RegionSeedBase[] = [
   {
     regionId: 'fr',
     namedHunters: [
-      { name: '장 로랑', rank: 'S', powerRange: [1950, 2350], growthRange: [1.015, 1.04] },
-      { name: '피에르 뒤퐁', rank: 'S', powerRange: [1550, 1850], growthRange: [1.01, 1.03] },
-      { name: '루카스 모로', rank: 'S', powerRange: [1350, 1600], growthRange: [1.01, 1.025] },
-      { name: '샤를로트 뒤부아', rank: 'S', powerRange: [1200, 1450], growthRange: [1.015, 1.03] }
+      {
+        name: '장 로랑',
+        rank: 'S',
+        powerRange: [1950, 2350],
+        growthRange: [1.015, 1.04],
+        level: 87,
+        jobId: 'swordsman',
+        titleId: 'veteran-hunter',
+        stats: {
+          STR: 315,
+          VIT: 190,
+          AGI: 285,
+          INT: 95,
+          PER: 125,
+          SEN: 140
+        },
+        baseEquipmentItemIds: [],
+        skillIds: ['basic-attack', 'basic-focus-slash', 'skill-swordsman-flash', 'skill-swordsman-combo', 'skill-swordsman-wave']
+      },
+      {
+        name: '피에르 뒤퐁',
+        rank: 'S',
+        powerRange: [1550, 1850],
+        growthRange: [1.01, 1.03],
+        level: 82,
+        jobId: 'mage',
+        titleId: 'veteran-hunter',
+        stats: {
+          STR: 70,
+          VIT: 145,
+          AGI: 130,
+          INT: 350,
+          PER: 155,
+          SEN: 210
+        },
+        baseEquipmentItemIds: [],
+        skillIds: ['basic-attack', 'skill-mage-bolt', 'skill-mage-burst', 'skill-mage-storm']
+      },
+      {
+        name: '루카스 모로',
+        rank: 'S',
+        powerRange: [1350, 1600],
+        growthRange: [1.01, 1.025],
+        level: 79,
+        jobId: 'scout',
+        titleId: 'veteran-hunter',
+        stats: {
+          STR: 150,
+          VIT: 145,
+          AGI: 305,
+          INT: 90,
+          PER: 120,
+          SEN: 180
+        },
+        baseEquipmentItemIds: [],
+        skillIds: ['basic-attack', 'basic-focus-slash', 'skill-scout-strike', 'skill-scout-mark', 'skill-scout-step']
+      },
+      {
+        name: '샤를로트 뒤부아',
+        rank: 'S',
+        powerRange: [1200, 1450],
+        growthRange: [1.015, 1.03],
+        level: 76,
+        jobId: 'tactician',
+        titleId: 'veteran-hunter',
+        stats: {
+          STR: 95,
+          VIT: 140,
+          AGI: 120,
+          INT: 275,
+          PER: 215,
+          SEN: 105
+        },
+        baseEquipmentItemIds: [],
+        skillIds: ['basic-attack', 'skill-tactician-analyze', 'skill-tactician-command', 'skill-tactician-analyze-pulse']
+      },
+      {
+        name: '아멜리 베르나르',
+        rank: 'A',
+        powerRange: [1200, 1800],
+        growthRange: [1.005, 1.02],
+        level: 68,
+        jobId: 'mage',
+        titleId: 'hunter',
+        stats: {
+          STR: 55,
+          VIT: 115,
+          AGI: 110,
+          INT: 295,
+          PER: 90,
+          SEN: 160
+        },
+        baseEquipmentItemIds: [],
+        skillIds: ['basic-attack', 'skill-mage-bolt', 'skill-mage-burst']
+      },
+      {
+        name: '마티외 가르니에',
+        rank: 'A',
+        powerRange: [1200, 1800],
+        growthRange: [1.005, 1.02],
+        level: 67,
+        jobId: 'swordsman',
+        titleId: 'hunter',
+        stats: {
+          STR: 270,
+          VIT: 155,
+          AGI: 240,
+          INT: 60,
+          PER: 75,
+          SEN: 40
+        },
+        baseEquipmentItemIds: [],
+        skillIds: ['basic-attack', 'basic-focus-slash', 'skill-swordsman-flash', 'skill-swordsman-combo']
+      },
+      {
+        name: '클레르 보몽',
+        rank: 'A',
+        powerRange: [1200, 1800],
+        growthRange: [1.005, 1.02],
+        level: 65,
+        jobId: 'scout',
+        titleId: 'hunter',
+        stats: {
+          STR: 110,
+          VIT: 120,
+          AGI: 270,
+          INT: 80,
+          PER: 85,
+          SEN: 125
+        },
+        baseEquipmentItemIds: [],
+        skillIds: ['basic-attack', 'basic-focus-slash', 'skill-scout-strike', 'skill-scout-mark']
+      },
+      {
+        name: '에티엔 르페브르',
+        rank: 'A',
+        powerRange: [1200, 1800],
+        growthRange: [1.005, 1.02],
+        level: 64,
+        jobId: 'guardian',
+        titleId: 'hunter',
+        stats: {
+          STR: 150,
+          VIT: 275,
+          AGI: 80,
+          INT: 125,
+          PER: 170,
+          SEN: 45
+        },
+        baseEquipmentItemIds: [],
+        skillIds: ['basic-attack', 'basic-guard-stance', 'skill-guardian-bash', 'skill-guardian-shield']
+      },
+      {
+        name: '줄리앙 포레',
+        rank: 'A',
+        powerRange: [1200, 1800],
+        growthRange: [1.005, 1.02],
+        level: 62,
+        jobId: 'tactician',
+        titleId: 'hunter',
+        stats: {
+          STR: 75,
+          VIT: 120,
+          AGI: 110,
+          INT: 245,
+          PER: 165,
+          SEN: 55
+        },
+        baseEquipmentItemIds: [],
+        skillIds: ['basic-attack', 'skill-tactician-analyze', 'skill-tactician-command']
+      },
+      {
+        name: '엘로디 마르탱',
+        rank: 'A',
+        powerRange: [1200, 1800],
+        growthRange: [1.005, 1.02],
+        level: 60,
+        jobId: 'guardian',
+        titleId: 'hunter',
+        stats: {
+          STR: 160,
+          VIT: 270,
+          AGI: 70,
+          INT: 60,
+          PER: 155,
+          SEN: 40
+        },
+        baseEquipmentItemIds: [],
+        skillIds: ['basic-attack', 'basic-guard-stance', 'skill-guardian-bash', 'skill-guardian-shield']
+      },
+      {
+        name: '니콜라 루셀',
+        rank: 'A',
+        powerRange: [1200, 1800],
+        growthRange: [1.005, 1.02],
+        level: 58,
+        jobId: 'mage',
+        titleId: 'hunter',
+        stats: {
+          STR: 45,
+          VIT: 105,
+          AGI: 95,
+          INT: 260,
+          PER: 80,
+          SEN: 145
+        },
+        baseEquipmentItemIds: [],
+        skillIds: ['basic-attack', 'skill-mage-burst']
+      },
+      {
+        name: '세바스티앙 카론',
+        rank: 'A',
+        powerRange: [1200, 1800],
+        growthRange: [1.005, 1.02],
+        level: 55,
+        jobId: 'warrior',
+        titleId: 'hunter',
+        stats: {
+          STR: 255,
+          VIT: 200,
+          AGI: 100,
+          INT: 45,
+          PER: 90,
+          SEN: 35
+        },
+        baseEquipmentItemIds: [],
+        skillIds: ['basic-attack', 'basic-focus-slash', 'skill-warrior-strike']
+      }
     ],
     pool: {
       countARange: [6, 9],
@@ -3862,9 +5283,177 @@ export const REGION_HUNTER_BASES: RegionSeedBase[] = [
   {
     regionId: 'it',
     namedHunters: [
-      { name: '페데리코 로시', rank: 'S', powerRange: [1600, 1950], growthRange: [1.01, 1.03] },
-      { name: '조반니 비안키', rank: 'S', powerRange: [1300, 1550], growthRange: [1.01, 1.025] },
-      { name: '소피아 리치', rank: 'S', powerRange: [1100, 1350], growthRange: [1.015, 1.03] }
+      {
+        name: '페데리코 로시',
+        rank: 'S',
+        powerRange: [1600, 1950],
+        growthRange: [1.01, 1.03],
+        level: 80,
+        jobId: 'swordsman',
+        titleId: 'veteran-hunter',
+        stats: {
+          STR: 285,
+          VIT: 170,
+          AGI: 260,
+          INT: 85,
+          PER: 110,
+          SEN: 120
+        },
+        baseEquipmentItemIds: [],
+        skillIds: ['basic-attack', 'basic-focus-slash', 'skill-swordsman-flash', 'skill-swordsman-combo', 'skill-swordsman-wave']
+      },
+      {
+        name: '조반니 비안키',
+        rank: 'S',
+        powerRange: [1300, 1550],
+        growthRange: [1.01, 1.025],
+        level: 76,
+        jobId: 'guardian',
+        titleId: 'veteran-hunter',
+        stats: {
+          STR: 190,
+          VIT: 285,
+          AGI: 95,
+          INT: 130,
+          PER: 205,
+          SEN: 95
+        },
+        baseEquipmentItemIds: [],
+        skillIds: ['basic-attack', 'basic-guard-stance', 'skill-guardian-bash', 'skill-guardian-shield', 'skill-guardian-stance']
+      },
+      {
+        name: '소피아 리치',
+        rank: 'S',
+        powerRange: [1100, 1350],
+        growthRange: [1.015, 1.03],
+        level: 73,
+        jobId: 'mage',
+        titleId: 'veteran-hunter',
+        stats: {
+          STR: 65,
+          VIT: 130,
+          AGI: 120,
+          INT: 315,
+          PER: 130,
+          SEN: 175
+        },
+        baseEquipmentItemIds: [],
+        skillIds: ['basic-attack', 'skill-mage-bolt', 'skill-mage-burst', 'skill-mage-storm']
+      },
+      {
+        name: '마르코 콘티',
+        rank: 'A',
+        powerRange: [1200, 1800],
+        growthRange: [1.005, 1.02],
+        level: 66,
+        jobId: 'swordsman',
+        titleId: 'hunter',
+        stats: {
+          STR: 255,
+          VIT: 150,
+          AGI: 230,
+          INT: 55,
+          PER: 70,
+          SEN: 40
+        },
+        baseEquipmentItemIds: [],
+        skillIds: ['basic-attack', 'basic-focus-slash', 'skill-swordsman-flash', 'skill-swordsman-combo']
+      },
+      {
+        name: '엘레나 페라리',
+        rank: 'A',
+        powerRange: [1200, 1800],
+        growthRange: [1.005, 1.02],
+        level: 64,
+        jobId: 'mage',
+        titleId: 'hunter',
+        stats: {
+          STR: 50,
+          VIT: 110,
+          AGI: 100,
+          INT: 280,
+          PER: 85,
+          SEN: 150
+        },
+        baseEquipmentItemIds: [],
+        skillIds: ['basic-attack', 'skill-mage-bolt', 'skill-mage-burst']
+      },
+      {
+        name: '루카 마리노',
+        rank: 'A',
+        powerRange: [1200, 1800],
+        growthRange: [1.005, 1.02],
+        level: 62,
+        jobId: 'scout',
+        titleId: 'hunter',
+        stats: {
+          STR: 110,
+          VIT: 115,
+          AGI: 260,
+          INT: 75,
+          PER: 80,
+          SEN: 120
+        },
+        baseEquipmentItemIds: [],
+        skillIds: ['basic-attack', 'basic-focus-slash', 'skill-scout-strike', 'skill-scout-mark']
+      },
+      {
+        name: '비토리아 그레코',
+        rank: 'A',
+        powerRange: [1200, 1800],
+        growthRange: [1.005, 1.02],
+        level: 60,
+        jobId: 'tactician',
+        titleId: 'hunter',
+        stats: {
+          STR: 70,
+          VIT: 115,
+          AGI: 105,
+          INT: 235,
+          PER: 155,
+          SEN: 50
+        },
+        baseEquipmentItemIds: [],
+        skillIds: ['basic-attack', 'skill-tactician-analyze', 'skill-tactician-command']
+      },
+      {
+        name: '안드레아 로마노',
+        rank: 'A',
+        powerRange: [1200, 1800],
+        growthRange: [1.005, 1.02],
+        level: 58,
+        jobId: 'guardian',
+        titleId: 'hunter',
+        stats: {
+          STR: 155,
+          VIT: 260,
+          AGI: 70,
+          INT: 55,
+          PER: 150,
+          SEN: 40
+        },
+        baseEquipmentItemIds: [],
+        skillIds: ['basic-attack', 'basic-guard-stance', 'skill-guardian-bash', 'skill-guardian-shield']
+      },
+      {
+        name: '카밀라 데 루카',
+        rank: 'A',
+        powerRange: [1200, 1800],
+        growthRange: [1.005, 1.02],
+        level: 55,
+        jobId: 'guardian',
+        titleId: 'hunter',
+        stats: {
+          STR: 130,
+          VIT: 230,
+          AGI: 75,
+          INT: 105,
+          PER: 145,
+          SEN: 40
+        },
+        baseEquipmentItemIds: [],
+        skillIds: ['basic-attack', 'basic-guard-stance', 'skill-guardian-bash', 'skill-guardian-shield']
+      }
     ],
     pool: {
       countARange: [4, 7],
@@ -3878,11 +5467,348 @@ export const REGION_HUNTER_BASES: RegionSeedBase[] = [
   {
     regionId: 'cn',
     namedHunters: [
-      { name: '류지강', rank: 'National', powerRange: [3800, 4500], growthRange: [1.02, 1.05] },
-      { name: '장웨이', rank: 'S', powerRange: [2100, 2450], growthRange: [1.015, 1.035] },
-      { name: '리밍', rank: 'S', powerRange: [1850, 2200], growthRange: [1.015, 1.04] },
-      { name: '왕판', rank: 'S', powerRange: [1700, 2000], growthRange: [1.01, 1.03] },
-      { name: '첸 시우', rank: 'S', powerRange: [1500, 1850], growthRange: [1.02, 1.04] }
+      {
+        name: '류지강',
+        rank: 'National',
+        powerRange: [3800, 4500],
+        growthRange: [1.02, 1.05],
+        level: 100,
+        jobId: 'warrior',
+        titleId: 'national-level-hunter',
+        stats: {
+          STR: 390,
+          VIT: 330,
+          AGI: 190,
+          INT: 120,
+          PER: 270,
+          SEN: 220
+        },
+        baseEquipmentItemIds: [],
+        skillIds: ['basic-attack', 'basic-focus-slash', 'skill-warrior-strike', 'skill-warrior-earthquake', 'skill-warrior-shout']
+      },
+      {
+        name: '장웨이',
+        rank: 'S',
+        powerRange: [2100, 2450],
+        growthRange: [1.015, 1.035],
+        level: 89,
+        jobId: 'swordsman',
+        titleId: 'veteran-hunter',
+        stats: {
+          STR: 330,
+          VIT: 210,
+          AGI: 270,
+          INT: 80,
+          PER: 160,
+          SEN: 130
+        },
+        baseEquipmentItemIds: [],
+        skillIds: ['basic-attack', 'basic-focus-slash', 'skill-swordsman-flash', 'skill-swordsman-combo', 'skill-swordsman-wave']
+      },
+      {
+        name: '리밍',
+        rank: 'S',
+        powerRange: [1850, 2200],
+        growthRange: [1.015, 1.04],
+        level: 86,
+        jobId: 'mage',
+        titleId: 'veteran-hunter',
+        stats: {
+          STR: 75,
+          VIT: 150,
+          AGI: 130,
+          INT: 370,
+          PER: 160,
+          SEN: 245
+        },
+        baseEquipmentItemIds: [],
+        skillIds: ['basic-attack', 'skill-mage-bolt', 'skill-mage-burst', 'skill-mage-storm']
+      },
+      {
+        name: '왕판',
+        rank: 'S',
+        powerRange: [1700, 2000],
+        growthRange: [1.01, 1.03],
+        level: 83,
+        jobId: 'guardian',
+        titleId: 'veteran-hunter',
+        stats: {
+          STR: 215,
+          VIT: 345,
+          AGI: 95,
+          INT: 90,
+          PER: 260,
+          SEN: 125
+        },
+        baseEquipmentItemIds: [],
+        skillIds: ['basic-attack', 'basic-guard-stance', 'skill-guardian-bash', 'skill-guardian-shield', 'skill-guardian-stance']
+      },
+      {
+        name: '첸 시우',
+        rank: 'S',
+        powerRange: [1500, 1850],
+        growthRange: [1.02, 1.04],
+        level: 80,
+        jobId: 'scout',
+        titleId: 'veteran-hunter',
+        stats: {
+          STR: 145,
+          VIT: 150,
+          AGI: 330,
+          INT: 115,
+          PER: 130,
+          SEN: 210
+        },
+        baseEquipmentItemIds: [],
+        skillIds: ['basic-attack', 'basic-focus-slash', 'skill-scout-strike', 'skill-scout-mark', 'skill-scout-step']
+      },
+      {
+        name: '선위',
+        rank: 'A',
+        powerRange: [1200, 1800],
+        growthRange: [1.005, 1.02],
+        level: 69,
+        jobId: 'warrior',
+        titleId: 'hunter',
+        stats: {
+          STR: 285,
+          VIT: 230,
+          AGI: 120,
+          INT: 55,
+          PER: 95,
+          SEN: 45
+        },
+        baseEquipmentItemIds: [],
+        skillIds: ['basic-attack', 'basic-focus-slash', 'skill-warrior-strike', 'skill-warrior-earthquake']
+      },
+      {
+        name: '린샤오란',
+        rank: 'A',
+        powerRange: [1200, 1800],
+        growthRange: [1.005, 1.02],
+        level: 68,
+        jobId: 'mage',
+        titleId: 'hunter',
+        stats: {
+          STR: 55,
+          VIT: 120,
+          AGI: 110,
+          INT: 295,
+          PER: 85,
+          SEN: 155
+        },
+        baseEquipmentItemIds: [],
+        skillIds: ['basic-attack', 'skill-mage-bolt', 'skill-mage-burst']
+      },
+      {
+        name: '자오톈위',
+        rank: 'A',
+        powerRange: [1200, 1800],
+        growthRange: [1.005, 1.02],
+        level: 67,
+        jobId: 'guardian',
+        titleId: 'hunter',
+        stats: {
+          STR: 175,
+          VIT: 300,
+          AGI: 75,
+          INT: 60,
+          PER: 170,
+          SEN: 40
+        },
+        baseEquipmentItemIds: [],
+        skillIds: ['basic-attack', 'basic-guard-stance', 'skill-guardian-bash', 'skill-guardian-shield']
+      },
+      {
+        name: '허란',
+        rank: 'A',
+        powerRange: [1200, 1800],
+        growthRange: [1.005, 1.02],
+        level: 66,
+        jobId: 'scout',
+        titleId: 'hunter',
+        stats: {
+          STR: 115,
+          VIT: 125,
+          AGI: 280,
+          INT: 80,
+          PER: 90,
+          SEN: 120
+        },
+        baseEquipmentItemIds: [],
+        skillIds: ['basic-attack', 'basic-focus-slash', 'skill-scout-strike', 'skill-scout-mark']
+      },
+      {
+        name: '우진하이',
+        rank: 'A',
+        powerRange: [1200, 1800],
+        growthRange: [1.005, 1.02],
+        level: 65,
+        jobId: 'tactician',
+        titleId: 'hunter',
+        stats: {
+          STR: 85,
+          VIT: 135,
+          AGI: 115,
+          INT: 255,
+          PER: 165,
+          SEN: 55
+        },
+        baseEquipmentItemIds: [],
+        skillIds: ['basic-attack', 'skill-tactician-analyze', 'skill-tactician-command']
+      },
+      {
+        name: '마오칭',
+        rank: 'A',
+        powerRange: [1200, 1800],
+        growthRange: [1.005, 1.02],
+        level: 64,
+        jobId: 'swordsman',
+        titleId: 'hunter',
+        stats: {
+          STR: 250,
+          VIT: 155,
+          AGI: 235,
+          INT: 60,
+          PER: 75,
+          SEN: 35
+        },
+        baseEquipmentItemIds: [],
+        skillIds: ['basic-attack', 'basic-focus-slash', 'skill-swordsman-flash', 'skill-swordsman-combo']
+      },
+      {
+        name: '두웨이',
+        rank: 'A',
+        powerRange: [1200, 1800],
+        growthRange: [1.005, 1.02],
+        level: 63,
+        jobId: 'warrior',
+        titleId: 'hunter',
+        stats: {
+          STR: 270,
+          VIT: 215,
+          AGI: 105,
+          INT: 50,
+          PER: 105,
+          SEN: 45
+        },
+        baseEquipmentItemIds: [],
+        skillIds: ['basic-attack', 'basic-focus-slash', 'skill-warrior-strike']
+      },
+      {
+        name: '바이위에',
+        rank: 'A',
+        powerRange: [1200, 1800],
+        growthRange: [1.005, 1.02],
+        level: 62,
+        jobId: 'mage',
+        titleId: 'hunter',
+        stats: {
+          STR: 50,
+          VIT: 110,
+          AGI: 95,
+          INT: 275,
+          PER: 80,
+          SEN: 150
+        },
+        baseEquipmentItemIds: [],
+        skillIds: ['basic-attack', 'skill-mage-bolt', 'skill-mage-burst']
+      },
+      {
+        name: '궈런',
+        rank: 'A',
+        powerRange: [1200, 1800],
+        growthRange: [1.005, 1.02],
+        level: 61,
+        jobId: 'guardian',
+        titleId: 'hunter',
+        stats: {
+          STR: 160,
+          VIT: 270,
+          AGI: 65,
+          INT: 55,
+          PER: 160,
+          SEN: 40
+        },
+        baseEquipmentItemIds: [],
+        skillIds: ['basic-attack', 'basic-guard-stance', 'skill-guardian-bash', 'skill-guardian-shield']
+      },
+      {
+        name: '탕메이',
+        rank: 'A',
+        powerRange: [1200, 1800],
+        growthRange: [1.005, 1.02],
+        level: 60,
+        jobId: 'scout',
+        titleId: 'hunter',
+        stats: {
+          STR: 95,
+          VIT: 115,
+          AGI: 255,
+          INT: 80,
+          PER: 75,
+          SEN: 130
+        },
+        baseEquipmentItemIds: [],
+        skillIds: ['basic-attack', 'basic-focus-slash', 'skill-scout-strike']
+      },
+      {
+        name: '쉬카이',
+        rank: 'A',
+        powerRange: [1200, 1800],
+        growthRange: [1.005, 1.02],
+        level: 58,
+        jobId: 'warrior',
+        titleId: 'hunter',
+        stats: {
+          STR: 280,
+          VIT: 205,
+          AGI: 110,
+          INT: 40,
+          PER: 75,
+          SEN: 30
+        },
+        baseEquipmentItemIds: [],
+        skillIds: ['basic-attack', 'basic-focus-slash', 'skill-warrior-strike']
+      },
+      {
+        name: '량첸',
+        rank: 'A',
+        powerRange: [1200, 1800],
+        growthRange: [1.005, 1.02],
+        level: 56,
+        jobId: 'tactician',
+        titleId: 'hunter',
+        stats: {
+          STR: 70,
+          VIT: 120,
+          AGI: 105,
+          INT: 230,
+          PER: 155,
+          SEN: 50
+        },
+        baseEquipmentItemIds: [],
+        skillIds: ['basic-attack', 'skill-tactician-analyze']
+      },
+      {
+        name: '옌쯔모',
+        rank: 'A',
+        powerRange: [1200, 1800],
+        growthRange: [1.005, 1.02],
+        level: 53,
+        jobId: 'swordsman',
+        titleId: 'hunter',
+        stats: {
+          STR: 225,
+          VIT: 135,
+          AGI: 215,
+          INT: 55,
+          PER: 70,
+          SEN: 30
+        },
+        baseEquipmentItemIds: [],
+        skillIds: ['basic-attack', 'basic-focus-slash', 'skill-swordsman-flash']
+      }
     ],
     pool: {
       countARange: [10, 16],
@@ -3896,10 +5822,215 @@ export const REGION_HUNTER_BASES: RegionSeedBase[] = [
   {
     regionId: 'jp',
     namedHunters: [
-      { name: '고토 류지', rank: 'S', powerRange: [2500, 2850], growthRange: [1.015, 1.035] },
-      { name: '스기모토 켄', rank: 'S', powerRange: [1500, 1800], growthRange: [1.01, 1.025] },
-      { name: '마츠우라 시게오', rank: 'S', powerRange: [1350, 1600], growthRange: [1.01, 1.03] },
-      { name: '미나구치 마사코', rank: 'S', powerRange: [1100, 1400], growthRange: [1.015, 1.03] }
+      {
+        name: '고토 류지',
+        rank: 'S',
+        powerRange: [2500, 2850],
+        growthRange: [1.015, 1.035],
+        level: 90,
+        jobId: 'swordsman',
+        titleId: 'veteran-hunter',
+        stats: {
+          STR: 335,
+          VIT: 195,
+          AGI: 295,
+          INT: 90,
+          PER: 125,
+          SEN: 150
+        },
+        baseEquipmentItemIds: [],
+        skillIds: ['basic-attack', 'basic-focus-slash', 'skill-swordsman-flash', 'skill-swordsman-combo', 'skill-swordsman-wave']
+      },
+      {
+        name: '스기모토 켄',
+        rank: 'S',
+        powerRange: [1500, 1800],
+        growthRange: [1.01, 1.025],
+        level: 84,
+        jobId: 'guardian',
+        titleId: 'veteran-hunter',
+        stats: {
+          STR: 200,
+          VIT: 300,
+          AGI: 120,
+          INT: 85,
+          PER: 220,
+          SEN: 105
+        },
+        baseEquipmentItemIds: [],
+        skillIds: ['basic-attack', 'basic-guard-stance', 'skill-guardian-bash', 'skill-guardian-shield', 'skill-guardian-stance']
+      },
+      {
+        name: '마츠우라 시게오',
+        rank: 'S',
+        powerRange: [1350, 1600],
+        growthRange: [1.01, 1.03],
+        level: 81,
+        jobId: 'scout',
+        titleId: 'veteran-hunter',
+        stats: {
+          STR: 160,
+          VIT: 145,
+          AGI: 295,
+          INT: 90,
+          PER: 125,
+          SEN: 180
+        },
+        baseEquipmentItemIds: [],
+        skillIds: ['basic-attack', 'basic-focus-slash', 'skill-scout-strike', 'skill-scout-mark', 'skill-scout-step']
+      },
+      {
+        name: '미나구치 마사코',
+        rank: 'S',
+        powerRange: [1100, 1400],
+        growthRange: [1.015, 1.03],
+        level: 82,
+        jobId: 'mage',
+        titleId: 'veteran-hunter',
+        stats: {
+          STR: 85,
+          VIT: 150,
+          AGI: 145,
+          INT: 340,
+          PER: 145,
+          SEN: 190
+        },
+        baseEquipmentItemIds: [],
+        skillIds: ['basic-attack', 'skill-mage-bolt', 'skill-mage-burst', 'skill-mage-storm']
+      },
+      {
+        name: '쿠로사와 렌',
+        rank: 'A',
+        powerRange: [1200, 1800],
+        growthRange: [1.005, 1.02],
+        level: 68,
+        jobId: 'swordsman',
+        titleId: 'hunter',
+        stats: {
+          STR: 270,
+          VIT: 150,
+          AGI: 245,
+          INT: 55,
+          PER: 75,
+          SEN: 45
+        },
+        baseEquipmentItemIds: [],
+        skillIds: ['basic-attack', 'basic-focus-slash', 'skill-swordsman-flash', 'skill-swordsman-combo']
+      },
+      {
+        name: '하야시 아오이',
+        rank: 'A',
+        powerRange: [1200, 1800],
+        growthRange: [1.005, 1.02],
+        level: 66,
+        jobId: 'mage',
+        titleId: 'hunter',
+        stats: {
+          STR: 55,
+          VIT: 115,
+          AGI: 115,
+          INT: 290,
+          PER: 80,
+          SEN: 155
+        },
+        baseEquipmentItemIds: [],
+        skillIds: ['basic-attack', 'skill-mage-bolt', 'skill-mage-burst']
+      },
+      {
+        name: '타치바나 쇼',
+        rank: 'A',
+        powerRange: [1200, 1800],
+        growthRange: [1.005, 1.02],
+        level: 64,
+        jobId: 'scout',
+        titleId: 'hunter',
+        stats: {
+          STR: 120,
+          VIT: 120,
+          AGI: 275,
+          INT: 75,
+          PER: 90,
+          SEN: 120
+        },
+        baseEquipmentItemIds: [],
+        skillIds: ['basic-attack', 'basic-focus-slash', 'skill-scout-strike', 'skill-scout-mark']
+      },
+      {
+        name: '오오타니 미즈키',
+        rank: 'A',
+        powerRange: [1200, 1800],
+        growthRange: [1.005, 1.02],
+        level: 63,
+        jobId: 'guardian',
+        titleId: 'hunter',
+        stats: {
+          STR: 160,
+          VIT: 285,
+          AGI: 70,
+          INT: 65,
+          PER: 165,
+          SEN: 45
+        },
+        baseEquipmentItemIds: [],
+        skillIds: ['basic-attack', 'basic-guard-stance', 'skill-guardian-bash', 'skill-guardian-shield']
+      },
+      {
+        name: '사카모토 유우마',
+        rank: 'A',
+        powerRange: [1200, 1800],
+        growthRange: [1.005, 1.02],
+        level: 61,
+        jobId: 'swordsman',
+        titleId: 'hunter',
+        stats: {
+          STR: 245,
+          VIT: 145,
+          AGI: 220,
+          INT: 55,
+          PER: 65,
+          SEN: 40
+        },
+        baseEquipmentItemIds: [],
+        skillIds: ['basic-attack', 'basic-focus-slash', 'skill-swordsman-flash', 'skill-swordsman-combo']
+      },
+      {
+        name: '후지모리 카나',
+        rank: 'A',
+        powerRange: [1200, 1800],
+        growthRange: [1.005, 1.02],
+        level: 58,
+        jobId: 'tactician',
+        titleId: 'hunter',
+        stats: {
+          STR: 70,
+          VIT: 115,
+          AGI: 105,
+          INT: 235,
+          PER: 155,
+          SEN: 50
+        },
+        baseEquipmentItemIds: [],
+        skillIds: ['basic-attack', 'skill-tactician-analyze', 'skill-tactician-command']
+      },
+      {
+        name: '이시카와 다이치',
+        rank: 'A',
+        powerRange: [1200, 1800],
+        growthRange: [1.005, 1.02],
+        level: 55,
+        jobId: 'guardian',
+        titleId: 'hunter',
+        stats: {
+          STR: 135,
+          VIT: 235,
+          AGI: 75,
+          INT: 110,
+          PER: 155,
+          SEN: 40
+        },
+        baseEquipmentItemIds: [],
+        skillIds: ['basic-attack', 'basic-guard-stance', 'skill-guardian-bash', 'skill-guardian-shield']
+      }
     ],
     pool: {
       countARange: [5, 8],
@@ -3913,10 +6044,234 @@ export const REGION_HUNTER_BASES: RegionSeedBase[] = [
   {
     regionId: 'kr',
     namedHunters: [
-      { name: '강태풍', rank: 'National', powerRange: [3000, 3500], growthRange: [1.02, 1.04] },
-      { name: '이진성', rank: 'S', powerRange: [1850, 2250], growthRange: [1.015, 1.035] },
-      { name: '백호민', rank: 'S', powerRange: [1600, 1950], growthRange: [1.015, 1.04] },
-      { name: '정재희', rank: 'S', powerRange: [1350, 1650], growthRange: [1.01, 1.03] }
+      {
+        name: '강태풍',
+        rank: 'National',
+        powerRange: [3000, 3500],
+        growthRange: [1.02, 1.04],
+        level: 100,
+        jobId: 'warrior',
+        titleId: 'national-level-hunter',
+        stats: {
+          STR: 360,
+          VIT: 320,
+          AGI: 280,
+          INT: 150,
+          PER: 220,
+          SEN: 250
+        },
+        baseEquipmentItemIds: [],
+        skillIds: ['basic-attack', 'basic-focus-slash', 'basic-guard-stance', 'skill-warrior-strike', 'skill-warrior-earthquake', 'skill-warrior-shout']
+      },
+      {
+        name: '이진성',
+        rank: 'S',
+        powerRange: [1850, 2250],
+        growthRange: [1.015, 1.035],
+        level: 84,
+        jobId: 'swordsman',
+        titleId: 'veteran-hunter',
+        stats: {
+          STR: 270,
+          VIT: 205,
+          AGI: 230,
+          INT: 90,
+          PER: 110,
+          SEN: 145
+        },
+        baseEquipmentItemIds: [],
+        skillIds: ['basic-attack', 'basic-focus-slash', 'skill-swordsman-flash', 'skill-swordsman-combo', 'skill-swordsman-wave']
+      },
+      {
+        name: '백호민',
+        rank: 'S',
+        powerRange: [1600, 1950],
+        growthRange: [1.015, 1.04],
+        level: 82,
+        jobId: 'guardian',
+        titleId: 'veteran-hunter',
+        stats: {
+          STR: 190,
+          VIT: 310,
+          AGI: 115,
+          INT: 110,
+          PER: 185,
+          SEN: 110
+        },
+        baseEquipmentItemIds: [],
+        skillIds: ['basic-attack', 'basic-guard-stance', 'skill-guardian-bash', 'skill-guardian-shield', 'skill-guardian-stance']
+      },
+      {
+        name: '정재희',
+        rank: 'S',
+        powerRange: [1350, 1650],
+        growthRange: [1.01, 1.03],
+        level: 76,
+        jobId: 'tactician',
+        titleId: 'veteran-hunter',
+        stats: {
+          STR: 120,
+          VIT: 150,
+          AGI: 140,
+          INT: 250,
+          PER: 130,
+          SEN: 140
+        },
+        baseEquipmentItemIds: [],
+        skillIds: ['basic-attack', 'skill-tactician-analyze', 'skill-tactician-command', 'skill-tactician-analyze-pulse']
+      },
+      {
+        name: '한서윤',
+        rank: 'A',
+        powerRange: [1200, 1800],
+        growthRange: [1.005, 1.02],
+        level: 68,
+        jobId: 'mage',
+        titleId: 'hunter',
+        stats: {
+          STR: 55,
+          VIT: 115,
+          AGI: 105,
+          INT: 285,
+          PER: 85,
+          SEN: 155
+        },
+        baseEquipmentItemIds: [],
+        skillIds: ['basic-attack', 'skill-mage-bolt', 'skill-mage-burst']
+      },
+      {
+        name: '박도현',
+        rank: 'A',
+        powerRange: [1200, 1800],
+        growthRange: [1.005, 1.02],
+        level: 67,
+        jobId: 'swordsman',
+        titleId: 'hunter',
+        stats: {
+          STR: 265,
+          VIT: 155,
+          AGI: 235,
+          INT: 60,
+          PER: 75,
+          SEN: 40
+        },
+        baseEquipmentItemIds: [],
+        skillIds: ['basic-attack', 'basic-focus-slash', 'skill-swordsman-flash', 'skill-swordsman-combo']
+      },
+      {
+        name: '최유림',
+        rank: 'A',
+        powerRange: [1200, 1800],
+        growthRange: [1.005, 1.02],
+        level: 65,
+        jobId: 'scout',
+        titleId: 'hunter',
+        stats: {
+          STR: 110,
+          VIT: 120,
+          AGI: 275,
+          INT: 80,
+          PER: 85,
+          SEN: 130
+        },
+        baseEquipmentItemIds: [],
+        skillIds: ['basic-attack', 'basic-focus-slash', 'skill-scout-strike', 'skill-scout-mark']
+      },
+      {
+        name: '서민재',
+        rank: 'A',
+        powerRange: [1200, 1800],
+        growthRange: [1.005, 1.02],
+        level: 64,
+        jobId: 'guardian',
+        titleId: 'hunter',
+        stats: {
+          STR: 165,
+          VIT: 285,
+          AGI: 75,
+          INT: 60,
+          PER: 170,
+          SEN: 45
+        },
+        baseEquipmentItemIds: [],
+        skillIds: ['basic-attack', 'basic-guard-stance', 'skill-guardian-bash', 'skill-guardian-shield']
+      },
+      {
+        name: '윤태오',
+        rank: 'A',
+        powerRange: [1200, 1800],
+        growthRange: [1.005, 1.02],
+        level: 62,
+        jobId: 'warrior',
+        titleId: 'hunter',
+        stats: {
+          STR: 275,
+          VIT: 210,
+          AGI: 105,
+          INT: 50,
+          PER: 95,
+          SEN: 45
+        },
+        baseEquipmentItemIds: [],
+        skillIds: ['basic-attack', 'basic-focus-slash', 'skill-warrior-strike', 'skill-warrior-earthquake']
+      },
+      {
+        name: '강하린',
+        rank: 'A',
+        powerRange: [1200, 1800],
+        growthRange: [1.005, 1.02],
+        level: 60,
+        jobId: 'tactician',
+        titleId: 'hunter',
+        stats: {
+          STR: 70,
+          VIT: 120,
+          AGI: 110,
+          INT: 235,
+          PER: 160,
+          SEN: 55
+        },
+        baseEquipmentItemIds: [],
+        skillIds: ['basic-attack', 'skill-tactician-analyze', 'skill-tactician-command']
+      },
+      {
+        name: '문지후',
+        rank: 'A',
+        powerRange: [1200, 1800],
+        growthRange: [1.005, 1.02],
+        level: 58,
+        jobId: 'guardian',
+        titleId: 'hunter',
+        stats: {
+          STR: 140,
+          VIT: 245,
+          AGI: 80,
+          INT: 115,
+          PER: 155,
+          SEN: 45
+        },
+        baseEquipmentItemIds: [],
+        skillIds: ['basic-attack', 'basic-guard-stance', 'skill-guardian-bash', 'skill-guardian-shield']
+      },
+      {
+        name: '오세준',
+        rank: 'A',
+        powerRange: [1200, 1800],
+        growthRange: [1.005, 1.02],
+        level: 55,
+        jobId: 'scout',
+        titleId: 'hunter',
+        stats: {
+          STR: 95,
+          VIT: 105,
+          AGI: 240,
+          INT: 75,
+          PER: 70,
+          SEN: 125
+        },
+        baseEquipmentItemIds: [],
+        skillIds: ['basic-attack', 'basic-focus-slash', 'skill-scout-strike']
+      }
     ],
     pool: {
       countARange: [6, 10],
@@ -3930,10 +6285,291 @@ export const REGION_HUNTER_BASES: RegionSeedBase[] = [
   {
     regionId: 'ru',
     namedHunters: [
-      { name: '유리 오를로프', rank: 'S', powerRange: [2600, 3100], growthRange: [1.02, 1.04] },
-      { name: '미하일 이바노프', rank: 'S', powerRange: [1950, 2250], growthRange: [1.015, 1.03] },
-      { name: '드미트리 소콜로프', rank: 'S', powerRange: [1700, 2000], growthRange: [1.015, 1.035] },
-      { name: '타티아나 볼코바', rank: 'S', powerRange: [1400, 1750], growthRange: [1.01, 1.03] }
+      {
+        name: '유리 오를로프',
+        rank: 'S',
+        powerRange: [2600, 3100],
+        growthRange: [1.02, 1.04],
+        level: 89,
+        jobId: 'warrior',
+        titleId: 'veteran-hunter',
+        stats: {
+          STR: 355,
+          VIT: 285,
+          AGI: 140,
+          INT: 70,
+          PER: 185,
+          SEN: 105
+        },
+        baseEquipmentItemIds: [],
+        skillIds: ['basic-attack', 'basic-focus-slash', 'skill-warrior-strike', 'skill-warrior-earthquake', 'skill-warrior-shout']
+      },
+      {
+        name: '미하일 이바노프',
+        rank: 'S',
+        powerRange: [1950, 2250],
+        growthRange: [1.015, 1.03],
+        level: 86,
+        jobId: 'guardian',
+        titleId: 'veteran-hunter',
+        stats: {
+          STR: 235,
+          VIT: 355,
+          AGI: 95,
+          INT: 80,
+          PER: 250,
+          SEN: 125
+        },
+        baseEquipmentItemIds: [],
+        skillIds: ['basic-attack', 'basic-guard-stance', 'skill-guardian-bash', 'skill-guardian-shield', 'skill-guardian-stance']
+      },
+      {
+        name: '드미트리 소콜로프',
+        rank: 'S',
+        powerRange: [1700, 2000],
+        growthRange: [1.015, 1.035],
+        level: 83,
+        jobId: 'scout',
+        titleId: 'veteran-hunter',
+        stats: {
+          STR: 155,
+          VIT: 150,
+          AGI: 325,
+          INT: 95,
+          PER: 135,
+          SEN: 205
+        },
+        baseEquipmentItemIds: [],
+        skillIds: ['basic-attack', 'basic-focus-slash', 'skill-scout-strike', 'skill-scout-mark', 'skill-scout-step']
+      },
+      {
+        name: '타티아나 볼코바',
+        rank: 'S',
+        powerRange: [1400, 1750],
+        growthRange: [1.01, 1.03],
+        level: 81,
+        jobId: 'mage',
+        titleId: 'veteran-hunter',
+        stats: {
+          STR: 70,
+          VIT: 155,
+          AGI: 120,
+          INT: 355,
+          PER: 155,
+          SEN: 225
+        },
+        baseEquipmentItemIds: [],
+        skillIds: ['basic-attack', 'skill-mage-bolt', 'skill-mage-burst', 'skill-mage-storm']
+      },
+      {
+        name: '알렉세이 페도로프',
+        rank: 'A',
+        powerRange: [1200, 1800],
+        growthRange: [1.005, 1.02],
+        level: 69,
+        jobId: 'guardian',
+        titleId: 'hunter',
+        stats: {
+          STR: 180,
+          VIT: 305,
+          AGI: 70,
+          INT: 55,
+          PER: 175,
+          SEN: 45
+        },
+        baseEquipmentItemIds: [],
+        skillIds: ['basic-attack', 'basic-guard-stance', 'skill-guardian-bash', 'skill-guardian-shield']
+      },
+      {
+        name: '이리나 체르노바',
+        rank: 'A',
+        powerRange: [1200, 1800],
+        growthRange: [1.005, 1.02],
+        level: 68,
+        jobId: 'mage',
+        titleId: 'hunter',
+        stats: {
+          STR: 55,
+          VIT: 120,
+          AGI: 105,
+          INT: 295,
+          PER: 90,
+          SEN: 155
+        },
+        baseEquipmentItemIds: [],
+        skillIds: ['basic-attack', 'skill-mage-bolt', 'skill-mage-burst']
+      },
+      {
+        name: '파벨 레베데프',
+        rank: 'A',
+        powerRange: [1200, 1800],
+        growthRange: [1.005, 1.02],
+        level: 67,
+        jobId: 'warrior',
+        titleId: 'hunter',
+        stats: {
+          STR: 290,
+          VIT: 230,
+          AGI: 105,
+          INT: 45,
+          PER: 105,
+          SEN: 40
+        },
+        baseEquipmentItemIds: [],
+        skillIds: ['basic-attack', 'basic-focus-slash', 'skill-warrior-strike', 'skill-warrior-earthquake']
+      },
+      {
+        name: '나탈리아 베로바',
+        rank: 'A',
+        powerRange: [1200, 1800],
+        growthRange: [1.005, 1.02],
+        level: 66,
+        jobId: 'scout',
+        titleId: 'hunter',
+        stats: {
+          STR: 115,
+          VIT: 125,
+          AGI: 280,
+          INT: 80,
+          PER: 90,
+          SEN: 120
+        },
+        baseEquipmentItemIds: [],
+        skillIds: ['basic-attack', 'basic-focus-slash', 'skill-scout-strike', 'skill-scout-mark']
+      },
+      {
+        name: '세르게이 쿠즈민',
+        rank: 'A',
+        powerRange: [1200, 1800],
+        growthRange: [1.005, 1.02],
+        level: 64,
+        jobId: 'warrior',
+        titleId: 'hunter',
+        stats: {
+          STR: 275,
+          VIT: 215,
+          AGI: 100,
+          INT: 45,
+          PER: 100,
+          SEN: 40
+        },
+        baseEquipmentItemIds: [],
+        skillIds: ['basic-attack', 'basic-focus-slash', 'skill-warrior-strike']
+      },
+      {
+        name: '올가 로마노바',
+        rank: 'A',
+        powerRange: [1200, 1800],
+        growthRange: [1.005, 1.02],
+        level: 63,
+        jobId: 'tactician',
+        titleId: 'hunter',
+        stats: {
+          STR: 70,
+          VIT: 125,
+          AGI: 105,
+          INT: 245,
+          PER: 165,
+          SEN: 50
+        },
+        baseEquipmentItemIds: [],
+        skillIds: ['basic-attack', 'skill-tactician-analyze', 'skill-tactician-command']
+      },
+      {
+        name: '니콜라이 보로닌',
+        rank: 'A',
+        powerRange: [1200, 1800],
+        growthRange: [1.005, 1.02],
+        level: 61,
+        jobId: 'guardian',
+        titleId: 'hunter',
+        stats: {
+          STR: 165,
+          VIT: 280,
+          AGI: 65,
+          INT: 55,
+          PER: 160,
+          SEN: 40
+        },
+        baseEquipmentItemIds: [],
+        skillIds: ['basic-attack', 'basic-guard-stance', 'skill-guardian-bash', 'skill-guardian-shield']
+      },
+      {
+        name: '마리나 소로키나',
+        rank: 'A',
+        powerRange: [1200, 1800],
+        growthRange: [1.005, 1.02],
+        level: 60,
+        jobId: 'mage',
+        titleId: 'hunter',
+        stats: {
+          STR: 50,
+          VIT: 105,
+          AGI: 95,
+          INT: 265,
+          PER: 80,
+          SEN: 145
+        },
+        baseEquipmentItemIds: [],
+        skillIds: ['basic-attack', 'skill-mage-bolt', 'skill-mage-burst']
+      },
+      {
+        name: '콘스탄틴 자이체프',
+        rank: 'A',
+        powerRange: [1200, 1800],
+        growthRange: [1.005, 1.02],
+        level: 58,
+        jobId: 'swordsman',
+        titleId: 'hunter',
+        stats: {
+          STR: 250,
+          VIT: 150,
+          AGI: 220,
+          INT: 55,
+          PER: 70,
+          SEN: 35
+        },
+        baseEquipmentItemIds: [],
+        skillIds: ['basic-attack', 'basic-focus-slash', 'skill-swordsman-flash', 'skill-swordsman-combo']
+      },
+      {
+        name: '안나 모르조바',
+        rank: 'A',
+        powerRange: [1200, 1800],
+        growthRange: [1.005, 1.02],
+        level: 56,
+        jobId: 'scout',
+        titleId: 'hunter',
+        stats: {
+          STR: 95,
+          VIT: 110,
+          AGI: 245,
+          INT: 75,
+          PER: 75,
+          SEN: 125
+        },
+        baseEquipmentItemIds: [],
+        skillIds: ['basic-attack', 'basic-focus-slash', 'skill-scout-strike']
+      },
+      {
+        name: '빅토르 말체프',
+        rank: 'A',
+        powerRange: [1200, 1800],
+        growthRange: [1.005, 1.02],
+        level: 54,
+        jobId: 'warrior',
+        titleId: 'hunter',
+        stats: {
+          STR: 245,
+          VIT: 190,
+          AGI: 95,
+          INT: 45,
+          PER: 90,
+          SEN: 35
+        },
+        baseEquipmentItemIds: [],
+        skillIds: ['basic-attack', 'basic-focus-slash', 'skill-warrior-strike']
+      }
     ],
     pool: {
       countARange: [8, 14],
@@ -3947,10 +6583,253 @@ export const REGION_HUNTER_BASES: RegionSeedBase[] = [
   {
     regionId: 'in',
     namedHunters: [
-      { name: '싯다르트 바찬', rank: 'National', powerRange: [3100, 3800], growthRange: [1.02, 1.045] },
-      { name: '라지 코타파리', rank: 'S', powerRange: [1750, 2050], growthRange: [1.015, 1.03] },
-      { name: '아르준 싱', rank: 'S', powerRange: [1550, 1850], growthRange: [1.01, 1.03] },
-      { name: '프리야 샤르마', rank: 'S', powerRange: [1300, 1600], growthRange: [1.015, 1.035] }
+      {
+        name: '싯다르트 바찬',
+        rank: 'National',
+        powerRange: [3100, 3800],
+        growthRange: [1.02, 1.045],
+        level: 99,
+        jobId: 'tactician',
+        titleId: 'national-level-hunter',
+        stats: {
+          STR: 155,
+          VIT: 220,
+          AGI: 180,
+          INT: 390,
+          PER: 310,
+          SEN: 285
+        },
+        baseEquipmentItemIds: [],
+        skillIds: ['basic-attack', 'skill-tactician-analyze', 'skill-tactician-command', 'skill-tactician-analyze-pulse']
+      },
+      {
+        name: '라지 코타파리',
+        rank: 'S',
+        powerRange: [1750, 2050],
+        growthRange: [1.015, 1.03],
+        level: 87,
+        jobId: 'warrior',
+        titleId: 'veteran-hunter',
+        stats: {
+          STR: 340,
+          VIT: 280,
+          AGI: 145,
+          INT: 75,
+          PER: 180,
+          SEN: 100
+        },
+        baseEquipmentItemIds: [],
+        skillIds: ['basic-attack', 'basic-focus-slash', 'skill-warrior-strike', 'skill-warrior-earthquake', 'skill-warrior-shout']
+      },
+      {
+        name: '아르준 싱',
+        rank: 'S',
+        powerRange: [1550, 1850],
+        growthRange: [1.01, 1.03],
+        level: 84,
+        jobId: 'swordsman',
+        titleId: 'veteran-hunter',
+        stats: {
+          STR: 305,
+          VIT: 180,
+          AGI: 270,
+          INT: 95,
+          PER: 130,
+          SEN: 130
+        },
+        baseEquipmentItemIds: [],
+        skillIds: ['basic-attack', 'basic-focus-slash', 'skill-swordsman-flash', 'skill-swordsman-combo', 'skill-swordsman-wave']
+      },
+      {
+        name: '프리야 샤르마',
+        rank: 'S',
+        powerRange: [1300, 1600],
+        growthRange: [1.015, 1.035],
+        level: 82,
+        jobId: 'mage',
+        titleId: 'veteran-hunter',
+        stats: {
+          STR: 70,
+          VIT: 145,
+          AGI: 125,
+          INT: 360,
+          PER: 155,
+          SEN: 225
+        },
+        baseEquipmentItemIds: [],
+        skillIds: ['basic-attack', 'skill-mage-bolt', 'skill-mage-burst', 'skill-mage-storm']
+      },
+      {
+        name: '카비르 칸',
+        rank: 'A',
+        powerRange: [1200, 1800],
+        growthRange: [1.005, 1.02],
+        level: 68,
+        jobId: 'warrior',
+        titleId: 'hunter',
+        stats: {
+          STR: 285,
+          VIT: 225,
+          AGI: 115,
+          INT: 50,
+          PER: 100,
+          SEN: 45
+        },
+        baseEquipmentItemIds: [],
+        skillIds: ['basic-attack', 'basic-focus-slash', 'skill-warrior-strike', 'skill-warrior-earthquake']
+      },
+      {
+        name: '아냐 아이어',
+        rank: 'A',
+        powerRange: [1200, 1800],
+        growthRange: [1.005, 1.02],
+        level: 67,
+        jobId: 'mage',
+        titleId: 'hunter',
+        stats: {
+          STR: 55,
+          VIT: 115,
+          AGI: 110,
+          INT: 295,
+          PER: 85,
+          SEN: 160
+        },
+        baseEquipmentItemIds: [],
+        skillIds: ['basic-attack', 'skill-mage-bolt', 'skill-mage-burst']
+      },
+      {
+        name: '니킬 바르마',
+        rank: 'A',
+        powerRange: [1200, 1800],
+        growthRange: [1.005, 1.02],
+        level: 66,
+        jobId: 'scout',
+        titleId: 'hunter',
+        stats: {
+          STR: 120,
+          VIT: 125,
+          AGI: 275,
+          INT: 80,
+          PER: 90,
+          SEN: 120
+        },
+        baseEquipmentItemIds: [],
+        skillIds: ['basic-attack', 'basic-focus-slash', 'skill-scout-strike', 'skill-scout-mark']
+      },
+      {
+        name: '사라스와티 나이르',
+        rank: 'A',
+        powerRange: [1200, 1800],
+        growthRange: [1.005, 1.02],
+        level: 64,
+        jobId: 'guardian',
+        titleId: 'hunter',
+        stats: {
+          STR: 160,
+          VIT: 280,
+          AGI: 75,
+          INT: 65,
+          PER: 170,
+          SEN: 45
+        },
+        baseEquipmentItemIds: [],
+        skillIds: ['basic-attack', 'basic-guard-stance', 'skill-guardian-bash', 'skill-guardian-shield']
+      },
+      {
+        name: '로한 데사이',
+        rank: 'A',
+        powerRange: [1200, 1800],
+        growthRange: [1.005, 1.02],
+        level: 63,
+        jobId: 'swordsman',
+        titleId: 'hunter',
+        stats: {
+          STR: 255,
+          VIT: 150,
+          AGI: 230,
+          INT: 60,
+          PER: 75,
+          SEN: 40
+        },
+        baseEquipmentItemIds: [],
+        skillIds: ['basic-attack', 'basic-focus-slash', 'skill-swordsman-flash', 'skill-swordsman-combo']
+      },
+      {
+        name: '미라 파텔',
+        rank: 'A',
+        powerRange: [1200, 1800],
+        growthRange: [1.005, 1.02],
+        level: 61,
+        jobId: 'tactician',
+        titleId: 'hunter',
+        stats: {
+          STR: 70,
+          VIT: 120,
+          AGI: 110,
+          INT: 245,
+          PER: 165,
+          SEN: 55
+        },
+        baseEquipmentItemIds: [],
+        skillIds: ['basic-attack', 'skill-tactician-analyze', 'skill-tactician-command']
+      },
+      {
+        name: '아디티 라만',
+        rank: 'A',
+        powerRange: [1200, 1800],
+        growthRange: [1.005, 1.02],
+        level: 60,
+        jobId: 'mage',
+        titleId: 'hunter',
+        stats: {
+          STR: 50,
+          VIT: 105,
+          AGI: 100,
+          INT: 270,
+          PER: 80,
+          SEN: 150
+        },
+        baseEquipmentItemIds: [],
+        skillIds: ['basic-attack', 'skill-mage-bolt', 'skill-mage-burst']
+      },
+      {
+        name: '데브 말호트라',
+        rank: 'A',
+        powerRange: [1200, 1800],
+        growthRange: [1.005, 1.02],
+        level: 58,
+        jobId: 'guardian',
+        titleId: 'hunter',
+        stats: {
+          STR: 155,
+          VIT: 265,
+          AGI: 70,
+          INT: 60,
+          PER: 155,
+          SEN: 40
+        },
+        baseEquipmentItemIds: [],
+        skillIds: ['basic-attack', 'basic-guard-stance', 'skill-guardian-bash', 'skill-guardian-shield']
+      },
+      {
+        name: '이샨 굽타',
+        rank: 'A',
+        powerRange: [1200, 1800],
+        growthRange: [1.005, 1.02],
+        level: 55,
+        jobId: 'scout',
+        titleId: 'hunter',
+        stats: {
+          STR: 100,
+          VIT: 110,
+          AGI: 245,
+          INT: 75,
+          PER: 75,
+          SEN: 125
+        },
+        baseEquipmentItemIds: [],
+        skillIds: ['basic-attack', 'basic-focus-slash', 'skill-scout-strike']
+      }
     ],
     pool: {
       countARange: [7, 11],
@@ -3964,9 +6843,177 @@ export const REGION_HUNTER_BASES: RegionSeedBase[] = [
   {
     regionId: 'br',
     namedHunters: [
-      { name: '티아고 실바', rank: 'S', powerRange: [1600, 1950], growthRange: [1.01, 1.025] },
-      { name: '루카스 산토스', rank: 'S', powerRange: [1300, 1600], growthRange: [1.01, 1.03] },
-      { name: '이사벨라 소우자', rank: 'S', powerRange: [1100, 1400], growthRange: [1.015, 1.03] }
+      {
+        name: '티아고 실바',
+        rank: 'S',
+        powerRange: [1600, 1950],
+        growthRange: [1.01, 1.025],
+        level: 79,
+        jobId: 'scout',
+        titleId: 'veteran-hunter',
+        stats: {
+          STR: 160,
+          VIT: 155,
+          AGI: 325,
+          INT: 90,
+          PER: 125,
+          SEN: 165
+        },
+        baseEquipmentItemIds: [],
+        skillIds: ['basic-attack', 'basic-focus-slash', 'skill-scout-strike', 'skill-scout-mark', 'skill-scout-step']
+      },
+      {
+        name: '루카스 산토스',
+        rank: 'S',
+        powerRange: [1300, 1600],
+        growthRange: [1.01, 1.03],
+        level: 76,
+        jobId: 'warrior',
+        titleId: 'veteran-hunter',
+        stats: {
+          STR: 310,
+          VIT: 245,
+          AGI: 145,
+          INT: 65,
+          PER: 135,
+          SEN: 80
+        },
+        baseEquipmentItemIds: [],
+        skillIds: ['basic-attack', 'basic-focus-slash', 'skill-warrior-strike', 'skill-warrior-earthquake', 'skill-warrior-shout']
+      },
+      {
+        name: '이사벨라 소우자',
+        rank: 'S',
+        powerRange: [1100, 1400],
+        growthRange: [1.015, 1.03],
+        level: 73,
+        jobId: 'mage',
+        titleId: 'veteran-hunter',
+        stats: {
+          STR: 65,
+          VIT: 135,
+          AGI: 125,
+          INT: 310,
+          PER: 130,
+          SEN: 175
+        },
+        baseEquipmentItemIds: [],
+        skillIds: ['basic-attack', 'skill-mage-bolt', 'skill-mage-burst', 'skill-mage-storm']
+      },
+      {
+        name: '마테우스 알메이다',
+        rank: 'A',
+        powerRange: [1200, 1800],
+        growthRange: [1.005, 1.02],
+        level: 66,
+        jobId: 'scout',
+        titleId: 'hunter',
+        stats: {
+          STR: 120,
+          VIT: 125,
+          AGI: 275,
+          INT: 75,
+          PER: 85,
+          SEN: 120
+        },
+        baseEquipmentItemIds: [],
+        skillIds: ['basic-attack', 'basic-focus-slash', 'skill-scout-strike', 'skill-scout-mark']
+      },
+      {
+        name: '라파엘 페레이라',
+        rank: 'A',
+        powerRange: [1200, 1800],
+        growthRange: [1.005, 1.02],
+        level: 64,
+        jobId: 'warrior',
+        titleId: 'hunter',
+        stats: {
+          STR: 280,
+          VIT: 215,
+          AGI: 110,
+          INT: 45,
+          PER: 90,
+          SEN: 40
+        },
+        baseEquipmentItemIds: [],
+        skillIds: ['basic-attack', 'basic-focus-slash', 'skill-warrior-strike', 'skill-warrior-earthquake']
+      },
+      {
+        name: '비앙카 코스타',
+        rank: 'A',
+        powerRange: [1200, 1800],
+        growthRange: [1.005, 1.02],
+        level: 62,
+        jobId: 'mage',
+        titleId: 'hunter',
+        stats: {
+          STR: 50,
+          VIT: 110,
+          AGI: 105,
+          INT: 270,
+          PER: 80,
+          SEN: 150
+        },
+        baseEquipmentItemIds: [],
+        skillIds: ['basic-attack', 'skill-mage-bolt', 'skill-mage-burst']
+      },
+      {
+        name: '엔리케 바르보사',
+        rank: 'A',
+        powerRange: [1200, 1800],
+        growthRange: [1.005, 1.02],
+        level: 60,
+        jobId: 'guardian',
+        titleId: 'hunter',
+        stats: {
+          STR: 160,
+          VIT: 265,
+          AGI: 75,
+          INT: 55,
+          PER: 150,
+          SEN: 40
+        },
+        baseEquipmentItemIds: [],
+        skillIds: ['basic-attack', 'basic-guard-stance', 'skill-guardian-bash', 'skill-guardian-shield']
+      },
+      {
+        name: '카밀라 누네스',
+        rank: 'A',
+        powerRange: [1200, 1800],
+        growthRange: [1.005, 1.02],
+        level: 58,
+        jobId: 'tactician',
+        titleId: 'hunter',
+        stats: {
+          STR: 70,
+          VIT: 115,
+          AGI: 110,
+          INT: 230,
+          PER: 155,
+          SEN: 50
+        },
+        baseEquipmentItemIds: [],
+        skillIds: ['basic-attack', 'skill-tactician-analyze', 'skill-tactician-command']
+      },
+      {
+        name: '다니엘 로차',
+        rank: 'A',
+        powerRange: [1200, 1800],
+        growthRange: [1.005, 1.02],
+        level: 55,
+        jobId: 'swordsman',
+        titleId: 'hunter',
+        stats: {
+          STR: 240,
+          VIT: 145,
+          AGI: 215,
+          INT: 55,
+          PER: 70,
+          SEN: 35
+        },
+        baseEquipmentItemIds: [],
+        skillIds: ['basic-attack', 'basic-focus-slash', 'skill-swordsman-flash', 'skill-swordsman-combo']
+      }
     ],
     pool: {
       countARange: [4, 7],
@@ -3980,9 +7027,177 @@ export const REGION_HUNTER_BASES: RegionSeedBase[] = [
   {
     regionId: 'au',
     namedHunters: [
-      { name: '잭슨 킹', rank: 'S', powerRange: [1750, 2150], growthRange: [1.015, 1.03] },
-      { name: '올리비아 스미스', rank: 'S', powerRange: [1400, 1750], growthRange: [1.01, 1.025] },
-      { name: '레녹스 테일러', rank: 'S', powerRange: [1200, 1500], growthRange: [1.01, 1.03] }
+      {
+        name: '잭슨 킹',
+        rank: 'S',
+        powerRange: [1750, 2150],
+        growthRange: [1.015, 1.03],
+        level: 79,
+        jobId: 'scout',
+        titleId: 'veteran-hunter',
+        stats: {
+          STR: 165,
+          VIT: 160,
+          AGI: 320,
+          INT: 90,
+          PER: 125,
+          SEN: 165
+        },
+        baseEquipmentItemIds: [],
+        skillIds: ['basic-attack', 'basic-focus-slash', 'skill-scout-strike', 'skill-scout-mark', 'skill-scout-step']
+      },
+      {
+        name: '올리비아 스미스',
+        rank: 'S',
+        powerRange: [1400, 1750],
+        growthRange: [1.01, 1.025],
+        level: 76,
+        jobId: 'mage',
+        titleId: 'veteran-hunter',
+        stats: {
+          STR: 65,
+          VIT: 135,
+          AGI: 125,
+          INT: 315,
+          PER: 135,
+          SEN: 180
+        },
+        baseEquipmentItemIds: [],
+        skillIds: ['basic-attack', 'skill-mage-bolt', 'skill-mage-burst', 'skill-mage-storm']
+      },
+      {
+        name: '레녹스 테일러',
+        rank: 'S',
+        powerRange: [1200, 1500],
+        growthRange: [1.01, 1.03],
+        level: 74,
+        jobId: 'guardian',
+        titleId: 'veteran-hunter',
+        stats: {
+          STR: 205,
+          VIT: 305,
+          AGI: 100,
+          INT: 90,
+          PER: 200,
+          SEN: 90
+        },
+        baseEquipmentItemIds: [],
+        skillIds: ['basic-attack', 'basic-guard-stance', 'skill-guardian-bash', 'skill-guardian-shield', 'skill-guardian-stance']
+      },
+      {
+        name: '루비 해밀턴',
+        rank: 'A',
+        powerRange: [1200, 1800],
+        growthRange: [1.005, 1.02],
+        level: 66,
+        jobId: 'scout',
+        titleId: 'hunter',
+        stats: {
+          STR: 115,
+          VIT: 125,
+          AGI: 275,
+          INT: 75,
+          PER: 85,
+          SEN: 125
+        },
+        baseEquipmentItemIds: [],
+        skillIds: ['basic-attack', 'basic-focus-slash', 'skill-scout-strike', 'skill-scout-mark']
+      },
+      {
+        name: '노아 베넷',
+        rank: 'A',
+        powerRange: [1200, 1800],
+        growthRange: [1.005, 1.02],
+        level: 64,
+        jobId: 'warrior',
+        titleId: 'hunter',
+        stats: {
+          STR: 280,
+          VIT: 215,
+          AGI: 110,
+          INT: 45,
+          PER: 90,
+          SEN: 40
+        },
+        baseEquipmentItemIds: [],
+        skillIds: ['basic-attack', 'basic-focus-slash', 'skill-warrior-strike', 'skill-warrior-earthquake']
+      },
+      {
+        name: '미아 카터',
+        rank: 'A',
+        powerRange: [1200, 1800],
+        growthRange: [1.005, 1.02],
+        level: 62,
+        jobId: 'mage',
+        titleId: 'hunter',
+        stats: {
+          STR: 50,
+          VIT: 110,
+          AGI: 105,
+          INT: 270,
+          PER: 80,
+          SEN: 150
+        },
+        baseEquipmentItemIds: [],
+        skillIds: ['basic-attack', 'skill-mage-bolt', 'skill-mage-burst']
+      },
+      {
+        name: '헨리 워드',
+        rank: 'A',
+        powerRange: [1200, 1800],
+        growthRange: [1.005, 1.02],
+        level: 60,
+        jobId: 'guardian',
+        titleId: 'hunter',
+        stats: {
+          STR: 160,
+          VIT: 265,
+          AGI: 75,
+          INT: 55,
+          PER: 150,
+          SEN: 40
+        },
+        baseEquipmentItemIds: [],
+        skillIds: ['basic-attack', 'basic-guard-stance', 'skill-guardian-bash', 'skill-guardian-shield']
+      },
+      {
+        name: '소피아 리드',
+        rank: 'A',
+        powerRange: [1200, 1800],
+        growthRange: [1.005, 1.02],
+        level: 58,
+        jobId: 'tactician',
+        titleId: 'hunter',
+        stats: {
+          STR: 70,
+          VIT: 115,
+          AGI: 110,
+          INT: 230,
+          PER: 155,
+          SEN: 50
+        },
+        baseEquipmentItemIds: [],
+        skillIds: ['basic-attack', 'skill-tactician-analyze', 'skill-tactician-command']
+      },
+      {
+        name: '루카스 브룩스',
+        rank: 'A',
+        powerRange: [1200, 1800],
+        growthRange: [1.005, 1.02],
+        level: 55,
+        jobId: 'swordsman',
+        titleId: 'hunter',
+        stats: {
+          STR: 240,
+          VIT: 145,
+          AGI: 215,
+          INT: 55,
+          PER: 70,
+          SEN: 35
+        },
+        baseEquipmentItemIds: [],
+        skillIds: ['basic-attack', 'basic-focus-slash', 'skill-swordsman-flash', 'skill-swordsman-combo']
+      }
     ],
     pool: {
       countARange: [4, 7],
@@ -3996,9 +7211,158 @@ export const REGION_HUNTER_BASES: RegionSeedBase[] = [
   {
     regionId: 'eg',
     namedHunters: [
-      { name: '하산 알리', rank: 'S', powerRange: [1500, 1850], growthRange: [1.01, 1.025] },
-      { name: '아미나 만수르', rank: 'S', powerRange: [1200, 1500], growthRange: [1.01, 1.03] },
-      { name: '오마르 샤리프', rank: 'S', powerRange: [1000, 1300], growthRange: [1.01, 1.02] }
+      {
+        name: '하산 알리',
+        rank: 'S',
+        powerRange: [1500, 1850],
+        growthRange: [1.01, 1.025],
+        level: 79,
+        jobId: 'guardian',
+        titleId: 'veteran-hunter',
+        stats: {
+          STR: 215,
+          VIT: 300,
+          AGI: 95,
+          INT: 135,
+          PER: 205,
+          SEN: 100
+        },
+        baseEquipmentItemIds: [],
+        skillIds: ['basic-attack', 'basic-guard-stance', 'skill-guardian-bash', 'skill-guardian-shield', 'skill-guardian-stance']
+      },
+      {
+        name: '아미나 만수르',
+        rank: 'S',
+        powerRange: [1200, 1500],
+        growthRange: [1.01, 1.03],
+        level: 76,
+        jobId: 'mage',
+        titleId: 'veteran-hunter',
+        stats: {
+          STR: 65,
+          VIT: 135,
+          AGI: 115,
+          INT: 330,
+          PER: 135,
+          SEN: 190
+        },
+        baseEquipmentItemIds: [],
+        skillIds: ['basic-attack', 'skill-mage-bolt', 'skill-mage-burst', 'skill-mage-storm']
+      },
+      {
+        name: '오마르 샤리프',
+        rank: 'S',
+        powerRange: [1000, 1300],
+        growthRange: [1.01, 1.02],
+        level: 72,
+        jobId: 'tactician',
+        titleId: 'veteran-hunter',
+        stats: {
+          STR: 95,
+          VIT: 145,
+          AGI: 115,
+          INT: 270,
+          PER: 210,
+          SEN: 95
+        },
+        baseEquipmentItemIds: [],
+        skillIds: ['basic-attack', 'skill-tactician-analyze', 'skill-tactician-command', 'skill-tactician-analyze-pulse']
+      },
+      {
+        name: '나디아 엘사예드',
+        rank: 'A',
+        powerRange: [1200, 1800],
+        growthRange: [1.005, 1.02],
+        level: 66,
+        jobId: 'mage',
+        titleId: 'hunter',
+        stats: {
+          STR: 50,
+          VIT: 110,
+          AGI: 100,
+          INT: 285,
+          PER: 85,
+          SEN: 150
+        },
+        baseEquipmentItemIds: [],
+        skillIds: ['basic-attack', 'skill-mage-bolt', 'skill-mage-burst']
+      },
+      {
+        name: '유세프 파라그',
+        rank: 'A',
+        powerRange: [1200, 1800],
+        growthRange: [1.005, 1.02],
+        level: 64,
+        jobId: 'guardian',
+        titleId: 'hunter',
+        stats: {
+          STR: 165,
+          VIT: 275,
+          AGI: 70,
+          INT: 60,
+          PER: 160,
+          SEN: 40
+        },
+        baseEquipmentItemIds: [],
+        skillIds: ['basic-attack', 'basic-guard-stance', 'skill-guardian-bash', 'skill-guardian-shield']
+      },
+      {
+        name: '라일라 하미드',
+        rank: 'A',
+        powerRange: [1200, 1800],
+        growthRange: [1.005, 1.02],
+        level: 61,
+        jobId: 'scout',
+        titleId: 'hunter',
+        stats: {
+          STR: 105,
+          VIT: 115,
+          AGI: 260,
+          INT: 80,
+          PER: 80,
+          SEN: 120
+        },
+        baseEquipmentItemIds: [],
+        skillIds: ['basic-attack', 'basic-focus-slash', 'skill-scout-strike', 'skill-scout-mark']
+      },
+      {
+        name: '카림 나세르',
+        rank: 'A',
+        powerRange: [1200, 1800],
+        growthRange: [1.005, 1.02],
+        level: 59,
+        jobId: 'swordsman',
+        titleId: 'hunter',
+        stats: {
+          STR: 245,
+          VIT: 150,
+          AGI: 215,
+          INT: 55,
+          PER: 70,
+          SEN: 35
+        },
+        baseEquipmentItemIds: [],
+        skillIds: ['basic-attack', 'basic-focus-slash', 'skill-swordsman-flash', 'skill-swordsman-combo']
+      },
+      {
+        name: '살마 라시드',
+        rank: 'A',
+        powerRange: [1200, 1800],
+        growthRange: [1.005, 1.02],
+        level: 55,
+        jobId: 'tactician',
+        titleId: 'hunter',
+        stats: {
+          STR: 65,
+          VIT: 110,
+          AGI: 100,
+          INT: 225,
+          PER: 155,
+          SEN: 45
+        },
+        baseEquipmentItemIds: [],
+        skillIds: ['basic-attack', 'skill-tactician-analyze', 'skill-tactician-command']
+      }
     ],
     pool: {
       countARange: [3, 6],
@@ -4010,5 +7374,3 @@ export const REGION_HUNTER_BASES: RegionSeedBase[] = [
     }
   }
 ]
-
-

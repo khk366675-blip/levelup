@@ -1,0 +1,239 @@
+[국가] 미국 (us)
+토마스 안드레 | National | Lv.100 | guardian | 칭호:national-level-hunter | 스탯{STR:340,VIT:410,AGI:190,INT:120,PER:260,SEN:220}(합 1540) | 기본장비:[] | 스킬:[basic-attack,basic-guard-stance,skill-guardian-bash,skill-guardian-shield,skill-guardian-stance] | 예상전투력:~6,700
+데이비드 브라운 | S | Lv.88 | guardian | 칭호:veteran-hunter | 스탯{STR:240,VIT:330,AGI:120,INT:150,PER:230,SEN:130}(합 1200) | 기본장비:[] | 스킬:[basic-attack,basic-guard-stance,skill-guardian-bash,skill-guardian-shield,skill-guardian-stance] | 예상전투력:~4,850
+마이클 코너 | S | Lv.86 | warrior | 칭호:veteran-hunter | 스탯{STR:360,VIT:270,AGI:160,INT:70,PER:180,SEN:120}(합 1160) | 기본장비:[] | 스킬:[basic-attack,basic-focus-slash,skill-warrior-strike,skill-warrior-earthquake,skill-warrior-shout] | 예상전투력:~4,600
+엘리자베스 리드 | S | Lv.83 | mage | 칭호:veteran-hunter | 스탯{STR:80,VIT:160,AGI:130,INT:360,PER:160,SEN:210}(합 1100) | 기본장비:[] | 스킬:[basic-attack,skill-mage-bolt,skill-mage-burst,skill-mage-storm] | 예상전투력:~4,350
+조나단 켄트 | S | Lv.80 | tactician | 칭호:veteran-hunter | 스탯{STR:130,VIT:190,AGI:150,INT:270,PER:230,SEN:150}(합 1120) | 기본장비:[] | 스킬:[basic-attack,skill-tactician-analyze,skill-tactician-command,skill-tactician-analyze-pulse] | 예상전투력:~4,250
+(A급) 레이첼 모건 | A | Lv.69 | scout | 칭호:hunter | 스탯{STR:120,VIT:130,AGI:260,INT:80,PER:90,SEN:120}(합 800) | 기본장비:[] | 스킬:[basic-attack,basic-focus-slash,skill-scout-strike,skill-scout-mark] | 예상전투력:~2,950
+(A급) 에단 워커 | A | Lv.68 | warrior | 칭호:hunter | 스탯{STR:270,VIT:210,AGI:100,INT:55,PER:110,SEN:55}(합 800) | 기본장비:[] | 스킬:[basic-attack,basic-focus-slash,skill-warrior-strike,skill-warrior-earthquake] | 예상전투력:~2,900
+(A급) 소피아 헤일 | A | Lv.67 | mage | 칭호:hunter | 스탯{STR:60,VIT:115,AGI:105,INT:280,PER:80,SEN:130}(합 770) | 기본장비:[] | 스킬:[basic-attack,skill-mage-bolt,skill-mage-burst] | 예상전투력:~2,780
+(A급) 그레이슨 밀러 | A | Lv.66 | guardian | 칭호:hunter | 스탯{STR:160,VIT:280,AGI:75,INT:55,PER:170,SEN:60}(합 800) | 기본장비:[] | 스킬:[basic-attack,basic-guard-stance,skill-guardian-bash,skill-guardian-shield] | 예상전투력:~2,760
+(A급) 올리비아 체이스 | A | Lv.65 | tactician | 칭호:hunter | 스탯{STR:75,VIT:130,AGI:115,INT:250,PER:160,SEN:70}(합 800) | 기본장비:[] | 스킬:[basic-attack,skill-tactician-analyze,skill-tactician-command] | 예상전투력:~2,720
+(A급) 잭슨 리버스 | A | Lv.64 | swordsman | 칭호:hunter | 스탯{STR:250,VIT:150,AGI:210,INT:60,PER:80,SEN:40}(합 790) | 기본장비:[] | 스킬:[basic-attack,basic-focus-slash,skill-swordsman-flash,skill-swordsman-combo] | 예상전투력:~2,650
+(A급) 노아 벤넷 | A | Lv.63 | guardian | 칭호:hunter | 스탯{STR:135,VIT:245,AGI:80,INT:115,PER:170,SEN:45}(합 790) | 기본장비:[] | 스킬:[basic-attack,basic-guard-stance,skill-guardian-bash,skill-guardian-shield] | 예상전투력:~2,580
+(A급) 에이바 스톤 | A | Lv.62 | scout | 칭호:hunter | 스탯{STR:95,VIT:115,AGI:245,INT:85,PER:75,SEN:145}(합 760) | 기본장비:[] | 스킬:[basic-attack,basic-focus-slash,skill-scout-strike,skill-scout-mark] | 예상전투력:~2,500
+(A급) 루크 해리슨 | A | Lv.61 | warrior | 칭호:hunter | 스탯{STR:285,VIT:205,AGI:115,INT:40,PER:80,SEN:35}(합 760) | 기본장비:[] | 스킬:[basic-attack,basic-focus-slash,skill-warrior-strike,skill-warrior-earthquake] | 예상전투력:~2,430
+(A급) 매디슨 크레인 | A | Lv.60 | mage | 칭호:hunter | 스탯{STR:50,VIT:105,AGI:95,INT:260,PER:80,SEN:150}(합 740) | 기본장비:[] | 스킬:[basic-attack,skill-mage-bolt,skill-mage-burst] | 예상전투력:~2,360
+(A급) 케일럽 포드 | A | Lv.59 | guardian | 칭호:hunter | 스탯{STR:150,VIT:255,AGI:65,INT:55,PER:155,SEN:50}(합 730) | 기본장비:[] | 스킬:[basic-attack,basic-guard-stance,skill-guardian-bash,skill-guardian-shield] | 예상전투력:~2,240
+(A급) 빅토리아 블레이크 | A | Lv.58 | tactician | 칭호:hunter | 스탯{STR:65,VIT:115,AGI:105,INT:225,PER:150,SEN:60}(합 720) | 기본장비:[] | 스킬:[basic-attack,skill-tactician-analyze,skill-tactician-command] | 예상전투력:~2,150
+(A급) 헨리 콜 | A | Lv.56 | warrior | 칭호:hunter | 스탯{STR:240,VIT:185,AGI:100,INT:50,PER:95,SEN:40}(합 710) | 기본장비:[] | 스킬:[basic-attack,basic-focus-slash,skill-warrior-strike] | 예상전투력:~2,050
+(A급) 스칼렛 웨스트 | A | Lv.54 | scout | 칭호:hunter | 스탯{STR:85,VIT:105,AGI:230,INT:75,PER:70,SEN:125}(합 690) | 기본장비:[] | 스킬:[basic-attack,basic-focus-slash,skill-scout-strike] | 예상전투력:~1,950
+(A급) 아이작 로웰 | A | Lv.52 | mage | 칭호:hunter | 스탯{STR:45,VIT:100,AGI:80,INT:230,PER:75,SEN:140}(합 670) | 기본장비:[] | 스킬:[basic-attack,skill-mage-burst] | 예상전투력:~1,750
+
+요약: National 1 / S 4 / A 15, 직업 6종, 전투력 약 1,750~6,700.
+
+[국가] 중국 (cn)
+류지강 | National | Lv.100 | warrior | 칭호:national-level-hunter | 스탯{STR:390,VIT:330,AGI:190,INT:120,PER:270,SEN:220}(합 1520) | 기본장비:[] | 스킬:[basic-attack,basic-focus-slash,skill-warrior-strike,skill-warrior-earthquake,skill-warrior-shout] | 예상전투력:~6,850
+장웨이 | S | Lv.89 | swordsman | 칭호:veteran-hunter | 스탯{STR:330,VIT:210,AGI:270,INT:80,PER:160,SEN:130}(합 1180) | 기본장비:[] | 스킬:[basic-attack,basic-focus-slash,skill-swordsman-flash,skill-swordsman-combo,skill-swordsman-wave] | 예상전투력:~4,850
+리밍 | S | Lv.86 | mage | 칭호:veteran-hunter | 스탯{STR:75,VIT:150,AGI:130,INT:370,PER:160,SEN:245}(합 1130) | 기본장비:[] | 스킬:[basic-attack,skill-mage-bolt,skill-mage-burst,skill-mage-storm] | 예상전투력:~4,550
+왕판 | S | Lv.83 | guardian | 칭호:veteran-hunter | 스탯{STR:215,VIT:345,AGI:95,INT:90,PER:260,SEN:125}(합 1130) | 기본장비:[] | 스킬:[basic-attack,basic-guard-stance,skill-guardian-bash,skill-guardian-shield,skill-guardian-stance] | 예상전투력:~4,300
+첸 시우 | S | Lv.80 | scout | 칭호:veteran-hunter | 스탯{STR:145,VIT:150,AGI:330,INT:115,PER:130,SEN:210}(합 1080) | 기본장비:[] | 스킬:[basic-attack,basic-focus-slash,skill-scout-strike,skill-scout-mark,skill-scout-step] | 예상전투력:~4,050
+(A급) 선위 | A | Lv.69 | warrior | 칭호:hunter | 스탯{STR:285,VIT:230,AGI:120,INT:55,PER:95,SEN:45}(합 830) | 기본장비:[] | 스킬:[basic-attack,basic-focus-slash,skill-warrior-strike,skill-warrior-earthquake] | 예상전투력:~2,950
+(A급) 린샤오란 | A | Lv.68 | mage | 칭호:hunter | 스탯{STR:55,VIT:120,AGI:110,INT:295,PER:85,SEN:155}(합 820) | 기본장비:[] | 스킬:[basic-attack,skill-mage-bolt,skill-mage-burst] | 예상전투력:~2,850
+(A급) 자오톈위 | A | Lv.67 | guardian | 칭호:hunter | 스탯{STR:175,VIT:300,AGI:75,INT:60,PER:170,SEN:40}(합 820) | 기본장비:[] | 스킬:[basic-attack,basic-guard-stance,skill-guardian-bash,skill-guardian-shield] | 예상전투력:~2,780
+(A급) 허란 | A | Lv.66 | scout | 칭호:hunter | 스탯{STR:115,VIT:125,AGI:280,INT:80,PER:90,SEN:120}(합 810) | 기본장비:[] | 스킬:[basic-attack,basic-focus-slash,skill-scout-strike,skill-scout-mark] | 예상전투력:~2,720
+(A급) 우진하이 | A | Lv.65 | tactician | 칭호:hunter | 스탯{STR:85,VIT:135,AGI:115,INT:255,PER:165,SEN:55}(합 810) | 기본장비:[] | 스킬:[basic-attack,skill-tactician-analyze,skill-tactician-command] | 예상전투력:~2,680
+(A급) 마오칭 | A | Lv.64 | swordsman | 칭호:hunter | 스탯{STR:250,VIT:155,AGI:235,INT:60,PER:75,SEN:35}(합 810) | 기본장비:[] | 스킬:[basic-attack,basic-focus-slash,skill-swordsman-flash,skill-swordsman-combo] | 예상전투력:~2,620
+(A급) 두웨이 | A | Lv.63 | warrior | 칭호:hunter | 스탯{STR:270,VIT:215,AGI:105,INT:50,PER:105,SEN:45}(합 790) | 기본장비:[] | 스킬:[basic-attack,basic-focus-slash,skill-warrior-strike] | 예상전투력:~2,500
+(A급) 바이위에 | A | Lv.62 | mage | 칭호:hunter | 스탯{STR:50,VIT:110,AGI:95,INT:275,PER:80,SEN:150}(합 760) | 기본장비:[] | 스킬:[basic-attack,skill-mage-bolt,skill-mage-burst] | 예상전투력:~2,400
+(A급) 궈런 | A | Lv.61 | guardian | 칭호:hunter | 스탯{STR:160,VIT:270,AGI:65,INT:55,PER:160,SEN:40}(합 750) | 기본장비:[] | 스킬:[basic-attack,basic-guard-stance,skill-guardian-bash,skill-guardian-shield] | 예상전투력:~2,300
+(A급) 탕메이 | A | Lv.60 | scout | 칭호:hunter | 스탯{STR:95,VIT:115,AGI:255,INT:80,PER:75,SEN:130}(합 750) | 기본장비:[] | 스킬:[basic-attack,basic-focus-slash,skill-scout-strike] | 예상전투력:~2,220
+(A급) 쉬카이 | A | Lv.58 | warrior | 칭호:hunter | 스탯{STR:280,VIT:205,AGI:110,INT:40,PER:75,SEN:30}(합 740) | 기본장비:[] | 스킬:[basic-attack,basic-focus-slash,skill-warrior-strike] | 예상전투력:~2,120
+(A급) 량첸 | A | Lv.56 | tactician | 칭호:hunter | 스탯{STR:70,VIT:120,AGI:105,INT:230,PER:155,SEN:50}(합 730) | 기본장비:[] | 스킬:[basic-attack,skill-tactician-analyze] | 예상전투력:~1,950
+(A급) 옌쯔모 | A | Lv.53 | swordsman | 칭호:hunter | 스탯{STR:225,VIT:135,AGI:215,INT:55,PER:70,SEN:30}(합 730) | 기본장비:[] | 스킬:[basic-attack,basic-focus-slash,skill-swordsman-flash] | 예상전투력:~1,820
+
+요약: National 1 / S 4 / A 13, 직업 6종, 전투력 약 1,820~6,850.
+
+[국가] 일본 (jp)
+고토 류지 | S | Lv.90 | swordsman | 칭호:veteran-hunter | 스탯{STR:335,VIT:195,AGI:295,INT:90,PER:125,SEN:150}(합 1190) | 기본장비:[] | 스킬:[basic-attack,basic-focus-slash,skill-swordsman-flash,skill-swordsman-combo,skill-swordsman-wave] | 예상전투력:~4,950
+스기모토 켄 | S | Lv.84 | guardian | 칭호:veteran-hunter | 스탯{STR:200,VIT:300,AGI:120,INT:85,PER:220,SEN:105}(합 1030) | 기본장비:[] | 스킬:[basic-attack,basic-guard-stance,skill-guardian-bash,skill-guardian-shield,skill-guardian-stance] | 예상전투력:~4,350
+마츠우라 시게오 | S | Lv.81 | scout | 칭호:veteran-hunter | 스탯{STR:160,VIT:145,AGI:295,INT:90,PER:125,SEN:180}(합 995) | 기본장비:[] | 스킬:[basic-attack,basic-focus-slash,skill-scout-strike,skill-scout-mark,skill-scout-step] | 예상전투력:~3,850
+미나구치 마사코 | S | Lv.82 | mage | 칭호:veteran-hunter | 스탯{STR:85,VIT:150,AGI:145,INT:340,PER:145,SEN:190}(합 1055) | 기본장비:[] | 스킬:[basic-attack,skill-mage-bolt,skill-mage-burst,skill-mage-storm] | 예상전투력:~3,700
+(A급) 쿠로사와 렌 | A | Lv.68 | swordsman | 칭호:hunter | 스탯{STR:270,VIT:150,AGI:245,INT:55,PER:75,SEN:45}(합 840) | 기본장비:[] | 스킬:[basic-attack,basic-focus-slash,skill-swordsman-flash,skill-swordsman-combo] | 예상전투력:~2,950
+(A급) 하야시 아오이 | A | Lv.66 | mage | 칭호:hunter | 스탯{STR:55,VIT:115,AGI:115,INT:290,PER:80,SEN:155}(합 810) | 기본장비:[] | 스킬:[basic-attack,skill-mage-bolt,skill-mage-burst] | 예상전투력:~2,760
+(A급) 타치바나 쇼 | A | Lv.64 | scout | 칭호:hunter | 스탯{STR:120,VIT:120,AGI:275,INT:75,PER:90,SEN:120}(합 800) | 기본장비:[] | 스킬:[basic-attack,basic-focus-slash,skill-scout-strike,skill-scout-mark] | 예상전투력:~2,620
+(A급) 오오타니 미즈키 | A | Lv.63 | guardian | 칭호:hunter | 스탯{STR:160,VIT:285,AGI:70,INT:65,PER:165,SEN:45}(합 790) | 기본장비:[] | 스킬:[basic-attack,basic-guard-stance,skill-guardian-bash,skill-guardian-shield] | 예상전투력:~2,480
+(A급) 사카모토 유우마 | A | Lv.61 | swordsman | 칭호:hunter | 스탯{STR:245,VIT:145,AGI:220,INT:55,PER:65,SEN:40}(합 770) | 기본장비:[] | 스킬:[basic-attack,basic-focus-slash,skill-swordsman-flash,skill-swordsman-combo] | 예상전투력:~2,300
+(A급) 후지모리 카나 | A | Lv.58 | tactician | 칭호:hunter | 스탯{STR:70,VIT:115,AGI:105,INT:235,PER:155,SEN:50}(합 730) | 기본장비:[] | 스킬:[basic-attack,skill-tactician-analyze,skill-tactician-command] | 예상전투력:~2,050
+(A급) 이시카와 다이치 | A | Lv.55 | guardian | 칭호:hunter | 스탯{STR:135,VIT:235,AGI:75,INT:110,PER:155,SEN:40}(합 750) | 기본장비:[] | 스킬:[basic-attack,basic-guard-stance,skill-guardian-bash,skill-guardian-shield] | 예상전투력:~1,850
+
+요약: S 4 / A 7, 직업 5종, 전투력 약 1,850~4,950.
+
+[국가] 한국 (kr)
+강태풍 | National | Lv.100 | warrior | 칭호:national-level-hunter | 스탯{STR:360,VIT:320,AGI:280,INT:150,PER:220,SEN:250}(합 1580) | 기본장비:[] | 스킬:[basic-attack,basic-focus-slash,basic-guard-stance,skill-warrior-strike,skill-warrior-earthquake,skill-warrior-shout] | 예상전투력:~6,430
+이진성 | S | Lv.84 | swordsman | 칭호:veteran-hunter | 스탯{STR:270,VIT:205,AGI:230,INT:90,PER:110,SEN:145}(합 1050) | 기본장비:[] | 스킬:[basic-attack,basic-focus-slash,skill-swordsman-flash,skill-swordsman-combo,skill-swordsman-wave] | 예상전투력:~4,777
+백호민 | S | Lv.82 | guardian | 칭호:veteran-hunter | 스탯{STR:190,VIT:310,AGI:115,INT:110,PER:185,SEN:110}(합 1020) | 기본장비:[] | 스킬:[basic-attack,basic-guard-stance,skill-guardian-bash,skill-guardian-shield,skill-guardian-stance] | 예상전투력:~4,783
+정재희 | S | Lv.76 | tactician | 칭호:veteran-hunter | 스탯{STR:120,VIT:150,AGI:140,INT:250,PER:130,SEN:140}(합 930) | 기본장비:[] | 스킬:[basic-attack,skill-tactician-analyze,skill-tactician-command,skill-tactician-analyze-pulse] | 예상전투력:~3,174
+(A급) 한서윤 | A | Lv.68 | mage | 칭호:hunter | 스탯{STR:55,VIT:115,AGI:105,INT:285,PER:85,SEN:155}(합 800) | 기본장비:[] | 스킬:[basic-attack,skill-mage-bolt,skill-mage-burst] | 예상전투력:~2,850
+(A급) 박도현 | A | Lv.67 | swordsman | 칭호:hunter | 스탯{STR:265,VIT:155,AGI:235,INT:60,PER:75,SEN:40}(합 830) | 기본장비:[] | 스킬:[basic-attack,basic-focus-slash,skill-swordsman-flash,skill-swordsman-combo] | 예상전투력:~2,780
+(A급) 최유림 | A | Lv.65 | scout | 칭호:hunter | 스탯{STR:110,VIT:120,AGI:275,INT:80,PER:85,SEN:130}(합 800) | 기본장비:[] | 스킬:[basic-attack,basic-focus-slash,skill-scout-strike,skill-scout-mark] | 예상전투력:~2,620
+(A급) 서민재 | A | Lv.64 | guardian | 칭호:hunter | 스탯{STR:165,VIT:285,AGI:75,INT:60,PER:170,SEN:45}(합 800) | 기본장비:[] | 스킬:[basic-attack,basic-guard-stance,skill-guardian-bash,skill-guardian-shield] | 예상전투력:~2,520
+(A급) 윤태오 | A | Lv.62 | warrior | 칭호:hunter | 스탯{STR:275,VIT:210,AGI:105,INT:50,PER:95,SEN:45}(합 780) | 기본장비:[] | 스킬:[basic-attack,basic-focus-slash,skill-warrior-strike,skill-warrior-earthquake] | 예상전투력:~2,380
+(A급) 강하린 | A | Lv.60 | tactician | 칭호:hunter | 스탯{STR:70,VIT:120,AGI:110,INT:235,PER:160,SEN:55}(합 750) | 기본장비:[] | 스킬:[basic-attack,skill-tactician-analyze,skill-tactician-command] | 예상전투력:~2,220
+(A급) 문지후 | A | Lv.58 | guardian | 칭호:hunter | 스탯{STR:140,VIT:245,AGI:80,INT:115,PER:155,SEN:45}(합 780) | 기본장비:[] | 스킬:[basic-attack,basic-guard-stance,skill-guardian-bash,skill-guardian-shield] | 예상전투력:~2,050
+(A급) 오세준 | A | Lv.55 | scout | 칭호:hunter | 스탯{STR:95,VIT:105,AGI:240,INT:75,PER:70,SEN:125}(합 710) | 기본장비:[] | 스킬:[basic-attack,basic-focus-slash,skill-scout-strike] | 예상전투력:~1,780
+
+요약: National 1 / S 3 / A 8, 직업 6종, 전투력 약 1,780~6,430.
+
+[국가] 러시아 (ru) — 정정 반영
+유리 오를로프 | S | Lv.89 | warrior | 칭호:veteran-hunter | 스탯{STR:355,VIT:285,AGI:140,INT:70,PER:185,SEN:105}(합 1140) | 기본장비:[] | 스킬:[basic-attack,basic-focus-slash,skill-warrior-strike,skill-warrior-earthquake,skill-warrior-shout] | 예상전투력:~4,650
+미하일 이바노프 | S | Lv.86 | guardian | 칭호:veteran-hunter | 스탯{STR:235,VIT:355,AGI:95,INT:80,PER:250,SEN:125}(합 1140) | 기본장비:[] | 스킬:[basic-attack,basic-guard-stance,skill-guardian-bash,skill-guardian-shield,skill-guardian-stance] | 예상전투력:~4,450
+드미트리 소콜로프 | S | Lv.83 | scout | 칭호:veteran-hunter | 스탯{STR:155,VIT:150,AGI:325,INT:95,PER:135,SEN:205}(합 1065) | 기본장비:[] | 스킬:[basic-attack,basic-focus-slash,skill-scout-strike,skill-scout-mark,skill-scout-step] | 예상전투력:~4,050
+타티아나 볼코바 | S | Lv.81 | mage | 칭호:veteran-hunter | 스탯{STR:70,VIT:155,AGI:120,INT:355,PER:155,SEN:225}(합 1080) | 기본장비:[] | 스킬:[basic-attack,skill-mage-bolt,skill-mage-burst,skill-mage-storm] | 예상전투력:~3,950
+(A급) 알렉세이 페도로프 | A | Lv.69 | guardian | 칭호:hunter | 스탯{STR:180,VIT:305,AGI:70,INT:55,PER:175,SEN:45}(합 830) | 기본장비:[] | 스킬:[basic-attack,basic-guard-stance,skill-guardian-bash,skill-guardian-shield] | 예상전투력:~2,950
+(A급) 이리나 체르노바 | A | Lv.68 | mage | 칭호:hunter | 스탯{STR:55,VIT:120,AGI:105,INT:295,PER:90,SEN:155}(합 820) | 기본장비:[] | 스킬:[basic-attack,skill-mage-bolt,skill-mage-burst] | 예상전투력:~2,820
+(A급) 파벨 레베데프 | A | Lv.67 | warrior | 칭호:hunter | 스탯{STR:290,VIT:230,AGI:105,INT:45,PER:105,SEN:40}(합 815) | 기본장비:[] | 스킬:[basic-attack,basic-focus-slash,skill-warrior-strike,skill-warrior-earthquake] | 예상전투력:~2,760
+(A급) 나탈리아 베로바 | A | Lv.66 | scout | 칭호:hunter | 스탯{STR:115,VIT:125,AGI:280,INT:80,PER:90,SEN:120}(합 810) | 기본장비:[] | 스킬:[basic-attack,basic-focus-slash,skill-scout-strike,skill-scout-mark] | 예상전투력:~2,700
+(A급) 세르게이 쿠즈민 | A | Lv.64 | warrior | 칭호:hunter | 스탯{STR:275,VIT:215,AGI:100,INT:45,PER:100,SEN:40}(합 775) | 기본장비:[] | 스킬:[basic-attack,basic-focus-slash,skill-warrior-strike] | 예상전투력:~2,500
+(A급) 올가 로마노바 | A | Lv.63 | tactician | 칭호:hunter | 스탯{STR:70,VIT:125,AGI:105,INT:245,PER:165,SEN:50}(합 760) | 기본장비:[] | 스킬:[basic-attack,skill-tactician-analyze,skill-tactician-command] | 예상전투력:~2,380
+(A급) 니콜라이 보로닌 | A | Lv.61 | guardian | 칭호:hunter | 스탯{STR:165,VIT:280,AGI:65,INT:55,PER:160,SEN:40}(합 765) | 기본장비:[] | 스킬:[basic-attack,basic-guard-stance,skill-guardian-bash,skill-guardian-shield] | 예상전투력:~2,260
+(A급) 마리나 소로키나 | A | Lv.60 | mage | 칭호:hunter | 스탯{STR:50,VIT:105,AGI:95,INT:265,PER:80,SEN:145}(합 740) | 기본장비:[] | 스킬:[basic-attack,skill-mage-bolt,skill-mage-burst] | 예상전투력:~2,180
+(A급) 콘스탄틴 자이체프 | A | Lv.58 | swordsman | 칭호:hunter | 스탯{STR:250,VIT:150,AGI:220,INT:55,PER:70,SEN:35}(합 780) | 기본장비:[] | 스킬:[basic-attack,basic-focus-slash,skill-swordsman-flash,skill-swordsman-combo] | 예상전투력:~2,050
+(A급) 안나 모르조바 | A | Lv.56 | scout | 칭호:hunter | 스탯{STR:95,VIT:110,AGI:245,INT:75,PER:75,SEN:125}(합 725) | 기본장비:[] | 스킬:[basic-attack,basic-focus-slash,skill-scout-strike] | 예상전투력:~1,880
+(A급) 빅토르 말체프 | A | Lv.54 | warrior | 칭호:hunter | 스탯{STR:245,VIT:190,AGI:95,INT:45,PER:90,SEN:35}(합 700) | 기본장비:[] | 스킬:[basic-attack,basic-focus-slash,skill-warrior-strike] | 예상전투력:~1,760
+
+요약: S 4 / A 11, 직업 6종, 전투력 약 1,760~4,650.
+
+[국가] 독일 (de)
+레너트 니어만 | S | Lv.88 | guardian | 칭호:veteran-hunter | 스탯{STR:245,VIT:335,AGI:115,INT:155,PER:230,SEN:120}(합 1200) | 기본장비:[] | 스킬:[basic-attack,basic-guard-stance,skill-guardian-bash,skill-guardian-shield,skill-guardian-stance] | 예상전투력:~4,850
+한스 뮐러 | S | Lv.84 | guardian | 칭호:veteran-hunter | 스탯{STR:225,VIT:345,AGI:95,INT:95,PER:245,SEN:105}(합 1110) | 기본장비:[] | 스킬:[basic-attack,basic-guard-stance,skill-guardian-bash,skill-guardian-shield,skill-guardian-stance] | 예상전투력:~4,300
+디터 슈미트 | S | Lv.80 | tactician | 칭호:veteran-hunter | 스탯{STR:105,VIT:155,AGI:120,INT:295,PER:245,SEN:125}(합 1045) | 기본장비:[] | 스킬:[basic-attack,skill-tactician-analyze,skill-tactician-command,skill-tactician-analyze-pulse] | 예상전투력:~3,850
+프란츠 바그너 | S | Lv.78 | swordsman | 칭호:veteran-hunter | 스탯{STR:275,VIT:165,AGI:245,INT:80,PER:105,SEN:110}(합 980) | 기본장비:[] | 스킬:[basic-attack,basic-focus-slash,skill-swordsman-flash,skill-swordsman-combo,skill-swordsman-wave] | 예상전투력:~3,550
+(A급) 클라우스 베커 | A | Lv.68 | guardian | 칭호:hunter | 스탯{STR:175,VIT:300,AGI:75,INT:65,PER:180,SEN:45}(합 840) | 기본장비:[] | 스킬:[basic-attack,basic-guard-stance,skill-guardian-bash,skill-guardian-shield] | 예상전투력:~2,900
+(A급) 마티아스 슈나이더 | A | Lv.67 | guardian | 칭호:hunter | 스탯{STR:150,VIT:270,AGI:80,INT:125,PER:170,SEN:45}(합 840) | 기본장비:[] | 스킬:[basic-attack,basic-guard-stance,skill-guardian-bash,skill-guardian-shield] | 예상전투력:~2,760
+(A급) 엘리자베트 크라우스 | A | Lv.66 | mage | 칭호:hunter | 스탯{STR:55,VIT:120,AGI:105,INT:295,PER:90,SEN:155}(합 820) | 기본장비:[] | 스킬:[basic-attack,skill-mage-bolt,skill-mage-burst] | 예상전투력:~2,650
+(A급) 펠릭스 호프만 | A | Lv.64 | tactician | 칭호:hunter | 스탯{STR:80,VIT:130,AGI:110,INT:255,PER:175,SEN:50}(합 800) | 기본장비:[] | 스킬:[basic-attack,skill-tactician-analyze,skill-tactician-command] | 예상전투력:~2,480
+(A급) 요나스 리히터 | A | Lv.62 | warrior | 칭호:hunter | 스탯{STR:280,VIT:220,AGI:100,INT:50,PER:105,SEN:35}(합 790) | 기본장비:[] | 스킬:[basic-attack,basic-focus-slash,skill-warrior-strike,skill-warrior-earthquake] | 예상전투력:~2,350
+(A급) 레나 바이스 | A | Lv.60 | scout | 칭호:hunter | 스탯{STR:105,VIT:115,AGI:260,INT:80,PER:85,SEN:125}(합 770) | 기본장비:[] | 스킬:[basic-attack,basic-focus-slash,skill-scout-strike,skill-scout-mark] | 예상전투력:~2,220
+(A급) 오스카 브란트 | A | Lv.58 | swordsman | 칭호:hunter | 스탯{STR:250,VIT:150,AGI:220,INT:55,PER:75,SEN:35}(합 785) | 기본장비:[] | 스킬:[basic-attack,basic-focus-slash,skill-swordsman-flash,skill-swordsman-combo] | 예상전투력:~2,050
+(A급) 카타리나 볼프 | A | Lv.55 | mage | 칭호:hunter | 스탯{STR:45,VIT:105,AGI:90,INT:245,PER:80,SEN:145}(합 710) | 기본장비:[] | 스킬:[basic-attack,skill-mage-burst] | 예상전투력:~1,780
+
+요약: S 4 / A 8, 직업 6종, 전투력 약 1,780~4,850.
+
+[국가] 멕시코 (mx)
+카를로스 산체스 | S | Lv.78 | warrior | 칭호:veteran-hunter | 스탯{STR:295,VIT:240,AGI:135,INT:75,PER:145,SEN:90}(합 980) | 기본장비:[] | 스킬:[basic-attack,basic-focus-slash,skill-warrior-strike,skill-warrior-earthquake,skill-warrior-shout] | 예상전투력:~3,750
+산티아고 고메즈 | S | Lv.75 | scout | 칭호:veteran-hunter | 스탯{STR:145,VIT:135,AGI:295,INT:85,PER:125,SEN:165}(합 950) | 기본장비:[] | 스킬:[basic-attack,basic-focus-slash,skill-scout-strike,skill-scout-mark,skill-scout-step] | 예상전투력:~3,420
+마리아 헤르난데스 | S | Lv.72 | mage | 칭호:veteran-hunter | 스탯{STR:70,VIT:135,AGI:115,INT:305,PER:135,SEN:170}(합 930) | 기본장비:[] | 스킬:[basic-attack,skill-mage-bolt,skill-mage-burst,skill-mage-storm] | 예상전투력:~3,080
+(A급) 발렌티나 로하스 | A | Lv.66 | scout | 칭호:hunter | 스탯{STR:110,VIT:120,AGI:270,INT:80,PER:85,SEN:125}(합 790) | 기본장비:[] | 스킬:[basic-attack,basic-focus-slash,skill-scout-strike,skill-scout-mark] | 예상전투력:~2,650
+(A급) 디에고 라미레스 | A | Lv.64 | warrior | 칭호:hunter | 스탯{STR:275,VIT:215,AGI:105,INT:45,PER:95,SEN:35}(합 770) | 기본장비:[] | 스킬:[basic-attack,basic-focus-slash,skill-warrior-strike,skill-warrior-earthquake] | 예상전투력:~2,450
+(A급) 이사벨라 몬테스 | A | Lv.61 | tactician | 칭호:hunter | 스탯{STR:70,VIT:115,AGI:105,INT:235,PER:155,SEN:50}(합 730) | 기본장비:[] | 스킬:[basic-attack,skill-tactician-analyze,skill-tactician-command] | 예상전투력:~2,180
+(A급) 라파엘 토레스 | A | Lv.59 | guardian | 칭호:hunter | 스탯{STR:155,VIT:260,AGI:70,INT:55,PER:150,SEN:40}(합 730) | 기본장비:[] | 스킬:[basic-attack,basic-guard-stance,skill-guardian-bash,skill-guardian-shield] | 예상전투력:~2,050
+(A급) 루시아 알바레스 | A | Lv.55 | mage | 칭호:hunter | 스탯{STR:45,VIT:100,AGI:90,INT:240,PER:75,SEN:140}(합 690) | 기본장비:[] | 스킬:[basic-attack,skill-mage-burst] | 예상전투력:~1,720
+
+요약: S 3 / A 5, 직업 5종, 전투력 약 1,720~3,750.
+
+[국가] 이탈리아 (it)
+페데리코 로시 | S | Lv.80 | swordsman | 칭호:veteran-hunter | 스탯{STR:285,VIT:170,AGI:260,INT:85,PER:110,SEN:120}(합 1030) | 기본장비:[] | 스킬:[basic-attack,basic-focus-slash,skill-swordsman-flash,skill-swordsman-combo,skill-swordsman-wave] | 예상전투력:~3,850
+조반니 비안키 | S | Lv.76 | guardian | 칭호:veteran-hunter | 스탯{STR:190,VIT:285,AGI:95,INT:130,PER:205,SEN:95}(합 1000) | 기본장비:[] | 스킬:[basic-attack,basic-guard-stance,skill-guardian-bash,skill-guardian-shield,skill-guardian-stance] | 예상전투력:~3,450
+소피아 리치 | S | Lv.73 | mage | 칭호:veteran-hunter | 스탯{STR:65,VIT:130,AGI:120,INT:315,PER:130,SEN:175}(합 935) | 기본장비:[] | 스킬:[basic-attack,skill-mage-bolt,skill-mage-burst,skill-mage-storm] | 예상전투력:~3,120
+(A급) 마르코 콘티 | A | Lv.66 | swordsman | 칭호:hunter | 스탯{STR:255,VIT:150,AGI:230,INT:55,PER:70,SEN:40}(합 800) | 기본장비:[] | 스킬:[basic-attack,basic-focus-slash,skill-swordsman-flash,skill-swordsman-combo] | 예상전투력:~2,650
+(A급) 엘레나 페라리 | A | Lv.64 | mage | 칭호:hunter | 스탯{STR:50,VIT:110,AGI:100,INT:280,PER:85,SEN:150}(합 775) | 기본장비:[] | 스킬:[basic-attack,skill-mage-bolt,skill-mage-burst] | 예상전투력:~2,430
+(A급) 루카 마리노 | A | Lv.62 | scout | 칭호:hunter | 스탯{STR:110,VIT:115,AGI:260,INT:75,PER:80,SEN:120}(합 760) | 기본장비:[] | 스킬:[basic-attack,basic-focus-slash,skill-scout-strike,skill-scout-mark] | 예상전투력:~2,250
+(A급) 비토리아 그레코 | A | Lv.60 | tactician | 칭호:hunter | 스탯{STR:70,VIT:115,AGI:105,INT:235,PER:155,SEN:50}(합 730) | 기본장비:[] | 스킬:[basic-attack,skill-tactician-analyze,skill-tactician-command] | 예상전투력:~2,100
+(A급) 안드레아 로마노 | A | Lv.58 | guardian | 칭호:hunter | 스탯{STR:155,VIT:260,AGI:70,INT:55,PER:150,SEN:40}(합 730) | 기본장비:[] | 스킬:[basic-attack,basic-guard-stance,skill-guardian-bash,skill-guardian-shield] | 예상전투력:~1,980
+(A급) 카밀라 데 루카 | A | Lv.55 | guardian | 칭호:hunter | 스탯{STR:130,VIT:230,AGI:75,INT:105,PER:145,SEN:40}(합 725) | 기본장비:[] | 스킬:[basic-attack,basic-guard-stance,skill-guardian-bash,skill-guardian-shield] | 예상전투력:~1,780
+
+요약: S 3 / A 6, 직업 5종, 전투력 약 1,780~3,850.
+
+[국가] 브라질 (br) — 정정 반영
+티아고 실바 | S | Lv.79 | scout | 칭호:veteran-hunter | 스탯{STR:160,VIT:155,AGI:325,INT:90,PER:125,SEN:165}(합 1020) | 기본장비:[] | 스킬:[basic-attack,basic-focus-slash,skill-scout-strike,skill-scout-mark,skill-scout-step] | 예상전투력:~3,780
+루카스 산토스 | S | Lv.76 | warrior | 칭호:veteran-hunter | 스탯{STR:310,VIT:245,AGI:145,INT:65,PER:135,SEN:80}(합 980) | 기본장비:[] | 스킬:[basic-attack,basic-focus-slash,skill-warrior-strike,skill-warrior-earthquake,skill-warrior-shout] | 예상전투력:~3,520
+이사벨라 소우자 | S | Lv.73 | mage | 칭호:veteran-hunter | 스탯{STR:65,VIT:135,AGI:125,INT:310,PER:130,SEN:175}(합 940) | 기본장비:[] | 스킬:[basic-attack,skill-mage-bolt,skill-mage-burst,skill-mage-storm] | 예상전투력:~3,120
+(A급) 마테우스 알메이다 | A | Lv.66 | scout | 칭호:hunter | 스탯{STR:120,VIT:125,AGI:275,INT:75,PER:85,SEN:120}(합 800) | 기본장비:[] | 스킬:[basic-attack,basic-focus-slash,skill-scout-strike,skill-scout-mark] | 예상전투력:~2,680
+(A급) 라파엘 페레이라 | A | Lv.64 | warrior | 칭호:hunter | 스탯{STR:280,VIT:215,AGI:110,INT:45,PER:90,SEN:40}(합 780) | 기본장비:[] | 스킬:[basic-attack,basic-focus-slash,skill-warrior-strike,skill-warrior-earthquake] | 예상전투력:~2,460
+(A급) 비앙카 코스타 | A | Lv.62 | mage | 칭호:hunter | 스탯{STR:50,VIT:110,AGI:105,INT:270,PER:80,SEN:150}(합 765) | 기본장비:[] | 스킬:[basic-attack,skill-mage-bolt,skill-mage-burst] | 예상전투력:~2,300
+(A급) 엔리케 바르보사 | A | Lv.60 | guardian | 칭호:hunter | 스탯{STR:160,VIT:265,AGI:75,INT:55,PER:150,SEN:40}(합 745) | 기본장비:[] | 스킬:[basic-attack,basic-guard-stance,skill-guardian-bash,skill-guardian-shield] | 예상전투력:~2,120
+(A급) 카밀라 누네스 | A | Lv.58 | tactician | 칭호:hunter | 스탯{STR:70,VIT:115,AGI:110,INT:230,PER:155,SEN:50}(합 730) | 기본장비:[] | 스킬:[basic-attack,skill-tactician-analyze,skill-tactician-command] | 예상전투력:~2,000
+(A급) 다니엘 로차 | A | Lv.55 | swordsman | 칭호:hunter | 스탯{STR:240,VIT:145,AGI:215,INT:55,PER:70,SEN:35}(합 760) | 기본장비:[] | 스킬:[basic-attack,basic-focus-slash,skill-swordsman-flash,skill-swordsman-combo] | 예상전투력:~1,760
+
+요약: S 3 / A 6, 직업 6종, 전투력 약 1,760~3,780.
+
+[국가] 이집트 (eg)
+하산 알리 | S | Lv.79 | guardian | 칭호:veteran-hunter | 스탯{STR:215,VIT:300,AGI:95,INT:135,PER:205,SEN:100}(합 1050) | 기본장비:[] | 스킬:[basic-attack,basic-guard-stance,skill-guardian-bash,skill-guardian-shield,skill-guardian-stance] | 예상전투력:~3,850
+아미나 만수르 | S | Lv.76 | mage | 칭호:veteran-hunter | 스탯{STR:65,VIT:135,AGI:115,INT:330,PER:135,SEN:190}(합 970) | 기본장비:[] | 스킬:[basic-attack,skill-mage-bolt,skill-mage-burst,skill-mage-storm] | 예상전투력:~3,520
+오마르 샤리프 | S | Lv.72 | tactician | 칭호:veteran-hunter | 스탯{STR:95,VIT:145,AGI:115,INT:270,PER:210,SEN:95}(합 930) | 기본장비:[] | 스킬:[basic-attack,skill-tactician-analyze,skill-tactician-command,skill-tactician-analyze-pulse] | 예상전투력:~3,120
+(A급) 나디아 엘사예드 | A | Lv.66 | mage | 칭호:hunter | 스탯{STR:50,VIT:110,AGI:100,INT:285,PER:85,SEN:150}(합 780) | 기본장비:[] | 스킬:[basic-attack,skill-mage-bolt,skill-mage-burst] | 예상전투력:~2,620
+(A급) 유세프 파라그 | A | Lv.64 | guardian | 칭호:hunter | 스탯{STR:165,VIT:275,AGI:70,INT:60,PER:160,SEN:40}(합 770) | 기본장비:[] | 스킬:[basic-attack,basic-guard-stance,skill-guardian-bash,skill-guardian-shield] | 예상전투력:~2,400
+(A급) 라일라 하미드 | A | Lv.61 | scout | 칭호:hunter | 스탯{STR:105,VIT:115,AGI:260,INT:80,PER:80,SEN:120}(합 760) | 기본장비:[] | 스킬:[basic-attack,basic-focus-slash,skill-scout-strike,skill-scout-mark] | 예상전투력:~2,220
+(A급) 카림 나세르 | A | Lv.59 | swordsman | 칭호:hunter | 스탯{STR:245,VIT:150,AGI:215,INT:55,PER:70,SEN:35}(합 770) | 기본장비:[] | 스킬:[basic-attack,basic-focus-slash,skill-swordsman-flash,skill-swordsman-combo] | 예상전투력:~2,050
+(A급) 살마 라시드 | A | Lv.55 | tactician | 칭호:hunter | 스탯{STR:65,VIT:110,AGI:100,INT:225,PER:155,SEN:45}(합 700) | 기본장비:[] | 스킬:[basic-attack,skill-tactician-analyze,skill-tactician-command] | 예상전투력:~1,750
+
+요약: S 3 / A 5, 직업 5종, 전투력 약 1,750~3,850.
+
+[국가] 영국 (uk)
+크리스토퍼 리드 | National | Lv.99 | guardian | 칭호:national-level-hunter | 스탯{STR:315,VIT:380,AGI:160,INT:180,PER:280,SEN:215}(합 1530) | 기본장비:[] | 스킬:[basic-attack,basic-guard-stance,skill-guardian-bash,skill-guardian-shield,skill-guardian-stance] | 예상전투력:~6,600
+조지 해리스 | S | Lv.87 | mage | 칭호:veteran-hunter | 스탯{STR:75,VIT:160,AGI:125,INT:380,PER:175,SEN:235}(합 1150) | 기본장비:[] | 스킬:[basic-attack,skill-mage-bolt,skill-mage-burst,skill-mage-storm] | 예상전투력:~4,650
+아서 펜드래건 | S | Lv.86 | swordsman | 칭호:veteran-hunter | 스탯{STR:325,VIT:210,AGI:270,INT:90,PER:145,SEN:130}(합 1170) | 기본장비:[] | 스킬:[basic-attack,basic-focus-slash,skill-swordsman-flash,skill-swordsman-combo,skill-swordsman-wave] | 예상전투력:~4,500
+리처드 하트 | S | Lv.80 | tactician | 칭호:veteran-hunter | 스탯{STR:105,VIT:155,AGI:125,INT:300,PER:240,SEN:125}(합 1050) | 기본장비:[] | 스킬:[basic-attack,skill-tactician-analyze,skill-tactician-command,skill-tactician-analyze-pulse] | 예상전투력:~3,850
+(A급) 엘리노어 애쉬크로프트 | A | Lv.69 | mage | 칭호:hunter | 스탯{STR:55,VIT:120,AGI:110,INT:300,PER:90,SEN:165}(합 840) | 기본장비:[] | 스킬:[basic-attack,skill-mage-bolt,skill-mage-burst] | 예상전투력:~2,920
+(A급) 윌리엄 블랙우드 | A | Lv.68 | guardian | 칭호:hunter | 스탯{STR:155,VIT:285,AGI:80,INT:130,PER:175,SEN:45}(합 870) | 기본장비:[] | 스킬:[basic-attack,basic-guard-stance,skill-guardian-bash,skill-guardian-shield] | 예상전투력:~2,850
+(A급) 에드워드 랭커스터 | A | Lv.66 | swordsman | 칭호:hunter | 스탯{STR:270,VIT:160,AGI:235,INT:60,PER:80,SEN:45}(합 850) | 기본장비:[] | 스킬:[basic-attack,basic-focus-slash,skill-swordsman-flash,skill-swordsman-combo] | 예상전투력:~2,700
+(A급) 샬럿 윈저 | A | Lv.65 | tactician | 칭호:hunter | 스탯{STR:75,VIT:125,AGI:110,INT:260,PER:170,SEN:60}(합 800) | 기본장비:[] | 스킬:[basic-attack,skill-tactician-analyze,skill-tactician-command] | 예상전투력:~2,550
+(A급) 헨리 브래드포드 | A | Lv.64 | guardian | 칭호:hunter | 스탯{STR:170,VIT:290,AGI:75,INT:65,PER:170,SEN:45}(합 815) | 기본장비:[] | 스킬:[basic-attack,basic-guard-stance,skill-guardian-bash,skill-guardian-shield] | 예상전투력:~2,470
+(A급) 빅토리아 헤일 | A | Lv.62 | scout | 칭호:hunter | 스탯{STR:110,VIT:120,AGI:270,INT:80,PER:85,SEN:125}(합 790) | 기본장비:[] | 스킬:[basic-attack,basic-focus-slash,skill-scout-strike,skill-scout-mark] | 예상전투력:~2,350
+(A급) 올리버 켄싱턴 | A | Lv.61 | mage | 칭호:hunter | 스탯{STR:50,VIT:110,AGI:100,INT:275,PER:85,SEN:150}(합 770) | 기본장비:[] | 스킬:[basic-attack,skill-mage-bolt,skill-mage-burst] | 예상전투력:~2,250
+(A급) 아멜리아 로즈웰 | A | Lv.59 | scout | 칭호:hunter | 스탯{STR:100,VIT:115,AGI:255,INT:80,PER:80,SEN:125}(합 755) | 기본장비:[] | 스킬:[basic-attack,basic-focus-slash,skill-scout-strike] | 예상전투력:~2,100
+(A급) 토마스 크롬웰 | A | Lv.57 | warrior | 칭호:hunter | 스탯{STR:265,VIT:205,AGI:100,INT:45,PER:90,SEN:35}(합 740) | 기본장비:[] | 스킬:[basic-attack,basic-focus-slash,skill-warrior-strike,skill-warrior-earthquake] | 예상전투력:~1,980
+(A급) 베아트리스 모건 | A | Lv.55 | guardian | 칭호:hunter | 스탯{STR:150,VIT:255,AGI:70,INT:60,PER:150,SEN:40}(합 725) | 기본장비:[] | 스킬:[basic-attack,basic-guard-stance,skill-guardian-bash,skill-guardian-shield] | 예상전투력:~1,780
+
+요약: National 1 / S 3 / A 10, 직업 6종, 전투력 약 1,780~6,600.
+
+[국가] 프랑스 (fr)
+장 로랑 | S | Lv.87 | swordsman | 칭호:veteran-hunter | 스탯{STR:315,VIT:190,AGI:285,INT:95,PER:125,SEN:140}(합 1150) | 기본장비:[] | 스킬:[basic-attack,basic-focus-slash,skill-swordsman-flash,skill-swordsman-combo,skill-swordsman-wave] | 예상전투력:~4,650
+피에르 뒤퐁 | S | Lv.82 | mage | 칭호:veteran-hunter | 스탯{STR:70,VIT:145,AGI:130,INT:350,PER:155,SEN:210}(합 1060) | 기본장비:[] | 스킬:[basic-attack,skill-mage-bolt,skill-mage-burst,skill-mage-storm] | 예상전투력:~4,050
+루카스 모로 | S | Lv.79 | scout | 칭호:veteran-hunter | 스탯{STR:150,VIT:145,AGI:305,INT:90,PER:120,SEN:180}(합 990) | 기본장비:[] | 스킬:[basic-attack,basic-focus-slash,skill-scout-strike,skill-scout-mark,skill-scout-step] | 예상전투력:~3,650
+샤를로트 뒤부아 | S | Lv.76 | tactician | 칭호:veteran-hunter | 스탯{STR:95,VIT:140,AGI:120,INT:275,PER:215,SEN:105}(합 950) | 기본장비:[] | 스킬:[basic-attack,skill-tactician-analyze,skill-tactician-command,skill-tactician-analyze-pulse] | 예상전투력:~3,300
+(A급) 아멜리 베르나르 | A | Lv.68 | mage | 칭호:hunter | 스탯{STR:55,VIT:115,AGI:110,INT:295,PER:90,SEN:160}(합 825) | 기본장비:[] | 스킬:[basic-attack,skill-mage-bolt,skill-mage-burst] | 예상전투력:~2,850
+(A급) 마티외 가르니에 | A | Lv.67 | swordsman | 칭호:hunter | 스탯{STR:270,VIT:155,AGI:240,INT:60,PER:75,SEN:40}(합 840) | 기본장비:[] | 스킬:[basic-attack,basic-focus-slash,skill-swordsman-flash,skill-swordsman-combo] | 예상전투력:~2,750
+(A급) 클레르 보몽 | A | Lv.65 | scout | 칭호:hunter | 스탯{STR:110,VIT:120,AGI:270,INT:80,PER:85,SEN:125}(합 790) | 기본장비:[] | 스킬:[basic-attack,basic-focus-slash,skill-scout-strike,skill-scout-mark] | 예상전투력:~2,520
+(A급) 에티엔 르페브르 | A | Lv.64 | guardian | 칭호:hunter | 스탯{STR:150,VIT:275,AGI:80,INT:125,PER:170,SEN:45}(합 845) | 기본장비:[] | 스킬:[basic-attack,basic-guard-stance,skill-guardian-bash,skill-guardian-shield] | 예상전투력:~2,470
+(A급) 줄리앙 포레 | A | Lv.62 | tactician | 칭호:hunter | 스탯{STR:75,VIT:120,AGI:110,INT:245,PER:165,SEN:55}(합 770) | 기본장비:[] | 스킬:[basic-attack,skill-tactician-analyze,skill-tactician-command] | 예상전투력:~2,300
+(A급) 엘로디 마르탱 | A | Lv.60 | guardian | 칭호:hunter | 스탯{STR:160,VIT:270,AGI:70,INT:60,PER:155,SEN:40}(합 755) | 기본장비:[] | 스킬:[basic-attack,basic-guard-stance,skill-guardian-bash,skill-guardian-shield] | 예상전투력:~2,120
+(A급) 니콜라 루셀 | A | Lv.58 | mage | 칭호:hunter | 스탯{STR:45,VIT:105,AGI:95,INT:260,PER:80,SEN:145}(합 730) | 기본장비:[] | 스킬:[basic-attack,skill-mage-burst] | 예상전투력:~1,950
+(A급) 세바스티앙 카론 | A | Lv.55 | warrior | 칭호:hunter | 스탯{STR:255,VIT:200,AGI:100,INT:45,PER:90,SEN:35}(합 725) | 기본장비:[] | 스킬:[basic-attack,basic-focus-slash,skill-warrior-strike] | 예상전투력:~1,780
+
+요약: S 4 / A 8, 직업 6종, 전투력 약 1,780~4,650.
+
+[국가] 캐나다 (ca)
+알렉산더 로건 | S | Lv.80 | guardian | 칭호:veteran-hunter | 스탯{STR:215,VIT:315,AGI:110,INT:95,PER:215,SEN:100}(합 1050) | 기본장비:[] | 스킬:[basic-attack,basic-guard-stance,skill-guardian-bash,skill-guardian-shield,skill-guardian-stance] | 예상전투력:~3,850
+윌리엄 클라크 | S | Lv.76 | scout | 칭호:veteran-hunter | 스탯{STR:155,VIT:150,AGI:300,INT:90,PER:120,SEN:165}(합 980) | 기본장비:[] | 스킬:[basic-attack,basic-focus-slash,skill-scout-strike,skill-scout-mark,skill-scout-step] | 예상전투력:~3,450
+에밀리 파크 | S | Lv.73 | mage | 칭호:veteran-hunter | 스탯{STR:65,VIT:135,AGI:120,INT:310,PER:135,SEN:170}(합 935) | 기본장비:[] | 스킬:[basic-attack,skill-mage-bolt,skill-mage-burst,skill-mage-storm] | 예상전투력:~3,100
+(A급) 매튜 프레이저 | A | Lv.67 | guardian | 칭호:hunter | 스탯{STR:170,VIT:290,AGI:75,INT:60,PER:170,SEN:45}(합 810) | 기본장비:[] | 스킬:[basic-attack,basic-guard-stance,skill-guardian-bash,skill-guardian-shield] | 예상전투력:~2,750
+(A급) 클레어 맥켄지 | A | Lv.66 | scout | 칭호:hunter | 스탯{STR:110,VIT:125,AGI:275,INT:80,PER:85,SEN:125}(합 800) | 기본장비:[] | 스킬:[basic-attack,basic-focus-slash,skill-scout-strike,skill-scout-mark] | 예상전투력:~2,620
+(A급) 노아 벨로우 | A | Lv.64 | warrior | 칭호:hunter | 스탯{STR:280,VIT:215,AGI:105,INT:45,PER:95,SEN:40}(합 780) | 기본장비:[] | 스킬:[basic-attack,basic-focus-slash,skill-warrior-strike,skill-warrior-earthquake] | 예상전투력:~2,430
+(A급) 아멜리아 그랜트 | A | Lv.62 | mage | 칭호:hunter | 스탯{STR:50,VIT:110,AGI:100,INT:270,PER:85,SEN:150}(합 765) | 기본장비:[] | 스킬:[basic-attack,skill-mage-bolt,skill-mage-burst] | 예상전투력:~2,300
+(A급) 올리버 하트웰 | A | Lv.60 | guardian | 칭호:hunter | 스탯{STR:140,VIT:250,AGI:75,INT:115,PER:155,SEN:40}(합 775) | 기본장비:[] | 스킬:[basic-attack,basic-guard-stance,skill-guardian-bash,skill-guardian-shield] | 예상전투력:~2,150
+(A급) 소피아 르블랑 | A | Lv.58 | tactician | 칭호:hunter | 스탯{STR:70,VIT:115,AGI:105,INT:235,PER:155,SEN:50}(합 730) | 기본장비:[] | 스킬:[basic-attack,skill-tactician-analyze,skill-tactician-command] | 예상전투력:~2,000
+(A급) 잭 톰슨 | A | Lv.55 | swordsman | 칭호:hunter | 스탯{STR:240,VIT:145,AGI:215,INT:55,PER:70,SEN:35}(합 760) | 기본장비:[] | 스킬:[basic-attack,basic-focus-slash,skill-swordsman-flash,skill-swordsman-combo] | 예상전투력:~1,780
+
+요약: S 3 / A 7, 직업 6종, 전투력 약 1,780~3,850.
+
+[국가] 인도 (in) — 정정 반영
+싯다르트 바찬 | National | Lv.99 | tactician | 칭호:national-level-hunter | 스탯{STR:155,VIT:220,AGI:180,INT:390,PER:310,SEN:285}(합 1540) | 기본장비:[] | 스킬:[basic-attack,skill-tactician-analyze,skill-tactician-command,skill-tactician-analyze-pulse] | 예상전투력:~6,500
+라지 코타파리 | S | Lv.87 | warrior | 칭호:veteran-hunter | 스탯{STR:340,VIT:280,AGI:145,INT:75,PER:180,SEN:100}(합 1120) | 기본장비:[] | 스킬:[basic-attack,basic-focus-slash,skill-warrior-strike,skill-warrior-earthquake,skill-warrior-shout] | 예상전투력:~4,500
+아르준 싱 | S | Lv.84 | swordsman | 칭호:veteran-hunter | 스탯{STR:305,VIT:180,AGI:270,INT:95,PER:130,SEN:130}(합 1110) | 기본장비:[] | 스킬:[basic-attack,basic-focus-slash,skill-swordsman-flash,skill-swordsman-combo,skill-swordsman-wave] | 예상전투력:~4,250
+프리야 샤르마 | S | Lv.82 | mage | 칭호:veteran-hunter | 스탯{STR:70,VIT:145,AGI:125,INT:360,PER:155,SEN:225}(합 1080) | 기본장비:[] | 스킬:[basic-attack,skill-mage-bolt,skill-mage-burst,skill-mage-storm] | 예상전투력:~4,050
+(A급) 카비르 칸 | A | Lv.68 | warrior | 칭호:hunter | 스탯{STR:285,VIT:225,AGI:115,INT:50,PER:100,SEN:45}(합 820) | 기본장비:[] | 스킬:[basic-attack,basic-focus-slash,skill-warrior-strike,skill-warrior-earthquake] | 예상전투력:~2,850
+(A급) 아냐 아이어 | A | Lv.67 | mage | 칭호:hunter | 스탯{STR:55,VIT:115,AGI:110,INT:295,PER:85,SEN:160}(합 820) | 기본장비:[] | 스킬:[basic-attack,skill-mage-bolt,skill-mage-burst] | 예상전투력:~2,760
+(A급) 니킬 바르마 | A | Lv.66 | scout | 칭호:hunter | 스탯{STR:120,VIT:125,AGI:275,INT:80,PER:90,SEN:120}(합 810) | 기본장비:[] | 스킬:[basic-attack,basic-focus-slash,skill-scout-strike,skill-scout-mark] | 예상전투력:~2,620
+(A급) 사라스와티 나이르 | A | Lv.64 | guardian | 칭호:hunter | 스탯{STR:160,VIT:280,AGI:75,INT:65,PER:170,SEN:45}(합 795) | 기본장비:[] | 스킬:[basic-attack,basic-guard-stance,skill-guardian-bash,skill-guardian-shield] | 예상전투력:~2,480
+(A급) 로한 데사이 | A | Lv.63 | swordsman | 칭호:hunter | 스탯{STR:255,VIT:150,AGI:230,INT:60,PER:75,SEN:40}(합 810) | 기본장비:[] | 스킬:[basic-attack,basic-focus-slash,skill-swordsman-flash,skill-swordsman-combo] | 예상전투력:~2,380
+(A급) 미라 파텔 | A | Lv.61 | tactician | 칭호:hunter | 스탯{STR:70,VIT:120,AGI:110,INT:245,PER:165,SEN:55}(합 765) | 기본장비:[] | 스킬:[basic-attack,skill-tactician-analyze,skill-tactician-command] | 예상전투력:~2,230
+(A급) 아디티 라만 | A | Lv.60 | mage | 칭호:hunter | 스탯{STR:50,VIT:105,AGI:100,INT:270,PER:80,SEN:150}(합 755) | 기본장비:[] | 스킬:[basic-attack,skill-mage-bolt,skill-mage-burst] | 예상전투력:~2,120
+(A급) 데브 말호트라 | A | Lv.58 | guardian | 칭호:hunter | 스탯{STR:155,VIT:265,AGI:70,INT:60,PER:155,SEN:40}(합 745) | 기본장비:[] | 스킬:[basic-attack,basic-guard-stance,skill-guardian-bash,skill-guardian-shield] | 예상전투력:~1,980
+(A급) 이샨 굽타 | A | Lv.55 | scout | 칭호:hunter | 스탯{STR:100,VIT:110,AGI:245,INT:75,PER:75,SEN:125}(합 730) | 기본장비:[] | 스킬:[basic-attack,basic-focus-slash,skill-scout-strike] | 예상전투력:~1,760
+
+요약: National 1 / S 3 / A 9, 직업 6종, 전투력 약 1,760~6,500.
+
+[국가] 호주 (au) — 정정 반영
+잭슨 킹 | S | Lv.79 | scout | 칭호:veteran-hunter | 스탯{STR:165,VIT:160,AGI:320,INT:90,PER:125,SEN:165}(합 1025) | 기본장비:[] | 스킬:[basic-attack,basic-focus-slash,skill-scout-strike,skill-scout-mark,skill-scout-step] | 예상전투력:~3,780
+올리비아 스미스 | S | Lv.76 | mage | 칭호:veteran-hunter | 스탯{STR:65,VIT:135,AGI:125,INT:315,PER:135,SEN:180}(합 955) | 기본장비:[] | 스킬:[basic-attack,skill-mage-bolt,skill-mage-burst,skill-mage-storm] | 예상전투력:~3,350
+레녹스 테일러 | S | Lv.74 | guardian | 칭호:veteran-hunter | 스탯{STR:205,VIT:305,AGI:100,INT:90,PER:200,SEN:90}(합 990) | 기본장비:[] | 스킬:[basic-attack,basic-guard-stance,skill-guardian-bash,skill-guardian-shield,skill-guardian-stance] | 예상전투력:~3,180
+(A급) 루비 해밀턴 | A | Lv.66 | scout | 칭호:hunter | 스탯{STR:115,VIT:125,AGI:275,INT:75,PER:85,SEN:125}(합 800) | 기본장비:[] | 스킬:[basic-attack,basic-focus-slash,skill-scout-strike,skill-scout-mark] | 예상전투력:~2,650
+(A급) 노아 베넷 | A | Lv.64 | warrior | 칭호:hunter | 스탯{STR:280,VIT:215,AGI:110,INT:45,PER:90,SEN:40}(합 780) | 기본장비:[] | 스킬:[basic-attack,basic-focus-slash,skill-warrior-strike,skill-warrior-earthquake] | 예상전투력:~2,430
+(A급) 미아 카터 | A | Lv.62 | mage | 칭호:hunter | 스탯{STR:50,VIT:110,AGI:105,INT:270,PER:80,SEN:150}(합 765) | 기본장비:[] | 스킬:[basic-attack,skill-mage-bolt,skill-mage-burst] | 예상전투력:~2,280
+(A급) 헨리 워드 | A | Lv.60 | guardian | 칭호:hunter | 스탯{STR:160,VIT:265,AGI:75,INT:55,PER:150,SEN:40}(합 745) | 기본장비:[] | 스킬:[basic-attack,basic-guard-stance,skill-guardian-bash,skill-guardian-shield] | 예상전투력:~2,100
+(A급) 소피아 리드 | A | Lv.58 | tactician | 칭호:hunter | 스탯{STR:70,VIT:115,AGI:110,INT:230,PER:155,SEN:50}(합 730) | 기본장비:[] | 스킬:[basic-attack,skill-tactician-analyze,skill-tactician-command] | 예상전투력:~1,980
+(A급) 루카스 브룩스 | A | Lv.55 | swordsman | 칭호:hunter | 스탯{STR:240,VIT:145,AGI:215,INT:55,PER:70,SEN:35}(합 760) | 기본장비:[] | 스킬:[basic-attack,basic-focus-slash,skill-swordsman-flash,skill-swordsman-combo] | 예상전투력:~1,760
+
+요약: S 3 / A 6, 직업 6종, 전투력 약 1,760~3,780.
