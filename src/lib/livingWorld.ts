@@ -135,6 +135,12 @@ export function initLivingWorld(seed: number): LivingWorldState {
         // 특성 배정 롤링
         const traitId = rollHunterTrait(rng)
 
+        // [각성 시스템] A/S급 헌터에 한해 희귀한 고잠재력 부여 (대부분 낮고 가끔 높음)
+        let potential: number | undefined = undefined
+        if (hBase.rank === 'A' || hBase.rank === 'S') {
+          potential = Math.pow(rng(), 3.5)
+        }
+
         const hunterObj: NamedHunter = {
           id: hunterId,
           regionId,
@@ -151,7 +157,9 @@ export function initLivingWorld(seed: number): LivingWorldState {
           jobId: hBase.jobId,
           titleId: hBase.titleId,
           baseEquipmentItemIds: hBase.baseEquipmentItemIds ?? [],
-          skillIds: hBase.skillIds ?? []
+          skillIds: hBase.skillIds ?? [],
+          potential,
+          awakened: false
         }
 
         if (hunterObj.stats && hunterObj.level && hunterObj.jobId) {

@@ -2385,6 +2385,8 @@ export interface NamedHunter {
   titleId?: string
   baseEquipmentItemIds?: string[]
   skillIds?: string[]
+  potential?: number    // [NEW] 헌터 잠재력 (0~1, 회차 랜덤)
+  awakened?: boolean    // [NEW] 각성 발동 여부 플래그
 }
 
 export interface HunterPool {

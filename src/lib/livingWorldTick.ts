@@ -488,6 +488,47 @@ export function advanceWorldDay(state: LivingWorldState, rng: RngFn): LivingWorl
                 const cap = 4500 + region.growthBias * 1000
                 if (hunter.power > cap) hunter.power = Math.round(cap)
 
+                // [각성 시스템] 헌터 잠재력 각성 판정 및 도약 적용
+                if ((hunter.rank === 'A' || hunter.rank === 'S') && !hunter.awakened && hunter.potential !== undefined) {
+                  // 각성 확률: potential * 0.008 (고잠재력 1.0 기준 클리어당 0.8% 확률)
+                  const awakenChance = hunter.potential * 0.008
+                  if (rng() < awakenChance) {
+                    hunter.awakened = true
+                    const oldRank = hunter.rank
+                    const newRank = oldRank === 'A' ? 'S' : 'National'
+                    hunter.rank = newRank
+
+                    // 1. 스탯 대폭 상승 (stats 모든 능력치 1.40배)
+                    if (hunter.stats) {
+                      const statsMult = 1.40
+                      const nextStats = { ...hunter.stats }
+                      for (const statKey in nextStats) {
+                        (nextStats as any)[statKey] = Math.round((nextStats as any)[statKey] * statsMult)
+                      }
+                      hunter.stats = nextStats
+                    } else {
+                      // stats 가 없는 경우 power 직접 증가
+                      hunter.power = Math.round(hunter.power * 1.40)
+                    }
+
+                    // 2. 보너스 스킬 주입 (A->S 면 공격력 패시브, S->National 이면 체력 패시브)
+                    if (hunter.skillIds) {
+                      const bonusSkill = newRank === 'S' ? 'pass_atk_3' : 'pass_hp_3'
+                      if (!hunter.skillIds.includes(bonusSkill)) {
+                        hunter.skillIds = [...hunter.skillIds, bonusSkill]
+                      }
+                    }
+
+                    // 3. 통일 전투력 최신화 (stats 및 rank 변경 사항 자동 재계산 적용)
+                    if (hunter.stats && hunter.level && hunter.jobId) {
+                      hunter.power = getNamedHunterBasePower(hunter)
+                    }
+
+                    const regName = RIFT_REGIONS.find(r => r.id === regionId)?.name ?? regionId.toUpperCase()
+                    addLog(`✨ [각성 발동] [${regName}]의 [${hunter.name}] 헌터가 전투 중 극적인 각성을 거치며 등급이 [${oldRank}] $\\to$ [${newRank}]급으로 도약했습니다! 스탯이 대폭 강화되어 새로운 전력이 되었습니다.`)
+                  }
+                }
+
                 const difficultyVal = gate.difficulty ?? 500
                 let equipGain = Math.round(difficultyVal * (0.005 + rng() * 0.01) * dispatchRatio)
 
