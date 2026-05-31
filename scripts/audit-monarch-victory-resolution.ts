@@ -88,10 +88,8 @@ function runVictoryResolutionAudit() {
     shadowCasualtyIds: []
   }
 
-  console.log(`\n[액션] Grellic 격퇴 승리 정산: resolveWorldGateBattleOutcome 호출`)
-  const activeGate = nextState.activeGate!
-  const gate = activeGate.customGateDef
-  useGame.getState().resolveWorldGateBattleOutcome(activeGate, gate, mockCombatLog)
+  console.log(`\n[액션] Grellic 격퇴 승리 정산: resolveDirectWorldBattle 호출`)
+  useGame.getState().resolveDirectWorldBattle(mockCombatLog, 'grellic', [])
 
   nextState = useGame.getState()
 
@@ -111,6 +109,22 @@ function runVictoryResolutionAudit() {
     console.error(`❌ [실패] 전장 UI 상태가 정리되지 않았습니다.`)
     process.exit(1)
   }
+
+  // 4.5 추가 방어막 검증: 승리 후 cancelWorldBattle 호출 시, Grellic이 defeated 상태로 계속 유지되는가?
+  console.log(`\n[액션] 승리 정산 완료 후 cancelWorldBattle (창 닫기 및 후퇴 덮어쓰기 차단 오염 검증) 실행...`)
+  useGame.getState().cancelWorldBattle()
+  
+  nextState = useGame.getState()
+  const grellicMonarchAfterCancel = nextState.livingWorld?.activeMonarchs?.find(m => m.monarchId === 'grellic')
+  const grellicRetreated = nextState.worldBattleRetreats?.['grellic']
+  console.log(`- [검증] cancel 후 Grellic status (defeated 예상): ${grellicMonarchAfterCancel?.status}`)
+  console.log(`- [검증] cancel 후 Grellic 후퇴 기록 등록 여부 (undefined 예상): ${grellicRetreated}`)
+
+  if (grellicMonarchAfterCancel?.status !== 'defeated' || grellicRetreated !== undefined) {
+    console.error(`❌ [실패] 승리 완료된 세션에 대해 cancelWorldBattle이 덮어쓰기 오염을 방지하지 못했습니다.`);
+    process.exit(1);
+  }
+  console.log(`✅ [성공] 승리 덮어쓰기 오염 방지 가드 완벽 작동 확인!`)
 
   // 5. stale overwrite 버그 퇴치 검증 (riftNodes 및 livingWorld.riftNodes 검사)
   const storeNodeStatus = nextState.riftNodes['grellic']
@@ -168,8 +182,7 @@ function runVictoryResolutionAudit() {
   // Celaide를 마지막으로 격파
   console.log(`- 마지막 군주 Celaide 격전 시작...`)
   useGame.getState().startWorldManualBattle('celaide', [])
-  const lastGate = useGame.getState().activeGate!
-  useGame.getState().resolveWorldGateBattleOutcome(lastGate, lastGate.customGateDef, mockCombatLog)
+  useGame.getState().resolveDirectWorldBattle(mockCombatLog, 'celaide', [])
 
   nextState = useGame.getState()
   console.log(`- [검증] angelReady 플래그 (true 예상): ${nextState.livingWorld?.angelReady}`)
@@ -193,9 +206,8 @@ function runVictoryResolutionAudit() {
   }
 
   // Angel 격퇴
-  console.log(`\n[액션] Angel 승리 정산: resolveWorldGateBattleOutcome('angel')`)
-  const angelGate = nextState.activeGate!
-  useGame.getState().resolveWorldGateBattleOutcome(angelGate, angelGate.customGateDef, mockCombatLog)
+  console.log(`\n[액션] Angel 승리 정산: resolveDirectWorldBattle('angel')`)
+  useGame.getState().resolveDirectWorldBattle(mockCombatLog, 'angel', [])
 
   nextState = useGame.getState()
   console.log(`- [검증] endingState (victory 예상): ${nextState.livingWorld?.endingState}`)

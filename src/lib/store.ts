@@ -7684,12 +7684,108 @@ export const useGame = create<GameState>()(
 
       resolveWorldBattle: () => {},
 
-      resolveDirectWorldBattle: (combatLog, nodeId, helperHunterIds) => {},
+      resolveDirectWorldBattle: (combatLog, nodeId, helperHunterIds) => {
+        const s = get()
+        const activeGate = s.activeGate
+        const isVictory = combatLog.result === 'victory'
+
+        // 1. activeGate가 존재하면 resolveWorldGateBattleOutcome으로 정산 처리를 위임합니다.
+        if (activeGate && activeGate.gateId === nodeId) {
+          const gate = activeGate.customGateDef || GATE_DEFINITIONS.find(g => g.id === activeGate.gateId)
+          if (gate) {
+            get().resolveWorldGateBattleOutcome(activeGate, gate, combatLog)
+            return
+          }
+        }
+
+        // 2. 만약 activeGate가 유실된 특수 상황이거나, 결전 상태가 미처 위임되지 못한 경우를 위한 fallback 수동 정산
+        const isMonarchId = MONARCHS.some(m => m.id === nodeId) || nodeId === 'angel'
+        
+        if (isVictory) {
+          get().markRiftNodeCleared(nodeId)
+          
+          const freshState = get()
+          let updatedActiveMonarchs = freshState.livingWorld?.activeMonarchs ? [...freshState.livingWorld.activeMonarchs] : undefined
+          let nextHomeReachedMonarchId = freshState.livingWorld?.homeReachedMonarchId
+          let nextAngelReady = freshState.livingWorld?.angelReady
+          let worldLogs = freshState.livingWorld ? [...freshState.livingWorld.eventLogs] : []
+
+          if (isMonarchId && updatedActiveMonarchs) {
+            const mIdx = updatedActiveMonarchs.findIndex(m => m.monarchId === nodeId)
+            if (mIdx !== -1) {
+              updatedActiveMonarchs[mIdx] = {
+                ...updatedActiveMonarchs[mIdx],
+                status: 'defeated' as const,
+                occupiedRegionIds: []
+              }
+            }
+            const krInvader = updatedActiveMonarchs.find(m => m.status === 'rampaging' && m.occupiedRegionIds.includes('kr'))
+            nextHomeReachedMonarchId = krInvader ? krInvader.monarchId : undefined
+
+            const allDefeated = updatedActiveMonarchs.length === 8 && updatedActiveMonarchs.every(m => m.status === 'defeated')
+            if (allDefeated) {
+              nextAngelReady = true
+              worldLogs.push(`[Day ${freshState.livingWorld?.day ?? 0}] [지고의 예언] 대균열의 심연에서 지고의 심판자(천사)가 강림을 예고하며 장엄한 빛이 쏟아집니다.`)
+            }
+          }
+
+          if (nodeId === 'angel') {
+            worldLogs.push(`[Day ${freshState.livingWorld?.day ?? 0}] 🌟 [구원 완료] 지고의 심판자(천사)를 격퇴하고 대균열의 근원을 영원히 정화했습니다! 세계는 멸망의 운명에서 마침내 구원받았습니다.`)
+          }
+
+          const finalRiftNodes = { ...freshState.riftNodes, [nodeId]: 'cleared' as RiftNodeStatus }
+
+          set({
+            livingWorld: freshState.livingWorld ? {
+              ...freshState.livingWorld,
+              riftNodes: freshState.livingWorld.riftNodes,
+              eventLogs: worldLogs,
+              activeMonarchs: updatedActiveMonarchs ?? freshState.livingWorld.activeMonarchs,
+              homeReachedMonarchId: nextHomeReachedMonarchId,
+              angelReady: nextAngelReady ?? freshState.livingWorld.angelReady,
+              endingState: nodeId === 'angel' ? 'victory' : freshState.livingWorld.endingState,
+            } : undefined,
+            riftNodes: finalRiftNodes,
+            activeGate: undefined,
+            manualBattleSession: undefined,
+            activeRiftNodeId: undefined,
+          })
+        } else {
+          if (isMonarchId && s.livingWorld) {
+            const worldLogs = [...s.livingWorld.eventLogs]
+            worldLogs.push(`[Day ${s.livingWorld.day}] ⚠️ [군주 토벌 실패] 플레이어가 군주 [${nodeId}] 토벌에 실패하고 부상을 입은 채 후퇴했습니다.`)
+            set({
+              livingWorld: {
+                ...s.livingWorld,
+                eventLogs: worldLogs
+              },
+              activeGate: undefined,
+              manualBattleSession: undefined,
+              activeRiftNodeId: undefined,
+            })
+          } else {
+            set({
+              activeGate: undefined,
+              manualBattleSession: undefined,
+              activeRiftNodeId: undefined,
+            })
+          }
+        }
+      },
 
       cancelWorldBattle: () => set((s) => {
         const activeGate = s.activeGate
         const manualSession = s.manualBattleSession
         if (!activeGate && (!manualSession || manualSession.source !== 'world_map')) return {}
+
+        // ⚠️ 추가 방어막: 이미 승리(victory)로 finalized된 world_map session은 retreat/cancel 처리(메시지 및 날짜 기록)를 하지 않고 cleanup만 수행합니다.
+        if (manualSession?.result === 'victory' || manualSession?.logs?.some(l => l.message?.includes('성공') || l.message?.includes('승리'))) {
+          return {
+            activeGate: undefined,
+            activeRiftNodeId: undefined,
+            manualBattleSession: undefined,
+          }
+        }
 
         const nodeId = activeGate?.gateId || manualSession?.gateInstanceId?.replace('worldmap-', '') || s.activeRiftNodeId
         const today = todayKey()
