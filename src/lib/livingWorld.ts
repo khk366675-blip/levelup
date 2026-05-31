@@ -9,6 +9,7 @@ import type {
 } from './types'
 import { getNPCEquipmentForScore } from './hunterEquipment'
 import { rollHunterTrait } from './hunterTraits'
+import { getNamedHunterBasePower } from './hunterUnified'
 
 /**
  * 특정 지역의 총전력을 계산합니다. (네임드 헌터 전투력 합 + 익명 풀 전투력 합)
@@ -134,7 +135,7 @@ export function initLivingWorld(seed: number): LivingWorldState {
         // 특성 배정 롤링
         const traitId = rollHunterTrait(rng)
 
-        namedHunters[hunterId] = {
+        const hunterObj: NamedHunter = {
           id: hunterId,
           regionId,
           name: hBase.name,
@@ -146,6 +147,26 @@ export function initLivingWorld(seed: number): LivingWorldState {
           equipmentItems: initialEquipmentItems,
           traitId
         }
+
+        if (hunterId === 'hunter-us-1') {
+          hunterObj.level = 100
+          hunterObj.stats = { STR: 350, VIT: 350, AGI: 280, INT: 150, PER: 180, SEN: 200 }
+          hunterObj.jobId = 'guardian'
+          hunterObj.titleId = 'legend-in-hand'
+          hunterObj.baseEquipmentItemIds = ['왕의 검', '그림자 왕관']
+          hunterObj.skillIds = ['basic-attack', 'basic-focus-slash', 'basic-guard-stance']
+          hunterObj.power = getNamedHunterBasePower(hunterObj)
+        } else if (hunterId === 'hunter-kr-2') {
+          hunterObj.level = 75
+          hunterObj.stats = { STR: 210, VIT: 180, AGI: 160, INT: 90, PER: 100, SEN: 110 }
+          hunterObj.jobId = 'swordsman'
+          hunterObj.titleId = 'hunter'
+          hunterObj.baseEquipmentItemIds = ['왕의 검']
+          hunterObj.skillIds = ['basic-attack', 'basic-focus-slash']
+          hunterObj.power = getNamedHunterBasePower(hunterObj)
+        }
+
+        namedHunters[hunterId] = hunterObj
       })
 
       // 2. 익명 헌터 풀 생성

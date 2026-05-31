@@ -2379,6 +2379,12 @@ export interface NamedHunter {
     slot?: string
   }[]
   traitId?: string      // [NEW] 헌터 입체화 특성 ID
+  level?: number
+  stats?: Record<StatKey, number>
+  jobId?: JobId
+  titleId?: string
+  baseEquipmentItemIds?: string[]
+  skillIds?: string[]
 }
 
 export interface HunterPool {

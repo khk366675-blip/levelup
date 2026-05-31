@@ -4,6 +4,7 @@ import { MONARCHS } from './monarchs'
 import { getRegionalTheme } from './livingWorldGateContent'
 import { getNPCEquipmentForScore } from './hunterEquipment'
 import { getHunterTrait } from './hunterTraits'
+import { getNamedHunterBasePower } from './hunterUnified'
 
 type RngFn = () => number
 
@@ -120,20 +121,25 @@ export function advanceWorldDay(state: LivingWorldState, rng: RngFn): LivingWorl
         hunter.injuredTurns = turns
       }
     } else if (hunter.status === 'active') {
-      // 성장률 롤링 및 천장 적용 (성향 growthBias 및 특성 growthMod 반영)
-      const trait = getHunterTrait(hunter.traitId)
-      const growthMod = trait?.growthMod ?? 1.0
+      if (hunter.stats && hunter.level && hunter.jobId) {
+        // [헌터 스탯 통일 1단계] 스탯 기반 헌터는 레벨/스탯이 고정되므로 랜덤 성장 배제 및 통일 전투력 최신화
+        hunter.power = getNamedHunterBasePower(hunter)
+      } else {
+        // 성장률 롤링 및 천장 적용 (성향 growthBias 및 특성 growthMod 반영)
+        const trait = getHunterTrait(hunter.traitId)
+        const growthMod = trait?.growthMod ?? 1.0
 
-      const biasMultiplier = 1 + (region?.growthBias ?? 0.5) * 0.25
-      const growth = hunter.power * (hunter.growthRate - 1) * biasMultiplier * growthMod
-      let nextPower = Math.round(hunter.power + growth)
+        const biasMultiplier = 1 + (region?.growthBias ?? 0.5) * 0.25
+        const growth = hunter.power * (hunter.growthRate - 1) * biasMultiplier * growthMod
+        let nextPower = Math.round(hunter.power + growth)
 
-      // 네임드 S급 성장 천장 (4,500 ~ 5,500 대역)
-      const cap = 4500 + (region?.growthBias ?? 0.5) * 1000
-      if (nextPower > cap) {
-        nextPower = Math.round(cap)
+        // 네임드 S급 성장 천장 (4,500 ~ 5,500 대역)
+        const cap = 4500 + (region?.growthBias ?? 0.5) * 1000
+        if (nextPower > cap) {
+          nextPower = Math.round(cap)
+        }
+        hunter.power = nextPower
       }
-      hunter.power = nextPower
     }
 
     nextNamedHunters[hunterId] = hunter
