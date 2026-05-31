@@ -2413,6 +2413,16 @@ export interface ActiveMonarch {
   lastExpandDay: number    // 마지막 영역 확장일 (확장 주기 계산용)
 }
 
+export interface DailySummary {
+  day: number
+  worldCorruption: number                  // 그날 종료 시 오염도
+  gatesClearedToday: number                // 그날 정화된 게이트 수 (NPC+플레이어)
+  gatesRampagedToday: number               // 그날 폭주 수
+  monarchCount: number                     // 그날 군주 수
+  cumulativeClearedGatesCount: number      // 누적 정화 게이트 수
+  cumulativeRampagedGatesCount: number     // 누적 폭주 게이트 수
+}
+
 export interface LivingWorldState {
   seed: number              // 이 회차의 시드 (재현용)
   day: number               // 경과 일수
@@ -2429,6 +2439,7 @@ export interface LivingWorldState {
   angelReady?: boolean                // 모든 군주 격퇴 시 천사 예고 플래그
   endingState?: 'none' | 'victory'    // 진엔딩 상태 식별자
   coopCount?: number                  // 이번 회차 총 협력 횟수
+  dailySummaries?: DailySummary[]     // [NEW] 일일 정세 요약 스냅샷 리스트
 }
 
 // 시드용 Base 데이터 타입

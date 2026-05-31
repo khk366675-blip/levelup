@@ -12909,7 +12909,7 @@ export const useGame = create<GameState>()(
     }),
     {
       name: 'levelup-save',
-      version: 24,
+      version: 25,
       partialize: (state) => ({
         ...state,
         manualBattleSession: undefined,
@@ -12930,6 +12930,13 @@ export const useGame = create<GameState>()(
         if (version < 24) {
           if (persistedState) {
             persistedState.activeWorldBattle = undefined;
+          }
+        }
+        if (version < 25) {
+          if (persistedState && persistedState.livingWorld) {
+            if (!persistedState.livingWorld.dailySummaries) {
+              persistedState.livingWorld.dailySummaries = [];
+            }
           }
         }
         // Ensure hunter has title fields

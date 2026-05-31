@@ -75,6 +75,12 @@ export function advanceWorldDay(state: LivingWorldState, rng: RngFn): LivingWorl
   let nextActiveMonarchs: ActiveMonarch[] = [...(state.activeMonarchs ?? [])]
   let nextHomeReachedMonarchId = state.homeReachedMonarchId
 
+  // [NEW] 틱 시작 전 통계 계산 (플레이어 클리어 반영)
+  const initialClearedCount = Object.values(state.riftNodes).filter(n => n.status === 'cleared').length
+  const initialExplodedCount = Object.values(state.riftNodes).filter(n => n.status === 'exploded').length
+  let npcClearedToday = 0
+  let npcExplodedToday = 0
+
   function addLog(msg: string) {
     logs.push(`[Day ${nextDay}] ${msg}`)
     // 최대 로그 60개 유지
@@ -140,6 +146,7 @@ export function advanceWorldDay(state: LivingWorldState, rng: RngFn): LivingWorl
         node.status = 'exploded'
         node.daysRemaining = 0
         node.loveCall = undefined
+        npcExplodedToday++
 
         const region = { ...nextRegions[node.regionId] }
         const rName = RIFT_REGIONS.find(r => r.id === node.regionId)?.name ?? node.regionId.toUpperCase()
@@ -226,6 +233,7 @@ export function advanceWorldDay(state: LivingWorldState, rng: RngFn): LivingWorl
         gate.daysRemaining = 0
         gate.loveCall = undefined
         nextRiftNodes[gate.id] = gate
+        npcClearedToday++
 
         region.activeGateIds = region.activeGateIds.filter(id => id !== gate.id)
 
@@ -611,6 +619,38 @@ export function advanceWorldDay(state: LivingWorldState, rng: RngFn): LivingWorl
     nextHomeReachedMonarchId = undefined
   }
 
+  // [NEW] dailySummaries 갱신 계산
+  const prevSummaries = state.dailySummaries ?? []
+  const lastSummary = prevSummaries[prevSummaries.length - 1]
+  const prevCumulativeCleared = lastSummary ? lastSummary.cumulativeClearedGatesCount : 0
+  const prevCumulativeExploded = lastSummary ? lastSummary.cumulativeRampagedGatesCount : 0
+
+  // 당일 플레이어가 정화한 횟수
+  const playerClearedToday = Math.max(0, initialClearedCount - prevCumulativeCleared)
+  const totalClearedToday = playerClearedToday + npcClearedToday
+  const totalExplodedToday = npcExplodedToday // 플레이어는 폭주를 유발하지 않음
+
+  const nextCumulativeCleared = prevCumulativeCleared + totalClearedToday
+  const nextCumulativeExploded = prevCumulativeExploded + totalExplodedToday
+
+  const activeMonarchCount = nextActiveMonarchs.filter(m => m.status === 'rampaging').length
+
+  const todaySummary = {
+    day: state.day, // 현재 종료된 Day 날짜
+    worldCorruption: nextWorldCorruption,
+    gatesClearedToday: totalClearedToday,
+    gatesRampagedToday: totalExplodedToday,
+    monarchCount: activeMonarchCount,
+    cumulativeClearedGatesCount: nextCumulativeCleared,
+    cumulativeRampagedGatesCount: nextCumulativeExploded
+  }
+
+  const nextSummaries = [...prevSummaries, todaySummary]
+  // 최근 30일 데이터만 유지
+  if (nextSummaries.length > 30) {
+    nextSummaries.shift()
+  }
+
   return {
     ...state,
     day: nextDay,
@@ -621,6 +661,7 @@ export function advanceWorldDay(state: LivingWorldState, rng: RngFn): LivingWorl
     monarchsAppeared: nextActiveMonarchs.length, // 기존 monarchsAppeared 숫자 카운트도 연동
     activeMonarchs: nextActiveMonarchs,
     homeReachedMonarchId: nextHomeReachedMonarchId,
-    eventLogs: logs
+    eventLogs: logs,
+    dailySummaries: nextSummaries
   }
 }

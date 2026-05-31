@@ -201,6 +201,7 @@ export function initLivingWorld(seed: number): LivingWorldState {
     homeReachedMonarchId: undefined,
     angelReady: false,
     endingState: 'none',
-    coopCount: 0
+    coopCount: 0,
+    dailySummaries: []
   }
 }

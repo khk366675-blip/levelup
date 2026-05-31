@@ -148,6 +148,17 @@ export function WorldMapPanel() {
   const [toastMessage, setToastMessage] = useState<string | null>(null)
   const [selectedHelpers, setSelectedHelpers] = useState<string[]>([])
 
+  // [NEW] 일일 정세 보고서 관련 상태
+  const [isDailyReportOpen, setIsDailyReportOpen] = useState(false)
+  const [selectedReportDay, setSelectedReportDay] = useState<number | null>(null)
+
+  const openDailyReport = () => {
+    const summaries = livingWorld?.dailySummaries ?? []
+    const maxSummaryDay = summaries.length > 0 ? summaries[summaries.length - 1].day : 0
+    setSelectedReportDay(maxSummaryDay)
+    setIsDailyReportOpen(true)
+  }
+
   const worldNode = selectedNode ? livingWorld?.riftNodes[selectedNode.id] : null
   const hasLoveCall = worldNode?.loveCall?.active
   const loveCallState = worldNode?.loveCall
@@ -658,6 +669,12 @@ export function WorldMapPanel() {
                 <Swords className="h-4 w-4" /> 📡 WORLD SIGNAL LOG
               </span>
               <div className="flex items-center gap-2 scale-90 sm:scale-100 origin-right">
+                <button
+                  onClick={openDailyReport}
+                  className="rounded border border-emerald-500/40 bg-emerald-500/10 hover:bg-emerald-500/25 px-2.5 py-0.5 text-[9px] font-black text-emerald-200 transition-all cursor-pointer flex items-center gap-1"
+                >
+                  📊 일일 보고서
+                </button>
                 <button
                   onClick={() => setIsAllLogsExpanded(!isAllLogsExpanded)}
                   className="rounded border border-cyan-500/30 bg-cyan-500/10 hover:bg-cyan-500/25 px-2 py-0.5 text-[9px] font-black text-cyan-200 transition-all cursor-pointer"
@@ -1948,6 +1965,330 @@ export function WorldMapPanel() {
           </div>
         )
       })()}
+
+      {/* 일일 정세 보고서 모달 (전체화면 오버레이) */}
+      {isDailyReportOpen && livingWorld && selectedReportDay !== null && (
+        <div className="fixed inset-0 z-[100] bg-zinc-950/95 backdrop-blur-md flex flex-col p-4 sm:p-6 text-white overflow-hidden font-sans animate-fade-in">
+          <div className="max-w-6xl w-full mx-auto flex-1 flex flex-col min-h-0 bg-zinc-900/80 border border-white/10 rounded-xl p-4 sm:p-6 shadow-2xl relative">
+            
+            {/* Top Close Button */}
+            <button 
+              onClick={() => setIsDailyReportOpen(false)}
+              className="absolute top-4 right-4 text-white/50 hover:text-white bg-white/5 hover:bg-white/10 px-3 py-1.5 rounded-lg transition-all cursor-pointer z-10 text-xs font-mono font-bold"
+            >
+              ✕ 닫기 (ESC)
+            </button>
+
+            {/* Header / Date Navigation */}
+            {(() => {
+              const summaries = livingWorld.dailySummaries ?? []
+              const currentSummary = summaries.find(s => s.day === selectedReportDay)
+              const prevSummary = summaries.find(s => s.day === selectedReportDay - 1)
+              const minDay = summaries.length > 0 ? summaries[0].day : 0
+              const maxDay = summaries.length > 0 ? summaries[summaries.length - 1].day : 0
+
+              const handlePrev = () => {
+                if (selectedReportDay > minDay) {
+                  setSelectedReportDay(selectedReportDay - 1)
+                }
+              }
+              const handleNext = () => {
+                if (selectedReportDay < maxDay) {
+                  setSelectedReportDay(selectedReportDay + 1)
+                }
+              }
+
+              return (
+                <>
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-white/10">
+                    <div>
+                      <h2 className="text-xl sm:text-2xl font-black text-white flex items-center gap-2">
+                        📊 Day {selectedReportDay} 정세 보고서
+                      </h2>
+                      <p className="text-xs text-white/40 mt-1 leading-normal">
+                        이전 날짜의 시뮬레이션 지표 스냅샷 및 지역 정화/폭주 데이터를 상세 분석합니다.
+                      </p>
+                    </div>
+
+                    {/* Date Navigation Buttons */}
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={handlePrev}
+                        disabled={selectedReportDay <= minDay}
+                        className="rounded-lg border border-white/10 bg-white/5 hover:bg-white/10 disabled:opacity-30 px-3 py-1.5 text-xs font-bold text-white transition-all cursor-pointer disabled:cursor-not-allowed"
+                      >
+                        ◀ 이전 날
+                      </button>
+                      <span className="font-mono text-xs font-bold px-3 py-1.5 bg-black/40 border border-white/5 rounded-lg">
+                        Day {selectedReportDay} / {maxDay}
+                      </span>
+                      <button
+                        onClick={handleNext}
+                        disabled={selectedReportDay >= maxDay}
+                        className="rounded-lg border border-white/10 bg-white/5 hover:bg-white/10 disabled:opacity-30 px-3 py-1.5 text-xs font-bold text-white transition-all cursor-pointer disabled:cursor-not-allowed"
+                      >
+                        다음 날 ▶
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Main Body Scrollable */}
+                  <div className="flex-1 overflow-y-auto mt-6 pr-1 space-y-6 scrollbar-thin scrollbar-thumb-zinc-700">
+                    {currentSummary ? (
+                      <>
+                        {/* 1. 핵심 지표 카드 grid */}
+                        <div className="grid gap-4 grid-cols-2 md:grid-cols-4">
+                          {/* 지표 1: 전역 오염도 */}
+                          {(() => {
+                            const val = currentSummary.worldCorruption
+                            const prevVal = prevSummary?.worldCorruption ?? 0
+                            const diff = val - prevVal
+                            const isIncreased = diff > 0
+                            const isDecreased = diff < 0
+                            return (
+                              <div className="bg-black/30 border border-white/5 p-4 rounded-lg flex flex-col justify-between min-h-[100px]">
+                                <span className="text-[10px] font-bold text-white/45 uppercase tracking-wider">전역 오염도</span>
+                                <div className="text-2xl font-black text-red-400 mt-1">{val}%</div>
+                                <div className="mt-2 flex items-center justify-between text-[10px]">
+                                  <span className="text-white/40">어제 대비</span>
+                                  {diff === 0 ? (
+                                    <span className="text-white/30 font-bold">-</span>
+                                  ) : isIncreased ? (
+                                    <span className="text-red-400 font-extrabold flex items-center gap-0.5">▲ +{diff}%</span>
+                                  ) : (
+                                    <span className="text-emerald-400 font-extrabold flex items-center gap-0.5">▼ {Math.abs(diff)}%</span>
+                                  )}
+                                </div>
+                              </div>
+                            )
+                          })()}
+
+                          {/* 지표 2: 당일 게이트 정화 수 */}
+                          {(() => {
+                            const val = currentSummary.gatesClearedToday
+                            const prevVal = prevSummary?.gatesClearedToday ?? 0
+                            const diff = val - prevVal
+                            return (
+                              <div className="bg-black/30 border border-white/5 p-4 rounded-lg flex flex-col justify-between min-h-[100px]">
+                                <span className="text-[10px] font-bold text-white/45 uppercase tracking-wider">당일 게이트 정화</span>
+                                <div className="text-2xl font-black text-emerald-400 mt-1">{val}개</div>
+                                <div className="mt-2 flex items-center justify-between text-[10px]">
+                                  <span className="text-white/40">어제 대비</span>
+                                  {diff === 0 ? (
+                                    <span className="text-white/30 font-bold">-</span>
+                                  ) : diff > 0 ? (
+                                    <span className="text-emerald-400 font-extrabold flex items-center gap-0.5">▲ +{diff}</span>
+                                  ) : (
+                                    <span className="text-red-400 font-extrabold flex items-center gap-0.5">▼ {Math.abs(diff)}</span>
+                                  )}
+                                </div>
+                              </div>
+                            )
+                          })()}
+
+                          {/* 지표 3: 당일 게이트 폭주 수 */}
+                          {(() => {
+                            const val = currentSummary.gatesRampagedToday
+                            const prevVal = prevSummary?.gatesRampagedToday ?? 0
+                            const diff = val - prevVal
+                            return (
+                              <div className="bg-black/30 border border-white/5 p-4 rounded-lg flex flex-col justify-between min-h-[100px]">
+                                <span className="text-[10px] font-bold text-white/45 uppercase tracking-wider">당일 게이트 폭주</span>
+                                <div className="text-2xl font-black text-red-500 mt-1">{val}개</div>
+                                <div className="mt-2 flex items-center justify-between text-[10px]">
+                                  <span className="text-white/40">어제 대비</span>
+                                  {diff === 0 ? (
+                                    <span className="text-white/30 font-bold">-</span>
+                                  ) : diff > 0 ? (
+                                    <span className="text-red-500 font-extrabold flex items-center gap-0.5 animate-pulse">▲ +{diff}</span>
+                                  ) : (
+                                    <span className="text-emerald-400 font-extrabold flex items-center gap-0.5">▼ {Math.abs(diff)}</span>
+                                  )}
+                                </div>
+                              </div>
+                            )
+                          })()}
+
+                          {/* 지표 4: 활성 군주 수 */}
+                          {(() => {
+                            const val = currentSummary.monarchCount
+                            const prevVal = prevSummary?.monarchCount ?? 0
+                            const diff = val - prevVal
+                            return (
+                              <div className="bg-black/30 border border-white/5 p-4 rounded-lg flex flex-col justify-between min-h-[100px]">
+                                <span className="text-[10px] font-bold text-white/45 uppercase tracking-wider">활성 군주 세력</span>
+                                <div className="text-2xl font-black text-purple-400 mt-1">{val}명</div>
+                                <div className="mt-2 flex items-center justify-between text-[10px]">
+                                  <span className="text-white/40">어제 대비</span>
+                                  {diff === 0 ? (
+                                    <span className="text-white/30 font-bold">-</span>
+                                  ) : diff > 0 ? (
+                                    <span className="text-purple-400 font-extrabold flex items-center gap-0.5">▲ +{diff}</span>
+                                  ) : (
+                                    <span className="text-emerald-400 font-extrabold flex items-center gap-0.5">▼ {Math.abs(diff)}</span>
+                                  )}
+                                </div>
+                              </div>
+                            )
+                          })()}
+                        </div>
+
+                        {/* 2. 상세 정보 영역 */}
+                        <div className="flex flex-col lg:flex-row gap-6">
+                          
+                          {/* 주요 사건 로그 (좌) */}
+                          <div className="flex-1 bg-black/20 border border-white/5 rounded-xl p-4 sm:p-5 flex flex-col min-h-[300px]">
+                            <h3 className="text-sm font-bold text-cyan-300 flex items-center gap-2 border-b border-white/10 pb-3 mb-4 uppercase">
+                              📢 Day {selectedReportDay} 주요 정세 사건
+                            </h3>
+                            
+                            {(() => {
+                              const dayLogs = livingWorld.eventLogs.filter(log => log.startsWith(`[Day ${selectedReportDay}]`))
+                              
+                              if (dayLogs.length === 0) {
+                                return (
+                                  <div className="text-zinc-500 italic py-16 text-center text-xs flex-1 flex items-center justify-center">
+                                    📡 이 날짜에는 특별한 전술 사건이나 이상 징후가 보고되지 않았습니다.
+                                  </div>
+                                )
+                              }
+
+                              return (
+                                <div className="space-y-2.5 overflow-y-auto max-h-[400px] pr-1 flex-1 scrollbar-thin">
+                                  {dayLogs.map((log, idx) => {
+                                    const style = classifyEventLog(log)
+                                    const cleanText = log.replace(/^\[Day \d+\]\s*/, '')
+                                    return (
+                                      <div key={idx} className="flex items-start gap-2.5 text-xs border-b border-white/5 pb-2.5 leading-normal transition-all hover:bg-white/5 p-1.5 rounded">
+                                        <span className={`chip shrink-0 scale-90 mt-0.5 ${style.badgeClass}`} style={{ fontSize: '7.5px', padding: '0.1rem 0.35rem' }}>
+                                          {style.badge}
+                                        </span>
+                                        <span className={`flex-1 font-mono text-[10.5px] tracking-wide leading-relaxed ${style.textClass}`}>
+                                          {cleanText}
+                                        </span>
+                                      </div>
+                                    )
+                                  })}
+                                </div>
+                              )
+                            })()}
+                          </div>
+
+                          {/* 국가 전선 현황 (우) */}
+                          <div className="w-full lg:w-[45%] bg-black/20 border border-white/5 rounded-xl p-4 sm:p-5 flex flex-col min-h-[300px]">
+                            <h3 className="text-sm font-bold text-orange-400 flex items-center gap-2 border-b border-white/10 pb-3 mb-4 uppercase">
+                              🛡️ 국가별 전선 오염도 현황
+                            </h3>
+
+                            {(() => {
+                              // 전력 및 오염도 기반 최강 전선 롤링
+                              const regionInfos = Object.values(livingWorld.regions).map(r => ({
+                                region: r,
+                                power: getRegionTotalPower(r, livingWorld.namedHunters),
+                                name: RIFT_REGIONS.find(reg => reg.id === r.regionId)?.name ?? r.regionId.toUpperCase()
+                              })).sort((a, b) => {
+                                // 오염도 낮은 순 -> 전력 높은 순
+                                if (a.region.corruption !== b.region.corruption) {
+                                  return a.region.corruption - b.region.corruption
+                                }
+                                return b.power - a.power
+                              })
+
+                              const strongestFrontierId = regionInfos[0]?.region.regionId
+
+                              return (
+                                <div className="space-y-3.5 overflow-y-auto max-h-[400px] pr-1 flex-1 scrollbar-thin">
+                                  {regionInfos.map(({ region, power, name }) => {
+                                    const isStrongest = region.regionId === strongestFrontierId
+                                    return (
+                                      <div key={region.regionId} className="flex flex-col gap-1.5 p-2 rounded border border-white/5 bg-zinc-950/20 hover:bg-zinc-950/40 transition-all">
+                                        <div className="flex items-center justify-between text-xs font-semibold">
+                                          <div className="flex items-center gap-1.5">
+                                            <span className="font-bold text-white/80">{name}</span>
+                                            <span className="text-[9px] text-white/35">⚔️{power.toLocaleString()}</span>
+                                            {isStrongest && (
+                                              <span className="rounded bg-emerald-500/20 border border-emerald-500/40 text-[8px] font-black text-emerald-400 px-1 py-0.2 select-none tracking-widest scale-90 uppercase animate-pulse">
+                                                ★ 최강 전선
+                                              </span>
+                                            )}
+                                          </div>
+                                          <span className={`font-mono font-bold ${
+                                            region.corruption >= 70 ? 'text-red-400' :
+                                            region.corruption >= 30 ? 'text-orange-400' :
+                                            'text-emerald-400'
+                                          }`}>
+                                            오염도 {region.corruption}%
+                                          </span>
+                                        </div>
+
+                                        {/* 게이지 바 */}
+                                        <div className="h-1.5 w-full bg-white/5 rounded-full overflow-hidden">
+                                          <div 
+                                            className={`h-full transition-all duration-300 bg-gradient-to-r ${
+                                              region.corruption >= 70 ? 'from-orange-500 to-red-500' :
+                                              region.corruption >= 30 ? 'from-yellow-400 to-orange-500' :
+                                              'from-cyan-400 to-emerald-400'
+                                            }`}
+                                            style={{ width: `${region.corruption}%` }}
+                                          />
+                                        </div>
+                                      </div>
+                                    )
+                                  })}
+                                </div>
+                              )
+                            })()}
+                          </div>
+
+                        </div>
+                      </>
+                    ) : (
+                      <div className="text-zinc-500 italic py-24 text-center text-sm flex-1 flex flex-col items-center justify-center gap-3">
+                        <span>📊 분석된 요약 데이터가 아직 기록되지 않았습니다.</span>
+                        <span className="text-xs text-white/30 leading-normal">
+                          첫 일일 퀘스트를 완료하거나 하루를 시뮬레이션(1틱 진행)하면 그날의 요약 스냅샷이 생성됩니다.
+                        </span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Footer Action Bar */}
+                  <div className="mt-6 pt-4 border-t border-white/10 flex flex-wrap gap-3 items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <button
+                        disabled
+                        className="opacity-45 rounded border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-bold text-white/55 cursor-not-allowed select-none"
+                      >
+                        ⚙️ 국가별 상세 현황 (준비 중)
+                      </button>
+                      <button
+                        disabled
+                        className="opacity-45 rounded border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-bold text-white/55 cursor-not-allowed select-none"
+                      >
+                        🏆 세계 헌터 랭킹 (준비 중)
+                      </button>
+                    </div>
+
+                    <button
+                      onClick={() => {
+                        setIsDailyReportOpen(false)
+                        setIsAllLogsExpanded(true)
+                        setTimeout(() => {
+                          const logTerminal = document.querySelector('.panel.border-white\\/10')
+                          logTerminal?.scrollIntoView({ behavior: 'smooth' })
+                        }, 150)
+                      }}
+                      className="rounded border border-cyan-500/40 bg-cyan-500/10 hover:bg-cyan-500/25 px-4 py-1.5 text-xs font-black text-cyan-200 cursor-pointer transition-all"
+                    >
+                      전체 사건 로그 모아보기
+                    </button>
+                  </div>
+                </>
+              )
+            })()}
+          </div>
+        </div>
+      )}
     </div>
   )
 }
