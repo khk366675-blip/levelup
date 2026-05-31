@@ -509,6 +509,21 @@ const formatBattleLogKo = (
     message = `${actorName}이/가 ${targetName}을 보호하며 ${value} 피해를 대신 받았다.`
   } else if (log.eventType === 'fizzle') {
     message = `${actorName}의 ${actionName}은/는 대상을 잃고 권능이 흩어졌다.`
+    if (import.meta.env.DEV) {
+      console.warn('[DEV FIZZLE DEBUG]\n' + 
+        `actor: ${log.metadata?.actorName ?? actorName} (${log.metadata?.actorTeam ?? 'unknown'})\n` +
+        `action: ${log.metadata?.actionLabel ?? actionName}\n` +
+        `targetType: ${log.metadata?.targetType ?? 'unknown'}\n` +
+        `effectKind: ${log.metadata?.effectKind ?? 'unknown'}\n` +
+        `queuedTargetIds: [${(log.metadata?.queuedTargetIds ?? []).join(', ')}]\n` +
+        `fallbackTargetIds: [${(log.metadata?.fallbackTargetIds ?? []).join(', ')}]\n` +
+        `livingPlayers: ${log.metadata?.livingPlayerCount ?? 'unknown'}\n` +
+        `livingEnemies: ${log.metadata?.livingEnemyCount ?? 'unknown'}\n` +
+        `reason: ${log.metadata?.debugReason ?? 'unknown'}\n` +
+        `livingPlayerUnits: ${JSON.stringify(log.metadata?.livingPlayerUnits ?? [])}\n` +
+        `livingEnemyUnits: ${JSON.stringify(log.metadata?.livingEnemyUnits ?? [])}`
+      )
+    }
   } else if (log.eventType === 'result') {
     message = state.winner === 'player'
       ? '전투가 끝났다. 아군 승리!'

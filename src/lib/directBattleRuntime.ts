@@ -886,6 +886,75 @@ const applyAllySupport = (
   })
 }
 
+const buildFizzleMetadata = (
+  state: DirectBattleState,
+  actor: BattleUnit,
+  action: BattleActionDefinition,
+  queuedTargetIds: string[],
+  debugReason: string,
+): any => {
+  const preferredBefore = [...queuedTargetIds]
+  const resolvedTargetIds = resolveTargets(state, actor, action, queuedTargetIds)
+
+  const livingPlayers = livingUnits(state, 'player')
+  const livingEnemies = livingUnits(state, 'enemy')
+
+  const livingPlayerUnits = livingPlayers.map(u => ({
+    unitId: u.unitId,
+    name: u.displayName,
+    currentHp: Math.round(u.stats.currentHp),
+    unitType: u.unitType,
+    role: u.role,
+    boardLane: u.boardLane,
+  }))
+
+  const livingEnemyUnits = livingEnemies.map(u => ({
+    unitId: u.unitId,
+    name: u.displayName,
+    currentHp: Math.round(u.stats.currentHp),
+    unitType: u.unitType,
+    role: u.role,
+    boardLane: u.boardLane,
+  }))
+
+  const effectsSummary = action.effects && action.effects.length > 0
+    ? action.effects.map(e => `${e.kind}:${e.stat ?? ''}:${e.value}:${e.target ?? ''}`).join(',')
+    : 'none'
+
+  return {
+    debugReason,
+    actorUnitId: actor.unitId,
+    actorName: actor.displayName,
+    actorTeam: actor.team,
+    actorUnitType: actor.unitType,
+    actionId: action.actionId,
+    actionLabel: action.label,
+    actionType: action.actionType,
+    effectKind: action.effectKind,
+    targetType: action.targetType,
+    effectsSummary,
+    queuedTargetIds,
+    preferredTargetIdsBeforeValidation: preferredBefore,
+    preferredTargetIdsAfterValidation: queuedTargetIds.filter(id => {
+      const u = findUnit(state, id)
+      if (!u || u.stats.currentHp <= 0) return false
+      const isHostile = isHostileAction(action)
+      return isHostile ? u.team !== actor.team : u.team === actor.team
+    }),
+    fallbackTargetIds: resolveTargets(state, actor, action, []),
+    finalTargetIds: resolvedTargetIds,
+    livingPlayerCount: livingPlayers.length,
+    livingEnemyCount: livingEnemies.length,
+    livingPlayerUnits,
+    livingEnemyUnits,
+    isHostileEffect: isHostileEffect(action),
+    isAllyTargetAction: isAllyTargetAction(action),
+    targetRule: actor.telegraph?.targetRule ?? 'none',
+    round: state.round,
+    battleId: state.battleId,
+  }
+}
+
 const addFizzleLog = (
   state: DirectBattleState,
   actor: BattleUnit,
@@ -894,6 +963,7 @@ const addFizzleLog = (
   reason: string,
 ) => {
   const snapshotIds = uniqueUnitIds([actor.unitId, ...targetIds])
+  const metadata = buildFizzleMetadata(state, actor, action, targetIds, reason)
   addLog(state, {
     actorUnitId: actor.unitId,
     targetUnitIds: targetIds,
@@ -909,6 +979,7 @@ const addFizzleLog = (
     hpAfterByUnitId: hpSnapshotsFor(state, snapshotIds),
     statusBeforeByUnitId: statusSnapshotsFor(state, snapshotIds),
     statusAfterByUnitId: statusSnapshotsFor(state, snapshotIds),
+    metadata,
   })
 }
 
@@ -918,8 +989,10 @@ const executeAction = (state: DirectBattleState, queued: QueuedBattleAction) => 
   const action = getAction(actor, queued.actionId)
   if (!action) return
 
-  if ((actor.cooldowns[action.actionId] ?? 0) > 0) {
+  const isBoss = actor.unitType === 'boss' || actor.role === 'boss' || actor.metadata?.tags?.includes('boss')
+  if (!isBoss && (actor.cooldowns[action.actionId] ?? 0) > 0) {
     const snapshotIds = uniqueUnitIds([actor.unitId, ...queued.targetIds])
+    const metadata = buildFizzleMetadata(state, actor, action, queued.targetIds, 'cooldown_not_ready')
     addLog(state, {
       actorUnitId: actor.unitId,
       targetUnitIds: queued.targetIds,
@@ -935,6 +1008,7 @@ const executeAction = (state: DirectBattleState, queued: QueuedBattleAction) => 
       hpAfterByUnitId: hpSnapshotsFor(state, snapshotIds),
       statusBeforeByUnitId: statusSnapshotsFor(state, snapshotIds),
       statusAfterByUnitId: statusSnapshotsFor(state, snapshotIds),
+      metadata,
     })
     return
   }
@@ -963,8 +1037,7 @@ const executeAction = (state: DirectBattleState, queued: QueuedBattleAction) => 
 
   if (targets.length === 0 && action.targetType !== 'self') {
     const snapshotIds = uniqueUnitIds([actor.unitId, ...queued.targetIds])
-    const livingPlayers = livingUnits(state, 'player').map(u => u.unitId)
-    const livingEnemies = livingUnits(state, 'enemy').map(u => u.unitId)
+    const metadata = buildFizzleMetadata(state, actor, action, queued.targetIds, 'no_targets_resolved')
     addLog(state, {
       actorUnitId: actor.unitId,
       targetUnitIds: queued.targetIds,
@@ -980,16 +1053,7 @@ const executeAction = (state: DirectBattleState, queued: QueuedBattleAction) => 
       hpAfterByUnitId: hpSnapshotsFor(state, snapshotIds),
       statusBeforeByUnitId: statusSnapshotsFor(state, snapshotIds),
       statusAfterByUnitId: statusSnapshotsFor(state, snapshotIds),
-      // debug metadata
-      metadata: {
-        debugTargetType: action.targetType,
-        debugActorTeam: actor.team,
-        debugLivingPlayerCount: livingPlayers.length,
-        debugLivingEnemyCount: livingEnemies.length,
-        debugPreferredTargetIds: queued.targetIds,
-        debugLivingPlayers: livingPlayers,
-        debugLivingEnemies: livingEnemies,
-      } as any
+      metadata,
     })
     return
   }
