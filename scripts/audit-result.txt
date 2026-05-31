@@ -1,0 +1,164 @@
+﻿==================================================
+[Living Rift World A-2-QA] GateRun ?좏깮吏 ?④낵 諛몃윴??媛먯궗 ?쒕??덉씠??==================================================
+
+=== Case 1: ?쒓뎅 B湲?寃뚯씠??- ?덉젙 ?꾩＜ ?꾨왂 ===
+Seed     | Strategy | Enc/Evt | Difficulty Delta (C/B) | Reward Mult | Relief | Boss Hint | Combat HP | Boss HP  | Consumed | Clamp | Polluted
+--------------------------------------------------------------------------------------------------------------------------------
+seed_123 | stabilize | 4/1     | C:1.00 / B:1.70        | x1.00       | 0%     | NO        | 1520      | 4590     | YES      | OK    | OK
+seed_456 | stabilize | 4/1     | C:1.00 / B:1.70        | x1.00       | 0%     | NO        | 1520      | 4590     | YES      | OK    | OK
+seed_789 | stabilize | 4/1     | C:1.00 / B:1.70        | x1.00       | 0%     | NO        | 1080      | 4590     | YES      | OK    | OK
+
+[?듦퀎 ?붿빟 (n=3)]
+- Reward Multiplier: ?됯퇏 x1.00 (踰붿쐞: x1.00 ~ x1.00)
+- Boss Difficulty Delta: ?됯퇏 0.0% (踰붿쐞: 0.0% ~ 0.0%)
+- First Combat Difficulty Mod: ?됯퇏 100.0% (踰붿쐞: 100.0% ~ 100.0%)
+- Boss Difficulty Mod: ?됯퇏 170.0% (踰붿쐞: 170.0% ~ 170.0%)
+- First Combat Monster ?됯퇏 HP: 1373
+- Boss Monster ?됯퇏 HP: 4590
+- Clamp ?쒓퀎 ?꾨떖 ?잛닔: 0??- ?쇰컲 寃뚯씠???ㅼ뿼 諛쒖깮 ?? 0??
+=== Case 2: ?쒓뎅 A湲?寃뚯씠??- ?뚰뙆/遺꾩꽍 ?쇳빀 (?ㅼ뿼??60% / D-1) ===
+Seed     | Strategy | Enc/Evt | Difficulty Delta (C/B) | Reward Mult | Relief | Boss Hint | Combat HP | Boss HP  | Consumed | Clamp | Polluted
+--------------------------------------------------------------------------------------------------------------------------------
+seed_123 | mixed    | 5/1     | C:1.00 / B:1.70        | x1.00       | 0%     | NO        | 1300      | 3825     | YES      | OK    | OK
+seed_456 | mixed    | 5/1     | C:1.00 / B:1.70        | x1.00       | 0%     | NO        | 1300      | 3825     | YES      | OK    | OK
+seed_789 | mixed    | 5/1     | C:1.00 / B:1.70        | x1.00       | 0%     | NO        | 1300      | 3825     | YES      | OK    | OK
+
+[?듦퀎 ?붿빟 (n=3)]
+- Reward Multiplier: ?됯퇏 x1.00 (踰붿쐞: x1.00 ~ x1.00)
+- Boss Difficulty Delta: ?됯퇏 0.0% (踰붿쐞: 0.0% ~ 0.0%)
+- First Combat Difficulty Mod: ?됯퇏 100.0% (踰붿쐞: 100.0% ~ 100.0%)
+- Boss Difficulty Mod: ?됯퇏 170.0% (踰붿쐞: 170.0% ~ 170.0%)
+- First Combat Monster ?됯퇏 HP: 1300
+- Boss Monster ?됯퇏 HP: 3825
+- Clamp ?쒓퀎 ?꾨떖 ?잛닔: 0??- ?쇰컲 寃뚯씠???ㅼ뿼 諛쒖깮 ?? 0??
+=== Case 3: 誘멸뎅 S湲??щ툕肄?- ?묐젰 ?먯젙 (?덉젙/?묐젰/遺꾩꽍 ?꾩＜) ===
+Seed     | Strategy | Enc/Evt | Difficulty Delta (C/B) | Reward Mult | Relief | Boss Hint | Combat HP | Boss HP  | Consumed | Clamp | Polluted
+--------------------------------------------------------------------------------------------------------------------------------
+seed_123 | stabilize | 6/2     | C:0.76 / B:2.04        | x1.00       | 0%     | NO        | 1152      | 6630     | YES      | OK    | OK
+seed_456 | stabilize | 6/2     | C:0.81 / B:2.04        | x1.00       | 0%     | NO        | 1238      | 6630     | YES      | OK    | OK
+seed_789 | stabilize | 6/2     | C:0.81 / B:2.04        | x1.00       | 0%     | NO        | 1238      | 6630     | YES      | OK    | OK
+seed_abc | stabilize | 6/2     | C:0.81 / B:2.04        | x1.00       | 0%     | NO        | 1238      | 6630     | YES      | OK    | OK
+seed_xyz | stabilize | 6/2     | C:0.76 / B:2.04        | x1.00       | 0%     | NO        | 1152      | 6630     | YES      | OK    | OK
+
+[?듦퀎 ?붿빟 (n=5)]
+- Reward Multiplier: ?됯퇏 x1.00 (踰붿쐞: x1.00 ~ x1.00)
+- Boss Difficulty Delta: ?됯퇏 0.0% (踰붿쐞: 0.0% ~ 0.0%)
+- First Combat Difficulty Mod: ?됯퇏 79.2% (踰붿쐞: 75.8% ~ 81.5%)
+- Boss Difficulty Mod: ?됯퇏 204.0% (踰붿쐞: 204.0% ~ 204.0%)
+- First Combat Monster ?됯퇏 HP: 1204
+- Boss Monster ?됯퇏 HP: 6630
+- Clamp ?쒓퀎 ?꾨떖 ?잛닔: 0??- ?쇰컲 寃뚯씠???ㅼ뿼 諛쒖깮 ?? 0??
+=== Case 4: 誘멸뎅 S湲??щ툕肄?- ?⑤룆 ?먯젙 (?뚰뙆/?⑤룆 ?꾩＜) ===
+Seed     | Strategy | Enc/Evt | Difficulty Delta (C/B) | Reward Mult | Relief | Boss Hint | Combat HP | Boss HP  | Consumed | Clamp | Polluted
+--------------------------------------------------------------------------------------------------------------------------------
+seed_123 | breakthrough | 6/2     | C:0.93 / B:2.04        | x1.26       | 0%     | NO        | 1418      | 6630     | YES      | OK    | OK
+seed_456 | breakthrough | 6/2     | C:0.93 / B:2.04        | x1.26       | 0%     | NO        | 1418      | 6630     | YES      | OK    | OK
+seed_789 | breakthrough | 6/2     | C:0.93 / B:2.04        | x1.26       | 0%     | NO        | 1418      | 6630     | YES      | OK    | OK
+seed_abc | breakthrough | 6/2     | C:0.93 / B:2.04        | x1.26       | 0%     | NO        | 1418      | 6630     | YES      | OK    | OK
+seed_xyz | breakthrough | 6/2     | C:0.93 / B:2.04        | x1.26       | 0%     | NO        | 1418      | 6630     | YES      | OK    | OK
+
+[?듦퀎 ?붿빟 (n=5)]
+- Reward Multiplier: ?됯퇏 x1.26 (踰붿쐞: x1.26 ~ x1.26)
+- Boss Difficulty Delta: ?됯퇏 0.0% (踰붿쐞: 0.0% ~ 0.0%)
+- First Combat Difficulty Mod: ?됯퇏 93.3% (踰붿쐞: 93.3% ~ 93.3%)
+- Boss Difficulty Mod: ?됯퇏 204.0% (踰붿쐞: 204.0% ~ 204.0%)
+- First Combat Monster ?됯퇏 HP: 1418
+- Boss Monster ?됯퇏 HP: 6630
+- Clamp ?쒓퀎 ?꾨떖 ?잛닔: 0??- ?쇰컲 寃뚯씠???ㅼ뿼 諛쒖깮 ?? 0??
+=== Case 5: 洹밸떒 耳?댁뒪 - Breakthrough/Solo ?꾩＜ ?꾨왂 ===
+Seed     | Strategy | Enc/Evt | Difficulty Delta (C/B) | Reward Mult | Relief | Boss Hint | Combat HP | Boss HP  | Consumed | Clamp | Polluted
+--------------------------------------------------------------------------------------------------------------------------------
+seed_123 | breakthrough | 6/2     | C:0.93 / B:2.04        | x1.26       | 0%     | NO        | 1418      | 6630     | YES      | OK    | OK
+seed_456 | breakthrough | 6/2     | C:0.93 / B:2.04        | x1.26       | 0%     | NO        | 1418      | 6630     | YES      | OK    | OK
+seed_789 | breakthrough | 6/2     | C:0.93 / B:2.04        | x1.26       | 0%     | NO        | 1418      | 6630     | YES      | OK    | OK
+seed_abc | breakthrough | 6/2     | C:0.93 / B:2.04        | x1.26       | 0%     | NO        | 1418      | 6630     | YES      | OK    | OK
+seed_xyz | breakthrough | 6/2     | C:0.93 / B:2.04        | x1.26       | 0%     | NO        | 1418      | 6630     | YES      | OK    | OK
+
+[?듦퀎 ?붿빟 (n=5)]
+- Reward Multiplier: ?됯퇏 x1.26 (踰붿쐞: x1.26 ~ x1.26)
+- Boss Difficulty Delta: ?됯퇏 0.0% (踰붿쐞: 0.0% ~ 0.0%)
+- First Combat Difficulty Mod: ?됯퇏 93.3% (踰붿쐞: 93.3% ~ 93.3%)
+- Boss Difficulty Mod: ?됯퇏 204.0% (踰붿쐞: 204.0% ~ 204.0%)
+- First Combat Monster ?됯퇏 HP: 1418
+- Boss Monster ?됯퇏 HP: 6630
+- Clamp ?쒓퀎 ?꾨떖 ?잛닔: 0??- ?쇰컲 寃뚯씠???ㅼ뿼 諛쒖깮 ?? 0??
+=== Case 6: 洹밸떒 耳?댁뒪 - Stabilize/Coop/Analyze ?꾩＜ ?꾨왂 ===
+Seed     | Strategy | Enc/Evt | Difficulty Delta (C/B) | Reward Mult | Relief | Boss Hint | Combat HP | Boss HP  | Consumed | Clamp | Polluted
+--------------------------------------------------------------------------------------------------------------------------------
+seed_123 | stabilize | 6/2     | C:0.76 / B:2.04        | x1.00       | 0%     | NO        | 1152      | 6630     | YES      | OK    | OK
+seed_456 | stabilize | 6/2     | C:0.81 / B:2.04        | x1.00       | 0%     | NO        | 1238      | 6630     | YES      | OK    | OK
+seed_789 | stabilize | 6/2     | C:0.81 / B:2.04        | x1.00       | 0%     | NO        | 1238      | 6630     | YES      | OK    | OK
+seed_abc | stabilize | 6/2     | C:0.81 / B:2.04        | x1.00       | 0%     | NO        | 1238      | 6630     | YES      | OK    | OK
+seed_xyz | stabilize | 6/2     | C:0.76 / B:2.04        | x1.00       | 0%     | NO        | 1152      | 6630     | YES      | OK    | OK
+
+[?듦퀎 ?붿빟 (n=5)]
+- Reward Multiplier: ?됯퇏 x1.00 (踰붿쐞: x1.00 ~ x1.00)
+- Boss Difficulty Delta: ?됯퇏 0.0% (踰붿쐞: 0.0% ~ 0.0%)
+- First Combat Difficulty Mod: ?됯퇏 79.2% (踰붿쐞: 75.8% ~ 81.5%)
+- Boss Difficulty Mod: ?됯퇏 204.0% (踰붿쐞: 204.0% ~ 204.0%)
+- First Combat Monster ?됯퇏 HP: 1204
+- Boss Monster ?됯퇏 HP: 6630
+- Clamp ?쒓퀎 ?꾨떖 ?잛닔: 0??- ?쇰컲 寃뚯씠???ㅼ뿼 諛쒖깮 ?? 0??
+=== Case 7: ?쇰컲 ?쒕뜡 寃뚯씠???뚭? 寃利?===
+Seed     | Strategy | Enc/Evt | Difficulty Delta (C/B) | Reward Mult | Relief | Boss Hint | Combat HP | Boss HP  | Consumed | Clamp | Polluted
+--------------------------------------------------------------------------------------------------------------------------------
+seed_123 | mixed    | 3/1     | C:1.00 / B:1.00        | x1.00       | 0%     | NO        | 420       | 0        | NO       | OK    | OK
+seed_456 | mixed    | 3/1     | C:1.00 / B:1.00        | x1.00       | 0%     | NO        | 420       | 0        | NO       | OK    | OK
+seed_789 | mixed    | 3/1     | C:1.00 / B:1.00        | x0.92       | 0%     | NO        | 252       | 0        | NO       | OK    | OK
+seed_abc | mixed    | 3/1     | C:1.00 / B:1.00        | x1.00       | 0%     | NO        | 420       | 0        | NO       | OK    | OK
+seed_xyz | mixed    | 3/1     | C:1.00 / B:1.00        | x1.00       | 0%     | NO        | 420       | 0        | NO       | OK    | OK
+
+[?듦퀎 ?붿빟 (n=5)]
+- Reward Multiplier: ?됯퇏 x0.98 (踰붿쐞: x0.92 ~ x1.00)
+- Boss Difficulty Delta: ?됯퇏 0.0% (踰붿쐞: 0.0% ~ 0.0%)
+- First Combat Difficulty Mod: ?됯퇏 100.0% (踰붿쐞: 100.0% ~ 100.0%)
+- Boss Difficulty Mod: ?됯퇏 100.0% (踰붿쐞: 100.0% ~ 100.0%)
+- First Combat Monster ?됯퇏 HP: 386
+- Boss Monster ?됯퇏 HP: 0
+- Clamp ?쒓퀎 ?꾨떖 ?잛닔: 0??- ?쇰컲 寃뚯씠???ㅼ뿼 諛쒖깮 ?? 0??
+=== Case 8: ?쇰낯 A湲?寃뚯씠??- ?뺥솕(Cleanse/Purify) ?꾩＜ ?꾨왂 ===
+Seed     | Strategy | Enc/Evt | Difficulty Delta (C/B) | Reward Mult | Relief | Boss Hint | Combat HP | Boss HP  | Consumed | Clamp | Polluted
+--------------------------------------------------------------------------------------------------------------------------------
+seed_123 | stabilize | 5/1     | C:1.00 / B:1.70        | x1.00       | 18%    | NO        | 1520      | 4590     | NO       | OK    | OK
+seed_456 | stabilize | 5/1     | C:1.00 / B:1.70        | x1.00       | 18%    | NO        | 1520      | 4590     | NO       | OK    | OK
+seed_789 | stabilize | 5/1     | C:1.00 / B:1.70        | x1.00       | 18%    | NO        | 1520      | 4590     | NO       | OK    | OK
+seed_abc | stabilize | 5/1     | C:1.00 / B:1.70        | x1.25       | 0%     | NO        | 1520      | 4590     | YES      | OK    | OK
+seed_xyz | stabilize | 5/1     | C:1.00 / B:1.70        | x1.25       | 0%     | NO        | 1520      | 4590     | YES      | OK    | OK
+
+[?듦퀎 ?붿빟 (n=5)]
+- Reward Multiplier: ?됯퇏 x1.10 (踰붿쐞: x1.00 ~ x1.25)
+- Boss Difficulty Delta: ?됯퇏 0.0% (踰붿쐞: 0.0% ~ 0.0%)
+- First Combat Difficulty Mod: ?됯퇏 100.0% (踰붿쐞: 100.0% ~ 100.0%)
+- Boss Difficulty Mod: ?됯퇏 170.0% (踰붿쐞: 170.0% ~ 170.0%)
+- First Combat Monster ?됯퇏 HP: 1520
+- Boss Monster ?됯퇏 HP: 4590
+- Clamp ?쒓퀎 ?꾨떖 ?잛닔: 0??- ?쇰컲 寃뚯씠???ㅼ뿼 諛쒖깮 ?? 0??
+=== Case 9: ?쒖슱 A湲?寃뚯씠??- 遺꾩꽍(Analyze) ?꾩＜ ?꾨왂 ===
+Seed     | Strategy | Enc/Evt | Difficulty Delta (C/B) | Reward Mult | Relief | Boss Hint | Combat HP | Boss HP  | Consumed | Clamp | Polluted
+--------------------------------------------------------------------------------------------------------------------------------
+seed_123 | stabilize | 5/1     | C:1.00 / B:1.70        | x1.00       | 0%     | NO        | 1300      | 3825     | YES      | OK    | OK
+seed_456 | stabilize | 5/1     | C:1.00 / B:1.70        | x1.00       | 0%     | NO        | 1300      | 3825     | YES      | OK    | OK
+seed_789 | stabilize | 5/1     | C:1.00 / B:1.70        | x1.00       | 0%     | NO        | 1300      | 3825     | YES      | OK    | OK
+seed_abc | stabilize | 5/1     | C:1.00 / B:1.57        | x1.00       | 0%     | YES       | 1300      | 3538     | NO       | OK    | OK
+seed_xyz | stabilize | 5/1     | C:1.00 / B:1.57        | x1.00       | 0%     | YES       | 1300      | 3538     | NO       | OK    | OK
+
+[?듦퀎 ?붿빟 (n=5)]
+- Reward Multiplier: ?됯퇏 x1.00 (踰붿쐞: x1.00 ~ x1.00)
+- Boss Difficulty Delta: ?됯퇏 -3.0% (踰붿쐞: -7.5% ~ 0.0%)
+- First Combat Difficulty Mod: ?됯퇏 100.0% (踰붿쐞: 100.0% ~ 100.0%)
+- Boss Difficulty Mod: ?됯퇏 164.9% (踰붿쐞: 157.3% ~ 170.0%)
+- First Combat Monster ?됯퇏 HP: 1300
+- Boss Monster ?됯퇏 HP: 3710
+- Clamp ?쒓퀎 ?꾨떖 ?잛닔: 0??- ?쇰컲 寃뚯씠???ㅼ뿼 諛쒖깮 ?? 0??
+==================================================
+?꾩껜 ?붾뱶留??쒕??덉씠???듯빀 媛먯궗 寃곌낵
+==================================================
+
+[?듦퀎 ?붿빟 (n=36)]
+- Reward Multiplier: ?됯퇏 x1.09 (踰붿쐞: x1.00 ~ x1.26)
+- Boss Difficulty Delta: ?됯퇏 -0.4% (踰붿쐞: -7.5% ~ 0.0%)
+- First Combat Difficulty Mod: ?됯퇏 92.4% (踰붿쐞: 75.8% ~ 100.0%)
+- Boss Difficulty Mod: ?됯퇏 188.2% (踰붿쐞: 157.3% ~ 204.0%)
+- First Combat Monster ?됯퇏 HP: 1343
+- Boss Monster ?됯퇏 HP: 5537
+- Clamp ?쒓퀎 ?꾨떖 ?잛닔: 0??- ?쇰컲 寃뚯씠???ㅼ뿼 諛쒖깮 ?? 0??

@@ -293,6 +293,22 @@ export const COOP_HELP_DR_CAP = 0.5       // 협력자 대미지 감소 최대 5
 export const COOP_REWARD_PENALTY_PER_HELPER = 0.15 // 협력자 1명당 플레이어 보상 15% 차감
 export const COOP_REWARD_MIN_RATIO = 0.3   // 최소 보상 30% 보장
 
+function appendMessageOnce(messages: SystemMessage[], nextMessage: SystemMessage): SystemMessage[] {
+  if (!messages) return [nextMessage]
+  const recentWindow = messages.slice(-5)
+  const isDuplicate = recentWindow.some(m => {
+    if (m.title !== nextMessage.title) return false
+    const firstLineA = m.lines?.[0]
+    const firstLineB = nextMessage.lines?.[0]
+    return firstLineA === firstLineB
+  })
+
+  if (isDuplicate) {
+    return messages
+  }
+  return [...messages, nextMessage]
+}
+
 function rollRedGateInstability(runState: GateRunState, encounterId: string, customIncrease?: number): boolean {
   if (!runState) return false
   if (!runState.redGateState) {
@@ -5065,7 +5081,31 @@ export const useGame = create<GameState>()(
 
       spawnGate: (gateId: string, source: 'random' | 'dungeon_clear' | 'event' | 'worldmap', helperHunterIds?: string[], customGateDef?: any) => {
         const s = get()
+        // 1. 이미 activeGate가 존재하며 active인 경우 중복 생성을 즉시 차단
         if (s.activeGate && s.activeGate.status === 'active') return
+
+        // 2. 군주/Angel defeated/cleared/ending victory 상태에서는 게이트 및 출현 알림 생성을 차단
+        const isMonarchId = MONARCHS.some(m => m.id === gateId) || gateId === 'angel'
+        if (isMonarchId) {
+          if (gateId === 'angel') {
+            if (s.livingWorld?.endingState === 'victory') {
+              return
+            }
+          } else {
+            if (s.livingWorld?.activeMonarchs) {
+              const activeMonarch = s.livingWorld.activeMonarchs.find(m => m.monarchId === gateId)
+              const isDefeated = !activeMonarch || activeMonarch.status === 'defeated' || activeMonarch.occupiedRegionIds.length === 0
+              if (isDefeated) {
+                return
+              }
+            }
+          }
+        }
+
+        // 3. 이미 cleared된 상태의 게이트/노드이면 생성 차단
+        if (s.riftNodes[gateId] === 'cleared' || (s.livingWorld?.riftNodes[gateId]?.status === 'cleared')) {
+          return
+        }
 
         const gate = customGateDef || GATE_DEFINITIONS.find(g => g.id === gateId)
         if (!gate) return
@@ -5124,7 +5164,7 @@ export const useGame = create<GameState>()(
             helperHunterIds,
             customGateDef: enrichedGateDef,
           },
-          messages: [...s.messages, {
+          messages: appendMessageOnce(s.messages, {
             id: uid(),
             kind: 'info',
             title: '게이트 출현',
@@ -5133,7 +5173,7 @@ export const useGame = create<GameState>()(
               ...(dp && dp.overallReadiness >= 15 ? [`현실 준비도 ${dp.overallReadiness}% — 보상 +${Math.round(dp.gateRewardBonus * 100)}%`] : [])
             ],
             createdAt: todayISO(),
-          }],
+          }),
         })
       },
 
@@ -7804,19 +7844,16 @@ export const useGame = create<GameState>()(
           activeRiftNodeId: undefined,
           manualBattleSession: undefined,
           worldBattleRetreats: nextRetreats,
-          messages: [
-            ...s.messages,
-            {
-              id: uid(),
-              kind: 'info',
-              title: '전투 후퇴',
-              lines: [
-                "[" + nameLabel + "] 전투에서 안전하게 후퇴했습니다.",
-                '다행히 부상을 면했으나, 오늘 이 구역은 다시 진입할 수 없습니다.',
-              ],
-              createdAt: todayISO(),
-            }
-          ]
+          messages: appendMessageOnce(s.messages, {
+            id: uid(),
+            kind: 'info',
+            title: '전투 후퇴',
+            lines: [
+              "[" + nameLabel + "] 전투에서 안전하게 후퇴했습니다.",
+              '다행히 부상을 면했으나, 오늘 이 구역은 다시 진입할 수 없습니다.',
+            ],
+            createdAt: todayISO(),
+          })
         }
       }),
 
@@ -8022,31 +8059,25 @@ export const useGame = create<GameState>()(
             const endingState = s.livingWorld?.endingState
             if (!angelReady) {
               set({
-                messages: [
-                  ...s.messages,
-                  {
-                    id: uid(),
-                    kind: 'info',
-                    title: '진입 차단',
-                    lines: ['아직 지고의 심판자(천사)가 나타나지 않았습니다. 8명의 군주를 모두 격퇴해야 합니다.'],
-                    createdAt: todayISO(),
-                  }
-                ]
+                messages: appendMessageOnce(s.messages, {
+                  id: uid(),
+                  kind: 'info',
+                  title: '진입 차단',
+                  lines: ['아직 지고의 심판자(천사)가 나타나지 않았습니다. 8명의 군주를 모두 격퇴해야 합니다.'],
+                  createdAt: todayISO(),
+                })
               })
               return
             }
             if (endingState === 'victory') {
               set({
-                messages: [
-                  ...s.messages,
-                  {
-                    id: uid(),
-                    kind: 'info',
-                    title: '진입 차단',
-                    lines: ['이미 정화된 결전입니다.'],
-                    createdAt: todayISO(),
-                  }
-                ]
+                messages: appendMessageOnce(s.messages, {
+                  id: uid(),
+                  kind: 'info',
+                  title: '진입 차단',
+                  lines: ['이미 정화된 결전입니다.'],
+                  createdAt: todayISO(),
+                })
               })
               return
             }
@@ -8057,16 +8088,13 @@ export const useGame = create<GameState>()(
               const isDefeated = !activeMonarch || activeMonarch.status === 'defeated' || activeMonarch.occupiedRegionIds.length === 0
               if (isDefeated) {
                 set({
-                  messages: [
-                    ...s.messages,
-                    {
-                      id: uid(),
-                      kind: 'info',
-                      title: '진입 차단',
-                      lines: ['이미 격퇴된 군주입니다.'],
-                      createdAt: todayISO(),
-                    }
-                  ]
+                  messages: appendMessageOnce(s.messages, {
+                    id: uid(),
+                    kind: 'info',
+                    title: '진입 차단',
+                    lines: ['이미 격퇴된 군주입니다.'],
+                    createdAt: todayISO(),
+                  })
                 })
                 return
               }
@@ -8113,16 +8141,13 @@ export const useGame = create<GameState>()(
         // 단, 러브콜(지원 요청)이 활성화되어 있는 게이트는 대한민국 외여도 개입(진입) 가능!
         if (!isMonarchId && node.regionId !== 'kr' && !node.loveCall?.active) {
           set({
-            messages: [
-              ...s.messages,
-              {
-                id: uid(),
-                kind: 'info',
-                title: '진입 권한 제한',
-                lines: ['대한민국 영역 외의 게이트에는 직접 개입할 수 없습니다. (러브콜(지원 요청)이 활성화된 게이트만 진입 가능)'],
-                createdAt: todayISO(),
-              }
-            ]
+            messages: appendMessageOnce(s.messages, {
+              id: uid(),
+              kind: 'info',
+              title: '진입 권한 제한',
+              lines: ['대한민국 영역 외의 게이트에는 직접 개입할 수 없습니다. (러브콜(지원 요청)이 활성화된 게이트만 진입 가능)'],
+              createdAt: todayISO(),
+            })
           })
           return
         }
@@ -8131,16 +8156,13 @@ export const useGame = create<GameState>()(
         const today = todayKey()
         if (s.worldBattleRetreats && s.worldBattleRetreats[nodeId] === today) {
           set({
-            messages: [
-              ...s.messages,
-              {
-                id: uid(),
-                kind: 'info',
-                title: '진입 차단',
-                lines: ['오늘 이 구역에서 후퇴하여 다시 진입할 수 없습니다. 내일 다시 시도하십시오.'],
-                createdAt: todayISO(),
-              }
-            ]
+            messages: appendMessageOnce(s.messages, {
+              id: uid(),
+              kind: 'info',
+              title: '진입 차단',
+              lines: ['오늘 이 구역에서 후퇴하여 다시 진입할 수 없습니다. 내일 다시 시도하십시오.'],
+              createdAt: todayISO(),
+            })
           })
           return
         }
@@ -12615,13 +12637,13 @@ export const useGame = create<GameState>()(
         const s = get()
         if (s.activeGate && s.activeGate.status === 'active') {
           set({
-            messages: [...s.messages, {
+            messages: appendMessageOnce(s.messages, {
               id: uid(),
               kind: 'info',
               title: '승급 시험 불가',
               lines: ['현재 이미 활성화된 게이트가 존재합니다. 공략을 완료하거나 포기한 뒤 시도하십시오.'],
               createdAt: todayISO(),
-            }]
+            })
           })
           return
         }
@@ -12676,7 +12698,7 @@ export const useGame = create<GameState>()(
               createdAt: Date.now()
             }
           } : undefined,
-          messages: [...s.messages, {
+          messages: appendMessageOnce(s.messages, {
             id: uid(),
             kind: 'quest',
             title: '협회 승급 심사 게이트 개방',
@@ -12686,7 +12708,7 @@ export const useGame = create<GameState>()(
               `공략을 성공하여 헌터의 진정한 자격을 입증하십시오.`
             ],
             createdAt: todayISO(),
-          }]
+          })
         })
         setTimeout(() => {
           get().emitWorldSignal('promotion_exam_start')
