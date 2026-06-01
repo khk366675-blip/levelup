@@ -325,7 +325,13 @@ export function WorldMapPanel() {
   })
 
   // D3 Zoom & Overlay HUD States
-  const [zoomTransform, setZoomTransform] = useState({ k: 1, x: 0, y: 0 })
+  const [zoomTransform, setZoomTransform] = useState(() => {
+    const krCoords = REGION_CENTROIDS['kr'] || [580, 180]
+    const initialScale = 1.5
+    const tx = MAP_WIDTH / 2 - krCoords[0] * initialScale
+    const ty = MAP_HEIGHT / 2 - krCoords[1] * initialScale
+    return { k: initialScale, x: tx, y: ty }
+  })
   const [isLoveCallsExpanded, setIsLoveCallsExpanded] = useState(true)
   const svgRef = useRef<SVGSVGElement | null>(null)
   const zoomBehaviorRef = useRef<any>(null)
@@ -528,6 +534,17 @@ export function WorldMapPanel() {
     zoomBehaviorRef.current = zoomBehavior
     svg.call(zoomBehavior)
 
+    // Set initial custom zoom centered around South Korea (1.5x)
+    const krCoords = REGION_CENTROIDS['kr'] || [580, 180]
+    const initialScale = 1.5
+    const tx = MAP_WIDTH / 2 - krCoords[0] * initialScale
+    const ty = MAP_HEIGHT / 2 - krCoords[1] * initialScale
+
+    svg.call(
+      zoomBehavior.transform,
+      zoomIdentity.translate(tx, ty).scale(initialScale)
+    )
+
     return () => {
       svg.on('.zoom', null)
     }
@@ -535,10 +552,18 @@ export function WorldMapPanel() {
 
   const handleResetZoom = () => {
     if (svgRef.current && zoomBehaviorRef.current) {
+      const krCoords = REGION_CENTROIDS['kr'] || [580, 180]
+      const targetScale = 1.5
+      const tx = MAP_WIDTH / 2 - krCoords[0] * targetScale
+      const ty = MAP_HEIGHT / 2 - krCoords[1] * targetScale
+
       select(svgRef.current as any)
         .transition()
         .duration(500)
-        .call(zoomBehaviorRef.current.transform, zoomIdentity)
+        .call(
+          zoomBehaviorRef.current.transform,
+          zoomIdentity.translate(tx, ty).scale(targetScale)
+        )
     }
   }
 
@@ -1483,8 +1508,7 @@ export function WorldMapPanel() {
                   fill="none"
                   stroke={strokeColor}
                   strokeWidth="1.5"
-                  strokeDasharray="4,4"
-                  className="link-animation opacity-60"
+                  className="opacity-40"
                   style={{
                     filter: `drop-shadow(0 0 2px ${strokeColor})`,
                   }}
