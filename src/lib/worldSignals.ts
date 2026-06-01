@@ -212,6 +212,22 @@ export const WORLD_SIGNAL_TEMPLATES = {
     body: '지고의 심판자가 방출하는 격막 신호 사이에 "나를 딛고 나아가라"는 메시지가 고정되어 흐릅니다.',
     spoilerLevel: 3,
   },
+  echo_unresolved_angel: {
+    id: 'echo_unresolved_angel',
+    source: 'echo' as const,
+    tier: 'distorted' as const,
+    title: '미완성 공명',
+    body: '결전 좌표의 빛이 잠시 어긋났다가 되돌아옵니다. 닿지 못한 기록이 아직 뒤편에서 흔들립니다.',
+    spoilerLevel: 2,
+  },
+  echo_ultimate_truth: {
+    id: 'echo_ultimate_truth',
+    source: 'echo' as const,
+    tier: 'sealed' as const,
+    title: '응축되는 진실',
+    body: '대균열의 심연에서 방출되는 빛의 궤적과 플레이어의 흔적이 완벽한 위상 동조를 이룹니다. 종착지가 눈앞에 다가왔습니다.',
+    spoilerLevel: 3,
+  },
 }
 
 export type WorldSignalTemplateId = keyof typeof WORLD_SIGNAL_TEMPLATES

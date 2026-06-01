@@ -2463,6 +2463,7 @@ export interface LivingWorldState {
   homeReachedMonarchId?: string       // 거점에 도달한 군주 ID
   angelReady?: boolean                // 모든 군주 격퇴 시 천사 예고 플래그
   endingState?: 'none' | 'victory'    // 진엔딩 상태 식별자
+  endingMode?: 'surface' | 'true' | 'choice_pending' // [2단계] 엔딩 서사 분기 상태
   coopCount?: number                  // 이번 회차 총 협력 횟수
   dailySummaries?: DailySummary[]     // [NEW] 일일 정세 요약 스냅샷 리스트
   monarchsSpawnedTotal?: number       // [NEW] 누적 등장 군주 총수 (격퇴 여부 무관)

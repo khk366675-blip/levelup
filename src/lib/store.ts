@@ -245,7 +245,9 @@ import {
   resolveExpeditionMidEventChoice,
 } from './shadowExpeditions'
 import {
+  getEchoTruthReadiness,
   ensureSecretProgress,
+  markSecretFlagPublic,
   recordSecretEvent,
   resetSecretProgressOnLoop,
   type SecretEvent,
@@ -570,6 +572,7 @@ export interface GameState {
   performWorldManualBattleAction: (action: ManualBattleAction) => void
   cancelWorldManualBattle: () => void
   switchWorldManualBattleToAuto: () => void
+  resolveEndingChoice: (choice: 'surface' | 'true') => void
 
   // rewards / challenge cards
   ensureDailyRewardSystems: () => void
@@ -946,6 +949,22 @@ const applySecretProgressEvent = (
 
   return nextState
 }
+
+const appendLivingWorldEvent = (
+  world: LivingWorldState,
+  event: WorldEvent,
+  logLine?: string
+): LivingWorldState => ({
+  ...world,
+  eventLogs: [
+    ...world.eventLogs,
+    logLine ?? `[Day ${world.day}] ${event.title}: ${event.body}`,
+  ].slice(-60),
+  recentEvents: [
+    ...(world.recentEvents ?? []),
+    event,
+  ].slice(-60),
+})
 
 const GATE_ENTRY_COST = 20
 
@@ -5015,9 +5034,9 @@ export const useGame = create<GameState>()(
                 day: nextLivingWorld.day,
                 type: 'defeated',
                 severity: 'critical',
-                title: nodeId === 'angel' ? '구원 완료' : '군주 격퇴',
-                body: nodeId === 'angel' 
-                  ? '지고의 심판자를 격퇴하고 세계를 영원히 구원했습니다!' 
+                title: nodeId === 'angel' ? '최종 결전 승리' : '군주 격퇴',
+                body: nodeId === 'angel'
+                  ? '지고의 심판자가 쓰러지고 결전의 빛이 정지했습니다.'
                   : `플레이어가 군주 [${node.name}] 토벌에 성공했습니다!`,
                 regionId: node.regionId || 'kr',
                 monarchId: nodeId,
@@ -7865,6 +7884,8 @@ export const useGame = create<GameState>()(
           let nextHomeReachedMonarchId = freshState.livingWorld?.homeReachedMonarchId
           let nextAngelReady = freshState.livingWorld?.angelReady
           let worldLogs = freshState.livingWorld ? [...freshState.livingWorld.eventLogs] : []
+          let nextRecentEvents = freshState.livingWorld?.recentEvents ? [...freshState.livingWorld.recentEvents] : undefined
+          let nextSecretProgress = ensureSecretProgress(freshState.secretProgress)
 
           if (isMonarchId && updatedActiveMonarchs) {
             const mIdx = updatedActiveMonarchs.findIndex(m => m.monarchId === nodeId)
@@ -7882,11 +7903,60 @@ export const useGame = create<GameState>()(
             if (allDefeated) {
               nextAngelReady = true
               worldLogs.push(`[Day ${freshState.livingWorld?.day ?? 0}] [지고의 예언] 대균열의 심연에서 지고의 심판자(천사)가 강림을 예고하며 장엄한 빛이 쏟아집니다.`)
+              const isTruePath = getEchoTruthReadiness(nextSecretProgress).reached
+              if (isTruePath) {
+                const emitRes = emitWorldSignal(nextSecretProgress, 'echo_ultimate_truth')
+                nextSecretProgress = emitRes.progress
+              }
             }
           }
 
+          let nextEndingState = freshState.livingWorld?.endingState ?? 'none'
+          let nextEndingMode = freshState.livingWorld?.endingMode
+
           if (nodeId === 'angel') {
-            worldLogs.push(`[Day ${freshState.livingWorld?.day ?? 0}] 🌟 [구원 완료] 지고의 심판자(천사)를 격퇴하고 대균열의 근원을 영원히 정화했습니다! 세계는 멸망의 운명에서 마침내 구원받았습니다.`)
+            nextEndingState = 'victory'
+            const isTruePath = getEchoTruthReadiness(nextSecretProgress).reached
+            if (isTruePath) {
+              nextEndingMode = 'choice_pending'
+              worldLogs.push(`[Day ${freshState.livingWorld?.day ?? 0}] 🌟 [지고의 대면] 심판자와 마주했습니다. 그의 이면에 새겨진 익숙한 흔적이 당신에게 선택을 촉구합니다.`)
+              const endingEvent: WorldEvent = {
+                id: `evt-angel-choice-${freshState.livingWorld?.day ?? 0}-${uid()}`,
+                day: freshState.livingWorld?.day ?? 0,
+                type: 'defeated',
+                severity: 'critical',
+                title: '결말 직전의 정지',
+                body: '쓰러진 심판자의 빛 아래에서 축적된 기록이 다른 결말의 여백을 비춥니다.',
+                regionId: 'kr',
+                monarchId: 'angel',
+                cinematic: true,
+                subtitle: 'SEALED ROUTE OPENED',
+                quote: '"여기서 끝내도 된다. 하지만 끝내지 않는 길도 있다."',
+              }
+              nextRecentEvents = [...(nextRecentEvents ?? []), endingEvent].slice(-60)
+            } else {
+              nextEndingMode = 'surface'
+              worldLogs.push(`[Day ${freshState.livingWorld?.day ?? 0}] 🌟 [구원 완료] 지고의 심판자(천사)를 격퇴하고 대균열의 근원을 정화했습니다! 그러나 어둠 속에서 낯익은 굴레가 느껴집니다.`)
+              const endingEvent: WorldEvent = {
+                id: `evt-angel-surface-${freshState.livingWorld?.day ?? 0}-${uid()}`,
+                day: freshState.livingWorld?.day ?? 0,
+                type: 'defeated',
+                severity: 'critical',
+                title: '봉인된 평화',
+                body: '결전의 빛은 세계를 감싸지만, 빈 왕좌의 그림자가 잠시 당신의 윤곽과 겹칩니다.',
+                regionId: 'kr',
+                monarchId: 'angel',
+                cinematic: true,
+                subtitle: 'SURFACE ROUTE SEALED',
+              }
+              nextRecentEvents = [...(nextRecentEvents ?? []), endingEvent].slice(-60)
+              const res = applySecretProgressEvent(freshState, {
+                context: 'echo',
+                action: 'ending_select',
+                endingType: 'surface'
+              })
+              nextSecretProgress = res.secretProgress ?? nextSecretProgress
+            }
           }
 
           const finalRiftNodes = { ...freshState.riftNodes, [nodeId]: 'cleared' as RiftNodeStatus }
@@ -7899,12 +7969,15 @@ export const useGame = create<GameState>()(
               activeMonarchs: updatedActiveMonarchs ?? freshState.livingWorld.activeMonarchs,
               homeReachedMonarchId: nextHomeReachedMonarchId,
               angelReady: nextAngelReady ?? freshState.livingWorld.angelReady,
-              endingState: nodeId === 'angel' ? 'victory' : freshState.livingWorld.endingState,
+              endingState: nextEndingState,
+              endingMode: nextEndingMode,
+              recentEvents: nextRecentEvents ?? freshState.livingWorld.recentEvents,
             } : undefined,
             riftNodes: finalRiftNodes,
             activeGate: undefined,
             manualBattleSession: undefined,
             activeRiftNodeId: undefined,
+            secretProgress: nextSecretProgress,
           })
         } else {
           const monarchLog: CombatLog = { ...combatLog, source: combatLog.source || 'worldmap' }
@@ -7998,6 +8071,7 @@ export const useGame = create<GameState>()(
 
           // 2. markRiftNodeCleared가 완료된 최신 스토어 상태를 가져옵니다.
           const freshState = get()
+          let nextSecretProgress = ensureSecretProgress(freshState.secretProgress)
 
           let nextHunter = freshState.hunter
           let nextItems = freshState.items ?? []
@@ -8009,6 +8083,7 @@ export const useGame = create<GameState>()(
           let updatedNamedHunters = freshState.livingWorld ? { ...freshState.livingWorld.namedHunters } : undefined
           let updatedRiftNodes = freshState.livingWorld ? { ...freshState.livingWorld.riftNodes } : undefined
           let worldLogs = freshState.livingWorld ? [...freshState.livingWorld.eventLogs] : []
+          let nextRecentEvents = freshState.livingWorld?.recentEvents ? [...freshState.livingWorld.recentEvents] : undefined
 
           let updatedActiveMonarchs = freshState.livingWorld?.activeMonarchs ? [...freshState.livingWorld.activeMonarchs] : undefined
           let nextHomeReachedMonarchId = freshState.livingWorld?.homeReachedMonarchId
@@ -8145,11 +8220,69 @@ export const useGame = create<GameState>()(
             if (allDefeated) {
               nextAngelReady = true
               worldLogs.push(`[Day ${freshState.livingWorld?.day ?? 0}] [지고의 예언] 대균열의 심연에서 지고의 심판자(천사)가 강림을 예고하며 장엄한 빛이 쏟아집니다.`)
+              const isTruePath = getEchoTruthReadiness(nextSecretProgress).reached
+              if (isTruePath) {
+                const emitRes = emitWorldSignal(nextSecretProgress, 'echo_ultimate_truth')
+                nextSecretProgress = emitRes.progress
+                if (emitRes.signal) {
+                  newMessages.push({
+                    id: uid(),
+                    kind: 'secret',
+                    title: emitRes.signal.title,
+                    lines: [emitRes.signal.body],
+                    createdAt: todayISO(),
+                  })
+                }
+              }
             }
           }
 
+          let nextEndingState = freshState.livingWorld?.endingState ?? 'none'
+          let nextEndingMode = freshState.livingWorld?.endingMode
+
           if (nodeId === 'angel') {
-            worldLogs.push(`[Day ${freshState.livingWorld?.day ?? 0}] 🌟 [구원 완료] 지고의 심판자(천사)를 격퇴하고 대균열의 근원을 영원히 정화했습니다! 세계는 멸망의 운명에서 마침내 구원받았습니다.`)
+            nextEndingState = 'victory'
+            const isTruePath = getEchoTruthReadiness(nextSecretProgress).reached
+            if (isTruePath) {
+              nextEndingMode = 'choice_pending'
+              worldLogs.push(`[Day ${freshState.livingWorld?.day ?? 0}] 🌟 [지고의 대면] 심판자와 마주했습니다. 그의 이면에 새겨진 익숙한 흔적이 당신에게 선택을 촉구합니다.`)
+              const endingEvent: WorldEvent = {
+                id: `evt-angel-choice-${freshState.livingWorld?.day ?? 0}-${uid()}`,
+                day: freshState.livingWorld?.day ?? 0,
+                type: 'defeated',
+                severity: 'critical',
+                title: '결말 직전의 정지',
+                body: '쓰러진 심판자의 빛 아래에서 축적된 기록이 다른 결말의 여백을 비춥니다.',
+                regionId: 'kr',
+                monarchId: 'angel',
+                cinematic: true,
+                subtitle: 'SEALED ROUTE OPENED',
+                quote: '"여기서 끝내도 된다. 하지만 끝내지 않는 길도 있다."',
+              }
+              nextRecentEvents = [...(nextRecentEvents ?? []), endingEvent].slice(-60)
+            } else {
+              nextEndingMode = 'surface'
+              worldLogs.push(`[Day ${freshState.livingWorld?.day ?? 0}] 🌟 [구원 완료] 지고의 심판자(천사)를 격퇴하고 대균열의 근원을 정화했습니다! 그러나 어둠 속에서 낯익은 굴레가 느껴집니다.`)
+              const endingEvent: WorldEvent = {
+                id: `evt-angel-surface-${freshState.livingWorld?.day ?? 0}-${uid()}`,
+                day: freshState.livingWorld?.day ?? 0,
+                type: 'defeated',
+                severity: 'critical',
+                title: '봉인된 평화',
+                body: '결전의 빛은 세계를 감싸지만, 빈 왕좌의 그림자가 잠시 당신의 윤곽과 겹칩니다.',
+                regionId: 'kr',
+                monarchId: 'angel',
+                cinematic: true,
+                subtitle: 'SURFACE ROUTE SEALED',
+              }
+              nextRecentEvents = [...(nextRecentEvents ?? []), endingEvent].slice(-60)
+              const res = applySecretProgressEvent(freshState, {
+                context: 'echo',
+                action: 'ending_select',
+                endingType: 'surface'
+              })
+              nextSecretProgress = res.secretProgress ?? nextSecretProgress
+            }
           }
 
           let nextCoopCount = freshState.livingWorld?.coopCount ?? 0
@@ -8226,18 +8359,21 @@ export const useGame = create<GameState>()(
               activeMonarchs: updatedActiveMonarchs ?? freshState.livingWorld.activeMonarchs,
               homeReachedMonarchId: nextHomeReachedMonarchId,
               angelReady: nextAngelReady ?? freshState.livingWorld.angelReady,
-              endingState: nodeId === 'angel' ? 'victory' : freshState.livingWorld.endingState,
+              endingState: nextEndingState,
+              endingMode: nextEndingMode,
               coopCount: nextCoopCount,
+              recentEvents: nextRecentEvents ?? freshState.livingWorld.recentEvents,
             } : undefined,
             messages: [...freshState.messages, ...newMessages],
             riftNodes: finalRiftNodes,
             activeGate: undefined,
             manualBattleSession: undefined,
             activeRiftNodeId: undefined,
+            secretProgress: nextSecretProgress,
           }
 
           if (isMonarchId) {
-            set(applySecretProgressEvent(freshState, { context: 'gate', outcome: 'victory', isMonarch: true, monarchId: nodeId }, baseState))
+            set(applySecretProgressEvent({ ...freshState, secretProgress: nextSecretProgress }, { context: 'gate', outcome: 'victory', isMonarch: true, monarchId: nodeId }, baseState))
           } else {
             set(baseState)
           }
@@ -8297,6 +8433,50 @@ export const useGame = create<GameState>()(
                 })
               })
               return
+            }
+
+            const readiness = getEchoTruthReadiness(s.secretProgress)
+            const confrontationFlag = readiness.reached ? 'angelTruthCondensed' : 'angelSurfaceOmenSeen'
+            if (s.livingWorld && !s.secretProgress?.flags?.[confrontationFlag]) {
+              let nextSecretProgress = markSecretFlagPublic(s.secretProgress, confrontationFlag)
+              const newMessages: SystemMessage[] = []
+              const signalId = readiness.reached ? 'echo_ultimate_truth' : 'echo_unresolved_angel'
+              const signalRes = emitWorldSignal(nextSecretProgress, signalId)
+              nextSecretProgress = signalRes.progress
+              if (signalRes.signal) {
+                newMessages.push({
+                  id: uid(),
+                  kind: 'secret',
+                  title: signalRes.signal.title,
+                  lines: [signalRes.signal.body],
+                  createdAt: todayISO(),
+                })
+              }
+
+              const confrontationEvent: WorldEvent = {
+                id: `evt-angel-entry-${s.livingWorld.day}-${readiness.reached ? 'truth' : 'surface'}-${uid()}`,
+                day: s.livingWorld.day,
+                type: 'monarch_appear',
+                severity: 'critical',
+                title: readiness.reached ? '결전 좌표 재정렬' : '결전 좌표 고정',
+                body: readiness.reached
+                  ? '누적된 잔향이 최종 결전의 빛과 같은 위상으로 맞물립니다.'
+                  : '빛은 완전하게 닫히지 않았고, 닿지 못한 잔향이 전장 가장자리에 남습니다.',
+                regionId: 'kr',
+                monarchId: 'angel',
+                cinematic: true,
+                subtitle: readiness.reached ? 'HIDDEN ROUTE SYNCHRONIZED' : 'UNRESOLVED ECHO DETECTED',
+              }
+
+              set({
+                secretProgress: nextSecretProgress,
+                livingWorld: appendLivingWorldEvent(
+                  s.livingWorld,
+                  confrontationEvent,
+                  `[Day ${s.livingWorld.day}] [결전 신호] ${confrontationEvent.body}`
+                ),
+                messages: newMessages.length > 0 ? [...s.messages, ...newMessages] : s.messages,
+              })
             }
           } else {
             // s.livingWorld와 activeMonarchs가 정상적으로 셋업되어 있는 리얼 런타임 환경에서만 이미 패퇴한 군주에 대한 재진입을 막습니다.
@@ -12131,6 +12311,65 @@ export const useGame = create<GameState>()(
         })
       },
 
+      resolveEndingChoice: (choice: 'surface' | 'true') => {
+        const s = get()
+        if (!s.livingWorld || s.livingWorld.endingMode !== 'choice_pending') return
+
+        let nextLivingWorld = s.livingWorld
+        if (choice === 'true') {
+          const endingEvent: WorldEvent = {
+            id: `evt-ending-true-${s.livingWorld.day}-${uid()}`,
+            day: s.livingWorld.day,
+            type: 'defeated',
+            severity: 'critical',
+            title: '새벽 신호 확정',
+            body: '결전 좌표의 반복 파형이 사라지고, 닫혀 있던 하늘이 처음으로 다른 빛을 통과시킵니다.',
+            regionId: 'kr',
+            monarchId: 'angel',
+            cinematic: true,
+            subtitle: 'TRUE ENDING RECORDED',
+          }
+          nextLivingWorld = appendLivingWorldEvent(
+            nextLivingWorld,
+            endingEvent,
+            `[Day ${s.livingWorld.day}] 🌟 [진정한 해방] 굴레가 끊어지고 반복 파형이 완전히 소거되었습니다.`
+          )
+        } else {
+          const endingEvent: WorldEvent = {
+            id: `evt-ending-loop-${s.livingWorld.day}-${uid()}`,
+            day: s.livingWorld.day,
+            type: 'defeated',
+            severity: 'critical',
+            title: '왕좌의 잔상',
+            body: '결전은 끝났지만 빛의 빈자리가 잠시 당신의 뒤에 같은 윤곽을 남깁니다.',
+            regionId: 'kr',
+            monarchId: 'angel',
+            cinematic: true,
+            subtitle: 'LOOP ROUTE RECORDED',
+          }
+          nextLivingWorld = appendLivingWorldEvent(
+            nextLivingWorld,
+            endingEvent,
+            `[Day ${s.livingWorld.day}] 🌟 [굴레의 계승] 결전은 종결되었지만 반복 파형은 보존되었습니다.`
+          )
+        }
+
+        const secretRes = applySecretProgressEvent(s, {
+          context: 'echo',
+          action: 'ending_select',
+          endingType: choice === 'true' ? 'true' : 'loop'
+        })
+
+        set({
+          livingWorld: {
+            ...nextLivingWorld,
+            endingMode: choice === 'true' ? 'true' : 'surface',
+            endingState: 'victory',
+          },
+          secretProgress: secretRes.secretProgress,
+        })
+      },
+
       triggerVictoryReset: () => {
         const s = get()
         const timestamp = Date.now()
@@ -12190,8 +12429,10 @@ export const useGame = create<GameState>()(
         }
 
         // 4. 새로운 세계 생성
+        const completedEndingMode = s.livingWorld?.endingMode
         const nextLivingWorld = initLivingWorld(Math.floor(Math.random() * 99999999) + 1)
         nextLivingWorld.endingState = 'none'
+        nextLivingWorld.endingMode = undefined
 
         set({
           hunter: initialHunter,
@@ -12202,12 +12443,18 @@ export const useGame = create<GameState>()(
             {
               id: uid(),
               kind: 'info',
-              title: '🎉 새로운 차원의 세계 강림',
-              lines: [
-                `이전 차원의 세계(Day ${s.livingWorld?.day ?? 0})를 성공적으로 구원하고 새로운 균열 차원에 도달했습니다!`,
-                '레벨, 스탯, 장비, 그림자, 골드가 승리 보상으로 온전히 차원 순화(초기화)되었으며, 새로운 동적 시뮬레이션 세계가 생성되었습니다.',
-                '메타 진행도에 세계 구원 기록이 영구히 각인되었습니다. 새로운 차원에서도 인류를 구해주십시오!'
-              ],
+              title: completedEndingMode === 'true' ? '새로운 차원의 세계 강림' : '다음 차원 진입',
+              lines: completedEndingMode === 'true'
+                ? [
+                  `이전 차원의 세계(Day ${s.livingWorld?.day ?? 0})에서 최종 기록을 완성하고 새로운 균열 차원에 도달했습니다.`,
+                  '레벨, 스탯, 장비, 그림자, 골드가 차원 순화(초기화)되었으며, 새로운 동적 시뮬레이션 세계가 생성되었습니다.',
+                  '메타 진행도에 최종 기록이 영구히 각인되었습니다.'
+                ]
+                : [
+                  `이전 차원의 세계(Day ${s.livingWorld?.day ?? 0})를 클리어하고 다음 균열 차원에 진입했습니다.`,
+                  '레벨, 스탯, 장비, 그림자, 골드가 차원 순화(초기화)되었으며, 새로운 동적 시뮬레이션 세계가 생성되었습니다.',
+                  '이전 회차의 잔향 기록이 보존되었습니다.'
+                ],
               createdAt: todayISO()
             }
           ],
@@ -13082,7 +13329,7 @@ export const useGame = create<GameState>()(
     }),
     {
       name: 'levelup-save',
-      version: 26,
+      version: 27,
       partialize: (state) => ({
         ...state,
         manualBattleSession: undefined,
@@ -13124,6 +13371,31 @@ export const useGame = create<GameState>()(
                 h.traitId = rollHunterTrait(rng)
               }
             })
+          }
+        }
+        if (version < 27) {
+          if (persistedState?.livingWorld) {
+            persistedState.livingWorld.endingState = persistedState.livingWorld.endingState ?? 'none'
+            if (persistedState.livingWorld.endingState !== 'victory') {
+              persistedState.livingWorld.endingMode = undefined
+            }
+          }
+          if (persistedState?.secretProgress) {
+            persistedState.secretProgress = ensureSecretProgress(persistedState.secretProgress, persistedState)
+            const flags = persistedState.secretProgress.flags ?? {}
+            persistedState.secretProgress.flags = flags
+            persistedState.secretProgress.counters = {
+              ...(persistedState.secretProgress.counters ?? {}),
+              trueEndingReached: flags.trueEndingReached ? 1 : 0,
+              surfaceEndingReached: flags.surfaceEndingReached ? 1 : 0,
+              loopEndingReached: flags.loopEndingReached ? 1 : 0,
+            }
+            persistedState.secretProgress.signals = {
+              ...(persistedState.secretProgress.signals ?? {}),
+              trueEndingReached: flags.trueEndingReached ? 1 : 0,
+              surfaceEndingReached: flags.surfaceEndingReached ? 1 : 0,
+              loopEndingReached: flags.loopEndingReached ? 1 : 0,
+            }
           }
         }
         // Ensure hunter has title fields

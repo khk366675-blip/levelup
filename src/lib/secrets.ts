@@ -33,7 +33,7 @@ export type SecretEvent =
   | { context: 'shadow'; action: 'evolve'; shadowInstanceId?: string }
   | { context: 'box'; boxType?: string; source?: string }
   | { context: 'rank'; leveledUp?: boolean; rankChanged?: boolean; skillUses?: number; challengeCardsCompleted?: number }
-  | { context: 'echo'; action: 'discover' | 'investigate' | 'resonance'; amount?: number }
+  | { context: 'echo'; action: 'discover' | 'investigate' | 'resonance' | 'ending_select'; amount?: number; endingType?: 'surface' | 'loop' | 'true' }
 
 export type SecretEventResult = {
   progress: SecretProgressState
@@ -76,6 +76,10 @@ const rewardCount = (progress: SecretProgressState, prefix: string): number =>
 
 const unionStrings = (...arrays: Array<string[] | undefined>): string[] =>
   Array.from(new Set(arrays.flatMap(array => array ?? [])))
+
+export const ECHO_TRUTH_AFFINITY_THRESHOLD = 40
+export const ECHO_TRUTH_FRAGMENT_THRESHOLD = 6
+export const ECHO_TRUTH_REQUIRED_FRAGMENT = 'echo-trace-b'
 
 const mergeNumberRecords = (...records: Array<Record<string, number> | undefined>): Record<string, number> => {
   const merged: Record<string, number> = {}
@@ -208,6 +212,67 @@ export const ensureSecretProgress = (
 }
 
 export const getSecretProgress = ensureSecretProgress
+
+export const getSecretTraceFragmentCount = (progress: SecretProgressState | undefined): number => {
+  if (!progress) return 0
+  const normalized = ensureSecretProgress(progress)
+  return unionStrings(
+    normalized.unlockedFragments,
+    normalized.unlocked?.filter(id => id.includes('trace'))
+  ).length
+}
+
+export const getEchoTruthReadiness = (
+  progress: SecretProgressState | undefined
+): {
+  affinity: number
+  fragmentCount: number
+  hasRequiredFragment: boolean
+  inheritedTruth: boolean
+  reached: boolean
+} => {
+  if (!progress) {
+    return {
+      affinity: 0,
+      fragmentCount: 0,
+      hasRequiredFragment: false,
+      inheritedTruth: false,
+      reached: false,
+    }
+  }
+
+  const normalized = ensureSecretProgress(progress)
+  const affinity = normalized.hiddenAffinity?.echo ?? 0
+  const fragmentCount = getSecretTraceFragmentCount(normalized)
+  const hasRequiredFragment = hasFragment(normalized, ECHO_TRUTH_REQUIRED_FRAGMENT)
+  const inheritedTruth = normalized.flags?.trueEndingReached === true
+  const reached = inheritedTruth || (
+    affinity >= ECHO_TRUTH_AFFINITY_THRESHOLD &&
+    fragmentCount >= ECHO_TRUTH_FRAGMENT_THRESHOLD &&
+    hasRequiredFragment
+  )
+
+  return {
+    affinity,
+    fragmentCount,
+    hasRequiredFragment,
+    inheritedTruth,
+    reached,
+  }
+}
+
+export const hasEchoTruthForAngel = (progress: SecretProgressState | undefined): boolean =>
+  getEchoTruthReadiness(progress).reached
+
+export const markSecretFlagPublic = (
+  progress: SecretProgressState | undefined,
+  flag: string,
+  value = true
+): SecretProgressState => {
+  const next = ensureSecretProgress(progress)
+  next.flags = { ...(next.flags ?? {}), [flag]: value }
+  return next
+}
 
 export const incrementSecretSignal = (
   progress: SecretProgressState | undefined,
@@ -471,9 +536,23 @@ export const recordSecretEvent = (
   bump(counters, `affinity.${event.context}`)
   bump(hiddenAffinity, event.context, 1)
 
-  // Echo 공명도(전임자 흔적) 누적 처리
+  // Echo 공명도(전임자 흔적) 누적 및 엔딩 기록 처리
   if (event.context === 'echo') {
-    bump(hiddenAffinity, 'echo', event.amount ?? 1)
+    if (event.action === 'ending_select') {
+      if (event.endingType === 'true') {
+        progress.flags = { ...(progress.flags ?? {}), trueEndingReached: true }
+        counters.trueEndingReached = 1
+      } else if (event.endingType === 'loop') {
+        progress.flags = { ...(progress.flags ?? {}), surfaceEndingReached: true, loopEndingReached: true }
+        counters.surfaceEndingReached = 1
+        counters.loopEndingReached = 1
+      } else if (event.endingType === 'surface') {
+        progress.flags = { ...(progress.flags ?? {}), surfaceEndingReached: true }
+        counters.surfaceEndingReached = 1
+      }
+    } else {
+      bump(hiddenAffinity, 'echo', event.amount ?? 1)
+    }
   } else if (event.context === 'gate' && event.outcome === 'victory') {
     bump(hiddenAffinity, 'echo', event.isMonarch ? 3 : 1)
   } else if (event.context === 'expedition' && (event.outcome === 'success' || event.outcome === 'great_success')) {
@@ -620,9 +699,31 @@ export const resetSecretProgressOnLoop = (
   const next = blankProgress()
   const prevLoop = currentProgress?.counters?.loopCount ?? 0
   const nextLoop = prevLoop + 1
-  
-  // 회차 수만 계승
-  next.counters = { ...next.counters, loopCount: nextLoop }
-  next.signals = { ...next.signals, loopCount: nextLoop }
+
+  // 회차 수 및 엔딩 관련 영구 플래그 보존
+  const prevFlags = currentProgress?.flags ?? {}
+  const nextFlags: Record<string, boolean> = {}
+
+  if (prevFlags.trueEndingReached) nextFlags.trueEndingReached = true
+  if (prevFlags.surfaceEndingReached) nextFlags.surfaceEndingReached = true
+  if (prevFlags.loopEndingReached) nextFlags.loopEndingReached = true
+
+  next.flags = nextFlags
+
+  // counters 보존
+  next.counters = {
+    ...next.counters,
+    loopCount: nextLoop,
+    trueEndingReached: prevFlags.trueEndingReached ? 1 : 0,
+    surfaceEndingReached: prevFlags.surfaceEndingReached ? 1 : 0,
+    loopEndingReached: prevFlags.loopEndingReached ? 1 : 0,
+  }
+  next.signals = {
+    ...next.signals,
+    loopCount: nextLoop,
+    trueEndingReached: prevFlags.trueEndingReached ? 1 : 0,
+    surfaceEndingReached: prevFlags.surfaceEndingReached ? 1 : 0,
+    loopEndingReached: prevFlags.loopEndingReached ? 1 : 0,
+  }
   return next
 }

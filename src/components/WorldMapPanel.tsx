@@ -32,6 +32,7 @@ import { getHunterCombatPower } from '../lib/combatPower'
 import { todayKey } from '../lib/game'
 import { getRegionalTheme } from '../lib/livingWorldGateContent'
 import { getHunterTrait } from '../lib/hunterTraits'
+import { getEchoTruthReadiness } from '../lib/secrets'
 
 // D3 World Map Imports & Initialization
 import { geoNaturalEarth1, geoPath, geoGraticule10 } from 'd3-geo'
@@ -298,11 +299,14 @@ export function WorldMapPanel() {
   const discoverRiftNode = useGame((s) => s.discoverRiftNode)
   const enterRiftNode = useGame((s) => s.enterRiftNode)
   const livingWorld = useGame((s) => s.livingWorld)
+  const secretProgress = useGame((s) => s.secretProgress)
+  const echoTruthReadiness = getEchoTruthReadiness(secretProgress)
 
   // L3 전용 신설 월드맵 상태 및 액션 연동
   const worldBattleRetreats = useGame((s) => s.worldBattleRetreats ?? {})
   const manualSession = useGame((s) => s.manualBattleSession)
   const startWorldManualBattle = useGame((s) => s.startWorldManualBattle)
+  const resolveEndingChoice = useGame((s) => s.resolveEndingChoice)
 
   // 헌터 스펙 및 실효 CP 연동용 상태
   const hunter = useGame((s) => s.hunter)
@@ -718,86 +722,210 @@ export function WorldMapPanel() {
 
   return (
     <div className="space-y-6 relative">
-      {/* 진엔딩 오버레이 (True Ending Overlay) */}
+      {/* 엔딩 및 분기 선택 오버레이 (Ending Branching Overlays) */}
       {livingWorld?.endingState === 'victory' && (
-        <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/95 backdrop-blur-lg overflow-y-auto p-4 py-8">
-          <div className="panel corner-bracket border-amber-500/50 bg-ink-950/90 p-8 max-w-2xl w-full shadow-glow-amber animate-scale-in text-center space-y-6">
-            <div className="br" />
-            <div className="flex flex-col items-center gap-2">
-              <div className="rounded-full bg-amber-500/10 border border-amber-500/40 p-4 shadow-glow-amber animate-pulse">
-                <Trophy className="h-10 w-10 text-amber-400 animate-bounce" />
+        <div className="fixed inset-0 z-[95] flex items-center justify-center bg-black/98 backdrop-blur-xl overflow-y-auto p-4 py-8">
+          {livingWorld.endingMode === 'choice_pending' ? (
+            /* 제3의 선택지 분기 해금 화면 */
+            <div className="panel corner-bracket border-purple-500/50 bg-ink-950/95 p-8 max-w-2xl w-full shadow-glow-purple animate-scale-in text-center space-y-6">
+              <div className="br" />
+              <div className="flex flex-col items-center gap-2">
+                <div className="rounded-full bg-purple-500/10 border border-purple-500/40 p-4 shadow-glow-purple animate-pulse">
+                  <Trophy className="h-10 w-10 text-purple-400" />
+                </div>
+                <h3 className="text-2xl font-black text-purple-300 tracking-widest mt-4 uppercase">
+                  👼 지고의 존재와의 대면
+                </h3>
+                <div className="text-[10px] text-purple-400 font-mono tracking-widest font-black uppercase">
+                  True Identity Revealed
+                </div>
               </div>
-              <h3 className="text-2xl font-black text-amber-300 tracking-widest mt-4 uppercase">
-                🏆 세계의 위대한 구원자
-              </h3>
-              <div className="text-[10px] text-amber-400 font-mono tracking-widest font-black uppercase">
-                True Ending: Dawn of Dimensional Peace
+
+              <p className="text-sm text-white/80 leading-relaxed max-w-xl mx-auto border-t border-b border-white/5 py-6 font-medium">
+                쓰러진 지고의 심판자, 그 가면 너머로 드러난 얼굴은 기이할 정도로 낯익습니다.<br />
+                그는 당신이 이 길을 걷기 전, 수많은 차원의 굴레를 겪으며 마침내 종착지에 도달했던 <strong>'첫 번째 전임자(Echo)'</strong>였습니다.<br />
+                <br />
+                스스로 천사가 되어 이 세상을 소멸하고 재창조함으로써 멸망을 막으려 했던 전임자가,<br />
+                희미해져 가는 의식 속에서 당신에게 마지막 결단을 묻습니다.
+              </p>
+
+              <div className="grid gap-4 md:grid-cols-2 pt-2">
+                {/* 선택지 1: 계승 및 루프 */}
+                <button
+                  onClick={() => resolveEndingChoice('surface')}
+                  className="group relative text-left p-5 rounded-lg border border-red-500/25 bg-red-950/10 hover:bg-red-950/20 hover:border-red-500/50 transition-all duration-300 shadow-lg cursor-pointer"
+                >
+                  <div className="font-black text-red-400 text-sm mb-1.5 flex items-center gap-1.5">
+                    <span>⚔️ 굴레의 계승 (처단)</span>
+                  </div>
+                  <p className="text-[11px] text-white/60 leading-relaxed font-medium">
+                    쓰러진 존재를 처단하고 이번 회차를 완성합니다. 세계는 평화를 되찾는 것처럼 보이지만, 비어 있던 빛의 자리가 오래도록 뒤에 남습니다.
+                  </p>
+                </button>
+
+                {/* 선택지 2: 해방 및 진엔딩 */}
+                <button
+                  onClick={() => resolveEndingChoice('true')}
+                  className="group relative text-left p-5 rounded-lg border border-amber-500/35 bg-amber-950/10 hover:bg-amber-950/20 hover:border-amber-500/60 transition-all duration-300 shadow-lg cursor-pointer"
+                >
+                  <div className="font-black text-amber-300 text-sm mb-1.5 flex items-center gap-1.5">
+                    <span>✨ 진정한 해방 (구원)</span>
+                  </div>
+                  <p className="text-[11px] text-white/60 leading-relaxed font-medium">
+                    무기의 끝을 거두고, 축적된 흔적의 파편들을 공명시켜 그의 쇠사슬을 깨부숩니다. 전임자를 굴레에서 해방하고 차원 반복의 거짓된 평화를 영원히 끊어냅니다.
+                  </p>
+                </button>
               </div>
             </div>
-
-            <p className="text-sm text-white/80 leading-relaxed max-w-xl mx-auto border-t border-b border-white/5 py-6">
-              인류 역사상 가장 거대했던 차원의 위기가 마침내 막을 내렸습니다.<br/>
-              당신은 심연에서 강림한 8명의 파괴적인 군주들을 모두 물리치고,<br/>
-              마지막으로 강림한 <strong>지고의 심판자(천사)</strong>마저 격퇴하여 대균열의 근원을 완벽히 정화했습니다.<br/>
-              <br/>
-              당신의 흔들리지 않는 의지와 위대한 그림자 군단, 그리고 전 세계 연대 헌터들의 동맹은<br/>
-              멸망의 운명에 쓰러져가던 인류를 구원하고 찬란한 평화의 새벽을 가져왔습니다.<br/>
-              세계의 역사는 영원히 당신의 구원을 기억할 것입니다.
-            </p>
-
-            {/* 이번 회차 기록 브리핑 */}
-            <div className="space-y-3 text-xs max-w-md mx-auto">
-              <div className="text-left font-bold text-white/50 text-[10px] tracking-widest uppercase mb-1">
-                📊 이번 차원 회차 요약 기록
-              </div>
-              <div className="grid grid-cols-2 gap-2 font-medium">
-                <div className="rounded border border-white/5 bg-white/5 px-3 py-2 text-white/70 flex justify-between">
-                  <span>차원 시드(Seed)</span>
-                  <span className="font-bold text-cyan-300">#{livingWorld.seed}</span>
+          ) : livingWorld.endingMode === 'true' ? (
+            /* 진엔딩 (True Ending) 화면 */
+            <div className="panel corner-bracket border-amber-500/50 bg-ink-950/90 p-8 max-w-2xl w-full shadow-glow-amber animate-scale-in text-center space-y-6">
+              <div className="br" />
+              <div className="flex flex-col items-center gap-2">
+                <div className="rounded-full bg-amber-500/10 border border-amber-500/40 p-4 shadow-glow-amber animate-pulse">
+                  <Trophy className="h-10 w-10 text-amber-400 animate-bounce" />
                 </div>
-                <div className="rounded border border-white/5 bg-white/5 px-3 py-2 text-white/70 flex justify-between">
-                  <span>생존/정화 일수</span>
-                  <span className="font-bold text-amber-300">{livingWorld.day}일</span>
-                </div>
-                <div className="rounded border border-white/5 bg-white/5 px-3 py-2 text-white/70 flex justify-between">
-                  <span>격퇴한 군주</span>
-                  <span className="font-bold text-red-400">8 / 8 (완성)</span>
-                </div>
-                <div className="rounded border border-white/5 bg-white/5 px-3 py-2 text-white/70 flex justify-between">
-                  <span>연대 협력 횟수</span>
-                  <span className="font-bold text-purple-300">{livingWorld.coopCount ?? 0}회</span>
-                </div>
-                <div className="rounded border border-white/5 bg-white/5 px-3 py-2 text-white/70 flex justify-between">
-                  <span>최종 헌터 레벨</span>
-                  <span className="font-bold text-emerald-300">Lv.{hunter.level}</span>
-                </div>
-                <div className="rounded border border-white/5 bg-white/5 px-3 py-2 text-white/70 flex justify-between">
-                  <span>복속된 그림자</span>
-                  <span className="font-bold text-purple-300">{ownedShadows.length}명</span>
+                <h3 className="text-2xl font-black text-amber-300 tracking-widest mt-4 uppercase">
+                  🏆 새벽의 구원자
+                </h3>
+                <div className="text-[10px] text-amber-400 font-mono tracking-widest font-black uppercase">
+                  True Ending: Eternal Dawn
                 </div>
               </div>
-              
-              {/* 이전 총 구원 횟수 */}
-              <div className="rounded-lg border border-amber-500/20 bg-amber-500/5 px-3 py-2.5 text-[11px] text-amber-200/90 font-bold flex justify-between items-center font-black">
-                <span>✨ 누적 세계 구원 횟수</span>
-                <span className="text-amber-300 text-sm font-black animate-pulse">
-                  {(useGame.getState().hardcoreState?.victoryCount ?? 0) + 1}회째 구원 완료
-                </span>
+
+              <p className="text-sm text-white/80 leading-relaxed max-w-xl mx-auto border-t border-b border-white/5 py-6 font-medium">
+                마침내 차원의 굴레가 산산조각 났습니다.<br />
+                당신은 전임자를 영원한 속박에서 해방하고, 인류를 무한히 반복되던 종말의 궤도에서 끌어냈습니다.<br />
+                <br />
+                인공적인 천상의 빛 대신 참된 아침 햇살이 대지에 내리쥡니다.<br />
+                더 이상 군주들의 위협도, 천사의 단죄도 존재하지 않는 온전한 미래가 시작됩니다.<br />
+                당신이 이룩한 영원한 평화는 은하의 모든 역사 속에 찬란한 기적으로 기록될 것입니다.
+              </p>
+
+              {/* 이번 회차 기록 브리핑 */}
+              <div className="space-y-3 text-xs max-w-md mx-auto">
+                <div className="text-left font-bold text-white/50 text-[10px] tracking-widest uppercase mb-1">
+                  📊 이번 차원 회차 요약 기록
+                </div>
+                <div className="grid grid-cols-2 gap-2 font-medium">
+                  <div className="rounded border border-white/5 bg-white/5 px-3 py-2 text-white/70 flex justify-between">
+                    <span>차원 시드(Seed)</span>
+                    <span className="font-bold text-cyan-300">#{livingWorld.seed}</span>
+                  </div>
+                  <div className="rounded border border-white/5 bg-white/5 px-3 py-2 text-white/70 flex justify-between">
+                    <span>생존/정화 일수</span>
+                    <span className="font-bold text-amber-300">{livingWorld.day}일</span>
+                  </div>
+                  <div className="rounded border border-white/5 bg-white/5 px-3 py-2 text-white/70 flex justify-between">
+                    <span>격퇴한 군주</span>
+                    <span className="font-bold text-red-400">8 / 8 (완성)</span>
+                  </div>
+                  <div className="rounded border border-white/5 bg-white/5 px-3 py-2 text-white/70 flex justify-between">
+                    <span>연대 협력 횟수</span>
+                    <span className="font-bold text-purple-300">{livingWorld.coopCount ?? 0}회</span>
+                  </div>
+                  <div className="rounded border border-white/5 bg-white/5 px-3 py-2 text-white/70 flex justify-between">
+                    <span>최종 헌터 레벨</span>
+                    <span className="font-bold text-emerald-300">Lv.{hunter.level}</span>
+                  </div>
+                  <div className="rounded border border-white/5 bg-white/5 px-3 py-2 text-white/70 flex justify-between">
+                    <span>복속된 그림자</span>
+                    <span className="font-bold text-purple-300">{ownedShadows.length}명</span>
+                  </div>
+                </div>
+
+                {/* 이전 총 구원 횟수 */}
+                <div className="rounded-lg border border-amber-500/20 bg-amber-500/5 px-3 py-2.5 text-[11px] text-amber-200/90 font-bold flex justify-between items-center font-black">
+                  <span>✨ 최종 기록 상태</span>
+                  <span className="text-amber-300 text-sm font-black animate-pulse">
+                    {secretProgress?.flags?.trueEndingReached ? '기록 보존됨' : '이번 회차 기록'}
+                  </span>
+                </div>
+              </div>
+
+              <div className="pt-4 max-w-sm mx-auto">
+                <button
+                  onClick={() => {
+                    useGame.getState().triggerVictoryReset()
+                    triggerToast("🌌 차원 이동 완료: 새로운 평화의 세계로 강림했습니다!")
+                  }}
+                  className="btn btn-primary w-full py-3.5 text-xs font-black tracking-widest text-center cursor-pointer shadow-glow-amber border border-amber-500/50 hover:bg-amber-500/25 hover:text-white transition-all duration-300"
+                >
+                  새로운 세계로 차원 이동 (다음 회차 진행)
+                </button>
               </div>
             </div>
+          ) : (
+            /* 표면 엔딩 (Surface Ending) 화면 */
+            <div className="panel corner-bracket border-red-500/50 bg-ink-950/90 p-8 max-w-2xl w-full shadow-glow-red animate-scale-in text-center space-y-6">
+              <div className="br" />
+              <div className="flex flex-col items-center gap-2">
+                <div className="rounded-full bg-red-500/10 border border-red-500/40 p-4 shadow-glow-red animate-pulse">
+                  <Trophy className="h-10 w-10 text-red-400" />
+                </div>
+                <h3 className="text-2xl font-black text-red-300 tracking-widest mt-4 uppercase">
+                  ⚔️ 거짓된 평화의 주역
+                </h3>
+                <div className="text-[10px] text-red-400 font-mono tracking-widest font-black uppercase">
+                  Surface Ending: Echoes of the Loop
+                </div>
+              </div>
 
-            <div className="pt-4 max-w-sm mx-auto">
-              <button
-                onClick={() => {
-                  useGame.getState().triggerVictoryReset()
-                  triggerToast("🌌 차원 이동 완료: 새로운 차원의 세계로 강림했습니다!")
-                }}
-                className="btn btn-primary w-full py-3.5 text-xs font-black tracking-widest text-center cursor-pointer shadow-glow-amber border border-amber-500/50 hover:bg-amber-500/25 hover:text-white transition-all duration-300"
-              >
-                새로운 세계로 차원 이동 (다음 회차 진행)
-              </button>
+              <p className="text-sm text-white/80 leading-relaxed max-w-xl mx-auto border-t border-b border-white/5 py-6 font-medium">
+                지고의 심판자는 격퇴되었고, 차원의 오염은 강제로 봉인되었습니다.<br />
+                인류는 멸망의 위기를 극복했으며, 도시는 영웅인 당신의 귀환을 연호합니다.<br />
+                <br />
+                그러나 영광의 한가운데에서, 당신은 기이한 차가움과 기시감을 느낍니다.<br />
+                빛이 바랜 심판자의 의자가 서서히 당신의 형상과 겹쳐 보이며, 침묵 속에서 다시금 균열의 신호음이 울리기 시작합니다.<br />
+                세계의 톱니바퀴는 결코 멈추지 않고 다시 처음으로 굴러갑니다.
+              </p>
+
+              {/* 이번 회차 기록 브리핑 */}
+              <div className="space-y-3 text-xs max-w-md mx-auto">
+                <div className="text-left font-bold text-white/50 text-[10px] tracking-widest uppercase mb-1">
+                  📊 이번 차원 회차 요약 기록
+                </div>
+                <div className="grid grid-cols-2 gap-2 font-medium">
+                  <div className="rounded border border-white/5 bg-white/5 px-3 py-2 text-white/70 flex justify-between">
+                    <span>차원 시드(Seed)</span>
+                    <span className="font-bold text-cyan-300">#{livingWorld.seed}</span>
+                  </div>
+                  <div className="rounded border border-white/5 bg-white/5 px-3 py-2 text-white/70 flex justify-between">
+                    <span>생존/정화 일수</span>
+                    <span className="font-bold text-amber-300">{livingWorld.day}일</span>
+                  </div>
+                  <div className="rounded border border-white/5 bg-white/5 px-3 py-2 text-white/70 flex justify-between">
+                    <span>격퇴한 군주</span>
+                    <span className="font-bold text-red-400">8 / 8 (완성)</span>
+                  </div>
+                  <div className="rounded border border-white/5 bg-white/5 px-3 py-2 text-white/70 flex justify-between">
+                    <span>연대 협력 횟수</span>
+                    <span className="font-bold text-purple-300">{livingWorld.coopCount ?? 0}회</span>
+                  </div>
+                  <div className="rounded border border-white/5 bg-white/5 px-3 py-2 text-white/70 flex justify-between">
+                    <span>최종 헌터 레벨</span>
+                    <span className="font-bold text-emerald-300">Lv.{hunter.level}</span>
+                  </div>
+                  <div className="rounded border border-white/5 bg-white/5 px-3 py-2 text-white/70 flex justify-between">
+                    <span>복속된 그림자</span>
+                    <span className="font-bold text-purple-300">{ownedShadows.length}명</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="pt-4 max-w-sm mx-auto">
+                <button
+                  onClick={() => {
+                    useGame.getState().triggerVictoryReset()
+                    triggerToast("🌌 차원 순화 완료: 굴레가 반복되는 다음 차원으로 이탈합니다.")
+                  }}
+                  className="btn btn-primary w-full py-3.5 text-xs font-black tracking-widest text-center cursor-pointer shadow-glow-red border border-red-500/50 hover:bg-red-500/25 hover:text-white transition-all duration-300"
+                >
+                  다음 차원으로 루프 개시
+                </button>
+              </div>
             </div>
-          </div>
+          )}
         </div>
       )}
 
@@ -995,8 +1123,12 @@ export function WorldMapPanel() {
             <div>
               <h3 className="text-base font-black text-amber-300 tracking-wider">🌟 지고의 심판자 강림 (최종 결전)</h3>
               <p className="text-xs text-purple-200/80 mt-1 leading-relaxed">
-                모든 심연의 군주(8명)가 퇴치되어 차원의 기둥이 무너지고 <strong>지고의 심판자(천사)</strong>가 전역 강림했습니다!<br/>
-                인류의 명운을 건 마지막 격퇴전을 준비하십시오. 이 승리는 차원의 영원한 구원을 의미합니다.
+                모든 심연의 군주(8명)가 퇴치되어 차원의 기둥이 무너지고 <strong>지고의 심판자(천사)</strong>가 강림했습니다!<br/>
+                {echoTruthReadiness.reached ? (
+                  <span className="text-amber-300 font-bold">✨ [동조 완료] 오래 축적된 자취와 결전 좌표가 같은 위상으로 맞물립니다. 결전 끝에 닫혀 있던 길이 드러날 것입니다.</span>
+                ) : (
+                  <span className="text-purple-300">⚠️ [여운] 결전 좌표 뒤편에서 아직 맞물리지 않은 잔류 신호가 희미하게 흔들립니다.</span>
+                )}
               </p>
             </div>
           </div>
