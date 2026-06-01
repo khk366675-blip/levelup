@@ -1018,9 +1018,9 @@ export function WorldMapPanel() {
             }
             if (corruption <= 20) {
               return {
-                fill: '#0d261e', // dark emerald shadow
-                stroke: '#1d9e75', // bright jade green
-                glowColor: '#1d9e75',
+                fill: '#0c0e18', // 프리미엄 다크 메탈 그레이 (Dark slate metallic)
+                stroke: '#2e3856', // 차분한 메탈 블루-그레이 경계선
+                glowColor: '#2e3856',
                 stateText: '안전',
               }
             }
@@ -2114,7 +2114,7 @@ export function WorldMapPanel() {
                   <span>경계 (오염 20-50)</span>
                 </div>
                 <div className="flex items-center gap-1.5">
-                  <span className="w-2.5 h-2.5 rounded-full bg-[#1d9e75]" style={{ filter: 'drop-shadow(0 0 2px #1d9e75)' }} />
+                  <span className="w-2.5 h-2.5 rounded-full bg-[#2e3856]" style={{ filter: 'drop-shadow(0 0 2px #2e3856)' }} />
                   <span>안전 (오염 &lt; 20)</span>
                 </div>
               </div>
