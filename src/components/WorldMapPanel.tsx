@@ -33,7 +33,7 @@ import { todayKey } from '../lib/game'
 import { getRegionalTheme } from '../lib/livingWorldGateContent'
 import { getHunterTrait } from '../lib/hunterTraits'
 import { getEchoTruthReadiness } from '../lib/secrets'
-import { getEffectiveRenown, getRenownProgress } from '../lib/renown'
+import { canHunterAnswerLoveCall, getEffectiveRenown, getRenownProgress } from '../lib/renown'
 
 // D3 World Map Imports & Initialization
 import { geoNaturalEarth1, geoPath, geoGraticule10 } from 'd3-geo'
@@ -474,13 +474,37 @@ export function WorldMapPanel() {
   const hasLoveCall = worldNode?.loveCall?.active
   const loveCallState = worldNode?.loveCall
 
+  const canSelectHelper = (hid: string): boolean => {
+    const helper = livingWorld?.namedHunters[hid]
+    return Boolean(helper && canHunterAnswerLoveCall(helper.rank, renownInfo.current.maxHelperRank))
+  }
+
+  const filterSelectableHelperIds = (ids?: string[]): string[] =>
+    (ids ?? []).filter(canSelectHelper)
+
   const handleHelperToggle = (hid: string) => {
+    if (!canSelectHelper(hid)) {
+      const helper = livingWorld?.namedHunters[hid]
+      setToastMessage(helper
+        ? `명성 부족: 현재 ${renownInfo.current.maxHelperRank}급 이하 헌터만 협력 요청에 응답합니다.`
+        : '협력 요청을 보낼 수 없는 헌터입니다.'
+      )
+      setTimeout(() => setToastMessage(null), 2600)
+      return
+    }
     if (selectedHelpers.includes(hid)) {
       setSelectedHelpers(selectedHelpers.filter(id => id !== hid))
     } else {
       setSelectedHelpers([...selectedHelpers, hid])
     }
   }
+
+  useEffect(() => {
+    setSelectedHelpers(prev => {
+      const filtered = prev.filter(canSelectHelper)
+      return filtered.length === prev.length ? prev : filtered
+    })
+  }, [livingWorld?.namedHunters, renownInfo.current.maxHelperRank])
 
   const activeHelpers = selectedHelpers.map(hid => livingWorld?.namedHunters[hid]).filter(Boolean) as any[]
   const coopHelperCount = activeHelpers.length
@@ -657,7 +681,7 @@ export function WorldMapPanel() {
       setSelectedNode(node)
       const worldNode = livingWorld?.riftNodes[node.id]
       if (worldNode?.loveCall?.active) {
-        setSelectedHelpers(worldNode.loveCall.helperHunterIds ?? [])
+        setSelectedHelpers(filterSelectableHelperIds(worldNode.loveCall.helperHunterIds))
       } else {
         setSelectedHelpers([])
       }
@@ -2437,14 +2461,14 @@ export function WorldMapPanel() {
                               <button
                                 onClick={() => {
                                   setSelectedNode(node)
-                                  setSelectedHelpers(loveCall.helperHunterIds ?? [])
+                                  setSelectedHelpers(filterSelectableHelperIds(loveCall.helperHunterIds))
                                   
                                   const level = getDangerLevel(node)
                                   if (level === 'reckless') {
                                     setRecklessConfirmType('manual')
                                     setShowRecklessConfirm(true)
                                   } else {
-                                    startWorldManualBattle(node.id, loveCall.helperHunterIds ?? [])
+                                    startWorldManualBattle(node.id, filterSelectableHelperIds(loveCall.helperHunterIds))
                                   }
                                 }}
                                 className="rounded bg-gradient-to-r from-amber-500/20 to-orange-500/20 hover:from-amber-500/30 hover:to-orange-500/30 border border-amber-500/40 hover:border-amber-400 py-1 text-[8.5px] font-black text-amber-200 transition-all cursor-pointer text-center flex items-center justify-center gap-0.5 shadow shadow-amber-950/20"
@@ -2592,20 +2616,25 @@ export function WorldMapPanel() {
                                     const h = livingWorld?.namedHunters[hid]
                                     if (!h) return null
                                     const isSelected = selectedHelpers.includes(hid)
+                                    const isLockedByRenown = !canSelectHelper(hid)
                                     const totalPower = h.power + (h.equipmentScore ?? 0)
                                     return (
-                                      <label key={hid} className="flex items-center justify-between rounded bg-black/35 hover:bg-black/60 px-1.5 py-0.5 cursor-pointer select-none text-[8.5px] border border-white/5">
-                                        <div className="flex items-center gap-1.5">
+                                      <label key={hid} className={`flex items-center justify-between rounded px-1.5 py-0.5 select-none text-[8.5px] border border-white/5 ${isLockedByRenown ? 'bg-black/25 opacity-55 cursor-not-allowed' : 'bg-black/35 hover:bg-black/60 cursor-pointer'}`}>
+                                        <div className="flex items-center gap-1.5 min-w-0">
                                           <input
                                             type="checkbox"
                                             checked={isSelected}
+                                            disabled={isLockedByRenown}
                                             onChange={() => handleHelperToggle(hid)}
-                                            className="accent-purple-500 h-2.5 w-2.5 cursor-pointer"
+                                            className={`accent-purple-500 h-2.5 w-2.5 ${isLockedByRenown ? 'cursor-not-allowed' : 'cursor-pointer'}`}
                                           />
                                           <span className="font-bold text-white/80">{h.name}</span>
                                           <span className="rounded bg-purple-500/20 px-1 text-purple-300 font-bold" style={{ fontSize: '7px' }}>
                                             {h.rank}
                                           </span>
+                                          {isLockedByRenown && (
+                                            <span className="truncate text-[7px] font-bold text-rose-300">명성 부족</span>
+                                          )}
                                         </div>
                                         <span className="text-cyan-300 font-mono">⚔️{totalPower.toLocaleString()}</span>
                                       </label>
@@ -2743,19 +2772,24 @@ export function WorldMapPanel() {
                                       const h = livingWorld?.namedHunters[hid]
                                       if (!h) return null
                                       const isSelected = selectedHelpers.includes(hid)
+                                      const isLockedByRenown = !canSelectHelper(hid)
                                       return (
-                                        <label key={hid} className="flex items-center justify-between rounded bg-black/35 hover:bg-black/60 px-1.5 py-0.5 cursor-pointer select-none text-[8.5px] border border-white/5">
-                                          <div className="flex items-center gap-1.5">
+                                        <label key={hid} className={`flex items-center justify-between rounded px-1.5 py-0.5 select-none text-[8.5px] border border-white/5 ${isLockedByRenown ? 'bg-black/25 opacity-55 cursor-not-allowed' : 'bg-black/35 hover:bg-black/60 cursor-pointer'}`}>
+                                          <div className="flex items-center gap-1.5 min-w-0">
                                             <input
                                               type="checkbox"
                                               checked={isSelected}
+                                              disabled={isLockedByRenown}
                                               onChange={() => handleHelperToggle(hid)}
-                                              className="accent-cyan-500 h-2.5 w-2.5 cursor-pointer"
+                                              className={`accent-cyan-500 h-2.5 w-2.5 ${isLockedByRenown ? 'cursor-not-allowed' : 'cursor-pointer'}`}
                                             />
                                             <span className="font-bold text-white/80">{h.name}</span>
                                             <span className="rounded bg-cyan-500/20 px-1 text-[7px] font-bold text-cyan-300">
                                               {h.rank}
                                             </span>
+                                            {isLockedByRenown && (
+                                              <span className="truncate text-[7px] font-bold text-rose-300">명성 부족</span>
+                                            )}
                                           </div>
                                           <span className="text-cyan-300 font-mono">⚔️{(h.power + (h.equipmentScore ?? 0)).toLocaleString()}</span>
                                         </label>
@@ -2808,19 +2842,24 @@ export function WorldMapPanel() {
                                           const h = livingWorld?.namedHunters[hid]
                                           if (!h) return null
                                           const isSelected = selectedHelpers.includes(hid)
+                                          const isLockedByRenown = !canSelectHelper(hid)
                                           return (
-                                            <label key={hid} className="flex items-center justify-between rounded bg-black/35 hover:bg-black/60 px-1.5 py-0.5 cursor-pointer select-none text-[8.5px] border border-white/5">
-                                              <div className="flex items-center gap-1.5">
+                                            <label key={hid} className={`flex items-center justify-between rounded px-1.5 py-0.5 select-none text-[8.5px] border border-white/5 ${isLockedByRenown ? 'bg-black/25 opacity-55 cursor-not-allowed' : 'bg-black/35 hover:bg-black/60 cursor-pointer'}`}>
+                                              <div className="flex items-center gap-1.5 min-w-0">
                                                 <input
                                                   type="checkbox"
                                                   checked={isSelected}
+                                                  disabled={isLockedByRenown}
                                                   onChange={() => handleHelperToggle(hid)}
-                                                  className="accent-purple-500 h-2.5 w-2.5 cursor-pointer"
+                                                  className={`accent-purple-500 h-2.5 w-2.5 ${isLockedByRenown ? 'cursor-not-allowed' : 'cursor-pointer'}`}
                                                 />
                                                 <span className="font-bold text-white/80">{h.name}</span>
                                                 <span className="rounded bg-purple-500/20 px-1 text-[7px] font-bold text-purple-300">
                                                   {h.rank}
                                                 </span>
+                                                {isLockedByRenown && (
+                                                  <span className="truncate text-[7px] font-bold text-rose-300">명성 부족</span>
+                                                )}
                                               </div>
                                               <span className="text-cyan-300 font-mono">⚔️{(h.power + (h.equipmentScore ?? 0)).toLocaleString()}</span>
                                             </label>

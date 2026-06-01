@@ -280,6 +280,7 @@ import {
 
 import { registerLegionNodeLevelResolver } from './shadowStats'
 import {
+  canHunterAnswerLoveCall,
   getEffectiveRenown,
   getRenownGainForGate,
   getRenownProgress,
@@ -788,6 +789,62 @@ const uid = () => Math.random().toString(36).slice(2, 10)
 
 const getMonarchsDefeatedCount = (world?: LivingWorldState): number =>
   world?.activeMonarchs?.filter(monarch => monarch.status === 'defeated').length ?? 0
+
+const getCurrentRenownTier = (
+  state: Pick<GameState, 'hunter' | 'achievementStats' | 'livingWorld'>
+) => getRenownTier(getEffectiveRenown(
+  state.hunter,
+  state.achievementStats,
+  getMonarchsDefeatedCount(state.livingWorld)
+))
+
+const filterWorldHelperHunterIds = (
+  state: Pick<GameState, 'hunter' | 'achievementStats' | 'livingWorld'>,
+  helperHunterIds?: string[]
+): { allowedIds: string[]; rejectedHunters: NamedHunter[] } => {
+  if (!helperHunterIds?.length || !state.livingWorld) {
+    return { allowedIds: [], rejectedHunters: [] }
+  }
+
+  const tier = getCurrentRenownTier(state)
+  const seen = new Set<string>()
+  const allowedIds: string[] = []
+  const rejectedHunters: NamedHunter[] = []
+
+  for (const hid of helperHunterIds) {
+    if (seen.has(hid)) continue
+    seen.add(hid)
+
+    const hunter = state.livingWorld.namedHunters[hid]
+    if (!hunter) continue
+    if (canHunterAnswerLoveCall(hunter.rank, tier.maxHelperRank)) {
+      allowedIds.push(hid)
+    } else {
+      rejectedHunters.push(hunter)
+    }
+  }
+
+  return { allowedIds, rejectedHunters }
+}
+
+const appendRejectedHelperMessage = (
+  messages: SystemMessage[],
+  rejectedHunters: NamedHunter[],
+  maxHelperRank: Rank
+): SystemMessage[] => {
+  if (rejectedHunters.length === 0) return messages
+  const names = rejectedHunters.map(hunter => `${hunter.name}(${hunter.rank})`).join(', ')
+  return appendMessageOnce(messages, {
+    id: uid(),
+    kind: 'info',
+    title: '협력 요청 제한',
+    lines: [
+      `현재 명성으로는 ${maxHelperRank}급 이하 헌터만 협력 요청에 응답합니다.`,
+      `제외됨: ${names}`,
+    ],
+    createdAt: todayISO(),
+  })
+}
 
 const applyRenownGain = (
   hunter: HunterState,
@@ -5282,6 +5339,11 @@ export const useGame = create<GameState>()(
 
       spawnGate: (gateId: string, source: 'random' | 'dungeon_clear' | 'event' | 'worldmap', helperHunterIds?: string[], customGateDef?: any) => {
         const s = get()
+        const helperFilter = source === 'worldmap'
+          ? filterWorldHelperHunterIds(s, helperHunterIds)
+          : { allowedIds: helperHunterIds ?? [], rejectedHunters: [] as NamedHunter[] }
+        const allowedHelperHunterIds = helperFilter.allowedIds
+        const currentRenownTier = source === 'worldmap' ? getCurrentRenownTier(s) : undefined
         // 1. 이미 activeGate가 존재하며 active인 경우 중복 생성을 즉시 차단
         if (source === 'worldmap') {
           if (s.activeWorldGate && s.activeWorldGate.status === 'active') return
@@ -5325,8 +5387,8 @@ export const useGame = create<GameState>()(
             subRegionId: node?.subRegionId || node?.regionId || 'default',
             daysRemaining: node?.daysRemaining,
             contamination: region?.corruption ?? 0,
-            hasHelpers: (helperHunterIds && helperHunterIds.length > 0) ? true : false,
-            helperHunterCount: helperHunterIds?.length ?? 0,
+            hasHelpers: allowedHelperHunterIds.length > 0,
+            helperHunterCount: allowedHelperHunterIds.length,
             isWorldNode: true
           }
         }
@@ -5365,14 +5427,19 @@ export const useGame = create<GameState>()(
           status: 'active' as const,
           source,
           runState,
-          helperHunterIds,
+          helperHunterIds: allowedHelperHunterIds,
           customGateDef: enrichedGateDef,
         }
 
         if (source === 'worldmap') {
+          const baseMessages = appendRejectedHelperMessage(
+            s.messages,
+            helperFilter.rejectedHunters,
+            currentRenownTier?.maxHelperRank ?? 'D'
+          )
           set({
             activeWorldGate: gateData,
-            messages: appendMessageOnce(s.messages, {
+            messages: appendMessageOnce(baseMessages, {
               id: uid(),
               kind: 'info',
               title: '게이트 출현',
@@ -8035,7 +8102,11 @@ export const useGame = create<GameState>()(
 
       // ── World Map Battle System (L3) ───────────────────────────────
 
-      startWorldBattle: (nodeId: string, helperHunterIds?: string[]) => {},
+      startWorldBattle: (nodeId: string, helperHunterIds?: string[]) => {
+        const s = get()
+        const helperFilter = filterWorldHelperHunterIds(s, helperHunterIds)
+        get().startWorldManualBattle(nodeId, helperFilter.allowedIds)
+      },
 
       resolveWorldBattle: () => {},
 
@@ -8043,12 +8114,21 @@ export const useGame = create<GameState>()(
         const s = get()
         const activeGate = s.activeWorldGate || s.activeGate
         const isVictory = combatLog.result === 'victory'
+        const activeGateHelperIds = activeGate?.helperHunterIds?.length
+          ? activeGate.helperHunterIds
+          : helperHunterIds
+        const filteredActiveGate = activeGate
+          ? {
+            ...activeGate,
+            helperHunterIds: filterWorldHelperHunterIds(s, activeGateHelperIds).allowedIds,
+          }
+          : undefined
 
         // 1. activeGate가 존재하면 resolveWorldGateBattleOutcome으로 정산 처리를 위임합니다.
-        if (activeGate && activeGate.gateId === nodeId) {
-          const gate = activeGate.customGateDef || GATE_DEFINITIONS.find(g => g.id === activeGate.gateId)
+        if (filteredActiveGate && filteredActiveGate.gateId === nodeId) {
+          const gate = filteredActiveGate.customGateDef || GATE_DEFINITIONS.find(g => g.id === filteredActiveGate.gateId)
           if (gate) {
-            get().resolveWorldGateBattleOutcome(activeGate, gate, combatLog)
+            get().resolveWorldGateBattleOutcome(filteredActiveGate, gate, combatLog)
             return
           }
         }
@@ -8276,8 +8356,16 @@ export const useGame = create<GameState>()(
 
           // 보상 계산 (난이도 CP 비례 & 협력 페널티 트레이드오프 적용)
           const recommendedPower = gate.recommendedPower || 1000
-          const helperHunterIds = activeGate.helperHunterIds || []
+          const helperFilter = filterWorldHelperHunterIds(freshState, activeGate.helperHunterIds)
+          const helperHunterIds = helperFilter.allowedIds
           const helperCount = helperHunterIds.length
+          newMessages.push(
+            ...appendRejectedHelperMessage(
+              [],
+              helperFilter.rejectedHunters,
+              getCurrentRenownTier(freshState).maxHelperRank
+            )
+          )
 
           let baseGold = 0
           let baseHunterXp = 0
@@ -8618,6 +8706,8 @@ export const useGame = create<GameState>()(
 
       startWorldManualBattle: (nodeId, helperHunterIds) => {
         const s = get()
+        const helperFilter = filterWorldHelperHunterIds(s, helperHunterIds)
+        const allowedHelperHunterIds = helperFilter.allowedIds
         const isMonarchId = MONARCHS.some(m => m.id === nodeId) || nodeId === 'angel'
 
         // 군주 및 Angel 진입 권한 및 격퇴 완료 가드
@@ -8861,7 +8951,7 @@ export const useGame = create<GameState>()(
             logs: [],
             startedAt: todayISO(),
             source: 'world_map' as const,
-            helperHunterIds: helperHunterIds || [],
+            helperHunterIds: allowedHelperHunterIds,
           }
         } else {
           const rank = node.difficultyRank || 'D'
