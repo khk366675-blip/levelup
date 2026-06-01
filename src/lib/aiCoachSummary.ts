@@ -312,6 +312,166 @@ function generateFallbackMemorySummary(state: GameState): AiCoachMemorySummary {
   }
 }
 
+const TREND_WINDOW_DAYS = 7
+const TREND_MIN_BUCKET_SIZE = 2
+const TREND_MIN_RATE_DELTA = 0.2
+const TREND_MIN_RECENT_RATE = 0.45
+
+const AI_COACH_CATEGORY_LABELS: Record<string, string> = {
+  workout: '운동',
+  study: '학습',
+  career: '커리어',
+  health: '건강',
+  mind: '멘탈/정신',
+  finance: '재정',
+  social: '관계',
+  challenge: '도전',
+  habit: '습관',
+}
+
+type TrendBucket = {
+  total: number
+  completed: number
+}
+
+type TrendCandidate = {
+  label: string
+  score: number
+}
+
+const createTrendBucket = (): TrendBucket => ({ total: 0, completed: 0 })
+
+const startOfLocalDay = (date: Date): Date => {
+  const copy = new Date(date)
+  copy.setHours(0, 0, 0, 0)
+  return copy
+}
+
+const getOutcomeDate = (outcome: AiCoachQuestOutcome): Date | null => {
+  const source = outcome.plannedDate || outcome.addedAt
+  if (!source) return null
+
+  const parsed = /^\d{4}-\d{2}-\d{2}$/.test(source)
+    ? new Date(`${source}T12:00:00`)
+    : new Date(source)
+
+  return Number.isNaN(parsed.getTime()) ? null : parsed
+}
+
+const formatTrendRate = (rate: number): string => `${Math.round(rate * 100)}%`
+
+const truncateTrendTitle = (title: string): string => {
+  const trimmed = title.trim()
+  return trimmed.length > 24 ? `${trimmed.slice(0, 24)}...` : trimmed
+}
+
+const pushTrendBucket = (
+  buckets: Record<string, TrendBucket>,
+  key: string,
+  completed: boolean,
+) => {
+  if (!key) return
+  const bucket = buckets[key] ?? createTrendBucket()
+  bucket.total += 1
+  if (completed) bucket.completed += 1
+  buckets[key] = bucket
+}
+
+const addTrendCandidates = (
+  recentBuckets: Record<string, TrendBucket>,
+  previousBuckets: Record<string, TrendBucket>,
+  labelForKey: (key: string) => string,
+  candidates: TrendCandidate[],
+) => {
+  Object.entries(recentBuckets).forEach(([key, recent]) => {
+    const previous = previousBuckets[key]
+    if (!previous) return
+    if (recent.total < TREND_MIN_BUCKET_SIZE || previous.total < TREND_MIN_BUCKET_SIZE) return
+
+    const recentRate = recent.completed / recent.total
+    const previousRate = previous.completed / previous.total
+    const delta = recentRate - previousRate
+
+    if (delta < TREND_MIN_RATE_DELTA || recentRate < TREND_MIN_RECENT_RATE) return
+
+    candidates.push({
+      label: `${labelForKey(key)} 상승세 (${formatTrendRate(previousRate)} -> ${formatTrendRate(recentRate)})`,
+      score: delta * 10 + recentRate + recent.total * 0.05,
+    })
+  })
+}
+
+/**
+ * 최근 7일 완료율이 직전 7일보다 뚜렷하게 오른 카테고리/과제를 찾습니다.
+ * 아직 완료/만료되지 않은 active plan은 추세 판정에서 제외해 당일 생성 직후의 노이즈를 막습니다.
+ */
+function computeImprovingAreasFromOutcomes(
+  questOutcomes: AiCoachQuestOutcome[],
+  now: Date,
+): string[] {
+  const recentCategoryBuckets: Record<string, TrendBucket> = {}
+  const previousCategoryBuckets: Record<string, TrendBucket> = {}
+  const recentQuestBuckets: Record<string, TrendBucket> = {}
+  const previousQuestBuckets: Record<string, TrendBucket> = {}
+  const questTitleByKey: Record<string, string> = {}
+
+  const today = startOfLocalDay(now)
+  const oneDayMs = 24 * 60 * 60 * 1000
+
+  questOutcomes.forEach((outcome) => {
+    if (outcome.status === 'added') return
+
+    const outcomeDate = getOutcomeDate(outcome)
+    if (!outcomeDate) return
+
+    const daysAgo = Math.floor((today.getTime() - startOfLocalDay(outcomeDate).getTime()) / oneDayMs)
+    if (daysAgo < 0 || daysAgo >= TREND_WINDOW_DAYS * 2) return
+
+    const isRecentWindow = daysAgo < TREND_WINDOW_DAYS
+    const completed = outcome.status === 'completed'
+    const categoryKey = outcome.category || 'unknown'
+    const questKey = `${categoryKey}:${outcome.title}`
+    questTitleByKey[questKey] = outcome.title
+
+    pushTrendBucket(
+      isRecentWindow ? recentCategoryBuckets : previousCategoryBuckets,
+      categoryKey,
+      completed,
+    )
+    pushTrendBucket(
+      isRecentWindow ? recentQuestBuckets : previousQuestBuckets,
+      questKey,
+      completed,
+    )
+  })
+
+  const candidates: TrendCandidate[] = []
+  addTrendCandidates(
+    recentCategoryBuckets,
+    previousCategoryBuckets,
+    key => `${AI_COACH_CATEGORY_LABELS[key] ?? key} 영역`,
+    candidates,
+  )
+
+  addTrendCandidates(
+    recentQuestBuckets,
+    previousQuestBuckets,
+    key => `"${truncateTrendTitle(questTitleByKey[key] ?? key)}"`,
+    candidates,
+  )
+
+  const seenLabels = new Set<string>()
+  return candidates
+    .sort((a, b) => b.score - a.score)
+    .map(candidate => candidate.label)
+    .filter(label => {
+      if (seenLabels.has(label)) return false
+      seenLabels.add(label)
+      return true
+    })
+    .slice(0, 3)
+}
+
 /**
  * 최근 세션과 퀘스트 성과를 분석하여 롤링 메모리 요약(rollingSummary)을 빌드합니다.
  * (12-31F)
@@ -456,12 +616,9 @@ export function computeRollingSummary(state: GameState): AiCoachMemorySummary {
     coachNotes.push('🧹 청소, 분리수거 등 정기 유지관리 퀘스트의 지연 횟수가 많습니다. 가벼운 습관 위주 배치가 필요합니다.')
   }
 
-  const improvingAreas: string[] = []
-  if (stableHabits.length > 0) {
-    improvingAreas.push('안정된 핵심 습관 유지')
-  }
-  if (rate7d !== null && rate7d >= 75) {
-    improvingAreas.push('안정적인 계획 수행률')
+  const improvingAreas = computeImprovingAreasFromOutcomes(questOutcomes, now)
+  if (improvingAreas.length > 0) {
+    coachNotes.push(`최근 개선 추세: ${improvingAreas.slice(0, 2).join(', ')}`)
   }
 
   return {

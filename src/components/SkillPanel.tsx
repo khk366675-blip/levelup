@@ -14,6 +14,7 @@ import {
 } from '../lib/skills'
 import { SkillActionCard, getSkillSourceMeta, getSkillTypeMeta, skillSourceSortRank, skillTypeSortRank } from './SkillActionCard'
 import { getAvailableUpgradesForSkill } from '../lib/skillUpgrades'
+import { sanitizeRetiredTowerText } from '../lib/retiredTowerUi'
 
 export function SkillPanel() {
   const hunter = useGame(s => s.hunter)
@@ -65,7 +66,7 @@ export function SkillPanel() {
             스킬
             <span className="text-[11px] system-text text-white/45">{skills.length}개 · 전투용 {combatSkillCount}</span>
           </span>
-          <span className="mt-1 block text-[11px] text-white/45">게이트·무한의 탑 수동 전투에서 직접 사용</span>
+          <span className="mt-1 block text-[11px] text-white/45">게이트 수동 전투에서 직접 사용</span>
         </span>
         <span className="shrink-0 rounded border border-cyan-300/25 bg-cyan-400/10 px-2 py-1 text-cyan-100">
           {expanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
@@ -83,7 +84,7 @@ export function SkillPanel() {
                   key={skill.id}
                   skill={skill}
                   runtime={runtime}
-                  providerName={provider?.name}
+                  providerName={sanitizeRetiredTowerText(provider?.name)}
                   selected={selectedSkill?.id === skill.id && getSkillDefinitionSource(skill) !== 'basic'}
                   informational
                   onClick={() => setSelectedSkillId(getSkillDefinitionSource(skill) === 'basic' ? undefined : skill.id)}
@@ -104,7 +105,7 @@ export function SkillPanel() {
                 </span>
                 {selectedProvider && (
                   <span className="rounded border border-purple-300/25 bg-purple-400/10 px-1.5 py-0.5 text-purple-100">
-                    {selectedProvider.name}
+                    {sanitizeRetiredTowerText(selectedProvider.name)}
                   </span>
                 )}
               </div>

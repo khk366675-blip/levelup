@@ -1,11 +1,12 @@
 import clsx from 'clsx'
 import { useState } from 'react'
 import { motion } from 'framer-motion'
-import { Box, CalendarCheck, Crown, Gem, Gift, Sparkles, Ticket, TowerControl } from 'lucide-react'
+import { Box, CalendarCheck, Crown, Gem, Gift, Sparkles, Ticket } from 'lucide-react'
 import { useGame } from '../lib/store'
 import type { BoxReward, BoxTier, RewardBox } from '../lib/types'
 import { formatStatReward, todayKey } from '../lib/game'
 import { getShadowDefinition } from '../lib/shadows'
+import { getItemDisplayName } from '../lib/retiredTowerUi'
 import { DramaticReveal, type DramaticRevealTone, type RevealStep } from './DramaticReveal'
 import { ChallengeCardsPanel } from './ChallengeCardsPanel'
 
@@ -39,7 +40,7 @@ const BOX_TYPE_META: Record<RewardBox['type'], { label: string; short: string; d
   boss: {
     label: '보스 보급',
     short: 'BOSS',
-    description: '탑 보스층 돌파 기록에서 회수한 상자입니다.',
+    description: '상위 보스 전리품에서 회수한 상자입니다.',
     chip: 'border-violet-500/25 bg-violet-500/10 text-violet-100',
   },
 }
@@ -55,9 +56,14 @@ function getDisplayTier(box: RewardBox, upgradePoints: number): BoxTier {
 }
 
 function boxIcon(box: RewardBox) {
-  if (box.type === 'boss') return TowerControl
+  if (box.type === 'boss') return Crown
   if (box.type === 'weekly') return Crown
   return Gift
+}
+
+function getBoxDisplayLabel(box: RewardBox): string {
+  if (box.source === 'tower_boss') return '보스 전리품 상자'
+  return box.label
 }
 
 function formatReward(reward?: BoxReward): string[] {
@@ -74,14 +80,14 @@ function formatReward(reward?: BoxReward): string[] {
       return `조각: ${safeName} +${fragment.amount}`
     }),
     ...Object.entries(reward.statRewards ?? {}).map(([stat, value]) => `${stat} ${formatStatReward(value ?? 0)}`),
-    ...(reward.items ?? []).map(item => `${item.icon} ${item.name}`),
-    ...(reward.consumables ?? []).map(item => `${item.icon} ${item.name}`),
+    ...(reward.items ?? []).map(item => `${item.icon} ${getItemDisplayName(item)}`),
+    ...(reward.consumables ?? []).map(item => `${item.icon} ${getItemDisplayName(item)}`),
   ]
 }
 
 function getRevealTone(box?: RewardBox): DramaticRevealTone {
   if (!box) return 'box'
-  if (box.type === 'boss') return 'tower'
+  if (box.type === 'boss') return 'box'
   if (box.tier === 'epic' || box.tier === 'superior') return 'rank'
   return 'box'
 }
@@ -163,8 +169,8 @@ export function RewardBoxPanel() {
     ? [
         {
           title: revealingBox.type === 'boss' ? 'BOSS BOX' : 'REWARD BOX',
-          text: revealingBox.type === 'boss' ? '탑의 금속 상자가 낮게 울린다.' : '상자 안쪽에서 빛이 번진다.',
-          subtext: `${revealingBox.label} · ${TIER_LABEL[revealingBox.tier]}`,
+          text: revealingBox.type === 'boss' ? '보스 전리품 상자가 낮게 울린다.' : '상자 안쪽에서 빛이 번진다.',
+          subtext: `${getBoxDisplayLabel(revealingBox)} · ${TIER_LABEL[revealingBox.tier]}`,
           durationMs: 780,
           tone: revealTone,
         },
@@ -175,7 +181,7 @@ export function RewardBoxPanel() {
             : hasHighValueDrop(revealingBox.reward)
               ? '날카로운 빛이 잠깐 새어 나온다.'
               : '잠금 장치가 천천히 풀린다.',
-          subtext: revealingBox.type === 'boss' ? '보스층의 잔향이 아직 남아 있습니다.' : '오늘의 도전 보정이 적용된 결과입니다.',
+          subtext: revealingBox.type === 'boss' ? '보스전의 잔향이 아직 남아 있습니다.' : '오늘의 도전 보정이 적용된 결과입니다.',
           durationMs: 820,
           tone: hasShadowSignalDrop(revealingBox.reward) ? 'shadow' : hasHighValueDrop(revealingBox.reward) ? 'rank' : revealTone,
         },
@@ -219,7 +225,7 @@ export function RewardBoxPanel() {
           <div>
             <div className="mb-4 text-center">
               <div className="system-text text-[10px] text-cyan-300 font-black tracking-widest animate-pulse">SUPPLY RECEIVED</div>
-              <div className="mt-1 text-xl font-black text-white">{revealingBox.label}</div>
+              <div className="mt-1 text-xl font-black text-white">{getBoxDisplayLabel(revealingBox)}</div>
             </div>
             
             <div className="space-y-3">
@@ -565,13 +571,13 @@ export function RewardBoxPanel() {
                       <div className="min-w-0">
                         <div className="flex items-center gap-1.5 mb-1">
                           <Icon className="h-4 w-4 shrink-0 text-white/70" />
-                          <span className="truncate text-xs font-bold text-white">{box.label}</span>
+                          <span className="truncate text-xs font-bold text-white">{getBoxDisplayLabel(box)}</span>
                         </div>
                         <div className="flex flex-wrap gap-1 text-[9px] system-text">
                           <span className={clsx('rounded border px-1.5 py-0.2', BOX_TYPE_META[box.type].chip)}>
                             {BOX_TYPE_META[box.type].label}
                           </span>
-                          {box.floor ? <span className="rounded border border-white/10 bg-black/15 px-1.5 py-0.2">{box.floor}층</span> : null}
+                          {box.floor && box.source !== 'tower_boss' ? <span className="rounded border border-white/10 bg-black/15 px-1.5 py-0.2">{box.floor}층</span> : null}
                         </div>
                       </div>
                       <Box className="h-7 w-7 shrink-0 text-white/30" />
@@ -627,7 +633,7 @@ export function RewardBoxPanel() {
                   >
                     {/* Left: Metadata one-liner */}
                     <div className="flex flex-wrap items-center gap-2 shrink-0">
-                      <span className="font-bold text-white/80">{box.label}</span>
+                      <span className="font-bold text-white/80">{getBoxDisplayLabel(box)}</span>
                       <span className={clsx('rounded border px-1.5 py-0.2 text-[9px] system-text', BOX_TYPE_META[box.type].chip)}>
                         {BOX_TYPE_META[box.type].short}
                       </span>

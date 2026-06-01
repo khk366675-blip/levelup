@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { CATEGORY_META, EQUIPMENT_SLOT_LABEL, RARITY_META, type EquipmentSlot, type Item } from '../lib/types'
 import { formatEquipmentStars, formatStatReward, getEnhancedItemEffects, getEquipmentStars } from '../lib/game'
 import { compareEquipmentForSlot, getEquipmentPowerBreakdown } from '../lib/equipmentPower'
+import { getItemDisplayName } from '../lib/retiredTowerUi'
 import { SKILL_DEFINITIONS } from '../lib/seed'
 import { TicketRevealSequence } from './TicketRevealSequence'
 
@@ -109,7 +110,7 @@ function EquipmentCard({
         <div className={clsx('text-center', featured ? 'py-3' : 'py-2')}>
           <div className={clsx('leading-none', featured ? 'text-6xl' : 'text-4xl')}>{item.icon}</div>
           <div className={clsx('mt-2 font-black leading-tight', featured ? 'text-xl' : 'text-sm', RARITY_META[item.rarity].color)}>
-            {item.name}
+            {getItemDisplayName(item)}
           </div>
           <div className="mt-1 flex flex-wrap justify-center gap-1.5 text-[10px] system-text">
             <span className="rounded border border-white/12 bg-black/18 px-2 py-0.5">{RARITY_META[item.rarity].label}</span>

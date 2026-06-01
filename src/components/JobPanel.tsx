@@ -398,7 +398,7 @@ export function JobPanel() {
                       }
                       if (cond.towerFloorCleared !== undefined) {
                         const met = (infiniteTower?.highestClearedFloor ?? 0) >= cond.towerFloorCleared
-                        condLines.push({ text: `무한의 탑 ${cond.towerFloorCleared}층 클리어`, met })
+                        condLines.push({ text: `상위 전투 기록 ${cond.towerFloorCleared}단계`, met })
                         if (!met) isConditionMet = false
                       }
                       if (cond.gateClearCount !== undefined) {

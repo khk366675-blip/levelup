@@ -518,7 +518,7 @@ export interface GameState {
   performManualBattleAction: (action: ManualBattleAction) => void
   cancelManualGateBattle: () => void
   switchManualBattleToAuto: () => void
-  chooseGateRunEventChoice: (choiceId: string) => void
+  chooseGateRunEventChoice: (choiceId: string, encounterId?: string) => void
   claimGateRunTreasure: () => void
   performGateRunRest: (option: 'heal' | 'buff' | 'cooldown') => void
   absorbGateRunShadowTrace: () => void
@@ -2572,6 +2572,11 @@ type ChallengeProgressEvent = {
   focusCompleted?: boolean
 }
 
+const isRetiredTowerChallengeCard = (card: ChallengeCard): boolean =>
+  card.category === 'tower' ||
+  card.condition.type === 'completeTowerAttempt' ||
+  card.condition.type === 'completeTowerClear'
+
 const getWeekKey = (date = new Date()): string => {
   const d = new Date(date)
   const day = (d.getDay() + 6) % 7
@@ -2643,14 +2648,12 @@ const generateChallengeCardsForToday = (quests: Quest[], date = todayKey()): Cha
   const normalPool = [
     createChallengeCard(date, 'daily-3', 'normal', 'habit', 'Daily 3개 완료', '오늘 가능한 Daily 퀘스트 3개를 완료합니다.', { type: 'completeDailyCount', target: 3 }),
     createChallengeCard(date, 'gate-attempt', 'normal', 'gate', '게이트 진입', '게이트 전투에 1회 도전합니다.', { type: 'completeGateAttempt', target: 1 }),
-    createChallengeCard(date, 'tower-attempt', 'normal', 'tower', '탑 등반', '무한의 탑에 1회 도전합니다.', { type: 'completeTowerAttempt', target: 1 }),
     createChallengeCard(date, 'study-2', 'normal', 'finance', '두뇌 예열', '학습, 커리어, 금융 Daily 퀘스트를 합산 2개 완료합니다.', { type: 'completeQuestCategory', category: 'study', target: 2 }),
     createChallengeCard(date, 'workout-2', 'normal', 'workout', '훈련 루틴', '운동 또는 건강 Daily 퀘스트를 합산 2개 완료합니다.', { type: 'completeQuestCategory', category: 'workout', target: 2 }),
   ]
   const hardPool = [
     createChallengeCard(date, 'daily-5', 'hard', 'habit', 'Daily 5개 완료', '오늘 가능한 Daily 퀘스트 5개를 완료합니다.', { type: 'completeDailyCount', target: 5 }),
     createChallengeCard(date, 'gate-win', 'hard', 'gate', '게이트 승리', '게이트 전투에서 승리합니다.', { type: 'completeGateVictory', target: 1 }),
-    createChallengeCard(date, 'tower-clear', 'hard', 'tower', '한 층 돌파', '무한의 탑 전투에서 승리합니다.', { type: 'completeTowerClear', target: 1 }),
     createChallengeCard(date, 'body-mind', 'hard', 'life', '몸과 머리 모두 사용', '운동/건강 1개와 학습/커리어/금융 1개를 각각 완료합니다.', { type: 'completeWorkoutAndStudy', target: 1 }),
   ]
 
@@ -2682,7 +2685,11 @@ const generateChallengeCardsForToday = (quests: Quest[], date = todayKey()): Cha
 
 const getCompletedSelectedChallengeCards = (s: GameState): ChallengeCard[] => {
   const selected = new Set(s.selectedChallengeCardIds ?? [])
-  return (s.todayChallengeCards ?? []).filter(card => selected.has(card.id) && card.status === 'completed')
+  return (s.todayChallengeCards ?? []).filter(card =>
+    !isRetiredTowerChallengeCard(card) &&
+    selected.has(card.id) &&
+    card.status === 'completed'
+  )
 }
 
 const getDailyBoxTierForState = (s: GameState): BoxTier => {
@@ -3127,7 +3134,7 @@ const rollBoxReward = (s: GameState, box: RewardBox): BoxReward => {
       const equipment = getItemFromPool(item => item.equippable === true && item.consumable !== true, box.tier === 'epic' ? 'epic' : 'rare', qualitySource)
       if (equipment) reward.items?.push(equipment)
     }
-    reward.message = `무한의 탑 ${rewardFloor}층 보스의 잔향이 담겨 있습니다.`
+    reward.message = '상위 보스 전리품의 잔향이 담겨 있습니다.'
   }
 
   const summonReward = rollBoxShadowSummonReward(box, mult)
@@ -3185,6 +3192,7 @@ const applyChallengeProgress = (s: GameState, event: ChallengeProgressEvent): Pa
 
   const completedNow: ChallengeCard[] = []
   const nextCards = cards.map(card => {
+    if (isRetiredTowerChallengeCard(card)) return card
     if (card.date !== date || card.status !== 'selected' || !selected.has(card.id)) return card
     if (!isChallengeConditionMet(s, card, event)) return card
     const completed = { ...card, status: 'completed' as const, completedAt: todayISO() }
@@ -3655,8 +3663,9 @@ export const useGame = create<GameState>()(
         let todayChallengeCards = s.todayChallengeCards ?? []
         let selectedChallengeCardIds = s.selectedChallengeCardIds ?? []
         let lastChallengeCardDate = s.lastChallengeCardDate
+        const hasRetiredTowerCards = todayChallengeCards.some(isRetiredTowerChallengeCard)
 
-        if (lastChallengeCardDate !== date) {
+        if (lastChallengeCardDate !== date || hasRetiredTowerCards) {
           todayChallengeCards = generateChallengeCardsForToday(s.quests, date)
           selectedChallengeCardIds = []
           lastChallengeCardDate = date
@@ -3692,9 +3701,10 @@ export const useGame = create<GameState>()(
             lastChallengeCardDate: date,
           }
         }
-        const alreadySelected = cards.some(card => card.status === 'selected' || card.status === 'completed')
+        const activeCards = cards.filter(card => !isRetiredTowerChallengeCard(card))
+        const alreadySelected = activeCards.some(card => card.status === 'selected' || card.status === 'completed')
         if (alreadySelected) return {}
-        const validIds = Array.from(new Set(cardIds)).filter(id => cards.some(card => card.id === id)).slice(0, 3)
+        const validIds = Array.from(new Set(cardIds)).filter(id => activeCards.some(card => card.id === id)).slice(0, 3)
         if (validIds.length !== 3) return {}
         const now = todayISO()
         return {
@@ -6689,14 +6699,36 @@ export const useGame = create<GameState>()(
 
       cancelManualGateBattle: () => set({ manualBattleSession: undefined }),
 
-      chooseGateRunEventChoice: (choiceId) => {
+      chooseGateRunEventChoice: (choiceId, encounterId) => {
         const s = get()
         const activeGate = s.activeGate
         if (!activeGate || activeGate.status !== 'active' || !activeGate.runState) return
 
-        const run = { ...activeGate.runState }
+        const run = {
+          ...activeGate.runState,
+          encounters: activeGate.runState.encounters.map(enc => ({
+            ...enc,
+            eventChoices: enc.eventChoices ? [...enc.eventChoices] : enc.eventChoices,
+          })),
+        }
         const currentEncounter = run.encounters[run.currentEncounterIndex]
-        if (currentEncounter.type !== 'event') return
+        if (
+          !currentEncounter ||
+          currentEncounter.type !== 'event' ||
+          currentEncounter.status !== 'available' ||
+          (encounterId && currentEncounter.id !== encounterId)
+        ) {
+          if (import.meta.env.DEV) {
+            console.warn('[GateRun] Ignored stale or invalid event choice', {
+              choiceId,
+              encounterId,
+              currentEncounterId: currentEncounter?.id,
+              currentEncounterType: currentEncounter?.type,
+              currentEncounterStatus: currentEncounter?.status,
+            })
+          }
+          return
+        }
 
         let choice = currentEncounter.eventChoices?.find(c => c.id === choiceId)
         if (!choice) {
@@ -7731,7 +7763,7 @@ export const useGame = create<GameState>()(
                   'boss',
                   floor >= 20 ? 'epic' : 'superior',
                   'tower_boss',
-                  `무한의 탑 ${floor}층 보스 박스`,
+                  '보스 전리품 상자',
                   floor
                 ),
                 ...(s.rewardBoxes ?? []),
@@ -7743,7 +7775,7 @@ export const useGame = create<GameState>()(
             kind: 'quest',
             title: `탑 ${floor}층 클리어`,
             lines: [
-              `무한의 탑 ${floor}층을 클리어했습니다.`,
+              '상위 전투 기록을 갱신했습니다.',
               ...(rewards.hunterXp ? [`XP +${rewards.hunterXp}`] : []),
               ...(rewards.gold ? [`Gold +${rewards.gold}`] : []),
               ...(rewards.shadowEssence ? [`정수 +${rewards.shadowEssence}`] : []),
@@ -7805,8 +7837,8 @@ export const useGame = create<GameState>()(
             title: `탑 ${floor}층 도전 실패`,
             lines: [
               result === 'defeat'
-                ? `무한의 탑 ${floor}층 도전에 실패했습니다.`
-                : `무한의 탑 ${floor}층 — 시간 초과.`,
+                ? '상위 전투 도전에 실패했습니다.'
+                : '상위 전투 - 시간 초과.',
               '전투력을 키운 뒤 다시 도전할 수 있습니다.',
             ],
             createdAt: todayISO(),
@@ -9944,7 +9976,7 @@ export const useGame = create<GameState>()(
                   'boss',
                   floor >= 20 ? 'epic' : 'superior',
                   'tower_boss',
-                  `무한의 탑 ${floor}층 보스 박스`,
+                  '보스 전리품 상자',
                   floor
                 ),
                 ...(s.rewardBoxes ?? []),
@@ -9956,7 +9988,7 @@ export const useGame = create<GameState>()(
             kind: 'quest',
             title: `탑 ${floor}층 클리어`,
             lines: [
-              `무한의 탑 ${floor}층을 클리어했습니다.`,
+              '상위 전투 기록을 갱신했습니다.',
               ...(rewards.hunterXp ? [`XP +${rewards.hunterXp}`] : []),
               ...(rewards.gold ? [`Gold +${rewards.gold}`] : []),
               ...(rewards.shadowEssence ? [`정수 +${rewards.shadowEssence}`] : []),
@@ -10005,8 +10037,8 @@ export const useGame = create<GameState>()(
             title: `탑 ${floor}층 도전 실패`,
             lines: [
               result.outcome === 'defeat'
-                ? `무한의 탑 ${floor}층 도전에 실패했습니다.`
-                : `무한의 탑 ${floor}층 — 시간 초과.`,
+                ? '상위 전투 도전에 실패했습니다.'
+                : '상위 전투 - 시간 초과.',
               '전투력을 키운 뒤 다시 도전할 수 있습니다.',
             ],
             createdAt: todayISO(),
@@ -10175,7 +10207,7 @@ export const useGame = create<GameState>()(
         set({
           manualBattleSession: {
             gateId: monsterDef.id,
-            gateName: `무한의 탑 ${floor}층`,
+            gateName: `상위 전투 기록 ${floor}단계`,
             gateInstanceId: `tower-${floor}`,
             waveIndex: 0,
             turn: 1,
@@ -10519,7 +10551,7 @@ export const useGame = create<GameState>()(
                     'boss',
                     floor >= 20 ? 'epic' : 'superior',
                     'tower_boss',
-                    `무한의 탑 ${floor}층 보스 박스`,
+                    '보스 전리품 상자',
                     floor
                   ),
                   ...(s.rewardBoxes ?? []),
@@ -10531,7 +10563,7 @@ export const useGame = create<GameState>()(
               kind: 'quest',
               title: `탑 ${floor}층 클리어`,
               lines: [
-                `무한의 탑 ${floor}층을 클리어했습니다.`,
+                '상위 전투 기록을 갱신했습니다.',
                 ...(rewards.hunterXp ? [`XP +${rewards.hunterXp}`] : []),
                 ...(rewards.gold ? [`Gold +${rewards.gold}`] : []),
                 ...(rewards.shadowEssence ? [`정수 +${rewards.shadowEssence}`] : []),
@@ -10604,8 +10636,8 @@ export const useGame = create<GameState>()(
               title: `탑 ${floor}층 도전 실패`,
               lines: [
                 result === 'defeat'
-                  ? `무한의 탑 ${floor}층 도전에 실패했습니다.`
-                  : `무한의 탑 ${floor}층 — 시간 초과.`,
+                  ? '상위 전투 도전에 실패했습니다.'
+                  : '상위 전투 - 시간 초과.',
                 '전투력을 키운 뒤 다시 도전할 수 있습니다.',
               ],
               createdAt: todayISO(),
@@ -10916,25 +10948,22 @@ export const useGame = create<GameState>()(
           get().rebuildAiCoachRollingSummary()
         }, 0)
 
-        // 12-45A: 일일 세계 틱 시뮬레이션 감지 및 실행 (MVP-2)
+        // 12-45A: 전체 AI Daily Plan이 실제 퀘스트로 반영될 때만 세계가 하루 진행된다.
         let nextLivingWorld = s.livingWorld
         const nextRiftNodes = { ...s.riftNodes }
         if (s.livingWorld) {
-          const today = targetDate // 'YYYY-MM-DD'
-          if (s.livingWorld.lastTickDate !== today) {
-            const rng = createSeededRng(s.livingWorld.seed + s.livingWorld.day)
-            nextLivingWorld = advanceWorldDay(s.livingWorld, rng)
-            nextLivingWorld.lastTickDate = today
+          const rng = createSeededRng(s.livingWorld.seed + s.livingWorld.day)
+          nextLivingWorld = advanceWorldDay(s.livingWorld, rng)
+          nextLivingWorld.lastTickDate = targetDate
 
-            // 틱에서 변화된 게이트 클리어 상태를 기존 store.riftNodes와 동기화
-            if (nextLivingWorld.riftNodes) {
-              for (const nodeId in nextLivingWorld.riftNodes) {
-                const node = nextLivingWorld.riftNodes[nodeId]
-                if (node.status === 'cleared') {
-                  nextRiftNodes[nodeId] = 'cleared'
-                } else if (node.status === 'exploded') {
-                  nextRiftNodes[nodeId] = 'undiscovered'
-                }
+          // 틱에서 변화된 게이트 클리어 상태를 기존 store.riftNodes와 동기화
+          if (nextLivingWorld.riftNodes) {
+            for (const nodeId in nextLivingWorld.riftNodes) {
+              const node = nextLivingWorld.riftNodes[nodeId]
+              if (node.status === 'cleared') {
+                nextRiftNodes[nodeId] = 'cleared'
+              } else if (node.status === 'exploded') {
+                nextRiftNodes[nodeId] = 'undiscovered'
               }
             }
           }
@@ -11846,8 +11875,6 @@ export const useGame = create<GameState>()(
 
         // 12-31F: 1회성 AI 퀘스트 만료(expired) 처리
         let updatedMemory = s.aiCoachMemory
-        const todayStr = today // YYYY-MM-DD
-        
         // 날짜가 지나버린 1회성 플랜 리스트 추출 (AI 플랜은 제외하여 보존)
         const expiredQuests = s.quests.filter(q => {
           const isOneTimeDaily = q.type === 'daily' && q.recurring === false
@@ -11894,29 +11921,6 @@ export const useGame = create<GameState>()(
             return q
           })
 
-        // 12-45A: 일일 세계 틱 시뮬레이션 감지 및 실행 (MVP-2)
-        let nextLivingWorld = s.livingWorld
-        const nextRiftNodes = { ...s.riftNodes }
-        if (s.livingWorld) {
-          if (s.livingWorld.lastTickDate !== today) {
-            const rng = createSeededRng(s.livingWorld.seed + s.livingWorld.day)
-            nextLivingWorld = advanceWorldDay(s.livingWorld, rng)
-            nextLivingWorld.lastTickDate = today
-
-            // 틱에서 변화된 게이트 클리어 상태를 기존 store.riftNodes와 동기화
-            if (nextLivingWorld.riftNodes) {
-              for (const nodeId in nextLivingWorld.riftNodes) {
-                const node = nextLivingWorld.riftNodes[nodeId]
-                if (node.status === 'cleared') {
-                  nextRiftNodes[nodeId] = 'cleared'
-                } else if (node.status === 'exploded') {
-                  nextRiftNodes[nodeId] = 'undiscovered'
-                }
-              }
-            }
-          }
-        }
-
         return {
           hunter: { ...s.hunter, streak, streakProtectionLastUsed, lastActiveDate: today },
           quests,
@@ -11924,8 +11928,6 @@ export const useGame = create<GameState>()(
           achievementStats: stats,
           aiCoachMemory: updatedMemory,
           initialized: true,
-          livingWorld: nextLivingWorld,
-          riftNodes: nextRiftNodes
         }
       }),
 

@@ -1,5 +1,6 @@
 import { AnimatePresence, motion } from 'framer-motion'
 import { useGame } from '../lib/store'
+import { sanitizeRetiredTowerText } from '../lib/retiredTowerUi'
 
 const KIND_STYLE: Record<string, { accent: string; glow: string; tag: string }> = {
   levelup: { accent: 'border-amber-400/60', glow: 'shadow-[0_0_60px_rgba(251,191,36,0.4)]', tag: 'text-amber-300' },
@@ -21,6 +22,8 @@ export function SystemMessageQueue() {
   const current = messages[0]
   const dramatic = current?.kind === 'levelup' || current?.kind === 'rank'
   const style = current ? (KIND_STYLE[current.kind] ?? KIND_STYLE.info) : KIND_STYLE.info
+  const displayTitle = sanitizeRetiredTowerText(current?.title)
+  const displayLines = current?.lines.map(line => sanitizeRetiredTowerText(line)) ?? []
 
   return (
     <AnimatePresence>
@@ -52,7 +55,7 @@ export function SystemMessageQueue() {
               transition={{ delay: 0.1, duration: 0.4 }}
               className={`text-2xl font-bold mb-4 ${style.tag}`}
             >
-              {current.title}
+              {displayTitle}
             </motion.h2>
 
             {current.kind === 'rank' && current.grade && (
@@ -104,7 +107,7 @@ export function SystemMessageQueue() {
             )}
 
             <div className="space-y-1.5 mb-6">
-              {current.lines.map((line, i) => (
+              {displayLines.map((line, i) => (
                 <motion.div
                   key={i}
                   initial={{ opacity: 0, y: 4 }}

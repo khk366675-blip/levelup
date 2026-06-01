@@ -2860,6 +2860,11 @@ function GateRunPanel({
   const rawCurrentEncounter = encounters[currentEncounterIndex]
   const currentEncounter = useMemo(() => hydrateGateRunEncounterChoices(rawCurrentEncounter, activeGate), [rawCurrentEncounter, activeGate])
 
+  useEffect(() => {
+    if (!currentEncounter?.id) return
+    setSelectedEncId(prev => (prev === currentEncounter.id ? prev : currentEncounter.id))
+  }, [currentEncounter?.id])
+
   const isRedGate = runState.redGateState && (runState.redGateState.status === 'opened' || runState.redGateState.status === 'cleared')
 
   // 테마 디자인 매핑
@@ -2911,6 +2916,8 @@ function GateRunPanel({
   // UI 상에서 선택된 인카운터의 세부 내용
   const rawActiveDetailEnc = encounters.find((e: any) => e.id === (selectedEncId ?? currentEncounter.id)) ?? currentEncounter
   const activeDetailEnc = useMemo(() => hydrateGateRunEncounterChoices(rawActiveDetailEnc, activeGate), [rawActiveDetailEnc, activeGate])
+  const activeDetailIsCurrent = activeDetailEnc.id === currentEncounter.id
+  const activeDetailCanInteract = activeDetailIsCurrent && activeDetailEnc.status === 'available'
 
   const computedDiffMod = useMemo(() => {
     const baseDiff = activeDetailEnc.difficultyMod ?? 1.0
@@ -3400,7 +3407,8 @@ function GateRunPanel({
                   <button
                     type="button"
                     onClick={onStartAuto}
-                    className="btn btn-primary w-full min-h-12 text-sm flex items-center justify-center gap-2"
+                    disabled={!activeDetailCanInteract}
+                    className="btn btn-primary w-full min-h-12 text-sm flex items-center justify-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed"
                   >
                     <Swords className="w-5 h-5 animate-pulse" />
                     <span>균열 공략 개시 (2.5D 전투)</span>
@@ -3419,8 +3427,11 @@ function GateRunPanel({
                     const isCoopActive = activeGate.helperHunterIds && activeGate.helperHunterIds.length > 0
                     const isLockedByCoop = choice.requiresCoop && !isCoopActive
                     const isLockedBySolo = choice.requiresSolo && isCoopActive
-                    const isLocked = isLockedByCoop || isLockedBySolo
-                    const lockReason = isLockedByCoop
+                    const isLockedByEncounter = !activeDetailCanInteract
+                    const isLocked = isLockedByCoop || isLockedBySolo || isLockedByEncounter
+                    const lockReason = isLockedByEncounter
+                      ? '현재 진행 중인 구역이 아닙니다. 활성화된 구역에서 선택지를 진행할 수 있습니다.'
+                      : isLockedByCoop
                       ? (choice.conditionHint || '🚨 [협력 Named 헌터 필요] 이 선택지는 지원 대원이 참가한 상태여야 활성화됩니다.')
                       : (choice.conditionHint || '🚨 [단독 돌입 필요] 이 선택지는 다른 헌터가 없을 때만 선택 가능합니다.')
 
@@ -3428,7 +3439,7 @@ function GateRunPanel({
                       <button
                         key={choice.id}
                         type="button"
-                        onClick={() => !isLocked && chooseGateRunEventChoice(choice.id)}
+                        onClick={() => !isLocked && chooseGateRunEventChoice(choice.id, activeDetailEnc.id)}
                         disabled={isLocked}
                         className={clsx(
                           "text-left p-3.5 border rounded-lg transition-all duration-200 group flex flex-col justify-between",
@@ -3473,8 +3484,9 @@ function GateRunPanel({
                       차원 불안정 현상 감지. 마력 공명을 통해 구역 안정화 후 우회하여 다음으로 통과합니다.
                       <button
                         type="button"
-                        onClick={() => chooseGateRunEventChoice('choice_rift_stabilize')}
-                        className="btn btn-secondary text-xs mt-3 block mx-auto"
+                        onClick={() => activeDetailCanInteract && chooseGateRunEventChoice('choice_rift_stabilize', activeDetailEnc.id)}
+                        disabled={!activeDetailCanInteract}
+                        className="btn btn-secondary text-xs mt-3 block mx-auto disabled:opacity-60 disabled:cursor-not-allowed"
                       >
                         마력 공명을 통해 구역 안정화 후 우회
                       </button>
@@ -3494,8 +3506,9 @@ function GateRunPanel({
                 </p>
                 <button
                   type="button"
-                  onClick={claimGateRunTreasure}
-                  className="btn btn-primary mt-5 px-6 min-h-10 text-xs font-semibold"
+                  onClick={() => activeDetailCanInteract && claimGateRunTreasure()}
+                  disabled={!activeDetailCanInteract}
+                  className="btn btn-primary mt-5 px-6 min-h-10 text-xs font-semibold disabled:opacity-60 disabled:cursor-not-allowed"
                 >
                   보물 상자 개봉하여 보상 적립
                 </button>
@@ -3552,8 +3565,9 @@ function GateRunPanel({
 
                 <button
                   type="button"
-                  onClick={() => performGateRunRest(activeRestOption)}
-                  className="btn btn-primary w-full min-h-10 text-xs font-semibold"
+                  onClick={() => activeDetailCanInteract && performGateRunRest(activeRestOption)}
+                  disabled={!activeDetailCanInteract}
+                  className="btn btn-primary w-full min-h-10 text-xs font-semibold disabled:opacity-60 disabled:cursor-not-allowed"
                 >
                   선택한 정비 행동 수행 및 통과
                 </button>
@@ -3570,8 +3584,9 @@ function GateRunPanel({
                 </p>
                 <button
                   type="button"
-                  onClick={absorbGateRunShadowTrace}
-                  className="btn btn-primary mt-5 px-6 min-h-10 text-xs font-semibold"
+                  onClick={() => activeDetailCanInteract && absorbGateRunShadowTrace()}
+                  disabled={!activeDetailCanInteract}
+                  className="btn btn-primary mt-5 px-6 min-h-10 text-xs font-semibold disabled:opacity-60 disabled:cursor-not-allowed"
                 >
                   흔적을 성불시켜 추출 공명률 축적
                 </button>

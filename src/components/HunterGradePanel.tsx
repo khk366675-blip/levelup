@@ -122,8 +122,8 @@ export function HunterGradePanel() {
       label: '보스 처형 실적',
       icon: Target,
       color: 'text-amber-400 border-amber-500/20 bg-amber-950/20',
-      desc: '게이트 지배자 베기 및 Tower 공략',
-      detail: `${s.achievementStats.bossKillsCount ?? 0}마리 처단 (Tower ${s.infiniteTower?.highestClearedFloor ?? 0}F)`
+      desc: '게이트 지배자 및 상위 보스 처단',
+      detail: `${s.achievementStats.bossKillsCount ?? 0}마리 처단`
     },
     legion: {
       label: '그림자 군단 위엄',

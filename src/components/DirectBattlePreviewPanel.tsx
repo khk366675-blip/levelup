@@ -4,13 +4,13 @@
  * 12-29I onwards: This component is the MAIN production direct-control battle panel.
  * - GatePanel uses it for the live "직접 조작 게이트 전투" path
  *   (handleDirectGateBattleComplete -> resolveDirectGateBattle).
- * - InfiniteTowerPanel uses it for the live "무한의 탑 직접 조작 전투" path
+ * - Legacy challenge panels can use it for direct-control battle paths
  *   (handleDirectTowerBattleComplete -> resolveDirectTowerBattle).
  *
  * The "Preview" name is historical (12-29F/G). The file name is preserved to keep
  * existing imports stable. Treat this as the production direct battle panel.
  * Cancellation grants no reward; victory/defeat are routed through existing
- * Gate/Tower reward + progression actions exactly once per battle.
+ * Reward + progression actions exactly once per battle.
  */
 
 import { useEffect, useMemo, useRef, useState } from 'react'

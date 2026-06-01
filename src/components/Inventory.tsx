@@ -15,6 +15,7 @@ import {
   MAX_ITEM_ENHANCEMENT_LEVEL,
 } from '../lib/game'
 import { compareEquipmentForSlot, getEquipmentPowerBreakdown } from '../lib/equipmentPower'
+import { getItemDisplayDescription, getItemDisplayName, sanitizeRetiredTowerText } from '../lib/retiredTowerUi'
 import { Package, Sword, Shield, Gem, Scroll, X, Sparkles } from 'lucide-react'
 
 const SLOT_ICONS: Record<EquipmentSlot, typeof Sword> = {
@@ -184,7 +185,7 @@ export function Inventory() {
                 <div className="flex items-start justify-between gap-2">
                   <div className="flex-1">
                     <div className="text-sm font-semibold text-purple-200">
-                      {effect.sourceItemName}
+                      {sanitizeRetiredTowerText(effect.sourceItemName)}
                     </div>
                     <div className="text-xs text-purple-300/80 mt-1">
                       {formatActiveEffectSummary(effect)}
@@ -232,7 +233,7 @@ export function Inventory() {
                   <div>
                     <div className="text-2xl text-center mb-1">{equippedItem.icon}</div>
                     <div className={`text-xs font-semibold text-center leading-snug ${RARITY_META[equippedItem.rarity].color}`}>
-                      {equippedItem.name}
+                      {getItemDisplayName(equippedItem)}
                     </div>
                     <div className="mt-0.5 text-center text-[10px] font-bold text-yellow-200/80">
                       {formatEquipmentStars(equippedItem)}
@@ -333,7 +334,7 @@ export function Inventory() {
               >
                 <div className="text-4xl text-center mb-2">{item.icon}</div>
                 <div className={`text-center text-sm font-semibold ${meta.color}`}>
-                  {item.name}
+                  {getItemDisplayName(item)}
                   {enhancementLabel && <span className="ml-1 text-amber-300">{enhancementLabel}</span>}
                   {item.equippable && !item.consumable && <span className="ml-1 text-yellow-200">{formatEquipmentStars(item)}</span>}
                 </div>
@@ -388,7 +389,7 @@ export function Inventory() {
                   </div>
                 )}
                 
-                <div className="text-xs text-white/50 text-center mt-2 leading-snug">{item.description}</div>
+                <div className="text-xs text-white/50 text-center mt-2 leading-snug">{getItemDisplayDescription(item)}</div>
 
                 {equipmentComparison && (
                   <div

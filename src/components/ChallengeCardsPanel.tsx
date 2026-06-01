@@ -26,7 +26,7 @@ const CATEGORY_LABEL: Record<ChallengeCard['category'], string> = {
   sleep: '수면',
   gate: '게이트',
   shadow: '그림자',
-  tower: '탑',
+  tower: '도전',
   habit: '습관',
 }
 
@@ -61,9 +61,8 @@ function conditionShortText(card: ChallengeCard): string {
     case 'completeShadowExpedition':
       return '그림자 원정 1회 완료'
     case 'completeTowerAttempt':
-      return '무한의 탑 도전 1회'
     case 'completeTowerClear':
-      return '무한의 탑 승리 1회'
+      return '비활성화된 도전'
     case 'openBox':
       return `보상 박스 ${target}개 개봉`
     case 'completeWorkoutAndStudy':
@@ -73,28 +72,36 @@ function conditionShortText(card: ChallengeCard): string {
   }
 }
 
+function isRetiredTowerChallengeCard(card: ChallengeCard): boolean {
+  return card.category === 'tower' ||
+    card.condition.type === 'completeTowerAttempt' ||
+    card.condition.type === 'completeTowerClear'
+}
+
 export function ChallengeCardsPanel() {
   const cards = useGame(s => s.todayChallengeCards ?? [])
   const selectedIdsFromStore = useGame(s => s.selectedChallengeCardIds)
-  const selectedIds = selectedIdsFromStore ?? []
   const selectChallengeCards = useGame(s => s.selectChallengeCards)
-  const [draftIds, setDraftIds] = useState<string[]>(selectedIds)
+  const [draftIds, setDraftIds] = useState<string[]>([])
   const [cardReveal, setCardReveal] = useState<'selected' | 'completed' | undefined>()
   const previousCompletedRef = useRef<number | undefined>(undefined)
 
-  const selectedIdsKey = (selectedIdsFromStore ?? []).join(',')
+  const visibleCards = cards.filter(card => !isRetiredTowerChallengeCard(card))
+  const visibleCardIds = new Set(visibleCards.map(card => card.id))
+  const selectedIds = (selectedIdsFromStore ?? []).filter(id => visibleCardIds.has(id))
+  const selectedIdsKey = selectedIds.join(',')
   useEffect(() => {
-    setDraftIds(selectedIdsFromStore ?? [])
+    setDraftIds(selectedIds)
   }, [selectedIdsKey])
 
   const hasSelected = selectedIds.length > 0
   const selectedSet = new Set(hasSelected ? selectedIds : draftIds)
-  const shownCards = hasSelected ? cards.filter(card => selectedSet.has(card.id)) : cards
-  const completedCount = cards.filter(card => selectedIds.includes(card.id) && card.status === 'completed').length
-  const selectedCards = cards.filter(card => selectedIds.includes(card.id))
+  const shownCards = hasSelected ? visibleCards.filter(card => selectedSet.has(card.id)) : visibleCards
+  const completedCount = visibleCards.filter(card => selectedIds.includes(card.id) && card.status === 'completed').length
+  const selectedCards = visibleCards.filter(card => selectedIds.includes(card.id))
   const pendingCount = Math.max(0, selectedCards.length - completedCount)
   const fullClearBonusReady = selectedCards.length === 3 && completedCount >= 3
-  const draftReward = cards
+  const draftReward = visibleCards
     .filter(card => selectedSet.has(card.id))
     .reduce((sum, card) => ({
       hunterXp: sum.hunterXp + card.reward.hunterXp,
@@ -154,7 +161,7 @@ export function ChallengeCardsPanel() {
   }
 
   const confirmCards = () => {
-    selectChallengeCards(draftIds)
+    selectChallengeCards(draftIds.filter(id => visibleCardIds.has(id)))
     setCardReveal('selected')
   }
 
@@ -223,7 +230,7 @@ export function ChallengeCardsPanel() {
       </div>
 
       {/* Cards List Grid */}
-      {cards.length === 0 ? (
+      {visibleCards.length === 0 ? (
         <div className="rounded-md border border-violet-500/12 bg-ink-950/45 px-3 py-8 text-center text-sm text-white/40">
           오늘의 도전 카드를 집계 중입니다. 잠시만 기다려주세요...
         </div>
@@ -356,4 +363,3 @@ export function ChallengeCardsPanel() {
     </div>
   )
 }
-
