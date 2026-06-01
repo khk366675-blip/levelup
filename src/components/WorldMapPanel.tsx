@@ -1548,7 +1548,7 @@ export function WorldMapPanel() {
                       <div className={`text-[8px] ${occupiedMonarch ? 'text-red-300 font-bold bg-red-950/40 border border-red-500/25 px-1.5' : 'text-purple-300/80 bg-black/45 px-1'} font-mono mt-0.5 whitespace-nowrap rounded`}>
                         {occupiedMonarch 
                           ? `군주: ${MONARCHS.find(m => m.id === occupiedMonarch.monarchId)?.name ?? occupiedMonarch.monarchId}`
-                          : `(${prog.cleared}/${prog.total})${totalPower > 0 ? ` ⚔️${(totalPower / 1000).toFixed(0)}k` : ''}`
+                          : `${totalPower > 0 ? `⚔️ ${(totalPower / 1000).toFixed(0)}k` : ''}`
                         }
                       </div>
                     </div>
@@ -1973,7 +1973,7 @@ export function WorldMapPanel() {
                               >
                                 {occupiedMonarch
                                   ? `군주: ${MONARCHS.find((m) => m.id === occupiedMonarch.monarchId)?.name ?? occupiedMonarch.monarchId}`
-                                  : `(${prog.cleared}/${prog.total})${totalPower > 0 ? ` ⚔️${(totalPower / 1000).toFixed(0)}k` : ''}`}
+                                  : `${totalPower > 0 ? `⚔️ ${(totalPower / 1000).toFixed(0)}k` : ''}`}
                               </text>
                             )}
                           </g>
