@@ -1982,12 +1982,12 @@ export function WorldMapPanel() {
                     })}
                   </g>
 
-                  {/* 게이트 노드 렌더링 - 한국 활성 게이트 및 활성화된 러브콜 노드 */}
+                  {/* 게이트 노드 렌더링 - 한국 활성 게이트, 활성화된 러브콜 노드, 그리고 타국가 S급 게이트 */}
                   <g className="gate-nodes-layer">
                     {Object.values(livingWorld?.riftNodes ?? {})
                       .filter(
                         (node: any) =>
-                          (node.regionId === 'kr' || node.loveCall?.active) &&
+                          (node.regionId === 'kr' || node.loveCall?.active || node.isSGrade) &&
                           (riftNodesState[node.id] ?? node.status) === 'active'
                       )
                       .map((node: any) => {
@@ -1997,24 +1997,50 @@ export function WorldMapPanel() {
                           (m) => m.status === 'rampaging' && m.occupiedRegionIds.includes(node.regionId)
                         )
                         const hasLoveCall = worldNode?.loveCall?.active
+                        
+                        // 타국가이면서 러브콜도 아직 없는데 S급 게이트인 경우 -> 현황 파악용 비공략 시각 노드
+                        const isNonLocalUnacceptedS = node.regionId !== 'kr' && !hasLoveCall && node.isSGrade
+                        
                         const [x, y] = getNodeCoordinates(node)
 
-                        const strokeColor = isNodeRegionOccupied ? '#ef4444' : hasLoveCall ? '#fbbf24' : '#22d3ee'
-                        const bgColor = isNodeRegionOccupied ? '#380c10' : hasLoveCall ? '#2e1d09' : '#083344'
+                        const strokeColor = isNodeRegionOccupied 
+                          ? '#ef4444' 
+                          : hasLoveCall 
+                          ? '#fbbf24' 
+                          : isNonLocalUnacceptedS 
+                          ? '#a855f7' // S급 시각용 얌전한 보라색
+                          : '#22d3ee'
+                          
+                        const bgColor = isNodeRegionOccupied 
+                          ? '#380c10' 
+                          : hasLoveCall 
+                          ? '#2e1d09' 
+                          : isNonLocalUnacceptedS 
+                          ? '#2e1035' // 얌전한 딥보라 배경
+                          : '#083344'
 
-                        // 줌 스케일 및 러브콜 여부에 따른 라벨 가독성 제어
-                        const showGateLabel = hasLoveCall || (selectedNode && selectedNode.id === node.id) || zoomTransform.k >= 2.0
+                        // S급 시각 노드는 약간의 존재감을 주되 얌전하게 5.0 (일반 4.5, 서울 허브 5.5)
+                        const nodeRadius = isNonLocalUnacceptedS ? 5.0 : 4.5
+
+                        // 줌 스케일 및 러브콜, S급 여부에 따른 라벨 가독성 제어
+                        const showGateLabel = hasLoveCall || isNonLocalUnacceptedS || (selectedNode && selectedNode.id === node.id) || zoomTransform.k >= 2.0
 
                         return (
                           <g
                             key={`gate-node-${node.id}`}
                             className="cursor-pointer group"
-                            onClick={() => handleNodeClick(node)}
+                            onClick={() => {
+                              if (isNonLocalUnacceptedS) {
+                                triggerToast(`[${node.name}]은 타국가의 S급 게이트입니다. 지원 요청(러브콜) 수락 후에 공략할 수 있습니다.`)
+                                return
+                              }
+                              handleNodeClick(node)
+                            }}
                           >
                             <circle
                               cx={x}
                               cy={y}
-                              r="4.5"
+                              r={nodeRadius}
                               fill={bgColor}
                               stroke={strokeColor}
                               strokeWidth="1.5"
@@ -2044,6 +2070,8 @@ export function WorldMapPanel() {
                                       ? 'fill-red-300'
                                       : hasLoveCall
                                       ? 'fill-amber-200'
+                                      : isNonLocalUnacceptedS
+                                      ? 'fill-purple-300'
                                       : 'fill-cyan-300'
                                   } stroke-black stroke-[2.5px] select-none`}
                                   style={{
@@ -2051,7 +2079,12 @@ export function WorldMapPanel() {
                                     strokeLinejoin: 'round',
                                   }}
                                 >
-                                  {hasLoveCall ? `📞 [지원] ${node.name}` : node.name}
+                                  {hasLoveCall 
+                                    ? `📞 [지원] ${node.name}` 
+                                    : isNonLocalUnacceptedS 
+                                    ? `👿 [S급] ${node.name}` 
+                                    : node.name
+                                  }
                                 </text>
                               </g>
                             )}
