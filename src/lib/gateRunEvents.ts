@@ -1087,6 +1087,12 @@ export function hydrateGateRunEncounterChoices(encounter: GateRunEncounter, acti
   return convertBrokenEventToSafeEncounter(encounter)
 }
 
+export const stripGateChoiceOutcomeHint = (description: string): string =>
+  description.replace(
+    /\s*[\(（][^\(（\)）]*(?:위험도|누적 위험도|경험치|XP|골드|Gold|정수|보상 배율|추출|성공률|HP|체력|다음 전투|다음 방|버프|디버프|조각|확률|페널티|획득|소모)[^\(（\)）]*[\)）]\s*$/u,
+    ''
+  ).trim()
+
 // 복구 불가한 깨진 이벤트를 컨셉에 어울리는 안전 보물방으로 전환하는 헬퍼
 export function convertBrokenEventToSafeEncounter(encounter: GateRunEncounter): GateRunEncounter {
   return {
@@ -1138,5 +1144,4 @@ export function getChoiceEffectType(choice: GateRunEventChoice): 'stabilize' | '
 
   return 'stabilize'
 }
-
 

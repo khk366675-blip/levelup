@@ -7,7 +7,9 @@ import {
   Crown,
   Gem,
   Lock,
+  Minus,
   Package,
+  Plus,
   ScrollText,
   Shield,
   ShoppingBag,
@@ -68,8 +70,27 @@ export function ShopPanel() {
   const [expandedProbabilityId, setExpandedProbabilityId] = useState<string | undefined>()
   const [equipmentReveal, setEquipmentReveal] = useState<EquipmentRevealPayload | undefined>()
   const [activeFilter, setActiveFilter] = useState<'all' | 'summon' | 'equipment' | 'shard' | 'essence' | 'premium' | 'purchasable'>('all')
+  const [purchaseQuantities, setPurchaseQuantities] = useState<Record<string, number>>({})
 
   const purchasableCount = SHOP_PRODUCTS.filter(p => getDisabledReason(p, gold, shadowEssence) === '구매 가능').length
+
+  const getMaxPurchasable = (product: ShopProduct) => {
+    const goldLimit = product.priceGold > 0 ? Math.floor(gold / product.priceGold) : 99
+    const essencePrice = product.priceEssence ?? 0
+    const essenceLimit = essencePrice > 0 ? Math.floor(shadowEssence / essencePrice) : 99
+    return Math.max(0, Math.min(99, goldLimit, essenceLimit))
+  }
+
+  const getPurchaseQuantity = (product: ShopProduct) => {
+    const max = getMaxPurchasable(product)
+    return Math.max(1, Math.min(max || 1, purchaseQuantities[product.id] ?? 1))
+  }
+
+  const setPurchaseQuantity = (product: ShopProduct, nextQuantity: number) => {
+    const max = getMaxPurchasable(product)
+    const safeQuantity = Math.max(1, Math.min(max || 1, Math.floor(nextQuantity) || 1))
+    setPurchaseQuantities(prev => ({ ...prev, [product.id]: safeQuantity }))
+  }
 
   const filteredProducts = SHOP_PRODUCTS.filter(product => {
     if (activeFilter === 'all') return true
@@ -86,8 +107,11 @@ export function ShopPanel() {
 
   const handleBuy = (product: ShopProduct, disabled: boolean) => {
     if (disabled) return
-    const cost = `${product.priceGold.toLocaleString()} Gold${product.priceEssence ? ` + 정수 ${product.priceEssence}` : ''}`
-    if (!window.confirm(`${product.name}을 구매할까요?\n${cost}`)) return
+    const quantity = getPurchaseQuantity(product)
+    const totalGoldCost = product.priceGold * quantity
+    const totalEssenceCost = (product.priceEssence ?? 0) * quantity
+    const cost = `${totalGoldCost.toLocaleString()} Gold${totalEssenceCost ? ` + 정수 ${totalEssenceCost}` : ''}`
+    if (!window.confirm(`${product.name} x${quantity}개를 구매할까요?\n${cost}`)) return
     const before = useGame.getState()
     const beforeItemIds = new Set(before.items.map(item => item.id))
     const equipmentSlots: EquipmentSlot[] = ['weapon', 'armor', 'accessory', 'artifact']
@@ -97,7 +121,7 @@ export function ShopPanel() {
       if (equippedItem) acc[slot] = equippedItem
       return acc
     }, {})
-    purchaseShopProduct(product.id)
+    purchaseShopProduct(product.id, quantity)
     const after = useGame.getState()
     const newEquipment = after.items.filter(item =>
       !beforeItemIds.has(item.id)
@@ -199,6 +223,8 @@ export function ShopPanel() {
             const disabledReason = getDisabledReason(product, gold, shadowEssence)
             const disabled = disabledReason !== '구매 가능'
             const expanded = expandedProbabilityId === product.id
+            const purchaseQuantity = getPurchaseQuantity(product)
+            const maxPurchaseQuantity = getMaxPurchasable(product)
             const normalShardReward = product.reward.kind === 'shadow_shards' ? product.reward.shards.normal ?? 0 : 0
             const cardLabel = isExchange ? 'EXCHANGE' : CATEGORY_LABEL[product.category]
             const cardClass = isExchange ? visual.accentClass : CATEGORY_CLASS[product.category]
@@ -326,7 +352,41 @@ export function ShopPanel() {
                     )}
 
                     {/* Actions Row */}
-                    <div className="grid grid-cols-[1fr_auto] gap-2">
+                    <div className="grid grid-cols-[auto_1fr_auto] gap-2">
+                      <div className={clsx(
+                        'flex h-11 items-center rounded-lg border bg-black/35',
+                        disabled ? 'border-red-500/15 opacity-60' : 'border-cyan-400/20'
+                      )}>
+                        <button
+                          type="button"
+                          disabled={disabled || purchaseQuantity <= 1}
+                          onClick={() => setPurchaseQuantity(product, purchaseQuantity - 1)}
+                          className="grid h-11 w-9 place-items-center text-white/60 transition hover:text-white disabled:cursor-not-allowed disabled:opacity-30"
+                          title="수량 감소"
+                        >
+                          <Minus className="h-3.5 w-3.5" />
+                        </button>
+                        <input
+                          type="number"
+                          min={1}
+                          max={Math.max(1, maxPurchaseQuantity)}
+                          value={purchaseQuantity}
+                          disabled={disabled}
+                          onChange={(event) => setPurchaseQuantity(product, Number(event.target.value))}
+                          className="h-9 w-12 border-x border-white/10 bg-transparent text-center text-xs font-black tabular-nums text-cyan-100 outline-none disabled:text-white/40"
+                          aria-label={`${product.name} 구매 수량`}
+                        />
+                        <button
+                          type="button"
+                          disabled={disabled || purchaseQuantity >= maxPurchaseQuantity}
+                          onClick={() => setPurchaseQuantity(product, purchaseQuantity + 1)}
+                          className="grid h-11 w-9 place-items-center text-white/60 transition hover:text-white disabled:cursor-not-allowed disabled:opacity-30"
+                          title="수량 증가"
+                        >
+                          <Plus className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+
                       <button
                         type="button"
                         disabled={disabled}
@@ -347,7 +407,7 @@ export function ShopPanel() {
                         ) : (
                           <>
                             <ShoppingBag className="h-3.5 w-3.5 animate-pulse" />
-                            <span>보급 구매</span>
+                            <span>{purchaseQuantity > 1 ? `보급 구매 x${purchaseQuantity}` : '보급 구매'}</span>
                           </>
                         )}
                       </button>

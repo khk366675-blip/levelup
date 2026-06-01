@@ -114,7 +114,7 @@ import {
   RIFT_REGIONS,
   RIFT_NODES,
 } from './seed'
-import { generateGateRunState, hydrateGateRunEncounterChoices, getChoiceEffectType } from './gateRunEvents'
+import { generateGateRunState, hydrateGateRunEncounterChoices, getChoiceEffectType, stripGateChoiceOutcomeHint } from './gateRunEvents'
 import { PROMOTION_EXAM_DEFINITIONS } from './promotionExams'
 import {
   CATEGORY_TO_STAT,
@@ -578,7 +578,7 @@ export interface GameState {
   ensureDailyRewardSystems: () => void
   openRewardBox: (boxId: string) => void
   selectChallengeCards: (cardIds: string[]) => void
-  purchaseShopProduct: (productId: string) => void
+  purchaseShopProduct: (productId: string, quantity?: number) => void
 
   // achievements
   recordAppOpen: () => void
@@ -3811,11 +3811,14 @@ export const useGame = create<GameState>()(
         }, 0)
       },
 
-      purchaseShopProduct: (productId) => set((s) => {
+      purchaseShopProduct: (productId, quantity = 1) => set((s) => {
         const product = SHOP_PRODUCTS.find(item => item.id === productId)
         if (!product) return {}
-        if ((s.gold ?? 0) < product.priceGold) return {}
-        if ((s.shadowEssence ?? 0) < (product.priceEssence ?? 0)) return {}
+        const purchaseQuantity = Math.max(1, Math.min(99, Math.floor(quantity)))
+        const totalGoldCost = product.priceGold * purchaseQuantity
+        const totalEssenceCost = (product.priceEssence ?? 0) * purchaseQuantity
+        if ((s.gold ?? 0) < totalGoldCost) return {}
+        if ((s.shadowEssence ?? 0) < totalEssenceCost) return {}
 
         const grants = {
           items: [] as Item[],
@@ -3824,16 +3827,18 @@ export const useGame = create<GameState>()(
           essence: 0,
           lines: [] as string[],
         }
-        applyShopReward(product.reward, grants)
+        for (let i = 0; i < purchaseQuantity; i++) {
+          applyShopReward(product.reward, grants)
+        }
 
         const spentLines = [
-          `Gold -${product.priceGold}`,
-          ...(product.priceEssence ? [`그림자 정수 -${product.priceEssence}`] : []),
+          `Gold -${totalGoldCost}`,
+          ...(product.priceEssence ? [`그림자 정수 -${totalEssenceCost}`] : []),
         ]
 
         return {
-          gold: (s.gold ?? 0) - product.priceGold,
-          shadowEssence: (s.shadowEssence ?? 0) - (product.priceEssence ?? 0) + grants.essence,
+          gold: (s.gold ?? 0) - totalGoldCost,
+          shadowEssence: (s.shadowEssence ?? 0) - totalEssenceCost + grants.essence,
           shadowSummonTickets: [...(s.shadowSummonTickets ?? []), ...grants.tickets],
           shadowSummonShards: addShadowSummonShards(s.shadowSummonShards, grants.shards),
           items: [...s.items, ...grants.items],
@@ -3842,7 +3847,7 @@ export const useGame = create<GameState>()(
             kind: grants.items.length > 0 ? 'item' : grants.tickets.length > 0 || Object.keys(grants.shards).length > 0 ? 'shadow' : 'info',
             title: '상점 구매 완료',
             lines: [
-              product.name,
+              purchaseQuantity > 1 ? `${product.name} x${purchaseQuantity}` : product.name,
               ...spentLines,
               ...grants.lines,
             ],
@@ -7054,7 +7059,7 @@ export const useGame = create<GameState>()(
 
         const lines = [
           `선택: "${choice.label}"`,
-          choice.description,
+          stripGateChoiceOutcomeHint(choice.description),
         ]
         if (choice.immediateReward) {
           const rew = choice.immediateReward

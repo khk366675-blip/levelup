@@ -43,7 +43,7 @@ import { ShadowPortrait } from './shadows/ShadowPortrait'
 import { ShadowExtractionReveal } from './shadows/ShadowExtractionReveal'
 import { SkillActionCard, skillSourceSortRank, skillTypeSortRank } from './SkillActionCard'
 import { GATE_DEFINITIONS, GATE_PENALTIES, GATE_REWARD_TABLES, MONSTER_DEFINITIONS, SKILL_DEFINITIONS } from '../lib/seed'
-import { GATE_THEMES, GATE_MODIFIERS, hydrateGateRunEncounterChoices } from '../lib/gateRunEvents'
+import { GATE_THEMES, GATE_MODIFIERS, hydrateGateRunEncounterChoices, stripGateChoiceOutcomeHint } from '../lib/gateRunEvents'
 import { getWorldGateEventPack } from '../lib/livingWorldGateEvents'
 import { pickDirectGateRunEncounterKey } from '../lib/directBattleEncounters'
 import { MONARCHS, FINAL_ANGEL, buildMonarchBattleUnit } from '../lib/monarchs'
@@ -3469,7 +3469,7 @@ function GateRunPanel({
                           "text-xs mt-1.5 pl-6",
                           isLocked ? "text-zinc-600" : "text-white/70"
                         )}>
-                          {choice.description}
+                          {stripGateChoiceOutcomeHint(choice.description)}
                         </div>
                         {isLocked && (
                           <div className="text-[10px] text-amber-400/90 font-bold mt-2 pl-6 animate-pulse">
