@@ -869,7 +869,7 @@ export function ShadowPanel() {
   const upgradeLegionNode = useGame(s => s.upgradeLegionNode)
   const craftHiddenEvolutionMaterial = useGame(s => s.craftHiddenEvolutionMaterial)
   const shadowLegionNodes = useGame(s => s.shadowLegionNodes ?? {})
-  const [labOpen, setLabOpen] = useState(true)
+  const [labOpen, setLabOpen] = useState(false)
 
   const handleReawaken = (shadowId: string) => {
     const beforeState = useGame.getState()
