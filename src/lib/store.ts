@@ -74,6 +74,7 @@ import type {
   WorldBattleResult,
   RiftNode,
   NamedHunter,
+  WorldEvent,
 } from './types'
 
 import { initLivingWorld } from './livingWorld'
@@ -4986,6 +4987,42 @@ export const useGame = create<GameState>()(
               riftNodes: updatedWorldNodes,
               eventLogs,
             }
+          }
+
+          // [NEW] 플레이어 공략 완료 구조화 이벤트 생성 및 수렴
+          const newEvent: WorldEvent = isMonarchId
+            ? {
+                id: `evt-player-defeat-${nextLivingWorld.day}-${nodeId}-${Math.floor(Math.random() * 100000)}`,
+                day: nextLivingWorld.day,
+                type: 'defeated',
+                severity: 'critical',
+                title: nodeId === 'angel' ? '구원 완료' : '군주 격퇴',
+                body: nodeId === 'angel' 
+                  ? '지고의 심판자를 격퇴하고 세계를 영원히 구원했습니다!' 
+                  : `플레이어가 군주 [${node.name}] 토벌에 성공했습니다!`,
+                regionId: node.regionId || 'kr',
+                monarchId: nodeId,
+                cinematic: true
+              }
+            : {
+                id: `evt-player-clear-${nextLivingWorld.day}-${nodeId}-${Math.floor(Math.random() * 100000)}`,
+                day: nextLivingWorld.day,
+                type: 'gate_open',
+                severity: 'minor',
+                title: '균열 정화',
+                body: `플레이어가 [${node.name}] 정화에 성공했습니다.`,
+                regionId: node.regionId || 'kr',
+                cinematic: false
+              }
+
+          const currentEvents = nextLivingWorld.recentEvents ? [...nextLivingWorld.recentEvents] : []
+          currentEvents.push(newEvent)
+          if (currentEvents.length > 60) {
+            currentEvents.shift()
+          }
+          nextLivingWorld = {
+            ...nextLivingWorld,
+            recentEvents: currentEvents
           }
         }
 

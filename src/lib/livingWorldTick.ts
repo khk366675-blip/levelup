@@ -1,4 +1,4 @@
-import type { LivingWorldState, NamedHunter, RegionState, RiftNode, Rank, ActiveMonarch } from './types'
+import type { LivingWorldState, NamedHunter, RegionState, RiftNode, Rank, ActiveMonarch, WorldEvent } from './types'
 import { RIFT_REGIONS, REGION_ADJACENCY, RIFT_NODES } from './seed'
 import { MONARCHS } from './monarchs'
 import { getRegionalTheme } from './livingWorldGateContent'
@@ -167,6 +167,7 @@ export function advanceWorldDay(state: LivingWorldState, rng: RngFn): LivingWorl
   const nextRegions = { ...state.regions }
   const nextRiftNodes = { ...state.riftNodes }
   const logs: string[] = [...state.eventLogs]
+  const recentEvents: WorldEvent[] = [...(state.recentEvents ?? [])]
   let nextWorldCorruption = state.worldCorruption
   let nextActiveMonarchs: ActiveMonarch[] = [...(state.activeMonarchs ?? [])]
   let nextHomeReachedMonarchId = state.homeReachedMonarchId
@@ -186,6 +187,33 @@ export function advanceWorldDay(state: LivingWorldState, rng: RngFn): LivingWorl
     }
   }
 
+  function addEvent(
+    type: WorldEvent['type'],
+    severity: WorldEvent['severity'],
+    title: string,
+    body: string,
+    regionId?: string,
+    monarchId?: string,
+    cinematic = false
+  ) {
+    const event: WorldEvent = {
+      id: `evt-${nextDay}-${type}-${Math.floor(rng() * 100000)}`,
+      day: nextDay,
+      type,
+      severity,
+      title,
+      body,
+      regionId,
+      monarchId,
+      cinematic
+    }
+    recentEvents.push(event)
+    if (recentEvents.length > 60) {
+      recentEvents.shift()
+    }
+    return event
+  }
+
   // 1. 헌터 성장 및 부상 치료
   for (const hunterId in nextNamedHunters) {
     const hunter = { ...nextNamedHunters[hunterId] }
@@ -197,6 +225,7 @@ export function advanceWorldDay(state: LivingWorldState, rng: RngFn): LivingWorl
         hunter.status = 'active'
         hunter.injuredTurns = undefined
         addLog(`🏥 ${region.regionId.toUpperCase()}의 네임드 헌터 [${hunter.name}]이(가) 부상에서 완치되어 복귀했습니다.`)
+        addEvent('awakening', 'minor', '헌터 복귀', `🏥 [${hunter.name}] 헌터가 부상에서 완치되어 전선에 복귀했습니다.`, region.regionId, undefined, false)
       } else {
         hunter.injuredTurns = turns
       }
@@ -268,6 +297,7 @@ export function advanceWorldDay(state: LivingWorldState, rng: RngFn): LivingWorl
         region.activeGateIds = region.activeGateIds.filter(id => id !== node.id)
 
         addLog(`💥 [${rName}]의 [${node.name}] 게이트가 방치되어 폭주했습니다! 지역 오염도 +${corruptionAdd}%, 전역 오염도 +${globalCorruptionAdd}%`)
+        addEvent('gate_surge', 'major', '게이트 폭주', `💥 [${rName}]의 [${node.name}] 게이트가 방치되어 폭주했습니다!`, node.regionId, undefined, false)
 
         nextRegions[node.regionId] = region
       } else {
@@ -357,6 +387,7 @@ export function advanceWorldDay(state: LivingWorldState, rng: RngFn): LivingWorl
             }
             nextRiftNodes[gate.id] = gate
             addLog(`📢 [${rName}]에서 긴급 방치 게이트 [${gate.name}] (시한 ${gate.daysRemaining}일)에 대해 용병 헌터 러브콜을 발송했습니다!`)
+            addEvent('gate_open', 'minor', '용병 러브콜 발송', `📢 [${rName}]의 [${gate.name}] 게이트에 대해 지원 요청이 들어왔습니다.`, gate.regionId, undefined, false)
           }
         }
         continue
@@ -526,6 +557,7 @@ export function advanceWorldDay(state: LivingWorldState, rng: RngFn): LivingWorl
 
                     const regName = RIFT_REGIONS.find(r => r.id === regionId)?.name ?? regionId.toUpperCase()
                     addLog(`✨ [각성 발동] [${regName}]의 [${hunter.name}] 헌터가 전투 중 극적인 각성을 거치며 등급이 [${oldRank}] $\\to$ [${newRank}]급으로 도약했습니다! 스탯이 대폭 강화되어 새로운 전력이 되었습니다.`)
+                    addEvent('awakening', 'major', '헌터 각성', `✨ [${regName}]의 [${hunter.name}] 헌터가 극적으로 각성하여 [${newRank}]급으로 도약했습니다!`, regionId, undefined, true)
                   }
                 }
 
@@ -539,6 +571,7 @@ export function advanceWorldDay(state: LivingWorldState, rng: RngFn): LivingWorl
                   const luckyAdd = Math.round(500 + rng() * 600)
                   equipGain += luckyAdd
                   addLog(`🍀 [대박 드랍] [${hunter.name}] 헌터가 전리품으로 고성능 장비를 획득했습니다! (+${luckyAdd} 장비전투력)`)
+                  addEvent('gate_open', 'minor', '고성능 장비 획득', `🍀 [${hunter.name}] 헌터가 던전 공략 결과 전리품을 획득했습니다.`, hunter.regionId, undefined, false)
                 }
 
                 const oldScore = hunter.equipmentScore ?? 0
@@ -594,6 +627,7 @@ export function advanceWorldDay(state: LivingWorldState, rng: RngFn): LivingWorl
           region.corruption = Math.max(0, region.corruption - adjustedCleanse)
 
           addLog(`⚔️ [${rName}] 헌터들이 [${gate.name}] 게이트 공략에 성공했습니다! (승률: ${Math.round(winChance * 100)}%) 지역 오염도 -${adjustedCleanse}%`)
+          addEvent('gate_open', 'minor', '게이트 정화', `⚔️ [${rName}] 헌터들이 [${gate.name}] 정화에 성공했습니다.`, gate.regionId, undefined, false)
         } else {
           // 공략 실패! (부상 또는 사망)
           const diffRatio = (gate.difficulty ?? 0) / Math.max(1, activePower)
@@ -643,10 +677,12 @@ export function advanceWorldDay(state: LivingWorldState, rng: RngFn): LivingWorl
             if (isDead) {
               hunter.status = 'dead'
               addLog(`💀 [${rName}] 헌터들이 [${gate.name}] 공략 중 패배했습니다. 무모한 전투의 결과로 네임드 헌터 [${hunter.name}]이(가) 전사했습니다!`)
+              addEvent('awakening', 'major', '네임드 헌터 전사', `💀 [${rName}]의 네임드 헌터 [${hunter.name}]이(가) 던전 공략 중 전사했습니다...`, region.regionId, undefined, true)
             } else {
               hunter.status = 'injured'
               hunter.injuredTurns = 3
               addLog(`🩹 [${rName}] 헌터들이 [${gate.name}] 공략 중 퇴각했습니다. 네임드 헌터 [${hunter.name}]이(가) 심한 부상을 입어 3일간 요양합니다.`)
+              addEvent('awakening', 'minor', '헌터 심각한 부상', `🩹 [${rName}]의 네임드 헌터 [${hunter.name}]이(가) 던전 공략 실패로 부상을 입었습니다.`, region.regionId, undefined, false)
             }
             nextNamedHunters[targetHunterId] = hunter
         } else {
@@ -655,12 +691,15 @@ export function advanceWorldDay(state: LivingWorldState, rng: RngFn): LivingWorl
           if (pool.countA > 0 && rng() < 0.2) {
             pool.countA = Math.max(0, pool.countA - 1)
             addLog(`🩹 [${rName}]의 A급 익명 헌터 1명이 전투 중 전사했습니다.`)
+            addEvent('gate_open', 'minor', '익명 헌터 전사', `🩹 [${rName}]의 A급 익명 헌터 1명이 전투 중 전사했습니다.`, region.regionId, undefined, false)
           } else if (pool.countB > 0 && rng() < 0.4) {
             pool.countB = Math.max(0, pool.countB - 1)
             addLog(`🩹 [${rName}]의 B급 익명 헌터 1명이 전투 중 전사했습니다.`)
+            addEvent('gate_open', 'minor', '익명 헌터 전사', `🩹 [${rName}]의 B급 익명 헌터 1명이 전투 중 전사했습니다.`, region.regionId, undefined, false)
           } else if (pool.countC > 0) {
             pool.countC = Math.max(0, pool.countC - 1)
             addLog(`🩹 [${rName}]의 C급 익명 헌터 1명이 전투 중 전사했습니다.`)
+            addEvent('gate_open', 'minor', '익명 헌터 전사', `🩹 [${rName}]의 C급 익명 헌터 1명이 전투 중 전사했습니다.`, region.regionId, undefined, false)
           }
           region.pool = pool
         }
@@ -669,6 +708,7 @@ export function advanceWorldDay(state: LivingWorldState, rng: RngFn): LivingWorl
         const corrupt = Math.round(3 + rng() * 5)
         region.corruption = Math.min(100, region.corruption + corrupt)
         addLog(`⚠️ [${rName}] 게이트 공략 실패의 여파로 지역 오염도가 +${corrupt}% 상승했습니다.`)
+        addEvent('gate_surge', 'minor', '게이트 공략 실패', `⚠️ [${rName}] 게이트 공략 실패로 지역 오염도가 상승했습니다.`, region.regionId, undefined, false)
       }
     }
   }
@@ -784,6 +824,11 @@ export function advanceWorldDay(state: LivingWorldState, rng: RngFn): LivingWorl
         nextRegions[regionId] = region
 
         addLog(`🚨 [${rName}] 지역에 새로운 ${rank}급 게이트 [${gateName}] (권장전력: ${difficulty})이(가) 활성화되었습니다!`)
+        if (isSGrade) {
+          addEvent('sgrade_gate', 'major', 'S급 게이트 활성화', `🚨 [${rName}] 지역에 대재앙급 S급 게이트 [${gateName}]가 열렸습니다!`, regionId, undefined, true)
+        } else {
+          addEvent('gate_open', 'minor', '신규 게이트 오픈', `🚨 [${rName}] 지역에 ${rank}급 게이트 [${gateName}]가 활성화되었습니다.`, regionId, undefined, false)
+        }
       }
     }
   }
@@ -841,6 +886,7 @@ export function advanceWorldDay(state: LivingWorldState, rng: RngFn): LivingWorl
         nextRegions[targetRegionId].corruption = Math.min(100, nextRegions[targetRegionId].corruption + 20)
 
         addLog(`👑 ⚡ [군주 출현] 제 ${targetMonarchData.rank}위 군주 [${targetMonarchData.name}] (테마: ${targetMonarchData.theme})이(가) [${rName}] 지역으로 침공을 개시했습니다! 해당 국가 오염도 급증 및 세계 종말이 가속화됩니다.`)
+        addEvent('monarch_appear', 'critical', '군주 출현', `👑 제 ${targetMonarchData.rank}위 군주 [${targetMonarchData.name}] (테마: ${targetMonarchData.theme})이(가) [${rName}] 지역에 강림했습니다!`, targetRegionId, targetMonarchData.id, true)
       }
     }
   }
@@ -880,6 +926,13 @@ export function advanceWorldDay(state: LivingWorldState, rng: RngFn): LivingWorl
         nextRegions[expandRegionId].corruption = Math.min(100, nextRegions[expandRegionId].corruption + 20)
 
         addLog(`👑 📢 [영역 확장] 군주 [${monarchName}]이(가) 인접한 [${expName}] 지역으로 영역을 확장했습니다!`)
+        addEvent('occupied', 'major', '영역 확장', `👑 군주 [${monarchName}]이(가) 인접한 [${expName}] 지역으로 영역을 확장했습니다!`, expandRegionId, monarch.monarchId, true)
+
+        // 거점 위협 감지 (한국 인접 지역 jp, cn 점령 시)
+        if (REGION_ADJACENCY['kr'].includes(expandRegionId)) {
+          addLog(`👑 🚨 [거점 위협] 군주 [${monarchName}]이(가) [${expName}]을(를) 장악하여 대한민국 국경에 도달했습니다! 침공 위협이 심각해집니다.`)
+          addEvent('home_threat', 'critical', '거점 위협 경보', `👑 군주 [${monarchName}]이(가) [${expName}]을(를) 장악하여 거점 바로 직전까지 침투했습니다!`, 'kr', monarch.monarchId, true)
+        }
       }
     }
 
@@ -902,6 +955,7 @@ export function advanceWorldDay(state: LivingWorldState, rng: RngFn): LivingWorl
               const expName = RIFT_REGIONS.find(r => r.id === challengeRegId)?.name ?? challengeRegId.toUpperCase()
 
               addLog(`⚔️ 🎉 [군주 격퇴] [${expName}]의 NPC 헌터들이 연합하여 군주 [${monarchData.name}]을(를) 격퇴하는 기적을 일으켰습니다! 영역이 해방되었습니다.`)
+              addEvent('defeated', 'critical', '군주 격퇴', `⚔️ [${expName}]의 헌터들이 연합하여 군주 [${monarchData.name}]을(를) 격퇴하는 기적을 일으켰습니다!`, challengeRegId, monarchData.id, true)
             }
           }
         } else {
@@ -924,6 +978,7 @@ export function advanceWorldDay(state: LivingWorldState, rng: RngFn): LivingWorl
                 reg.corruption = Math.min(100, reg.corruption + 15)
 
                 addLog(`💀 [참변] [${regName}]의 헌터들이 군주 [${monarchData.name}]에게 저항을 시도했으나 참패하여 흩어졌습니다! [${hunter.name}] 헌터가 치명적인 부상을 입었습니다.`)
+                addEvent('occupied', 'major', '토벌 실패 참변', `💀 [${regName}]의 헌터들이 군주 [${monarchData.name}] 저항에 실패하고, 네임드 [${hunter.name}]이(가) 큰 부상을 입었습니다.`, challengeRegId, monarchData.id, true)
               }
             }
           }
@@ -944,6 +999,7 @@ export function advanceWorldDay(state: LivingWorldState, rng: RngFn): LivingWorl
     const monarchName = MONARCHS.find(mon => mon.id === nextHomeReachedMonarchId)?.name ?? nextHomeReachedMonarchId.toUpperCase()
     
     addLog(`🚨 ⚠️ [초비상] 군주 [${monarchName}]이(가) 대한민국의 방어선을 돌파하고 거점에 도달했습니다! 더 이상 도망칠 곳은 없습니다. 강제 전투가 걸립니다!`)
+    addEvent('home_reached', 'critical', '거점 침입 (초비상)', `🚨 군주 [${monarchName}]이(가) 거점(대한민국)에 침입하여 강제 결전이 선포되었습니다!`, 'kr', nextHomeReachedMonarchId, true)
   } else {
     // 대한민국 영토가 안전해졌다면 (격퇴 등으로) 플래그를 클리어
     nextHomeReachedMonarchId = undefined
@@ -992,6 +1048,7 @@ export function advanceWorldDay(state: LivingWorldState, rng: RngFn): LivingWorl
     activeMonarchs: nextActiveMonarchs,
     homeReachedMonarchId: nextHomeReachedMonarchId,
     eventLogs: logs,
+    recentEvents,
     dailySummaries: nextSummaries,
     monarchsSpawnedTotal: nextMonarchsSpawnedTotal
   }

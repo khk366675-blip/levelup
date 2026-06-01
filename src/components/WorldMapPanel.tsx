@@ -26,7 +26,8 @@ import { MONARCHS, FINAL_ANGEL } from '../lib/monarchs'
 import { getRegionProgress, RIFT_NODE_STATUS_META } from '../lib/riftWorld'
 import { getRegionTotalPower } from '../lib/livingWorld'
 import { GatePanel } from './GatePanel'
-import type { RiftNode, RiftRegion } from '../lib/types'
+import { WorldCinematicEngine } from './WorldCinematicEngine'
+import type { RiftNode, RiftRegion, WorldEvent } from '../lib/types'
 import { getHunterCombatPower } from '../lib/combatPower'
 import { todayKey } from '../lib/game'
 import { getRegionalTheme } from '../lib/livingWorldGateContent'
@@ -236,6 +237,58 @@ export function WorldMapPanel() {
   const [selectedNode, setSelectedNode] = useState<RiftNode | null>(null)
   const [toastMessage, setToastMessage] = useState<string | null>(null)
   const [selectedHelpers, setSelectedHelpers] = useState<string[]>([])
+
+  // State & Ref for SVG Map Shockwaves & Ripple VFX
+  const [mapEffects, setMapEffects] = useState<Array<{
+    id: string
+    x: number
+    y: number
+    color: string
+    type: string
+  }>>([])
+  const processedMapEvents = useRef<Set<string>>(new Set())
+
+  useEffect(() => {
+    if (!livingWorld?.recentEvents || livingWorld.recentEvents.length === 0) return
+
+    const newEffects: typeof mapEffects = []
+
+    livingWorld.recentEvents.forEach(evt => {
+      if (processedMapEvents.current.has(evt.id)) return
+      processedMapEvents.current.add(evt.id)
+
+      // Only animate map shockwaves for critical/major events that have a regionId
+      if (evt.regionId && (evt.severity === 'critical' || evt.severity === 'major')) {
+        const centroid = REGION_CENTROIDS[evt.regionId]
+        if (centroid) {
+          const [x, y] = centroid
+          let color = '#ef4444' // default red
+          if (evt.type === 'awakening') color = '#eab308' // gold
+          else if (evt.type === 'defeated') color = '#8b5cf6' // purple
+          else if (evt.type === 'home_threat') color = '#f97316' // orange
+          else if (evt.type === 'sgrade_gate') color = '#a855f7' // S-grade violet
+
+          const effectId = `eff-${evt.id}-${Date.now()}`
+          newEffects.push({
+            id: effectId,
+            x,
+            y,
+            color,
+            type: evt.type
+          })
+
+          // Auto-remove after 3 seconds
+          setTimeout(() => {
+            setMapEffects(prev => prev.filter(eff => eff.id !== effectId))
+          }, 3000)
+        }
+      }
+    })
+
+    if (newEffects.length > 0) {
+      setMapEffects(prev => [...prev, ...newEffects])
+    }
+  }, [livingWorld?.recentEvents])
 
   // [NEW] 통합 보고서 관련 상태 (일일 정세 / 국가별 상세 / 세계 헌터 랭킹)
   const [activeReportTab, setActiveReportTab] = useState<'daily' | 'country' | 'hunter' | null>(null)
@@ -887,6 +940,75 @@ export function WorldMapPanel() {
             
             <div className="flex-1 rounded bg-black/45 border border-white/5 p-2 scrollbar-thin">
               {(() => {
+                const events = livingWorld.recentEvents || []
+                if (events.length > 0) {
+                  const displayedEvents = isAllLogsExpanded
+                    ? events.slice().reverse()
+                    : events.slice().reverse().slice(0, 4)
+
+                  return (
+                    <div className="space-y-1.5 max-h-[110px] overflow-y-auto pr-1 scrollbar-thin scrollbar-thumb-cyan-500/20">
+                      {displayedEvents.map((evt) => {
+                        const isLatest = evt.day === livingWorld.day
+                        let borderClass = 'border-white/5 bg-white/5'
+                        let badgeClass = 'bg-zinc-500/10 border-zinc-500/20 text-zinc-400'
+                        let textClass = 'text-white/70'
+                        let icon = '📡'
+
+                        if (evt.severity === 'critical') {
+                          borderClass = isLatest ? 'border-red-500/40 bg-red-950/20 shadow-[0_0_10px_rgba(239,68,68,0.15)]' : 'border-red-500/25 bg-red-950/10'
+                          badgeClass = 'bg-red-500/20 border-red-500/30 text-red-400 font-black animate-pulse'
+                          textClass = 'text-red-300 font-bold'
+                          icon = '🚨'
+                        } else if (evt.severity === 'major') {
+                          borderClass = isLatest ? 'border-orange-500/40 bg-orange-950/20 shadow-[0_0_10px_rgba(249,115,22,0.1)]' : 'border-orange-500/25 bg-orange-950/10'
+                          badgeClass = 'bg-orange-500/10 border-orange-500/20 text-orange-400'
+                          textClass = 'text-orange-300 font-semibold'
+                          icon = '⚠️'
+                        } else {
+                          borderClass = 'border-white/5 bg-white/2 hover:border-white/10'
+                          badgeClass = 'bg-zinc-800/30 border-zinc-700/30 text-zinc-400'
+                          textClass = 'text-white/60 font-medium'
+                          icon = '📡'
+                        }
+
+                        if (evt.type === 'awakening') icon = '✨'
+                        if (evt.type === 'defeated') icon = '⚔️'
+                        if (evt.type === 'occupied') icon = '💀'
+                        if (evt.type === 'gate_surge') icon = '💥'
+                        if (evt.type === 'sgrade_gate') icon = '👾'
+                        if (evt.type === 'home_reached') icon = '🔥'
+
+                        return (
+                          <div 
+                            key={evt.id} 
+                            className={`flex items-center gap-2 text-[10.5px] border rounded p-1.5 leading-normal transition-all hover:bg-white/5 ${borderClass} ${
+                              isLatest ? 'border-l-2' : ''
+                            }`}
+                            style={{ 
+                              borderLeftColor: isLatest ? (evt.severity === 'critical' ? '#ef4444' : evt.severity === 'major' ? '#f97316' : '#3b82f6') : undefined
+                            }}
+                          >
+                            <span className="shrink-0 text-xs select-none">{icon}</span>
+                            <span className={`chip shrink-0 scale-95 ${badgeClass}`} style={{ fontSize: '7.5px', padding: '0.05rem 0.25rem' }}>
+                              Day {evt.day}
+                            </span>
+                            <span className={`flex-1 font-mono break-all ${textClass}`}>
+                              {evt.body}
+                            </span>
+                            {isLatest && (
+                              <span className="text-[7px] font-black uppercase text-cyan-400 bg-cyan-400/10 px-1 py-0.2 rounded animate-pulse select-none shrink-0 tracking-wider">
+                                LATEST
+                              </span>
+                            )}
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )
+                }
+
+                // Fallback for Day 0 or backward compatibility with eventLogs
                 const displayedLogs = isAllLogsExpanded 
                   ? livingWorld.eventLogs.slice().reverse() 
                   : livingWorld.eventLogs.slice().reverse().slice(0, 4)
@@ -1303,6 +1425,52 @@ export function WorldMapPanel() {
                   {/* 차원 균열 네트워크 연결선 */}
                   <g className="connecting-lines-layer">
                     {renderConnectingLines()}
+                  </g>
+
+                  {/* 시네마틱 충격파 / 지진 이펙트 레이어 */}
+                  <g className="map-effects-layer">
+                    {mapEffects.map((eff) => (
+                      <g key={eff.id}>
+                        <circle
+                          cx={eff.x}
+                          cy={eff.y}
+                          r="1"
+                          fill="none"
+                          stroke={eff.color}
+                          strokeWidth="2.5"
+                          className="animate-ping animate-infinite"
+                          style={{
+                            transformOrigin: `${eff.x}px ${eff.y}px`,
+                            animationDuration: '2s',
+                          }}
+                        />
+                        <circle
+                          cx={eff.x}
+                          cy={eff.y}
+                          r="1"
+                          fill="none"
+                          stroke={eff.color}
+                          strokeWidth="1.5"
+                          className="animate-ping animate-infinite"
+                          style={{
+                            transformOrigin: `${eff.x}px ${eff.y}px`,
+                            animationDuration: '2.5s',
+                            animationDelay: '0.5s',
+                          }}
+                        />
+                        <circle
+                          cx={eff.x}
+                          cy={eff.y}
+                          r="8"
+                          fill={eff.color}
+                          className="animate-pulse"
+                          style={{
+                            opacity: 0.45,
+                            filter: `drop-shadow(0 0 8px ${eff.color})`,
+                          }}
+                        />
+                      </g>
+                    ))}
                   </g>
 
                   {/* 거점 국가 중심점 마커 및 레이블 */}
@@ -3334,6 +3502,12 @@ export function WorldMapPanel() {
           </div>
         </div>
       )}
+      
+      {/* Reusable cinematic overlay/banner queue engine manager */}
+      <WorldCinematicEngine 
+        events={livingWorld?.recentEvents ?? []} 
+        currentDay={livingWorld?.day ?? 0} 
+      />
     </div>
   )
 }

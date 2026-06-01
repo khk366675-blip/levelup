@@ -2432,6 +2432,18 @@ export interface DailySummary {
   cumulativeRampagedGatesCount: number     // 누적 폭주 게이트 수
 }
 
+export interface WorldEvent {
+  id: string
+  day: number
+  type: 'monarch_appear' | 'awakening' | 'occupied' | 'expand' | 'defeated' | 'home_threat' | 'home_reached' | 'gate_surge' | 'sgrade_gate' | 'gate_open'
+  severity: 'minor' | 'major' | 'critical'
+  title: string
+  body: string
+  regionId?: string
+  monarchId?: string
+  cinematic: boolean
+}
+
 export interface LivingWorldState {
   seed: number              // 이 회차의 시드 (재현용)
   day: number               // 경과 일수
@@ -2442,6 +2454,7 @@ export interface LivingWorldState {
   monarchsAppeared: number  // 등장한 군주 수
   lastTickDate?: string     // 마지막으로 틱이 돌아간 날짜 (YYYY-MM-DD)
   eventLogs: string[]       // 최근 사건 로그 리스트
+  recentEvents?: WorldEvent[] // [NEW] 구조화된 최근 사건 리스트
   riftNodes: Record<string, RiftNode> // 시뮬레이션용 게이트 노드 상태
   activeMonarchs?: ActiveMonarch[]    // 활성화된 군주들 상태
   homeReachedMonarchId?: string       // 거점에 도달한 군주 ID
