@@ -144,8 +144,8 @@ export const SHOP_PRODUCTS: ShopProduct[] = [
   {
     id: 'essence-normal-shards',
     visualKey: 'exchange_essence_gold_to_shard',
-    name: '정수 조각 교환',
-    description: '정수와 Gold를 함께 써서 일반 소환 조각을 보급합니다.',
+    name: '그림자 정수 조각 교환',
+    description: '그림자 정수와 Gold를 함께 써서 일반 소환 조각을 보급합니다.',
     category: 'shard',
     priceGold: 60,
     priceEssence: 6,
@@ -192,7 +192,7 @@ export const SHOP_PRODUCTS: ShopProduct[] = [
   {
     id: 'shadow-shard-bundle',
     name: '그림자 조각 묶음',
-    description: '일반 조각과 고급 조각을 함께 얻는 정수 교환 상품입니다.',
+    description: '일반 조각과 고급 조각을 함께 얻는 그림자 정수 교환 상품입니다.',
     category: 'shard',
     priceGold: 350,
     priceEssence: 8,

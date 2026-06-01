@@ -119,7 +119,7 @@ const expeditionTheme: Record<ShadowExpeditionType, { icon: typeof Crosshair; pa
     border: 'border-purple-300/25',
     accent: 'text-purple-100',
     wash: 'from-purple-400/18 to-violet-500/5',
-    label: 'ESSENCE RIFT',
+    label: '그림자 정수 균열',
   },
   hunt: {
     icon: Crosshair,
@@ -1078,7 +1078,7 @@ function ReportPanel({
           <div className="text-lg font-bold text-cyan-100">+{expeditionResult.shadowXpGained}</div>
         </div>
         <div className="rounded-md border border-purple-300/20 bg-purple-400/10 p-2">
-          <div className="system-text text-[9px] text-purple-100/55">ESSENCE</div>
+          <div className="system-text text-[9px] text-purple-100/55">그림자 정수</div>
           <div className="text-lg font-bold text-purple-100">+{expeditionResult.essenceGained}</div>
         </div>
       </div>

@@ -77,7 +77,7 @@ const battlefieldTheme: Record<ShadowExpeditionType, { board: string; floor: str
     board: 'bg-[radial-gradient(circle_at_52%_38%,rgba(168,85,247,0.24),transparent_34%),linear-gradient(180deg,rgba(37,20,63,0.84),rgba(2,6,23,0.97))]',
     floor: 'border-purple-300/25 shadow-[0_0_42px_rgba(168,85,247,0.18)]',
     accent: 'text-purple-100',
-    label: 'ESSENCE FIELD',
+    label: '그림자 정수 지대',
     particles: 'bg-violet-200/60',
   },
   hunt: {

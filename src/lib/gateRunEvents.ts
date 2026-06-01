@@ -152,7 +152,7 @@ export const GATE_RUN_EVENTS: GateRunEventTemplate[] = [
       {
         id: 'choice_rift_stabilize',
         label: '차원 안정화 수행',
-        description: '마력 제어로 균열을 강제로 억누릅니다. (누적 위험도 -15, 마력 정수 +100)',
+        description: '마력 제어로 균열을 강제로 억누릅니다. (누적 위험도 -15, 그림자 정수 +100)',
         riskDelta: -15,
         immediateReward: { essence: 100, xp: 0, gold: 0, items: [] },
       },
@@ -220,7 +220,7 @@ export const GATE_RUN_EVENTS: GateRunEventTemplate[] = [
       {
         id: 'choice_altar_shatter',
         label: '제단을 파괴해 에너지 갈취',
-        description: '제단에 깃든 에너지를 무력으로 탈취합니다. (마력 정수 +250, 누적 위험도 +10)',
+        description: '제단에 깃든 에너지를 무력으로 탈취합니다. (그림자 정수 +250, 누적 위험도 +10)',
         immediateReward: { essence: 250, xp: 0, gold: 0, items: [] },
         riskDelta: 10,
       },
@@ -303,7 +303,7 @@ export const GATE_RUN_EVENTS: GateRunEventTemplate[] = [
       {
         id: 'choice_mirror_shatter',
         label: '거울을 가차 없이 산산조각 냄',
-        description: '불길한 환영을 없애고 흩어진 마력을 흡수합니다. (마력 정수 +300)',
+        description: '불길한 환영을 없애고 흩어진 마력을 흡수합니다. (그림자 정수 +300)',
         immediateReward: { essence: 300, xp: 0, gold: 0, items: [] },
       },
     ],
@@ -381,7 +381,7 @@ export const GATE_RUN_EVENTS: GateRunEventTemplate[] = [
       {
         id: 'choice_whisper_refuse',
         label: '정신을 단단히 고정하고 거부',
-        description: '정신 장벽을 굳건히 세워 파동을 밀어냅니다. (마력 정수 +200 획득)',
+        description: '정신 장벽을 굳건히 세워 파동을 밀어냅니다. (그림자 정수 +200 획득)',
         immediateReward: { essence: 200, xp: 0, gold: 0, items: [] },
       },
     ],
@@ -512,7 +512,7 @@ export const GATE_RUN_EVENTS: GateRunEventTemplate[] = [
       {
         id: 'choice_curse_take',
         label: '저주를 감수하고 보물 강탈',
-        description: '맨손으로 보물을 꺼냅니다. (대량 골드 +1500, 마력 정수 +500, 단 던전 끝까지 적 강화)',
+        description: '맨손으로 보물을 꺼냅니다. (대량 골드 +1500, 그림자 정수 +500, 단 던전 끝까지 적 강화)',
         immediateReward: { gold: 1500, essence: 500, xp: 0, items: [] },
         nextEncounterModifier: 'curse_damage_taken_up',
       },
@@ -918,7 +918,7 @@ export function generateGateRunState(gateId: string, seed: string, examGrade?: H
     } else if (encType === 'rest') {
       const restTypes = [
         { name: '안전한 모닥불', desc: '따뜻한 온기가 감도는 모닥불 주위에서 상처를 꿰맵니다. (HP 40% 회복)' },
-        { name: '마력의 푸른 온천', desc: '흘러넘치는 차원의 마력천에 몸을 담급니다. (HP 30% 회복 및 마력 정수 획득)' },
+        { name: '마력의 푸른 온천', desc: '흘러넘치는 차원의 마력천에 몸을 담급니다. (HP 30% 회복 및 그림자 정수 획득)' },
         { name: '그림자의 밀실', desc: '군주의 그림자 기운이 차분하게 헌터를 보호합니다. (HP 20% 회복 및 다음 추출 공명 보정 +5%)' }
       ]
       const chosenRest = restTypes[Math.floor(rand() * restTypes.length)]

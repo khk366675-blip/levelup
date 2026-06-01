@@ -944,7 +944,7 @@ export function InfiniteTowerPanel() {
                       골드 {calculateTowerReward(challengeFloor, 'victory', true).gold?.toLocaleString() || 1000}
                     </span>
                     <span className="text-[10px] px-1.5 py-0.5 bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 rounded font-bold">
-                      정수 {calculateTowerReward(challengeFloor, 'victory', true).shadowEssence?.toLocaleString() || 5}
+                      그림자 정수 {calculateTowerReward(challengeFloor, 'victory', true).shadowEssence?.toLocaleString() || 5}
                     </span>
                     {calculateTowerReward(challengeFloor, 'victory', true).boxType && (
                       <span className="text-[10px] px-1.5 py-0.5 bg-rose-500/20 text-rose-300 border border-rose-500/30 rounded animate-pulse">
@@ -1342,7 +1342,7 @@ export function InfiniteTowerPanel() {
               {activeBattle.result.rewards.hunterXp ? <div>XP +{activeBattle.result.rewards.hunterXp}</div> : null}
               {activeBattle.result.rewards.gold ? <div>Gold +{activeBattle.result.rewards.gold}</div> : null}
               {activeBattle.result.rewards.shadowXp ? <div>Shadow XP +{activeBattle.result.rewards.shadowXp}</div> : null}
-              {activeBattle.result.rewards.shadowEssence ? <div>정수 +{activeBattle.result.rewards.shadowEssence}</div> : null}
+              {activeBattle.result.rewards.shadowEssence ? <div>그림자 정수 +{activeBattle.result.rewards.shadowEssence}</div> : null}
               {activeBattle.result.rewards.boxType ? <div className="text-amber-300/80">보스 박스 획득</div> : null}
               {activeBattle.result.firstClear ? <div className="text-emerald-300/70">첫 클리어 보상</div> : null}
             </div>

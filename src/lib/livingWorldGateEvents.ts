@@ -111,7 +111,7 @@ export const REGIONAL_EVENT_PACKS: Record<string, WorldGateEventPack> = {
           {
             id: 'choice_seoul_building_smash',
             label: '마력 핵의 물리적 분쇄',
-            description: '낙인을 억지로 깨부수어 이계 정수를 즉시 갈취합니다. (위험도 +15, 정수 +300)',
+            description: '낙인을 억지로 깨부수어 이계 정수를 즉시 갈취합니다. (위험도 +15, 그림자 정수 +300)',
             riskDelta: 15,
             immediateReward: { essence: 300, xp: 0, gold: 0, items: [] }
           },
@@ -180,7 +180,7 @@ export const REGIONAL_EVENT_PACKS: Record<string, WorldGateEventPack> = {
           {
             id: 'choice_incheon_mist_scout',
             label: '협력 대원 정찰 정밀 지시',
-            description: 'Named 헌터의 통신망을 이용해 사각지대를 조율합니다. (위험도 -15, 정수 +200)',
+            description: 'Named 헌터의 통신망을 이용해 사각지대를 조율합니다. (위험도 -15, 그림자 정수 +200)',
             requiresCoop: true,
             conditionHint: '협력 사냥꾼이 존재해야 지시가 가능합니다.',
             coopRiskDelta: -15,
@@ -260,7 +260,7 @@ export const REGIONAL_EVENT_PACKS: Record<string, WorldGateEventPack> = {
           {
             id: 'choice_kr_busan_coop_def',
             label: '공조 병력 분산 방어',
-            description: '협력 헌터들을 측면 방벽으로 조 배치합니다. (위험도 -30, 정수 +100)',
+            description: '협력 헌터들을 측면 방벽으로 조 배치합니다. (위험도 -30, 그림자 정수 +100)',
             requiresCoop: true,
             conditionHint: '배치 가능한 Named 헌터가 부족합니다.',
             coopRiskDelta: -30,
@@ -276,7 +276,7 @@ export const REGIONAL_EVENT_PACKS: Record<string, WorldGateEventPack> = {
           {
             id: 'choice_busan_bw_repair',
             label: '임시 속성 방벽 봉인',
-            description: '마력을 방출해 틈새를 얼려 막습니다. (위험도 -10, 정수 +250)',
+            description: '마력을 방출해 틈새를 얼려 막습니다. (위험도 -10, 그림자 정수 +250)',
             riskDelta: -10,
             immediateReward: { essence: 250, xp: 0, gold: 0, items: [] }
           },
@@ -361,7 +361,7 @@ export const REGIONAL_EVENT_PACKS: Record<string, WorldGateEventPack> = {
           {
             id: 'choice_jeju_cave_crystals',
             label: '이계 마력 광석 집중 채굴',
-            description: '위험을 감수하고 광석 정수를 전부 캐냅니다. (위험도 +15, 정수 +350)',
+            description: '위험을 감수하고 광석 정수를 전부 캐냅니다. (위험도 +15, 그림자 정수 +350)',
             riskDelta: 15,
             immediateReward: { essence: 350, xp: 0, gold: 0, items: [] }
           }
@@ -410,7 +410,7 @@ export const REGIONAL_EVENT_PACKS: Record<string, WorldGateEventPack> = {
           {
             id: 'choice_kr_radar_ignore',
             label: '기기 강제 분쇄 파괴',
-            description: '소음을 없애기 위해 부수고 직진합니다. (위험도 +10, 정수 +200)',
+            description: '소음을 없애기 위해 부수고 직진합니다. (위험도 +10, 그림자 정수 +200)',
             riskDelta: 10,
             immediateReward: { essence: 200, xp: 0, gold: 0, items: [] }
           }
@@ -489,7 +489,7 @@ export const REGIONAL_EVENT_PACKS: Record<string, WorldGateEventPack> = {
           {
             id: 'choice_us_highway_coop',
             label: '현지 S급 헌터 전열 인계',
-            description: '토마스 리드의 중장갑 돌파에 맞추어 공격을 가합니다. (위험도 -30, 정수 +150)',
+            description: '토마스 리드의 중장갑 돌파에 맞추어 공격을 가합니다. (위험도 -30, 그림자 정수 +150)',
             requiresCoop: true,
             conditionHint: '미국 전선에 대기 중인 Named 헌터가 필요합니다.',
             coopRiskDelta: -30,
@@ -561,7 +561,7 @@ export const REGIONAL_EVENT_PACKS: Record<string, WorldGateEventPack> = {
           {
             id: 'choice_uk_templar_shatter',
             label: '룬의 주술적 강제 봉인',
-            description: '강제로 룬을 깨뜨려 축적된 마력 정수를 탈취합니다. (위험도 +15, 정수 +300)',
+            description: '강제로 룬을 깨뜨려 축적된 그림자 정수를 탈취합니다. (위험도 +15, 그림자 정수 +300)',
             riskDelta: 15,
             immediateReward: { essence: 300, xp: 0, gold: 0, items: [] }
           },
@@ -640,7 +640,7 @@ export const REGIONAL_EVENT_PACKS: Record<string, WorldGateEventPack> = {
           {
             id: 'choice_ru_lab_charge',
             label: '연구소 비밀 금고 강제 개봉',
-            description: '경보 유발을 무시하고 정수 상자를 강취합니다. (위험도 +20, 정수 +350)',
+            description: '경보 유발을 무시하고 정수 상자를 강취합니다. (위험도 +20, 그림자 정수 +350)',
             riskDelta: 20,
             immediateReward: { essence: 350, xp: 0, gold: 0, items: [] }
           },
@@ -726,7 +726,7 @@ export const REGIONAL_EVENT_PACKS: Record<string, WorldGateEventPack> = {
           {
             id: 'choice_cn_seal_coop',
             label: '현지 무협 헌터 진법 결합',
-            description: '장웨이의 마력 장벽 지원을 받아 위험 요소를 안전 중화합니다. (위험도 -30, 정수 +150)',
+            description: '장웨이의 마력 장벽 지원을 받아 위험 요소를 안전 중화합니다. (위험도 -30, 그림자 정수 +150)',
             requiresCoop: true,
             conditionHint: '중국 공조 Named 헌터가 필요합니다.',
             coopRiskDelta: -30,
@@ -792,13 +792,13 @@ export const REGIONAL_EVENT_PACKS: Record<string, WorldGateEventPack> = {
           {
             id: 'choice_jp_shrine_purify',
             label: '주술적 부적 결계 강화',
-            description: '마력을 중화해 안전한 휴식망을 형성합니다. (위험도 -15, 정수 +200)',
+            description: '마력을 중화해 안전한 휴식망을 형성합니다. (위험도 -15, 그림자 정수 +200)',
             riskDelta: -15,
             immediateReward: { essence: 200, xp: 0, gold: 0, items: [] }
           },
           {
             id: 'choice_jp_shrine_extract',
-            label: '요괴의 마력 정수 징수',
+            label: '요괴의 그림자 정수 징수',
             description: '영령을 강제로 베어 그림자 흔적 보정을 얻습니다. (위험도 +20, 추출 성공률 +6%)',
             riskDelta: 20,
             extractionBonusDelta: 6
@@ -885,7 +885,7 @@ export const REGIONAL_EVENT_PACKS: Record<string, WorldGateEventPack> = {
           {
             id: 'choice_de_core_coop',
             label: '현지 헌터의 공학 지원',
-            description: '디터의 보조 마력 절연 방패를 주입해 위험 없이 코어를 처리합니다. (위험도 -30, 정수 +150)',
+            description: '디터의 보조 마력 절연 방패를 주입해 위험 없이 코어를 처리합니다. (위험도 -30, 그림자 정수 +150)',
             requiresCoop: true,
             conditionHint: '독일 공조 Named 헌터가 필요합니다.',
             coopRiskDelta: -30,
@@ -901,7 +901,7 @@ export const REGIONAL_EVENT_PACKS: Record<string, WorldGateEventPack> = {
           {
             id: 'choice_de_industry_slay',
             label: '삼림 벌목종 격퇴 사냥',
-            description: '적을 토막 내어 이계 원액을 회수합니다. (위험도 +10, 정수 +300)',
+            description: '적을 토막 내어 이계 원액을 회수합니다. (위험도 +10, 그림자 정수 +300)',
             riskDelta: 10,
             immediateReward: { essence: 300, xp: 0, gold: 0, items: [] }
           },
@@ -952,7 +952,7 @@ export const REGIONAL_EVENT_PACKS: Record<string, WorldGateEventPack> = {
           {
             id: 'choice_default_rift_stabilize',
             label: '차원 주파수 안정화 수행',
-            description: '마력 제어로 균열을 억제합니다. (위험도 -15, 정수 +100)',
+            description: '마력 제어로 균열을 억제합니다. (위험도 -15, 그림자 정수 +100)',
             riskDelta: -15,
             immediateReward: { essence: 100, xp: 0, gold: 0, items: [] }
           },
@@ -1023,7 +1023,7 @@ export const REGIONAL_EVENT_PACKS: Record<string, WorldGateEventPack> = {
           {
             id: 'choice_default_altar_shatter',
             label: '제단 마석 추출 파괴',
-            description: '마석 제단을 강제로 깨뜨려 정수를 탈취합니다. (위험도 +15, 정수 +250)',
+            description: '마석 제단을 강제로 깨뜨려 정수를 탈취합니다. (위험도 +15, 그림자 정수 +250)',
             riskDelta: 15,
             immediateReward: { essence: 250, xp: 0, gold: 0, items: [] }
           }

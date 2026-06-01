@@ -374,8 +374,8 @@ export function FocusSessionOverlay() {
                   <div className="flex items-center gap-2 text-emerald-300/90">
                     <Sparkles className="w-4 h-4 text-emerald-400" />
                     <div>
-                      <div className="text-[9px] text-white/40">마도 정수</div>
-                      <div className="font-bold text-sm">+{showResultRecord.rewards?.essence ?? 0} Essence</div>
+                      <div className="text-[9px] text-white/40">그림자 정수</div>
+                      <div className="font-bold text-sm">+{showResultRecord.rewards?.essence ?? 0} 그림자 정수</div>
                     </div>
                   </div>
 

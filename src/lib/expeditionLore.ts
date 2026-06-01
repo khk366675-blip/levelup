@@ -330,7 +330,7 @@ export const MID_EVENTS: ExpeditionMidEvent[] = [
     type: 'essence',
     phase: 'threshold',
     title: '누군가의 이름',
-    description: '정수 회수 중 그림자 하나가 부르지 않은 이름에 반응했다.',
+    description: '그림자 정수 회수 중 그림자 하나가 부르지 않은 이름에 반응했다.',
     recentCooldown: 4,
     choices: [
       {

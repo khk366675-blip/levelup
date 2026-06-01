@@ -1188,7 +1188,7 @@ export const SHADOW_LEGION_NODES: ShadowLegionNode[] = [
   },
   {
     id: 'node_essence',
-    name: '정수 회수',
+    name: '그림자 정수 회수',
     description: '그림자 정수 추가 획득 확률 +3% (최대 10레벨)',
     maxLevel: 10,
     costBase: 60,

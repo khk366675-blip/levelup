@@ -2174,7 +2174,7 @@ const createGateBattleOutcomeUpdate = (
             title: `인카운터 클리어 (${run.currentEncounterIndex}/${run.encounters.length})`,
             lines: [
               `[${currentEncounter.title}] 정복 완료.`,
-              `부분 보상 누적: XP +${partialXP}, 골드 +${partialGold}, 마력 정수 +${partialEssence}`,
+              `부분 보상 누적: XP +${partialXP}, 골드 +${partialGold}, 그림자 정수 +${partialEssence}`,
             ],
             createdAt: todayISO(),
           }
@@ -2242,7 +2242,7 @@ const createGateBattleOutcomeUpdate = (
           `게이트 던전 런 [${gate.name}] 완벽 공략 성공!`,
           `총 획득 XP: +${finalXP}`,
           `총 획득 골드: +${finalGold}`,
-          `총 획득 마력 정수: +${finalEssence}`,
+          `총 획득 그림자 정수: +${finalEssence}`,
           ...run.accumulatedRewards.items.map(r => `전리품: [${r.itemName}]`),
         ]
 
@@ -2361,7 +2361,7 @@ const createGateBattleOutcomeUpdate = (
           ]
         : [
             `[${gate.name}] 던전 런 중 [${currentEncounter.title}]에서 패배했습니다.`,
-            `누적 획득 골드: +${earnedGold}, 정수: +${earnedEssence}`,
+            `누적 획득 골드: +${earnedGold}, 그림자 정수: +${earnedEssence}`,
             redGateShardBonus ? '레드 게이트 잔향 조각(네임드 조각) 획득: +1' : '',
             `스태미나 -${finalStaminaCost}`,
             `부상을 입었습니다. 6시간 경과 또는 퀘스트 3개 완료 시 회복됩니다.`,
@@ -6153,7 +6153,7 @@ export const useGame = create<GameState>()(
             id: uid(),
             kind: 'shadow',
             title: '그림자 붕괴',
-            lines: collapsed.map(shadow => `${shadow.name}: 복원 비용 정수 ${shadow.restoreCost}`),
+            lines: collapsed.map(shadow => `${shadow.name}: 복원 비용 그림자 정수 ${shadow.restoreCost}`),
             createdAt: todayISO(),
           })
         }
@@ -6903,7 +6903,7 @@ export const useGame = create<GameState>()(
               const riskDelta = daysRemaining !== undefined && daysRemaining <= 2 ? 0.02 : 0.04
               run.nextCombatDifficultyDelta = Math.max(-0.15, Math.min(0.15, (run.nextCombatDifficultyDelta ?? 0) + riskDelta))
 
-              outcomeText = `위험 지대의 고립 대원을 구출하여 물자를 입수했습니다. 다음 전투 위험도가 미세하게 증가하지만 자원을 추가 획득합니다. (골드 +${goldBonus}, 정수 +${essenceBonus})`
+              outcomeText = `위험 지대의 고립 대원을 구출하여 물자를 입수했습니다. 다음 전투 위험도가 미세하게 증가하지만 자원을 추가 획득합니다. (골드 +${goldBonus}, 그림자 정수 +${essenceBonus})`
               break
             }
             case 'analyze': {
@@ -7064,7 +7064,7 @@ export const useGame = create<GameState>()(
         if (choice.immediateReward) {
           const rew = choice.immediateReward
           if (rew.gold) lines.push(`골드 획득: +${rew.gold}`)
-          if (rew.essence) lines.push(`마력 정수 획득: +${rew.essence}`)
+          if (rew.essence) lines.push(`그림자 정수 획득: +${rew.essence}`)
         }
         if (run.lastEventOutcomeText) {
           lines.push(run.lastEventOutcomeText)
@@ -7162,7 +7162,7 @@ export const useGame = create<GameState>()(
             id: uid(),
             kind: 'quest',
             title: '보물 상자 개봉',
-            lines: [`보물을 안전하게 회수했습니다.`, `골드 +${goldAmt}, 마력 정수 +${essAmt} 누적`],
+            lines: [`보물을 안전하게 회수했습니다.`, `골드 +${goldAmt}, 그림자 정수 +${essAmt} 누적`],
             createdAt: todayISO(),
           }]
         }))
@@ -7349,7 +7349,7 @@ export const useGame = create<GameState>()(
                 ]
               : [
                   `던전 탐사를 도중에 철수했습니다.`,
-                  `누적 획득 보상 정산 지급: 골드 +${earnedGold}, 마력 정수 +${earnedEssence}`
+                  `누적 획득 보상 정산 지급: 골드 +${earnedGold}, 그림자 정수 +${earnedEssence}`
                 ],
             createdAt: todayISO(),
           }]
@@ -7869,7 +7869,7 @@ export const useGame = create<GameState>()(
               '상위 전투 기록을 갱신했습니다.',
               ...(rewards.hunterXp ? [`XP +${rewards.hunterXp}`] : []),
               ...(rewards.gold ? [`Gold +${rewards.gold}`] : []),
-              ...(rewards.shadowEssence ? [`정수 +${rewards.shadowEssence}`] : []),
+              ...(rewards.shadowEssence ? [`그림자 정수 +${rewards.shadowEssence}`] : []),
               ...(rewards.boxType ? ['보스 박스 획득'] : []),
             ],
             createdAt: todayISO(),
@@ -8322,7 +8322,7 @@ export const useGame = create<GameState>()(
                 : `[${gate.name}] 균열 정화에 성공했습니다!`,
               `XP +${finalXp}`,
               `Gold +${finalGold}`,
-              `정수 +${finalEssence}`,
+              `그림자 정수 +${finalEssence}`,
               ...(droppedItemName ? [`획득 장비: ${droppedItemName}`] : []),
             ],
             createdAt: todayISO(),
@@ -9241,7 +9241,7 @@ export const useGame = create<GameState>()(
             messages: [...s.messages, {
               id: uid(),
               kind: 'shadow' as const,
-              title: '정수 부족',
+              title: '그림자 정수 부족',
               lines: ['그림자 정수가 부족합니다.'],
               createdAt: todayISO(),
             }],
@@ -9266,7 +9266,7 @@ export const useGame = create<GameState>()(
             title: '집중 훈련',
             lines: [
               `[${option.name}] ${shadow.name}에게 XP +${option.xpGain} 지급${levelUpLine}.`,
-              `소모된 그림자 정수: ${cost}개 (보유 정수: ${currentEssence - cost}개)`,
+              `소모된 그림자 정수: ${cost}개 (보유 그림자 정수: ${currentEssence - cost}개)`,
             ],
             createdAt: todayISO(),
           }],
@@ -9303,7 +9303,7 @@ export const useGame = create<GameState>()(
             title: '소환권 구매 완료',
             lines: [
               `그림자 정수 ${cost}개를 소모해 일반 그림자 소환권을 1장 구매했습니다.`,
-              `(보유 정수: ${currentEssence - cost}개)`,
+              `(보유 그림자 정수: ${currentEssence - cost}개)`,
             ],
             createdAt: todayISO(),
           }],
@@ -9342,7 +9342,7 @@ export const useGame = create<GameState>()(
             title: '촉매 구매 완료',
             lines: [
               `그림자 정수 ${cost}개를 소모해 그림자 추출 보조 촉매를 1개 구매했습니다.`,
-              `(보유 정수: ${currentEssence - cost}개)`,
+              `(보유 그림자 정수: ${currentEssence - cost}개)`,
             ],
             createdAt: todayISO(),
           }],
@@ -9382,7 +9382,7 @@ export const useGame = create<GameState>()(
             messages: [...s.messages, {
               id: uid(),
               kind: 'shadow' as const,
-              title: '정수 부족',
+              title: '그림자 정수 부족',
               lines: ['연구를 수행하기 위한 그림자 정수가 부족합니다.'],
               createdAt: todayISO(),
             }],
@@ -9427,11 +9427,11 @@ export const useGame = create<GameState>()(
             lines: success
               ? [
                   `[재각성 성공] ${shadow.name}의 태생 등급이 ${currentGrade}에서 ${nextGrade}(으)로 상승했습니다!`,
-                  `소모된 그림자 정수: ${cost}개 (보유 정수: ${currentEssence - cost}개)`,
+                  `소모된 그림자 정수: ${cost}개 (보유 그림자 정수: ${currentEssence - cost}개)`,
                 ]
               : [
                   `[재각성 실패] ${shadow.name}의 태생 등급 재각성에 실패했습니다. 등급이 ${currentGrade}로 보존됩니다.`,
-                  `소모된 그림자 정수: ${cost}개 (보유 정수: ${currentEssence - cost}개)`,
+                  `소모된 그림자 정수: ${cost}개 (보유 그림자 정수: ${currentEssence - cost}개)`,
                 ],
             createdAt: todayISO(),
           }],
@@ -9466,7 +9466,7 @@ export const useGame = create<GameState>()(
             messages: [...s.messages, {
               id: uid(),
               kind: 'shadow' as const,
-              title: '정수 부족',
+              title: '그림자 정수 부족',
               lines: ['특성 재굴림을 수행하기 위한 그림자 정수가 부족합니다.'],
               createdAt: todayISO(),
             }]
@@ -9495,7 +9495,7 @@ export const useGame = create<GameState>()(
             lines: [
               `[특성 성공] ${shadow.name}의 ${slotIndex + 1}번째 슬롯에 [${newTrait.name}] 특성이 부여되었습니다!`,
               `효과: ${newTrait.description}`,
-              `소모된 그림자 정수: ${cost}개 (보유 정수: ${currentEssence - cost}개)`,
+              `소모된 그림자 정수: ${cost}개 (보유 그림자 정수: ${currentEssence - cost}개)`,
             ],
             createdAt: todayISO(),
           }]
@@ -9547,7 +9547,7 @@ export const useGame = create<GameState>()(
             messages: [...s.messages, {
               id: uid(),
               kind: 'shadow' as const,
-              title: '정수 부족',
+              title: '그림자 정수 부족',
               lines: ['슬롯 개방을 위한 그림자 정수가 부족합니다.'],
               createdAt: todayISO(),
             }]
@@ -9572,7 +9572,7 @@ export const useGame = create<GameState>()(
             title: slotType === 'skill' ? '스킬 슬롯 개방 완료' : '패시브 슬롯 개방 완료',
             lines: [
               `${shadow.name}의 ${slotType === 'skill' ? '액티브 스킬' : '패시브'} 슬롯이 추가로 개방되었습니다!`,
-              `소모된 그림자 정수: ${cost}개 (보유 정수: ${currentEssence - cost}개)`,
+              `소모된 그림자 정수: ${cost}개 (보유 그림자 정수: ${currentEssence - cost}개)`,
             ],
             createdAt: todayISO(),
           }]
@@ -9639,7 +9639,7 @@ export const useGame = create<GameState>()(
             messages: [...s.messages, {
               id: uid(),
               kind: 'info' as const,
-              title: '정수 부족',
+              title: '그림자 정수 부족',
               lines: ['군단 연구 강화를 위한 그림자 정수가 부족합니다.'],
               createdAt: todayISO(),
             }]
@@ -9657,7 +9657,7 @@ export const useGame = create<GameState>()(
             title: '군단 연구 강화 완료',
             lines: [
               `[연구 완료] ${nodeDef.name} 연구가 Lv.${currentLevel + 1}으로 강화되었습니다!`,
-              `소모된 그림자 정수: ${cost}개 (보유 정수: ${currentEssence - cost}개)`,
+              `소모된 그림자 정수: ${cost}개 (보유 그림자 정수: ${currentEssence - cost}개)`,
             ],
             createdAt: todayISO(),
           }]
@@ -9695,7 +9695,7 @@ export const useGame = create<GameState>()(
             messages: [...s.messages, {
               id: uid(),
               kind: 'info' as const,
-              title: '정수 부족',
+              title: '그림자 정수 부족',
               lines: ['재료 합성을 위한 그림자 정수가 부족합니다.'],
               createdAt: todayISO(),
             }]
@@ -9722,7 +9722,7 @@ export const useGame = create<GameState>()(
             lines: [
               `[합성 성공] 그림자 정수 ${cost}개를 소모해 [${name}]을(를) 합성했습니다.`,
               `설명: ${desc}`,
-              `(보유 정수: ${currentEssence - cost}개)`,
+              `(보유 그림자 정수: ${currentEssence - cost}개)`,
             ],
             createdAt: todayISO(),
           }]
@@ -10102,7 +10102,7 @@ export const useGame = create<GameState>()(
               '상위 전투 기록을 갱신했습니다.',
               ...(rewards.hunterXp ? [`XP +${rewards.hunterXp}`] : []),
               ...(rewards.gold ? [`Gold +${rewards.gold}`] : []),
-              ...(rewards.shadowEssence ? [`정수 +${rewards.shadowEssence}`] : []),
+              ...(rewards.shadowEssence ? [`그림자 정수 +${rewards.shadowEssence}`] : []),
               ...(rewards.boxType ? ['보스 박스 획득'] : []),
             ],
             createdAt: todayISO(),
@@ -10677,7 +10677,7 @@ export const useGame = create<GameState>()(
                 '상위 전투 기록을 갱신했습니다.',
                 ...(rewards.hunterXp ? [`XP +${rewards.hunterXp}`] : []),
                 ...(rewards.gold ? [`Gold +${rewards.gold}`] : []),
-                ...(rewards.shadowEssence ? [`정수 +${rewards.shadowEssence}`] : []),
+                ...(rewards.shadowEssence ? [`그림자 정수 +${rewards.shadowEssence}`] : []),
                 ...(rewards.boxType ? ['보스 박스 획득'] : []),
               ],
               createdAt: todayISO(),
@@ -12996,7 +12996,7 @@ export const useGame = create<GameState>()(
               lines: [
                 `성공적으로 게이트 심층 잠입을 완수했습니다.`,
                 `집중 시간: ${Math.floor(finalFocusedMs / 60000)}분`,
-                `획득 보상: 마도 정수 +${rewards.essence}, 골드 +${rewards.gold}${fragmentRewardText}`,
+                `획득 보상: 그림자 정수 +${rewards.essence}, 골드 +${rewards.gold}${fragmentRewardText}`,
                 rewards.extractionBonus ? `[추출 공명] 해당 게이트의 그림자 추출 성공률이 추가로 +${Math.round(rewards.extractionBonus * 100)}% 상승합니다.` : '',
                 `협회 평가 기록에 반영될 집중 기록이 저장되었습니다.`
               ].filter(Boolean),
@@ -13112,14 +13112,14 @@ export const useGame = create<GameState>()(
           msgLines = [
             `사용자가 수동으로 집중 타이머를 중단했습니다.`,
             `집중 시간: ${Math.floor(finalFocusedMs / 60000)}분 (누적 이탈: ${Math.floor((active.totalInterruptedMs ?? 0) / 1000)}초)`,
-            `완주 성공 시에만 골드와 마도 정수를 획득할 수 있습니다. 확보된 성장 보상은 없지만, 다시 시작할 수 있습니다.`
+            `완주 성공 시에만 골드와 그림자 정수를 획득할 수 있습니다. 확보된 성장 보상은 없지만, 다시 시작할 수 있습니다.`
           ]
         } else if (actualReason === 'interruption_limit_exceeded') {
           msgTitle = '집중 유지 실패'
           msgLines = [
             `허용 이탈 시간을 초과하여 집중 세션이 실패 처리되었습니다.`,
             `집중 시간: ${Math.floor(finalFocusedMs / 60000)}분 (누적 이탈: ${Math.floor((active.totalInterruptedMs ?? 0) / 1000)}초 / 허용: ${Math.floor((active.allowedInterruptionMs ?? 60000) / 1000)}초)`,
-            `완주 성공 시에만 골드와 마도 정수를 획득할 수 있습니다. 확보된 성장 보상은 없지만, 다시 시작할 수 있습니다.`,
+            `완주 성공 시에만 골드와 그림자 정수를 획득할 수 있습니다. 확보된 성장 보상은 없지만, 다시 시작할 수 있습니다.`,
             rewards.instabilityAdded ? `[게이트 상태 동요] 이탈 허용 초과로 인해 게이트 내부 불안정성이 +${rewards.instabilityAdded}만큼 누적되었습니다.` : ''
           ]
         } else if (actualReason === 'refresh_guard') {

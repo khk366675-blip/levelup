@@ -2758,8 +2758,8 @@ export function WorldMapPanel() {
                                       <span className="font-bold text-amber-300">+{loveCallState.promisedReward.gold} G</span>
                                     </div>
                                     <div className="flex justify-between text-white/75">
-                                      <span>어둠의 정수</span>
-                                      <span className="font-bold text-purple-300">+{loveCallState.promisedReward.shadowEssence} 정수</span>
+                                      <span>그림자 정수</span>
+                                      <span className="font-bold text-purple-300">+{loveCallState.promisedReward.shadowEssence} 그림자 정수</span>
                                     </div>
                                   </div>
 

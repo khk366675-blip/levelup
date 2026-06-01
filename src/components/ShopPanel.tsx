@@ -29,7 +29,7 @@ import { TicketVisual } from './TicketVisual'
 const CATEGORY_LABEL: Record<ShopProductCategory, string> = {
   shadow_summon: 'SHADOW SUMMON',
   equipment_draw: 'EQUIPMENT DRAW',
-  essence: 'ESSENCE',
+  essence: '그림자 정수',
   shard: 'SHARD',
   relic: 'RELIC',
   premium: 'PREMIUM',
@@ -59,7 +59,7 @@ function visualIcon(visual: TicketVisualMeta) {
 
 function getDisabledReason(product: ShopProduct, gold: number, shadowEssence: number) {
   if (gold < product.priceGold) return 'Gold 부족'
-  if (shadowEssence < (product.priceEssence ?? 0)) return '정수 부족'
+  if (shadowEssence < (product.priceEssence ?? 0)) return '그림자 정수 부족'
   return '구매 가능'
 }
 
@@ -110,7 +110,7 @@ export function ShopPanel() {
     const quantity = getPurchaseQuantity(product)
     const totalGoldCost = product.priceGold * quantity
     const totalEssenceCost = (product.priceEssence ?? 0) * quantity
-    const cost = `${totalGoldCost.toLocaleString()} Gold${totalEssenceCost ? ` + 정수 ${totalEssenceCost}` : ''}`
+    const cost = `${totalGoldCost.toLocaleString()} Gold${totalEssenceCost ? ` + 그림자 정수 ${totalEssenceCost}` : ''}`
     if (!window.confirm(`${product.name} x${quantity}개를 구매할까요?\n${cost}`)) return
     const before = useGame.getState()
     const beforeItemIds = new Set(before.items.map(item => item.id))
@@ -138,7 +138,7 @@ export function ShopPanel() {
     { id: 'summon', label: '소환' },
     { id: 'equipment', label: '장비권' },
     { id: 'shard', label: '그림자 조각' },
-    { id: 'essence', label: '정수/교환' },
+    { id: 'essence', label: '그림자 정수/교환' },
     { id: 'premium', label: '프리미엄' },
     { id: 'purchasable', label: '구매 가능' },
   ] as const
@@ -170,7 +170,7 @@ export function ShopPanel() {
               </div>
             </div>
             <div className="rounded-md border border-purple-300/20 bg-purple-400/10 px-3.5 py-1.5 min-w-[130px]">
-              <div className="system-text text-[9px] text-purple-200/65 font-bold">보유 ESSENCE</div>
+              <div className="system-text text-[9px] text-purple-200/65 font-bold">보유 그림자 정수</div>
               <div className="mt-0.5 flex items-center gap-1.5 text-base font-black tabular-nums text-purple-100">
                 <Gem className="h-4 w-4 text-purple-400" />
                 {shadowEssence.toLocaleString()}
@@ -319,7 +319,7 @@ export function ShopPanel() {
                   <div>
                     {isExchange ? (
                       <div className="mb-3.5 grid grid-cols-3 gap-1 px-2.5 py-1.5 rounded-lg border border-slate-500/10 bg-black/40 text-center system-text text-[9.5px] font-bold text-white/50">
-                        <span className="text-purple-300">정수 {product.priceEssence ?? 0}개</span>
+                        <span className="text-purple-300">그림자 정수 {product.priceEssence ?? 0}개</span>
                         <span className="grid place-items-center text-emerald-300 font-black">
                           <ArrowRight className="h-3 w-3" />
                         </span>
@@ -336,7 +336,7 @@ export function ShopPanel() {
                               <>
                                 <span className="text-white/20 text-xs px-0.5">+</span>
                                 <Gem className="h-3.5 w-3.5 text-purple-400" />
-                                <span className="text-xs font-black text-purple-200">{product.priceEssence} 정수</span>
+                                <span className="text-xs font-black text-purple-200">{product.priceEssence} 그림자 정수</span>
                               </>
                             ) : null}
                           </div>

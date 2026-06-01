@@ -35,7 +35,7 @@ export const SHADOW_EXPEDITION_PARTY_MAX = 5
 
 export const SHADOW_EXPEDITION_TYPE_LABEL: Record<ShadowExpeditionType, string> = {
   training: '수련 원정',
-  essence: '정수 회수',
+  essence: '그림자 정수 회수',
   hunt: '잔재 사냥',
   scout: '균열 정찰',
 }
@@ -525,7 +525,7 @@ export const getShadowExpeditionReward = (
 ): ShadowExpeditionResult => {
   const base = REWARDS[type][outcome]
   const searchBonus = outcome === 'failure' ? 0 : Math.min(3, Math.max(0, searchStacks))
-  const bonusRewards = searchBonus > 0 ? [`수색 보너스 정수 +${searchBonus}`] : undefined
+  const bonusRewards = searchBonus > 0 ? [`수색 보너스 그림자 정수 +${searchBonus}`] : undefined
   return {
     outcome,
     progress: 0,
@@ -784,7 +784,7 @@ export const resolveShadowExpeditionCommand = (
     id: idFactory(),
     turn: nextTurn,
     type: 'system',
-    message: `원정 ${SHADOW_EXPEDITION_OUTCOME_LABEL[outcome]}. 그림자들이 경험치 ${result.shadowXpGained}와 정수 ${result.essenceGained}을 회수했다.`,
+    message: `원정 ${SHADOW_EXPEDITION_OUTCOME_LABEL[outcome]}. 그림자들이 경험치 ${result.shadowXpGained}와 그림자 정수 ${result.essenceGained}을 회수했다.`,
   })
 
   return {

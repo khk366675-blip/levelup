@@ -71,7 +71,7 @@ export function FocusSessionPanel() {
           </div>
           <p className="text-xs text-white/60 leading-relaxed">
             현실에서 공부나 업무에 집중하는 동안 집중 이력이 측정되고, 완료 시 보상이 정식 지급됩니다.<br />
-            <span className="text-emerald-300 font-bold">완주 성공 시에만 골드와 마도 정수가 지급</span>되며, 누적 이탈 시간이 허용치를 초과하면 실패 처리됩니다.
+            <span className="text-emerald-300 font-bold">완주 성공 시에만 골드와 그림자 정수가 지급</span>되며, 누적 이탈 시간이 허용치를 초과하면 실패 처리됩니다.
           </p>
         </div>
 

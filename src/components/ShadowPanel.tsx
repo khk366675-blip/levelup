@@ -238,6 +238,8 @@ function ShadowDetailPanel({
   equipped: boolean
   shadowEssence: number
 }) {
+  const [detailsOpen, setDetailsOpen] = useState(false)
+
   if (!shadow) {
     return (
       <div className="panel corner-bracket p-5 border-white/10 bg-ink-950/70">
@@ -259,6 +261,11 @@ function ShadowDetailPanel({
   const effects = getShadowEffects(shadow).map(formatShadowEffect)
   const combatProfile = getShadowCombatProfile(shadow)
   const unitProfile = getShadowCombatUnitProfile(shadow)
+  const summaryItems = [
+    { label: 'SCP', value: combatProfile.totalPower.toLocaleString() },
+    { label: 'Lv', value: `${level}/${maxLevel}` },
+    { label: 'Role', value: SHADOW_ROLE_LABEL[shadow.role] },
+  ]
   const breakdownItems = [
     { label: '지원', value: combatProfile.assistPower },
     { label: '수호', value: combatProfile.guardPower },
@@ -282,6 +289,39 @@ function ShadowDetailPanel({
       </div>
 
       <ShadowPortrait shadow={shadow} size="xl" active={equipped} highlighted innateGrade={shadow.innateGrade} evolutionReady={evolutionCheck.canEvolve} />
+
+      <div className="mt-3 grid grid-cols-3 gap-2 text-[10px]">
+        {summaryItems.map(item => (
+          <div key={item.label} className="min-w-0 rounded border border-white/10 bg-ink-900/55 px-2 py-1.5">
+            <div className="system-text text-[8px] text-white/35">{item.label}</div>
+            <div className="truncate font-semibold text-white/85">{item.value}</div>
+          </div>
+        ))}
+      </div>
+
+      <div className="mt-2 flex flex-wrap gap-1.5 text-[10px] system-text">
+        <span className={`rounded border px-2 py-1 ${equipped ? 'border-cyan-300/35 bg-cyan-300/10 text-cyan-100' : 'border-white/10 bg-white/5 text-white/45'}`}>
+          {equipped ? '출전 중' : '미출전'}
+        </span>
+        <span className={`rounded border px-2 py-1 ${evolutionCheck.canEvolve ? 'border-emerald-300/35 bg-emerald-300/10 text-emerald-100' : 'border-white/10 bg-white/5 text-white/45'}`}>
+          {evolutionCheck.canEvolve ? '진화 가능' : '진화 대기'}
+        </span>
+        {(shadow.enhancementLevel ?? 0) > 0 && (
+          <span className="rounded border border-amber-300/35 bg-amber-300/10 px-2 py-1 text-amber-100">+{shadow.enhancementLevel}</span>
+        )}
+      </div>
+
+      <button
+        type="button"
+        onClick={() => setDetailsOpen(open => !open)}
+        className="mt-3 flex w-full items-center justify-between rounded border border-white/10 bg-ink-900/55 px-3 py-2 text-[10px] font-bold text-white/60 transition hover:border-cyan-300/30 hover:text-cyan-100"
+      >
+        <span>{detailsOpen ? '상세 정보 접기' : '상세 정보 펼치기'}</span>
+        {detailsOpen ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+      </button>
+
+      {detailsOpen && (
+        <div className="mt-3 border-t border-white/10 pt-3">
 
       <div className="mt-4 grid grid-cols-2 gap-2 text-[11px]">
         <div className="rounded border border-white/10 bg-ink-900/55 px-3 py-2">
@@ -490,6 +530,8 @@ function ShadowDetailPanel({
       <div className="mt-2 text-[10px] text-white/35 system-text">
         {displaySourceLabel(shadow)} · 강화 {shadow.enhancementLevel ?? 0}/{MAX_SHADOW_ENHANCEMENT_LEVEL} · 흡수 {shadow.absorbedCount ?? 0}회
       </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -606,7 +648,7 @@ function ShadowCard({
       )}
       {evolutionCheck.targetDefinition && (
         <div className="mt-1 text-[10px] text-white/40">
-          진화: {shadow.name} → {evolutionCheck.targetDefinition.name} ({evolutionCheck.cost} 정수)
+          진화: {shadow.name} → {evolutionCheck.targetDefinition.name} ({evolutionCheck.cost} 그림자 정수)
           {!evolutionCheck.canEvolve && evolutionCheck.reason && (
             <span className="text-white/30 ml-1">· {evolutionCheck.reason}</span>
           )}
@@ -639,7 +681,7 @@ function ShadowCard({
             onClick={onDecompose}
             disabled={equipped || shadow.isAchievementNamed || shadow.isLocked}
             className="flex-1 btn text-[10px] border-rose-400/25 bg-rose-400/10 text-rose-100 disabled:opacity-40 disabled:cursor-not-allowed"
-            title={shadow.isAchievementNamed ? '성취 네임드는 분해 불가' : shadow.isLocked ? '잠금 중: 분해 불가' : equipped ? '장착 중' : `정수 +${SHADOW_DECOMPOSE_ESSENCE[shadow.rarity] ?? 1}`}
+            title={shadow.isAchievementNamed ? '성취 네임드는 분해 불가' : shadow.isLocked ? '잠금 중: 분해 불가' : equipped ? '장착 중' : `그림자 정수 +${SHADOW_DECOMPOSE_ESSENCE[shadow.rarity] ?? 1}`}
           >
             분해 (+{SHADOW_DECOMPOSE_ESSENCE[shadow.rarity] ?? 1})
           </button>
@@ -1381,7 +1423,7 @@ export function ShadowPanel() {
           
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 w-full lg:w-auto lg:min-w-[720px] text-xs">
             <div className="rounded-md border border-cyan-400/20 bg-cyan-400/8 px-3 py-1.5 shadow-sm">
-              <div className="system-text text-[8px] text-cyan-200/50 uppercase tracking-wider font-bold">Essence</div>
+              <div className="system-text text-[8px] text-cyan-200/50 uppercase tracking-wider font-bold">그림자 정수</div>
               <div className="text-sm font-black text-cyan-100 tabular-nums">{shadowEssence.toLocaleString()}</div>
             </div>
             <div className="rounded-md border border-purple-400/20 bg-purple-400/8 px-3 py-1.5 shadow-sm">
@@ -1461,6 +1503,7 @@ export function ShadowPanel() {
             )}
           </div>
           <ShadowDetailPanel
+            key={selectedShadow?.instanceId ?? 'empty-shadow-detail'}
             shadow={selectedShadow}
             equipped={selectedShadow ? equippedShadowIds.includes(selectedShadow.instanceId) : false}
             shadowEssence={shadowEssence}
@@ -1651,7 +1694,7 @@ export function ShadowPanel() {
           </div>
           <div className="flex items-center gap-3">
             <span className="text-xs rounded border border-purple-400/20 bg-purple-400/10 px-2.5 py-1 text-purple-200">
-              보유 정수: {shadowEssence}
+              보유 그림자 정수: {shadowEssence}
             </span>
             {labOpen ? <ChevronUp className="w-4 h-4 text-white/40" /> : <ChevronDown className="w-4 h-4 text-white/40" />}
           </div>
@@ -1733,7 +1776,7 @@ export function ShadowPanel() {
               <div className="rounded-lg border border-purple-400/15 bg-purple-400/5 p-3">
                 <div className="mb-3 flex items-center gap-2">
                   <Gem className="h-4 w-4 text-purple-300" />
-                  <div className="system-text text-[11px] text-purple-100/75">정수 상점</div>
+                  <div className="system-text text-[11px] text-purple-100/75">그림자 정수 상점</div>
                   <div className="h-px flex-1 bg-gradient-to-r from-purple-300/25 to-transparent" />
                 </div>
 
@@ -1749,7 +1792,7 @@ export function ShadowPanel() {
                     </div>
                     <div className="flex items-center gap-2">
                       <span className={`system-text text-[10px] ${shadowEssence >= 60 ? 'text-purple-200' : 'text-rose-400 font-bold'}`}>
-                        정수 60개
+                        그림자 정수 60개
                       </span>
                       <button
                         type="button"
@@ -1773,7 +1816,7 @@ export function ShadowPanel() {
                     </div>
                     <div className="flex items-center gap-2">
                       <span className={`system-text text-[10px] ${shadowEssence >= 30 ? 'text-purple-200' : 'text-rose-400 font-bold'}`}>
-                        정수 30개
+                        그림자 정수 30개
                       </span>
                       <button
                         type="button"
@@ -1789,11 +1832,11 @@ export function ShadowPanel() {
               </div>
             </div>
 
-            {/* 고급 정수 연구소 */}
+            {/* 고급 그림자 정수 연구소 */}
             <div className="rounded-lg border border-purple-500/20 bg-purple-500/5 p-3">
               <div className="mb-3 flex items-center gap-2">
                 <Sparkles className="h-4 w-4 text-purple-300" />
-                <div className="system-text text-[11px] text-purple-100/75">고급 정수 연구소</div>
+                <div className="system-text text-[11px] text-purple-100/75">고급 그림자 정수 연구소</div>
                 <div className="h-px flex-1 bg-gradient-to-r from-purple-500/20 to-transparent" />
               </div>
 
@@ -1842,7 +1885,7 @@ export function ShadowPanel() {
                         </div>
                         <div className="mt-3 flex items-center justify-between border-t border-white/5 pt-2">
                           <span className={`system-text text-[10px] ${shadowEssence >= 100 ? 'text-purple-200' : 'text-rose-400 font-bold'}`}>
-                            정수 100개
+                            그림자 정수 100개
                           </span>
                           <button
                             type="button"
@@ -1913,7 +1956,7 @@ export function ShadowPanel() {
                                       type="button"
                                       disabled={shadowEssence < cost}
                                       onClick={() => {
-                                        if (window.confirm(`[${selectedShadow.name}]의 ${idx + 1}번째 특성을 재굴림(혹은 신규 부여)하시겠습니까?\n소모 정수: ${cost}`)) {
+                                        if (window.confirm(`[${selectedShadow.name}]의 ${idx + 1}번째 특성을 재굴림(혹은 신규 부여)하시겠습니까?\n소모 그림자 정수: ${cost}`)) {
                                           handleRerollTrait(selectedShadow.instanceId, idx, cost)
                                         }
                                       }}
@@ -2094,7 +2137,7 @@ export function ShadowPanel() {
                               onClick={() => upgradeLegionNode(node.id)}
                               className="btn btn-secondary py-0.5 px-2 text-[9px] shrink-0"
                             >
-                              {isMax ? 'MAX' : `${cost}정수`}
+                              {isMax ? 'MAX' : `${cost} 그림자 정수`}
                             </button>
                           </div>
                         )
@@ -2131,7 +2174,7 @@ export function ShadowPanel() {
                               type="button"
                               disabled={shadowEssence < mat.cost}
                               onClick={() => {
-                                if (window.confirm(`[${mat.name}]을 합성하시겠습니까?\n소모 정수: ${mat.cost}개`)) {
+                                if (window.confirm(`[${mat.name}]을 합성하시겠습니까?\n소모 그림자 정수: ${mat.cost}개`)) {
                                   craftHiddenEvolutionMaterial(mat.id)
                                 }
                               }}

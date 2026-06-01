@@ -217,7 +217,7 @@ export function ChallengeCardsPanel() {
         <div className="flex flex-wrap gap-2">
           <span className="rounded-md border border-cyan-400/25 bg-cyan-400/8 px-2 py-0.5 text-cyan-200 font-bold">XP +{draftReward.hunterXp}</span>
           <span className="rounded-md border border-amber-400/25 bg-amber-400/8 px-2 py-0.5 text-amber-200 font-bold">Gold +{draftReward.gold}</span>
-          <span className="rounded-md border border-emerald-400/25 bg-emerald-400/8 px-2 py-0.5 text-emerald-200 font-bold">정수 +{draftReward.shadowEssence}</span>
+          <span className="rounded-md border border-emerald-400/25 bg-emerald-400/8 px-2 py-0.5 text-emerald-200 font-bold">그림자 정수 +{draftReward.shadowEssence}</span>
           <span className="rounded-md border border-amber-400/30 bg-amber-400/12 px-2 py-0.5 text-amber-300 font-bold flex items-center gap-1">
             <Box className="h-3 w-3" /> 박스 강화 +{draftReward.boxUpgradePoints}
           </span>
@@ -330,7 +330,7 @@ export function ChallengeCardsPanel() {
                   <div className="flex flex-wrap gap-x-1.5 gap-y-0.5 text-[9.5px] text-white/60 font-semibold">
                     <span className="text-cyan-200">XP+{card.reward.hunterXp}</span>
                     <span className="text-amber-200">G+{card.reward.gold ?? 0}</span>
-                    <span className="text-purple-200">정수+{card.reward.shadowEssence}</span>
+                    <span className="text-purple-200">그림자 정수 +{card.reward.shadowEssence}</span>
                   </div>
 
                   {/* Box Upgrade points chip */}

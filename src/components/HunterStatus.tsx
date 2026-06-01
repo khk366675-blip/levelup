@@ -449,7 +449,7 @@ export function HunterStatus({ currentTab, onTabChange }: HunterStatusProps) {
           🪙 {gold.toLocaleString()} Gold
         </span>
         <span className="chip border-purple-500/20 text-purple-300 bg-purple-500/5 px-2 py-0.5 text-[10px] rounded">
-          🔮 {shadowEssence.toLocaleString()} 정수
+          🔮 그림자 정수 {shadowEssence.toLocaleString()}
         </span>
         <span className={`chip border-cyan-500/20 ${meta.color} bg-black/40 px-2 py-0.5 text-[10px] rounded`}>
           {meta.icon} {meta.label} ({state.overallReadiness}%)

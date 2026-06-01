@@ -193,7 +193,7 @@ export const TICKET_VISUALS_BY_PRODUCT_ID: Record<string, TicketVisual> = {
   },
   'small-essence-pack': {
     key: 'essence-pack',
-    label: 'ESSENCE PACK',
+    label: '그림자 정수 팩',
     shortDescription: '그림자 정수 소량 보급',
     glyph: 'CORE',
     artKind: 'essence',
