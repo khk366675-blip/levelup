@@ -3439,7 +3439,7 @@ function GateRunPanel({
                       <button
                         key={choice.id}
                         type="button"
-                        onClick={() => !isLocked && chooseGateRunEventChoice(choice.id, activeDetailEnc.id)}
+                        onClick={() => !isLocked && chooseGateRunEventChoice(choice.id, activeDetailEnc.id, activeGate.instanceId)}
                         disabled={isLocked}
                         className={clsx(
                           "text-left p-3.5 border rounded-lg transition-all duration-200 group flex flex-col justify-between",
@@ -3484,7 +3484,7 @@ function GateRunPanel({
                       차원 불안정 현상 감지. 마력 공명을 통해 구역 안정화 후 우회하여 다음으로 통과합니다.
                       <button
                         type="button"
-                        onClick={() => activeDetailCanInteract && chooseGateRunEventChoice('choice_rift_stabilize', activeDetailEnc.id)}
+                        onClick={() => activeDetailCanInteract && chooseGateRunEventChoice('choice_rift_stabilize', activeDetailEnc.id, activeGate.instanceId)}
                         disabled={!activeDetailCanInteract}
                         className="btn btn-secondary text-xs mt-3 block mx-auto disabled:opacity-60 disabled:cursor-not-allowed"
                       >
@@ -3506,7 +3506,7 @@ function GateRunPanel({
                 </p>
                 <button
                   type="button"
-                  onClick={() => activeDetailCanInteract && claimGateRunTreasure()}
+                  onClick={() => activeDetailCanInteract && claimGateRunTreasure(activeGate.instanceId)}
                   disabled={!activeDetailCanInteract}
                   className="btn btn-primary mt-5 px-6 min-h-10 text-xs font-semibold disabled:opacity-60 disabled:cursor-not-allowed"
                 >
@@ -3565,7 +3565,7 @@ function GateRunPanel({
 
                 <button
                   type="button"
-                  onClick={() => activeDetailCanInteract && performGateRunRest(activeRestOption)}
+                  onClick={() => activeDetailCanInteract && performGateRunRest(activeRestOption, activeGate.instanceId)}
                   disabled={!activeDetailCanInteract}
                   className="btn btn-primary w-full min-h-10 text-xs font-semibold disabled:opacity-60 disabled:cursor-not-allowed"
                 >
@@ -3584,7 +3584,7 @@ function GateRunPanel({
                 </p>
                 <button
                   type="button"
-                  onClick={() => activeDetailCanInteract && absorbGateRunShadowTrace()}
+                  onClick={() => activeDetailCanInteract && absorbGateRunShadowTrace(activeGate.instanceId)}
                   disabled={!activeDetailCanInteract}
                   className="btn btn-primary mt-5 px-6 min-h-10 text-xs font-semibold disabled:opacity-60 disabled:cursor-not-allowed"
                 >
@@ -3617,7 +3617,7 @@ function GateRunPanel({
           ) : (
             <button
               type="button"
-              onClick={abandonGateRun}
+              onClick={() => abandonGateRun(activeGate.instanceId)}
               className="btn border border-rose-500/30 bg-rose-500/10 hover:bg-rose-500/25 text-rose-200 min-h-10 px-5 text-xs font-semibold"
             >
               공략 중단 및 탈출 (부분 누적 보상만 들고 퇴각)

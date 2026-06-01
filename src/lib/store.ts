@@ -518,11 +518,11 @@ export interface GameState {
   performManualBattleAction: (action: ManualBattleAction) => void
   cancelManualGateBattle: () => void
   switchManualBattleToAuto: () => void
-  chooseGateRunEventChoice: (choiceId: string, encounterId?: string) => void
-  claimGateRunTreasure: () => void
-  performGateRunRest: (option: 'heal' | 'buff' | 'cooldown') => void
-  absorbGateRunShadowTrace: () => void
-  abandonGateRun: () => void
+  chooseGateRunEventChoice: (choiceId: string, encounterId?: string, gateInstanceId?: string) => void
+  claimGateRunTreasure: (gateInstanceId?: string) => void
+  performGateRunRest: (option: 'heal' | 'buff' | 'cooldown', gateInstanceId?: string) => void
+  absorbGateRunShadowTrace: (gateInstanceId?: string) => void
+  abandonGateRun: (gateInstanceId?: string) => void
   attemptShadowExtraction: (gateInstanceId: string) => void
   equipShadow: (shadowId: string) => void
   unequipShadow: (shadowId: string) => void
@@ -2571,6 +2571,57 @@ type ChallengeProgressEvent = {
   boxOpened?: boolean
   focusCompleted?: boolean
 }
+
+type GateRunTargetKey = 'activeGate' | 'activeWorldGate'
+
+const copyGateRunState = (runState: GateRunState): GateRunState => ({
+  ...runState,
+  encounters: runState.encounters.map(enc => ({
+    ...enc,
+    eventChoices: enc.eventChoices ? enc.eventChoices.map(choice => ({ ...choice })) : enc.eventChoices,
+    treasureReward: enc.treasureReward ? { ...enc.treasureReward } : enc.treasureReward,
+  })),
+  accumulatedRewards: {
+    ...runState.accumulatedRewards,
+    items: [...runState.accumulatedRewards.items],
+  },
+  clearedEncounterIds: [...runState.clearedEncounterIds],
+  modifierIds: [...runState.modifierIds],
+  riskTags: runState.riskTags ? [...runState.riskTags] : runState.riskTags,
+  redGateState: runState.redGateState ? { ...runState.redGateState } : runState.redGateState,
+  pressureSnapshot: runState.pressureSnapshot
+    ? { ...runState.pressureSnapshot, reasonLabels: [...runState.pressureSnapshot.reasonLabels] }
+    : runState.pressureSnapshot,
+})
+
+const getGateRunActionTarget = (
+  s: GameState,
+  gateInstanceId?: string,
+  encounterId?: string,
+): { key: GateRunTargetKey; activeGate: ActiveGate } | undefined => {
+  const candidates: Array<{ key: GateRunTargetKey; activeGate?: ActiveGate }> = [
+    { key: 'activeWorldGate', activeGate: s.activeWorldGate },
+    { key: 'activeGate', activeGate: s.activeGate },
+  ]
+
+  return candidates.find(({ activeGate }) => {
+    if (!activeGate || activeGate.status !== 'active' || !activeGate.runState) return false
+    if (gateInstanceId && activeGate.instanceId !== gateInstanceId) return false
+    if (encounterId) {
+      const currentEncounter = activeGate.runState.encounters[activeGate.runState.currentEncounterIndex]
+      if (currentEncounter?.id !== encounterId) return false
+    }
+    return true
+  }) as { key: GateRunTargetKey; activeGate: ActiveGate } | undefined
+}
+
+const gateRunTargetUpdate = (
+  key: GateRunTargetKey,
+  activeGate: ActiveGate,
+): Partial<Pick<GameState, GateRunTargetKey>> =>
+  key === 'activeWorldGate'
+    ? { activeWorldGate: activeGate }
+    : { activeGate }
 
 const isRetiredTowerChallengeCard = (card: ChallengeCard): boolean =>
   card.category === 'tower' ||
@@ -6699,18 +6750,13 @@ export const useGame = create<GameState>()(
 
       cancelManualGateBattle: () => set({ manualBattleSession: undefined }),
 
-      chooseGateRunEventChoice: (choiceId, encounterId) => {
+      chooseGateRunEventChoice: (choiceId, encounterId, gateInstanceId) => {
         const s = get()
-        const activeGate = s.activeGate
-        if (!activeGate || activeGate.status !== 'active' || !activeGate.runState) return
+        const target = getGateRunActionTarget(s, gateInstanceId, encounterId)
+        if (!target) return
+        const { key: activeGateKey, activeGate } = target
 
-        const run = {
-          ...activeGate.runState,
-          encounters: activeGate.runState.encounters.map(enc => ({
-            ...enc,
-            eventChoices: enc.eventChoices ? [...enc.eventChoices] : enc.eventChoices,
-          })),
-        }
+        const run = copyGateRunState(activeGate.runState!)
         const currentEncounter = run.encounters[run.currentEncounterIndex]
         if (
           !currentEncounter ||
@@ -6974,11 +7020,11 @@ export const useGame = create<GameState>()(
             hunter: xpResult.hunter,
             gold: nextGold,
             shadowEssence: nextEssenceVal,
-            activeGate: {
+            ...gateRunTargetUpdate(activeGateKey, {
               ...activeGate,
               status: 'cleared',
               runState: run
-            }
+            })
           })
           // 12-41B: 게이트 최종 클리어 성공 연계 및 승급 후킹
           get().checkGateClearHooks(activeGate.gateId, true)
@@ -7019,10 +7065,10 @@ export const useGame = create<GameState>()(
         }
 
         set((prev) => ({
-          activeGate: {
-            ...prev.activeGate!,
+          ...gateRunTargetUpdate(activeGateKey, {
+            ...(prev[activeGateKey] ?? activeGate),
             runState: run
-          },
+          }),
           messages: [...prev.messages, {
             id: uid(),
             kind: 'quest',
@@ -7033,12 +7079,13 @@ export const useGame = create<GameState>()(
         }))
       },
 
-      claimGateRunTreasure: () => {
+      claimGateRunTreasure: (gateInstanceId) => {
         const s = get()
-        const activeGate = s.activeGate
-        if (!activeGate || activeGate.status !== 'active' || !activeGate.runState) return
+        const target = getGateRunActionTarget(s, gateInstanceId)
+        if (!target) return
+        const { key: activeGateKey, activeGate } = target
 
-        const run = { ...activeGate.runState }
+        const run = copyGateRunState(activeGate.runState!)
         const currentEncounter = run.encounters[run.currentEncounterIndex]
         if (currentEncounter.type !== 'treasure') return
 
@@ -7065,10 +7112,10 @@ export const useGame = create<GameState>()(
           run.currentEncounterIndex = nextIndex
           run.encounters[nextIndex].status = 'available'
           set({
-            activeGate: {
+            ...gateRunTargetUpdate(activeGateKey, {
               ...activeGate,
               runState: run
-            }
+            })
           })
         } else {
           run.completed = true
@@ -7085,11 +7132,11 @@ export const useGame = create<GameState>()(
             hunter: xpResult.hunter,
             gold: nextGold,
             shadowEssence: nextEssenceVal,
-            activeGate: {
+            ...gateRunTargetUpdate(activeGateKey, {
               ...activeGate,
               status: 'cleared',
               runState: run
-            }
+            })
           })
           // 12-41B: 게이트 최종 클리어 성공 연계 및 승급 후킹
           get().checkGateClearHooks(activeGate.gateId, true)
@@ -7106,12 +7153,13 @@ export const useGame = create<GameState>()(
         }))
       },
 
-      performGateRunRest: (option) => {
+      performGateRunRest: (option, gateInstanceId) => {
         const s = get()
-        const activeGate = s.activeGate
-        if (!activeGate || activeGate.status !== 'active' || !activeGate.runState) return
+        const target = getGateRunActionTarget(s, gateInstanceId)
+        if (!target) return
+        const { key: activeGateKey, activeGate } = target
 
-        const run = { ...activeGate.runState }
+        const run = copyGateRunState(activeGate.runState!)
         const currentEncounter = run.encounters[run.currentEncounterIndex]
         if (currentEncounter.type !== 'rest') return
 
@@ -7130,19 +7178,19 @@ export const useGame = create<GameState>()(
             run.encounters[nextIndex].specialRuleId = 'player_speed_up_1t'
           }
           set({
-            activeGate: {
+            ...gateRunTargetUpdate(activeGateKey, {
               ...activeGate,
               runState: run
-            }
+            })
           })
         } else {
           run.completed = true
           set({
-            activeGate: {
+            ...gateRunTargetUpdate(activeGateKey, {
               ...activeGate,
               status: 'cleared',
               runState: run
-            }
+            })
           })
         }
 
@@ -7162,12 +7210,13 @@ export const useGame = create<GameState>()(
         }))
       },
 
-      absorbGateRunShadowTrace: () => {
+      absorbGateRunShadowTrace: (gateInstanceId) => {
         const s = get()
-        const activeGate = s.activeGate
-        if (!activeGate || activeGate.status !== 'active' || !activeGate.runState) return
+        const target = getGateRunActionTarget(s, gateInstanceId)
+        if (!target) return
+        const { key: activeGateKey, activeGate } = target
 
-        const run = { ...activeGate.runState }
+        const run = copyGateRunState(activeGate.runState!)
         const currentEncounter = run.encounters[run.currentEncounterIndex]
         if (currentEncounter.type !== 'shadow_trace') return
 
@@ -7182,19 +7231,19 @@ export const useGame = create<GameState>()(
           run.currentEncounterIndex = nextIndex
           run.encounters[nextIndex].status = 'available'
           set({
-            activeGate: {
+            ...gateRunTargetUpdate(activeGateKey, {
               ...activeGate,
               runState: run
-            }
+            })
           })
         } else {
           run.completed = true
           set({
-            activeGate: {
+            ...gateRunTargetUpdate(activeGateKey, {
               ...activeGate,
               status: 'cleared',
               runState: run
-            }
+            })
           })
           // 12-41B: 게이트 최종 클리어 성공 연계 및 승급 후킹
           get().checkGateClearHooks(activeGate.gateId, true)
@@ -7211,12 +7260,13 @@ export const useGame = create<GameState>()(
         }))
       },
 
-      abandonGateRun: () => {
+      abandonGateRun: (gateInstanceId) => {
         const s = get()
-        const activeGate = s.activeGate
-        if (!activeGate || !activeGate.runState) return
+        const target = getGateRunActionTarget(s, gateInstanceId)
+        if (!target) return
+        const { key: activeGateKey, activeGate } = target
 
-        const run = { ...activeGate.runState }
+        const run = copyGateRunState(activeGate.runState!)
         run.failed = true
         
         const earnedGold = run.accumulatedRewards.gold
@@ -7240,11 +7290,11 @@ export const useGame = create<GameState>()(
         set({
           gold: nextGold,
           shadowEssence: nextEssenceVal,
-          activeGate: {
+          ...gateRunTargetUpdate(activeGateKey, {
             ...activeGate,
             status: 'failed',
             runState: run
-          },
+          }),
           activeRiftNodeId: undefined,
           hunterGrade: nextHunterGrade,
           messages: [...s.messages, {
