@@ -9,6 +9,8 @@ import { getSkillMotionPreset, type ActorMotionType, type TargetReactionType } f
 import { getHunterBattleSpriteUrl } from '../../lib/hunterBattleSprites'
 import { isMonarchVisualBoss, getMonarchFieldClass } from '../../lib/monarchVisualEffects'
 
+type FormationLane = BattleActorViewModel['boardLane']
+
 type Battlefield2DViewProps = {
   actors: BattleActorViewModel[]
   battleType: 'gate' | 'tower'
@@ -29,27 +31,66 @@ type Battlefield2DViewProps = {
   visualTestJob?: string
 }
 
-// Map lane/team positioning to percentage coordinates
-function getLaneYOuter(team: 'ally' | 'enemy', lane: BattleLane, isCompact: boolean): number {
-  if (isCompact) {
-    if (team === 'ally') {
-      if (lane === 'front') return 56 // Shadows
-      if (lane === 'mid') return 71  // Hunter
-      return 82                      // Backline
-    } else {
-      if (lane === 'front') return 41 // Enemy minions
-      return 26                       // Boss / Enemy back
-    }
-  } else {
-    if (team === 'ally') {
-      if (lane === 'front') return 56 // Shadows
-      if (lane === 'mid') return 69  // Hunter
-      return 80                      // Backline
-    } else {
-      if (lane === 'front') return 43 // Enemy minions
-      return 30                       // Boss / Enemy back
-    }
+const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value))
+
+const normalizeFormationLane = (actor: BattleActorViewModel): FormationLane => {
+  if (actor.boardLane) return actor.boardLane
+  if (actor.kind === 'boss') return 'boss'
+  if (actor.lane === 'back') return 'rear'
+  if (actor.lane === 'mid') return 'anchor'
+  return 'front'
+}
+
+// Map lane/team positioning to percentage coordinates. BattleLane remains a
+// fallback, while boardLane is the read-only formation depth used for display.
+function getLaneYOuter(team: 'ally' | 'enemy', lane: BattleLane, isCompact: boolean, boardLane?: FormationLane): number {
+  const formationLane = boardLane ?? (lane === 'back' ? 'rear' : lane === 'mid' ? 'anchor' : 'front')
+  if (team === 'ally') {
+    if (formationLane === 'rear') return isCompact ? 39 : 38
+    if (formationLane === 'flank') return isCompact ? 53 : 52
+    if (formationLane === 'anchor') return isCompact ? 58 : 57
+    return isCompact ? 64 : 63
   }
+
+  if (formationLane === 'rear' || formationLane === 'boss') return isCompact ? 37 : 36
+  if (formationLane === 'flank') return isCompact ? 50 : 49
+  if (formationLane === 'anchor') return isCompact ? 54 : 53
+  return isCompact ? 60 : 59
+}
+
+function getLaneXOuter(team: 'ally' | 'enemy', boardLane: FormationLane, isCompact: boolean): number {
+  if (team === 'ally') {
+    if (boardLane === 'rear') return isCompact ? 13 : 12
+    if (boardLane === 'anchor') return isCompact ? 20 : 18
+    if (boardLane === 'flank') return isCompact ? 25 : 24
+    return isCompact ? 31 : 29
+  }
+
+  if (boardLane === 'rear' || boardLane === 'boss') return isCompact ? 82 : 84
+  if (boardLane === 'anchor') return isCompact ? 76 : 78
+  if (boardLane === 'flank') return isCompact ? 71 : 72
+  return isCompact ? 65 : 66
+}
+
+function getFormationMeta(actor: BattleActorViewModel): { lane: FormationLane; laneLabel: string; roleLabel: string } {
+  const lane = normalizeFormationLane(actor)
+  const laneLabel =
+    lane === 'rear' ? '후열' :
+    lane === 'anchor' ? '앵커' :
+    lane === 'flank' ? '측면' :
+    lane === 'boss' ? '후방' :
+    '전열'
+
+  const role = actor.role?.toLowerCase() ?? ''
+  const roleLabel =
+    actor.isBoss || actor.kind === 'boss' ? 'BOSS' :
+    role.includes('guard') || role.includes('tank') || role.includes('knight') || role.includes('shield') ? '방어' :
+    role.includes('support') || role.includes('mender') || role.includes('healer') ? '지원' :
+    role.includes('analyst') || role.includes('tactician') || role.includes('controller') || role.includes('caster') ? '전술' :
+    role.includes('scout') || role.includes('hunter') || role.includes('assassin') || role.includes('tracker') ? '기동' :
+    '공격'
+
+  return { lane, laneLabel, roleLabel }
 }
 
 // Melee vs Ranged Lineage Evaluator
@@ -133,93 +174,41 @@ export function Battlefield2DView({
     const coords: Record<string, { x: number; y: number }> = {}
     
     // Y Safe Zone boundaries to prevent clipping (top overlay vs bottom border)
-    const SAFE_Y_TOP = 28
-    const SAFE_Y_BOTTOM = 72
+    const SAFE_Y_TOP = isCompact ? 30 : 28
+    const SAFE_Y_BOTTOM = isCompact ? 70 : 72
 
-    // Helper to calculate staggered Y coordinate inside safe zone
-    const getSafeStaggeredY = (idx: number, count: number) => {
-      if (count <= 1) return 50
-      return SAFE_Y_TOP + ((SAFE_Y_BOTTOM - SAFE_Y_TOP) * idx) / (count - 1)
+    const laneOrder: FormationLane[] = ['rear', 'anchor', 'flank', 'front', 'boss']
+    const getLaneSpreadY = (actor: BattleActorViewModel, idx: number, count: number) => {
+      const lane = normalizeFormationLane(actor)
+      const base = getLaneYOuter(actor.team, actor.lane, isCompact, lane)
+      if (count <= 1) return clamp(base, SAFE_Y_TOP, SAFE_Y_BOTTOM)
+      const spacing = (isCompact ? 6.5 : 8.5) * (count >= 4 ? 0.82 : 1)
+      return clamp(base + (idx - (count - 1) / 2) * spacing, SAFE_Y_TOP, SAFE_Y_BOTTOM)
     }
 
-    // 1. Ally Team Positioning
-    const allyActors = overriddenActors.filter(a => a.team === 'ally')
-    const playerActor = allyActors.find(a => a.id === 'direct-preview-hunter')
-    const coopActors = allyActors.filter(a => a.kind === 'hunter' && a.id !== 'direct-preview-hunter')
-    const shadowActors = allyActors.filter(a => a.kind === 'shadow')
-
-    const backlineActors = [
-      ...(playerActor ? [playerActor] : []),
-      ...coopActors
-    ]
-
-    const countB = backlineActors.length
-    const countF = shadowActors.length
-
-    // Position Backline (Player + Coop Hunters) - Back Row
-    if (countB > 0) {
-      backlineActors.forEach((actor, idx) => {
-        const y = getSafeStaggeredY(idx, countB)
-        // Stagger X slightly based on depth to create a subtle 2.5D perspective
-        let x = (isCompact ? 14 : 12) + (countB <= 1 ? 0 : idx * 2.5)
-        
-        // If there are no shadows, center the backline closer to active zone
-        if (countF === 0) {
-          x += 8
-        }
-        coords[actor.id] = { x, y }
+    const positionTeam = (team: 'ally' | 'enemy') => {
+      const teamActors = overriddenActors.filter(actor => actor.team === team)
+      const actorsByLane = laneOrder.map(lane => {
+        const actorsInLane = teamActors.filter(actor => normalizeFormationLane(actor) === lane)
+        return { lane, actors: actorsInLane }
       })
-    }
 
-    // Position Shadows (Left Front) - Front Row
-    if (countF > 0) {
-      shadowActors.forEach((shadow, idx) => {
-        const y = getSafeStaggeredY(idx, countF)
-        // Stagger X slightly for perspective
-        const x = (isCompact ? 28 : 26) + (countF <= 1 ? 0 : idx * 3)
-        coords[shadow.id] = { x, y }
-      })
-    } else if (countB === 0 && allyActors.length > 0) {
-      // Fallback if we only have other ally actors without formal distinction
-      allyActors.forEach((actor, idx) => {
-        const y = getSafeStaggeredY(idx, allyActors.length)
-        const x = isCompact ? 22 : 18
-        coords[actor.id] = { x, y }
-      })
-    }
-    
-    // 2. Enemy Team Positioning
-    const enemyActors = overriddenActors.filter(a => a.team === 'enemy')
-    const bossActor = enemyActors.find(a => a.isBoss || a.kind === 'boss')
-    const minionActors = enemyActors.filter(a => !(a.isBoss || a.kind === 'boss'))
-    
-    if (bossActor) {
-      // Boss as Back Row, Minions as Front Row
-      const countM = minionActors.length
-      
-      // 1. Boss Alone or with minions
-      const yBoss = 50
-      const xBoss = (isCompact ? 78 : 80) - (countM === 0 ? 8 : 0)
-      coords[bossActor.id] = { x: xBoss, y: yBoss }
-
-      // 2. Minions (Front Row)
-      if (countM > 0) {
-        minionActors.forEach((minion, idx) => {
-          const y = getSafeStaggeredY(idx, countM)
-          // Stagger X leftward for perspective (enemies face left)
-          const x = (isCompact ? 64 : 66) - (countM <= 1 ? 0 : idx * 2.5)
-          coords[minion.id] = { x, y }
+      actorsByLane.forEach(({ lane, actors: actorsInLane }) => {
+        actorsInLane.forEach((actor, idx) => {
+          const count = actorsInLane.length
+          const baseX = getLaneXOuter(team, lane, isCompact)
+          const laneTuck = teamActors.length >= 4 ? 0.8 : 1
+          const xStep = (isCompact ? 1.6 : 2.1) * laneTuck
+          const xDirection = team === 'ally' ? 1 : -1
+          const x = clamp(baseX + (idx - (count - 1) / 2) * xStep * xDirection, 8, 90)
+          const y = getLaneSpreadY(actor, idx, count)
+          coords[actor.id] = { x, y }
         })
-      }
-    } else {
-      // Normal Monsters only (No Boss) - Single dynamic row distributed in safe zone
-      const countE = enemyActors.length
-      enemyActors.forEach((actor, idx) => {
-        const y = getSafeStaggeredY(idx, countE)
-        const x = (isCompact ? 72 : 74) - (countE <= 1 ? 0 : idx * 2)
-        coords[actor.id] = { x, y }
       })
     }
+
+    positionTeam('ally')
+    positionTeam('enemy')
     
     return coords
   }, [overriddenActors, isCompact])
@@ -391,6 +380,18 @@ export function Battlefield2DView({
         }}
       />
 
+      {/* Formation depth guides: boardLane is read-only; these only reveal existing lanes. */}
+      <div className="pointer-events-none absolute inset-x-4 top-[35%] z-[1] flex items-center gap-2 opacity-70">
+        <div className="h-px flex-1 border-t border-dashed border-cyan-200/16" />
+        <span className="rounded border border-cyan-200/15 bg-black/25 px-1.5 py-0.5 text-[8px] font-bold text-cyan-100/45">후열</span>
+        <div className="h-px flex-1 border-t border-dashed border-rose-200/16" />
+      </div>
+      <div className="pointer-events-none absolute inset-x-4 top-[61%] z-[1] flex items-center gap-2 opacity-70">
+        <div className="h-px flex-1 border-t border-dashed border-cyan-200/22" />
+        <span className="rounded border border-white/15 bg-black/30 px-1.5 py-0.5 text-[8px] font-bold text-white/50">전열</span>
+        <div className="h-px flex-1 border-t border-dashed border-rose-200/22" />
+      </div>
+
       {/* VFX Layer */}
       <BattlefieldVfxLayer vfxs={vfxs} />
 
@@ -527,7 +528,7 @@ export function Battlefield2DView({
             if (!intensity) intensity = preset.intensity
           }
  
-          const isPlayerTeam = actor.team === 'ally'
+          const formationMeta = getFormationMeta(actor)
           return (
             <div
               key={actor.id}
@@ -580,6 +581,20 @@ export function Battlefield2DView({
                 intensity={intensity}
                 yCoord={coords.y}
               />
+              <div className={clsx(
+                'mx-auto mt-1 flex w-max max-w-[92px] items-center justify-center gap-1 rounded-full border bg-black/70 px-1.5 py-0.5 text-[8px] font-black leading-none shadow-md backdrop-blur-sm',
+                actor.team === 'ally'
+                  ? formationMeta.lane === 'rear'
+                    ? 'border-cyan-200/20 text-cyan-100/80'
+                    : 'border-emerald-200/20 text-emerald-100/80'
+                  : formationMeta.lane === 'rear' || formationMeta.lane === 'boss'
+                  ? 'border-rose-200/20 text-rose-100/80'
+                  : 'border-amber-200/20 text-amber-100/80'
+              )}>
+                <span>{formationMeta.laneLabel}</span>
+                <span className="text-white/25">/</span>
+                <span className="text-white/55">{formationMeta.roleLabel}</span>
+              </div>
             </div>
           )
         })}

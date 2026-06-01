@@ -1,4 +1,4 @@
-import type { BattleUnit, DirectBattleState } from './directBattleTypes'
+import type { BattleBoardLane, BattleUnit, DirectBattleState } from './directBattleTypes'
 import { getHunterBattleSpriteUrl } from './hunterBattleSprites'
 import { getMonsterBattleSpriteUrl } from './monsterBattleSprites'
 
@@ -14,6 +14,7 @@ export interface BattleActorViewModel {
   team: BattleActorTeam
   kind: BattleActorKind
   lane: BattleLane
+  boardLane: BattleBoardLane
   
   hp: number
   maxHp: number
@@ -83,6 +84,7 @@ export function mapUnitToViewModel(
     team: unit.team === 'player' ? 'ally' : 'enemy',
     kind,
     lane: getUnitLane(unit),
+    boardLane: unit.boardLane,
     hp: Math.max(0, Math.round(unit.stats.currentHp)),
     maxHp: Math.round(unit.stats.maxHp),
     portraitUrl: undefined,
