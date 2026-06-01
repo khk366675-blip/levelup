@@ -1272,9 +1272,8 @@ export function WorldMapPanel() {
                       const corruption = regionState ? regionState.corruption : 0
                       const colors = getCountryColors(region.id, corruption, !!occupiedMonarch)
 
-                      // 줌 스케일 (zoomTransform.k) 연동 우선순위 정렬
-                      // 거점(한국), 점령, 높은 오염도(>20%) 또는 줌인이 충분히 되었을 때(k >= 2.2) 표시
-                      const isLabelPriority = region.id === 'kr' || !!occupiedMonarch || corruption > 20 || zoomTransform.k >= 2.2
+                      // 모든 국가 이름 상시 표시 (유저 지시사항 반영)
+                      const isLabelPriority = true
                       const showStats = zoomTransform.k >= 1.8
 
                       return (
@@ -1386,15 +1385,6 @@ export function WorldMapPanel() {
                             className="cursor-pointer group"
                             onClick={() => handleNodeClick(node)}
                           >
-                            <circle
-                              cx={x}
-                              cy={y}
-                              r="8"
-                              fill="none"
-                              stroke={strokeColor}
-                              strokeWidth="1"
-                              className="ring-pulse"
-                            />
                             <circle
                               cx={x}
                               cy={y}
