@@ -171,22 +171,46 @@ export const WORLD_SIGNAL_TEMPLATES = {
     spoilerLevel: 2,
   },
 
-  // Boss / Tower
-  tower_anomaly: {
-    id: 'tower_anomaly',
-    source: 'tower' as const,
+  // Echo (전임자 흔적)
+  echo_faint_footstep: {
+    id: 'echo_faint_footstep',
+    source: 'echo' as const,
     tier: 'faint' as const,
-    title: '층계의 이탈',
-    body: '탑의 상층 기록 중 일부 구간이 협회 데이터베이스의 연대기와 일치하지 않습니다.',
+    title: '낯익은 발자취',
+    body: '이곳의 공간 곡선이 이미 누군가에 의해 정밀하게 정돈되었던 흔적을 보여줍니다.',
+    spoilerLevel: 0,
+  },
+  echo_faint_coordinates: {
+    id: 'echo_faint_coordinates',
+    source: 'echo' as const,
+    tier: 'faint' as const,
+    title: '비정상적 잔류 좌표',
+    body: '차원 기하학적 분석기에 과거 소속이 불분명한 각성자의 이동 경로가 짧게 표시되었습니다.',
+    spoilerLevel: 0,
+  },
+  echo_clear_predecessor: {
+    id: 'echo_clear_predecessor',
+    source: 'echo' as const,
+    tier: 'clear' as const,
+    title: '첫 번째 기록',
+    body: '현재의 인장과 거의 완벽히 동일하지만, 수십 차례 이상 더 오래된 연대의 신호 기록이 검출되었습니다.',
     spoilerLevel: 1,
   },
-  tower_boss_anomaly: {
-    id: 'tower_boss_anomaly',
-    source: 'boss' as const,
-    tier: 'clear' as const,
-    title: '게이트 생태 반응',
-    body: '보스 개체의 에센스 파형이 인위적으로 주입된 듯한 부자연스러운 게이트 생태 반응을 보입니다.',
+  echo_distorted_reflection: {
+    id: 'echo_distorted_reflection',
+    source: 'echo' as const,
+    tier: 'distorted' as const,
+    title: '어긋난 투영',
+    body: '그림자의 심층 데이터 속에서 마치 나 자신을 바라보는 듯한 모순적인 피드백 신호가 감지됩니다.',
     spoilerLevel: 2,
+  },
+  echo_severe_angel_will: {
+    id: 'echo_severe_angel_will',
+    source: 'echo' as const,
+    tier: 'severe' as const,
+    title: '심판자의 잔향',
+    body: '지고의 심판자가 방출하는 격막 신호 사이에 "나를 딛고 나아가라"는 메시지가 고정되어 흐릅니다.',
+    spoilerLevel: 3,
   },
 }
 
@@ -203,6 +227,7 @@ export const createInitialWorldSignalState = (): WorldSignalState => ({
     shadowExpeditionFindings: 0,
     realityPressureSpikes: 0,
     bossAnomalies: 0,
+    echoDiscoveries: 0,
   },
   recentSignals: [],
 })
@@ -210,9 +235,19 @@ export const createInitialWorldSignalState = (): WorldSignalState => ({
 export const ensureWorldSignalState = (state?: WorldSignalState): WorldSignalState => {
   const initial = createInitialWorldSignalState()
   if (!state) return initial
+  
+  // tower 관련 레거시 신호 및 발견 정보 안전 필터링
+  const filteredDiscovered = Array.isArray(state.discoveredSignalIds)
+    ? state.discoveredSignalIds.filter(id => id !== 'tower_anomaly' && id !== 'tower_boss_anomaly' && id in WORLD_SIGNAL_TEMPLATES)
+    : initial.discoveredSignalIds
+
+  const filteredRecent = Array.isArray(state.recentSignals)
+    ? (state.recentSignals as any[]).filter(s => s.source !== 'tower' && s.id !== 'tower_anomaly' && s.id !== 'tower_boss_anomaly' && s.id in WORLD_SIGNAL_TEMPLATES)
+    : initial.recentSignals
+
   return {
     intensity: typeof state.intensity === 'number' ? state.intensity : initial.intensity,
-    discoveredSignalIds: Array.isArray(state.discoveredSignalIds) ? state.discoveredSignalIds : initial.discoveredSignalIds,
+    discoveredSignalIds: filteredDiscovered,
     counters: {
       focusResonance: state.counters?.focusResonance ?? initial.counters.focusResonance,
       redGateContact: state.counters?.redGateContact ?? initial.counters.redGateContact,
@@ -221,9 +256,10 @@ export const ensureWorldSignalState = (state?: WorldSignalState): WorldSignalSta
       shadowExpeditionFindings: state.counters?.shadowExpeditionFindings ?? initial.counters.shadowExpeditionFindings,
       realityPressureSpikes: state.counters?.realityPressureSpikes ?? initial.counters.realityPressureSpikes,
       bossAnomalies: state.counters?.bossAnomalies ?? initial.counters.bossAnomalies,
+      echoDiscoveries: state.counters?.echoDiscoveries ?? initial.counters.echoDiscoveries,
     },
     lastSignalAt: state.lastSignalAt ?? initial.lastSignalAt,
-    recentSignals: Array.isArray(state.recentSignals) ? state.recentSignals : initial.recentSignals,
+    recentSignals: filteredRecent,
   }
 }
 
@@ -308,7 +344,8 @@ export const emitWorldSignal = (
   else if (template.source === 'extraction') nextCounters.extractionEcho++
   else if (template.source === 'promotion') nextCounters.promotionAuthority++
   else if (template.source === 'expedition') nextCounters.shadowExpeditionFindings++
-  else if (template.source === 'boss' || template.source === 'tower') nextCounters.bossAnomalies++
+  else if ((template.source as any) === 'boss' || (template.source as any) === 'tower') nextCounters.bossAnomalies++
+  else if ((template.source as any) === 'echo') nextCounters.echoDiscoveries++
 
   // Update intensity: faint gives 1, clear gives 3, distorted/severe gives 5, sealed gives 7. Cap at 100.
   let intensityBonus = 1

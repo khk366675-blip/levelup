@@ -6,7 +6,7 @@ import type {
   SystemMessage,
 } from './types'
 import { SECRET_HINTS, SECRET_MESSAGES } from './secretLore'
-import { ensureWorldSignalState, createInitialWorldSignalState } from './worldSignals'
+import { ensureWorldSignalState, createInitialWorldSignalState, emitWorldSignal } from './worldSignals'
 
 type SecretSnapshot = {
   infiniteTower?: {
@@ -22,17 +22,18 @@ type SecretSnapshot = {
   skillStates?: Record<string, { timesUsed?: number; masteryLevel?: number }>
 }
 
-export type SecretContext = 'tower' | 'gate' | 'expedition' | 'shadow' | 'box' | 'rank'
+export type SecretContext = 'tower' | 'gate' | 'expedition' | 'shadow' | 'box' | 'rank' | 'echo'
 
 export type SecretEvent =
   | { context: 'tower'; outcome: 'victory' | 'defeat' | 'draw'; floor: number; firstClear?: boolean; boss?: boolean }
-  | { context: 'gate'; outcome: 'victory' | 'defeat' | 'draw' }
-  | { context: 'expedition'; outcome: 'great_success' | 'success' | 'partial' | 'failure'; expeditionType?: string; shadowIds?: string[] }
+  | { context: 'gate'; outcome: 'victory' | 'defeat' | 'draw'; isMonarch?: boolean; monarchId?: string }
+  | { context: 'expedition'; outcome: 'great_success' | 'success' | 'partial' | 'failure'; expeditionType?: string; shadowIds?: string[]; isEchoEvent?: boolean }
   | { context: 'shadow'; action: 'extract'; success: boolean; named?: boolean }
   | { context: 'shadow'; action: 'summon' | 'fragment_summon'; named?: boolean }
   | { context: 'shadow'; action: 'evolve'; shadowInstanceId?: string }
   | { context: 'box'; boxType?: string; source?: string }
   | { context: 'rank'; leveledUp?: boolean; rankChanged?: boolean; skillUses?: number; challengeCardsCompleted?: number }
+  | { context: 'echo'; action: 'discover' | 'investigate' | 'resonance'; amount?: number }
 
 export type SecretEventResult = {
   progress: SecretProgressState
@@ -251,12 +252,13 @@ export const applySecretModifiers = (baseValue: number, modifiers: number[], max
   capSecretBonus(baseValue, baseValue + modifiers.reduce((sum, value) => sum + value, 0), maxRatio)
 
 const hintFor = (progress: SecretProgressState, context: SecretContext): string | undefined => {
+  if (context === 'echo') return undefined
   const contextCount = count(progress, `${context}_signals`)
   const lastHintAt = count(progress, `last_hint_signal_${context}`)
   if (lastHintAt > 0 && contextCount - lastHintAt < 3) return undefined
   const resonanceLift = Math.min(2, count(progress, 'resonance_triad'))
-  const eligible = SECRET_HINTS[context]
-    .filter(item => contextCount + resonanceLift >= item.min && !hasHint(progress, item.id))
+  const eligible = (SECRET_HINTS as any)[context]
+    .filter((item: any) => contextCount + resonanceLift >= item.min && !hasHint(progress, item.id))
   return eligible[eligible.length - 1]?.id
 }
 
@@ -469,6 +471,15 @@ export const recordSecretEvent = (
   bump(counters, `affinity.${event.context}`)
   bump(hiddenAffinity, event.context, 1)
 
+  // Echo 공명도(전임자 흔적) 누적 처리
+  if (event.context === 'echo') {
+    bump(hiddenAffinity, 'echo', event.amount ?? 1)
+  } else if (event.context === 'gate' && event.outcome === 'victory') {
+    bump(hiddenAffinity, 'echo', event.isMonarch ? 3 : 1)
+  } else if (event.context === 'expedition' && (event.outcome === 'success' || event.outcome === 'great_success')) {
+    bump(hiddenAffinity, 'echo', event.isEchoEvent ? 3 : 1)
+  }
+
   if (event.context === 'tower') {
     if (event.outcome === 'victory') {
       bump(counters, 'tower_clears')
@@ -549,7 +560,52 @@ export const recordSecretEvent = (
   const shadowEssenceBonus = maybeApplySmallReward(progress, event, messages)
   const ownedShadows = maybeMarkShadow(progress, event, snapshot.ownedShadows, messages)
 
-  return { progress, messages, shadowEssenceBonus, ownedShadows }
+  // Echo 공명도 변화에 따른 단서 및 조각 주입 트리거
+  const prevEcho = currentProgress?.hiddenAffinity?.echo ?? 0
+  const nextEcho = hiddenAffinity.echo ?? 0
+  const loopCount = counters.loopCount ?? 0
+
+  let updatedProgress = progress
+  
+  if (prevEcho < 1 && nextEcho >= 1) {
+    const emitRes = emitWorldSignal(updatedProgress, 'echo_faint_footstep')
+    updatedProgress = emitRes.progress
+    if (emitRes.signal) {
+      const isRepeated = loopCount >= 1
+      messages.push({
+        kind: 'secret',
+        title: emitRes.signal.title,
+        lines: [
+          emitRes.signal.body,
+          isRepeated ? `(잔류하는 위화감 속에 '반복되는 역사의 결'이 스쳐 지나갑니다...)` : ''
+        ].filter(Boolean),
+      })
+    }
+  } else if (prevEcho < 15 && nextEcho >= 15) {
+    const emitRes = emitWorldSignal(updatedProgress, 'echo_clear_predecessor')
+    updatedProgress = emitRes.progress
+    if (emitRes.signal) {
+      messages.push({
+        kind: 'secret',
+        title: emitRes.signal.title,
+        lines: [emitRes.signal.body],
+      })
+    }
+    unlockSecretOnce(updatedProgress, 'echo-trace-a')
+  } else if (prevEcho < 40 && nextEcho >= 40) {
+    const emitRes = emitWorldSignal(updatedProgress, 'echo_severe_angel_will')
+    updatedProgress = emitRes.progress
+    if (emitRes.signal) {
+      messages.push({
+        kind: 'secret',
+        title: emitRes.signal.title,
+        lines: [emitRes.signal.body],
+      })
+    }
+    unlockSecretOnce(updatedProgress, 'echo-trace-b')
+  }
+
+  return { progress: updatedProgress, messages, shadowEssenceBonus, ownedShadows }
 }
 
 export const getSecretVisibleFragments = (progress: SecretProgressState | undefined): string[] =>
@@ -557,3 +613,16 @@ export const getSecretVisibleFragments = (progress: SecretProgressState | undefi
     progress?.unlockedFragments,
     progress?.unlocked?.filter(id => id.includes('trace'))
   ).slice(-3)
+
+export const resetSecretProgressOnLoop = (
+  currentProgress: SecretProgressState | undefined
+): SecretProgressState => {
+  const next = blankProgress()
+  const prevLoop = currentProgress?.counters?.loopCount ?? 0
+  const nextLoop = prevLoop + 1
+  
+  // 회차 수만 계승
+  next.counters = { ...next.counters, loopCount: nextLoop }
+  next.signals = { ...next.signals, loopCount: nextLoop }
+  return next
+}

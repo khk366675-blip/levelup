@@ -247,6 +247,7 @@ import {
 import {
   ensureSecretProgress,
   recordSecretEvent,
+  resetSecretProgressOnLoop,
   type SecretEvent,
 } from './secrets'
 import { emitWorldSignal, type WorldSignalTemplateId } from './worldSignals'
@@ -923,6 +924,24 @@ const applySecretProgressEvent = (
   }
   if (result.ownedShadows ?? baseState.ownedShadows) {
     nextState.ownedShadows = result.ownedShadows ?? baseState.ownedShadows
+  }
+
+  // 비밀 서사 단서 발생 시 월드맵 뉴스피드(eventLogs)에 은은하게 연동 기록
+  if (s.livingWorld && secretMessages.length > 0) {
+    const worldLogs = baseState.livingWorld?.eventLogs
+      ? [...baseState.livingWorld.eventLogs]
+      : [...s.livingWorld.eventLogs]
+
+    secretMessages.forEach(msg => {
+      if (msg.kind === 'secret') {
+        const cleanBody = msg.lines?.[0] ?? ''
+        worldLogs.push(`[Day ${s.livingWorld?.day ?? 0}] 📡 [이상 징후] ${msg.title}: ${cleanBody}`)
+      }
+    })
+
+    nextState.livingWorld = baseState.livingWorld
+      ? { ...baseState.livingWorld, eventLogs: worldLogs }
+      : { ...s.livingWorld, eventLogs: worldLogs }
   }
 
   return nextState
@@ -3474,7 +3493,7 @@ const createHardcoreDeathResetState = (
     challengeCardHistory: {},
     shopPurchases: {},
     skillStates: {},
-    secretProgress: undefined,
+    secretProgress: resetSecretProgressOnLoop(s.secretProgress),
     aiCoachCoreContext: s.aiCoachCoreContext,
     aiCoachMemory: s.aiCoachMemory,
     dailyProgression: s.dailyProgression,
@@ -8194,7 +8213,7 @@ export const useGame = create<GameState>()(
           // UI 렌더링에 영항을 주는 노드 클리어 보장
           const finalRiftNodes = { ...freshState.riftNodes, [nodeId]: 'cleared' as RiftNodeStatus }
 
-          set({
+          const baseState: Partial<GameState> = {
             hunter: nextHunter,
             gold: nextGold,
             shadowEssence: nextShadowEssence,
@@ -8215,7 +8234,13 @@ export const useGame = create<GameState>()(
             activeGate: undefined,
             manualBattleSession: undefined,
             activeRiftNodeId: undefined,
-          })
+          }
+
+          if (isMonarchId) {
+            set(applySecretProgressEvent(freshState, { context: 'gate', outcome: 'victory', isMonarch: true, monarchId: nodeId }, baseState))
+          } else {
+            set(baseState)
+          }
         } else {
           // 패배 시
           const monarchLog: CombatLog = { ...combatLog, source: combatLog.source || 'worldmap' }
@@ -9517,9 +9542,21 @@ export const useGame = create<GameState>()(
           .map(id => (s.ownedShadows ?? []).find(shadow => shadow.instanceId === id))
           .filter((shadow): shadow is OwnedShadow => Boolean(shadow))
         const resolved = resolveExpeditionMidEventChoice(expedition, choiceId, uid, party)
-        return {
+        
+        const baseState = {
           shadowExpeditions: (s.shadowExpeditions ?? []).map(item => item.id === expeditionId ? resolved : item),
         }
+
+        if (choiceId === 'investigate' && expedition.midEvent.id === 'echo_expedition_artifact') {
+          return applySecretProgressEvent(s, {
+            context: 'expedition',
+            outcome: 'success',
+            isEchoEvent: true,
+            shadowIds: expedition.selectedShadowIds,
+          }, baseState)
+        }
+
+        return baseState
       }),
 
       abandonShadowExpedition: (expeditionId) => set((s) => {
@@ -10372,9 +10409,9 @@ export const useGame = create<GameState>()(
             }))
             setTimeout(() => {
               if (getTowerFloorType(floor) === 'boss') {
-                get().emitWorldSignal('tower_boss_anomaly')
+                get().emitWorldSignal('echo_clear_predecessor')
               } else if (floor >= 25) {
-                get().emitWorldSignal('tower_anomaly')
+                get().emitWorldSignal('echo_faint_footstep')
               }
               set(current => applyChallengeProgress(current, { towerAttempt: true, towerClear: true }))
               get().checkTitleUnlocks()
@@ -12219,7 +12256,7 @@ export const useGame = create<GameState>()(
           challengeCardHistory: {},
           shopPurchases: {},
           skillStates: {},
-          secretProgress: undefined,
+          secretProgress: resetSecretProgressOnLoop(s.secretProgress),
           aiCoachCoreContext: preservedAiCoachCoreContext,
           aiCoachMemory: preservedAiCoachMemory,
           dailyProgression: preservedDailyProgression,
@@ -12625,6 +12662,15 @@ export const useGame = create<GameState>()(
         } else {
           get().emitWorldSignal('focus_resonance_faint')
         }
+
+        // 집중 완주 시 현실 노력 공명(resonance)에 따른 Echo 공명도 누적
+        if (elapsedMinutes >= 25) {
+          set(prev => applySecretProgressEvent(prev, {
+            context: 'echo',
+            action: 'resonance',
+            amount: elapsedMinutes >= 50 ? 3 : 1
+          }))
+        }
         
         // 일일 도전과제 달성 체크
         set(current => applyChallengeProgress(current, { focusCompleted: true }))
@@ -13002,6 +13048,11 @@ export const useGame = create<GameState>()(
             }
           }))
 
+          // 8% 확률로 Echo 단서(낯익은 표식) 주입
+          if (Math.random() < 0.08) {
+            set(prev => applySecretProgressEvent(prev, { context: 'gate', outcome: 'victory' }))
+          }
+
           if (isRedGate) {
             const instability = runState?.redGateState?.instabilityScore ?? 0
             const isHighPressure = runState?.pressureSnapshot && (runState.pressureSnapshot.readinessTier === 'transcendent' || runState.pressureSnapshot.monsterHpMultiplier >= 1.08)
@@ -13014,8 +13065,6 @@ export const useGame = create<GameState>()(
             const instability = runState?.redGateState?.instabilityScore ?? 0
             if (runState?.redGateState?.status === 'unstable' && instability >= 70) {
               get().emitWorldSignal('red_gate_leak')
-            } else if (isBoss) {
-              get().emitWorldSignal('tower_boss_anomaly')
             }
           }
 

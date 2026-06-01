@@ -459,7 +459,7 @@ export function HunterStatus({ currentTab, onTabChange }: HunterStatusProps) {
         </span>
         {s.secretProgress?.worldSignals?.intensity && s.secretProgress.worldSignals.intensity > 0 ? (
           <span className="chip border-red-500/30 text-red-400 bg-red-950/10 px-2 py-0.5 text-[10px] rounded animate-pulse">
-            📡 이상 징후 감지 ({s.secretProgress.worldSignals.intensity}%)
+            📡 이상 징후 감지 ({s.secretProgress.worldSignals.intensity > 60 ? '근접' : s.secretProgress.worldSignals.intensity > 30 ? '인지' : '위화감'})
           </span>
         ) : null}
         
@@ -612,7 +612,7 @@ export function HunterStatus({ currentTab, onTabChange }: HunterStatusProps) {
                       📡 이상 징후 관측 로그 (비공개 기록)
                     </span>
                     <span className="text-[10px] font-mono text-red-400/80">
-                      공명도: {s.secretProgress.worldSignals.intensity}%
+                      상태: {s.secretProgress.worldSignals.intensity > 60 ? '주파수 고정' : s.secretProgress.worldSignals.intensity > 30 ? '신호 수신 중' : '미세한 전도'}
                     </span>
                   </div>
                   <div className="space-y-2">

@@ -1832,7 +1832,7 @@ export interface SystemMessage {
 export interface WorldSignalEntry {
   id: string
   at: number
-  source: 'focus' | 'red_gate' | 'extraction' | 'promotion' | 'expedition' | 'boss' | 'daily' | 'tower' | 'system'
+  source: 'focus' | 'red_gate' | 'extraction' | 'promotion' | 'expedition' | 'boss' | 'daily' | 'echo' | 'system'
   tier: 'faint' | 'clear' | 'distorted' | 'severe' | 'sealed'
   title: string
   body: string
@@ -1851,6 +1851,7 @@ export interface WorldSignalState {
     shadowExpeditionFindings: number
     realityPressureSpikes: number
     bossAnomalies: number
+    echoDiscoveries: number
   }
   lastSignalAt?: number
   recentSignals: WorldSignalEntry[]

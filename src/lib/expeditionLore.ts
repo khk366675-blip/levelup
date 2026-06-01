@@ -201,6 +201,32 @@ export function getRoleLine(role: ShadowRole, context: RoleLineContext): string 
 // ── Mid Events ──────────────────────────────────────────────────────
 
 export const MID_EVENTS: ExpeditionMidEvent[] = [
+  {
+    id: 'echo_expedition_artifact',
+    type: 'any',
+    phase: 'threshold',
+    title: '전임자의 유물 발견',
+    description: '원정 중 한 그림자가 차원 왜곡 영역 구석에서 과거 주인이 사용했던 것으로 추정되는 낯선 기록기와 망가진 유물을 발견했습니다.',
+    recentCooldown: 5,
+    choices: [
+      {
+        id: 'investigate',
+        label: '기록기 분석 및 유물 수거',
+        description: '과거 전임자의 기록을 면밀히 분석하고 유물을 가져갑니다. (Echo 공명도 증가)',
+        progressDelta: 5,
+        riskDelta: 5,
+        log: '과거 전임자가 남긴 기하학적 수식과 조각들이 해독되며, 세계의 반향이 깊어집니다.',
+      },
+      {
+        id: 'seal',
+        label: '현 상태로 안전하게 밀봉',
+        description: '위험 요소를 배제하고 발견물을 안전하게 밀봉 처리합니다.',
+        progressDelta: 3,
+        riskDelta: -5,
+        log: '발견물은 밀봉되어 보존되었고, 정찰 경로는 안정화되었습니다.',
+      },
+    ],
+  },
   // training
   {
     id: 'training_rift_in_sparring',
