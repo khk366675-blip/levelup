@@ -5,8 +5,13 @@ import { getRegionalTheme } from './livingWorldGateContent'
 import { getNPCEquipmentForScore } from './hunterEquipment'
 import { getHunterTrait } from './hunterTraits'
 import { getNamedHunterBasePower } from './hunterUnified'
+import { canHunterAnswerLoveCall } from './renown'
 
 type RngFn = () => number
+
+export interface AdvanceWorldDayOptions {
+  loveCallHelperMaxRank?: Rank
+}
 
 // =====================================================================
 // 밸런스 튜닝 상수 (살아있는 균열 세계)
@@ -161,7 +166,7 @@ function getActiveRegionPower(
  * 하루의 세계 시뮬레이션 틱을 한 번 진행합니다.
  * 순수 함수로 구성되어 있어 입력된 상태를 기반으로 변경된 새로운 상태를 반환합니다.
  */
-export function advanceWorldDay(state: LivingWorldState, rng: RngFn): LivingWorldState {
+export function advanceWorldDay(state: LivingWorldState, rng: RngFn, options: AdvanceWorldDayOptions = {}): LivingWorldState {
   const nextDay = state.day + 1
   const nextNamedHunters = { ...state.namedHunters }
   const nextRegions = { ...state.regions }
@@ -172,6 +177,7 @@ export function advanceWorldDay(state: LivingWorldState, rng: RngFn): LivingWorl
   let nextActiveMonarchs: ActiveMonarch[] = [...(state.activeMonarchs ?? [])]
   let nextHomeReachedMonarchId = state.homeReachedMonarchId
   let nextMonarchsSpawnedTotal = state.monarchsSpawnedTotal ?? 0
+  const loveCallHelperMaxRank = options.loveCallHelperMaxRank ?? 'National'
 
   // [NEW] 틱 시작 전 통계 계산 (플레이어 클리어 반영)
   const initialClearedCount = Object.values(state.riftNodes).filter(n => n.status === 'cleared').length
@@ -403,7 +409,12 @@ export function advanceWorldDay(state: LivingWorldState, rng: RngFn): LivingWorl
             const helperHunterIds: string[] = []
             for (const hid in nextNamedHunters) {
               const h = nextNamedHunters[hid]
-              if (h && h.regionId === regionId && h.status === 'active') {
+              if (
+                h &&
+                h.regionId === regionId &&
+                h.status === 'active' &&
+                canHunterAnswerLoveCall(h.rank, loveCallHelperMaxRank)
+              ) {
                 helperHunterIds.push(h.id)
               }
             }

@@ -15,6 +15,7 @@ type Battlefield2DViewProps = {
   actors: BattleActorViewModel[]
   battleType: 'gate' | 'tower'
   encounterKey?: string
+  battleThemeKey?: string
   phase?: 'idle' | 'acting' | 'victory' | 'defeat' | 'cancelled'
   latestAction?: {
     actorId?: string
@@ -43,33 +44,34 @@ const normalizeFormationLane = (actor: BattleActorViewModel): FormationLane => {
 
 // Map lane/team positioning to percentage coordinates. BattleLane remains a
 // fallback, while boardLane is the read-only formation depth used for display.
-function getLaneYOuter(team: 'ally' | 'enemy', lane: BattleLane, isCompact: boolean, boardLane?: FormationLane): number {
+function getLaneYOuter(_team: 'ally' | 'enemy', lane: BattleLane, isCompact: boolean, boardLane?: FormationLane): number {
   const formationLane = boardLane ?? (lane === 'back' ? 'rear' : lane === 'mid' ? 'anchor' : 'front')
-  if (team === 'ally') {
-    if (formationLane === 'rear') return isCompact ? 39 : 38
-    if (formationLane === 'flank') return isCompact ? 53 : 52
-    if (formationLane === 'anchor') return isCompact ? 58 : 57
-    return isCompact ? 64 : 63
-  }
-
-  if (formationLane === 'rear' || formationLane === 'boss') return isCompact ? 37 : 36
-  if (formationLane === 'flank') return isCompact ? 50 : 49
-  if (formationLane === 'anchor') return isCompact ? 54 : 53
-  return isCompact ? 60 : 59
+  if (formationLane === 'rear' || formationLane === 'boss') return isCompact ? 45 : 44
+  if (formationLane === 'flank') return 50
+  if (formationLane === 'anchor') return isCompact ? 54 : 54
+  return isCompact ? 57 : 58
 }
 
 function getLaneXOuter(team: 'ally' | 'enemy', boardLane: FormationLane, isCompact: boolean): number {
   if (team === 'ally') {
-    if (boardLane === 'rear') return isCompact ? 13 : 12
-    if (boardLane === 'anchor') return isCompact ? 20 : 18
-    if (boardLane === 'flank') return isCompact ? 25 : 24
-    return isCompact ? 31 : 29
+    if (boardLane === 'rear') return isCompact ? 21 : 23
+    if (boardLane === 'anchor') return isCompact ? 28 : 30
+    if (boardLane === 'flank') return isCompact ? 34 : 35
+    return isCompact ? 40 : 40
   }
 
-  if (boardLane === 'rear' || boardLane === 'boss') return isCompact ? 82 : 84
-  if (boardLane === 'anchor') return isCompact ? 76 : 78
-  if (boardLane === 'flank') return isCompact ? 71 : 72
-  return isCompact ? 65 : 66
+  if (boardLane === 'rear' || boardLane === 'boss') return isCompact ? 79 : 76
+  if (boardLane === 'anchor') return isCompact ? 72 : 70
+  if (boardLane === 'flank') return isCompact ? 66 : 65
+  return isCompact ? 60 : 60
+}
+
+function getFormationScaleCoord(actor: BattleActorViewModel): number {
+  const lane = normalizeFormationLane(actor)
+  if (lane === 'rear' || lane === 'boss') return 42
+  if (lane === 'anchor') return 52
+  if (lane === 'flank') return 56
+  return 64
 }
 
 function getFormationMeta(actor: BattleActorViewModel): { lane: FormationLane; laneLabel: string; roleLabel: string } {
@@ -129,6 +131,7 @@ export function Battlefield2DView({
   actors,
   battleType,
   encounterKey,
+  battleThemeKey,
   phase = 'idle',
   latestAction,
   compact = false,
@@ -167,23 +170,45 @@ export function Battlefield2DView({
     })
   }, [actors, visualTestJob])
 
-  const theme = getBattlefieldTheme(battleType, encounterKey)
+  const themeEncounterKey = useMemo(() => {
+    const parts = [battleThemeKey, encounterKey]
+    if (overriddenActors.some(a => a.team === 'enemy' && isMonarchVisualBoss(a.sourceId))) {
+      parts.unshift('monarch')
+    }
+    return parts.filter(Boolean).join(':')
+  }, [battleThemeKey, encounterKey, overriddenActors])
+
+  const theme = getBattlefieldTheme(battleType, themeEncounterKey)
 
   // Track coordinates for each actor by ID with dynamic safe-zone distribution
   const actorCoords = useMemo(() => {
     const coords: Record<string, { x: number; y: number }> = {}
     
-    // Y Safe Zone boundaries to prevent clipping (top overlay vs bottom border)
-    const SAFE_Y_TOP = isCompact ? 30 : 28
-    const SAFE_Y_BOTTOM = isCompact ? 70 : 72
-
     const laneOrder: FormationLane[] = ['rear', 'anchor', 'flank', 'front', 'boss']
-    const getLaneSpreadY = (actor: BattleActorViewModel, idx: number, count: number) => {
+
+    const actorUsesCompactSprite = (actor: BattleActorViewModel, teamCount: number) =>
+      isCompact ||
+      (actor.team === 'ally' && teamCount >= 4) ||
+      (actor.team === 'enemy' && teamCount >= 4 && !actor.isBoss && actor.kind !== 'boss')
+
+    const getSafeXBounds = (actor: BattleActorViewModel, teamCount: number): [number, number] => {
+      if (actorUsesCompactSprite(actor, teamCount)) return [14, 86]
+      if (actor.isBoss || actor.kind === 'boss') return [29, 71]
+      return [21, 79]
+    }
+
+    const getSafeYBounds = (actor: BattleActorViewModel, teamCount: number): [number, number] => {
+      if (actor.isBoss || actor.kind === 'boss') return actorUsesCompactSprite(actor, teamCount) ? [38, 62] : [44, 56]
+      return actorUsesCompactSprite(actor, teamCount) ? [32, 68] : [38, 62]
+    }
+
+    const getLaneSpreadY = (actor: BattleActorViewModel, idx: number, count: number, teamCount: number) => {
       const lane = normalizeFormationLane(actor)
       const base = getLaneYOuter(actor.team, actor.lane, isCompact, lane)
-      if (count <= 1) return clamp(base, SAFE_Y_TOP, SAFE_Y_BOTTOM)
-      const spacing = (isCompact ? 6.5 : 8.5) * (count >= 4 ? 0.82 : 1)
-      return clamp(base + (idx - (count - 1) / 2) * spacing, SAFE_Y_TOP, SAFE_Y_BOTTOM)
+      const [safeYTop, safeYBottom] = getSafeYBounds(actor, teamCount)
+      if (count <= 1) return clamp(base, safeYTop, safeYBottom)
+      const spacing = actorUsesCompactSprite(actor, teamCount) ? 6 : 5
+      return clamp(base + (idx - (count - 1) / 2) * spacing, safeYTop, safeYBottom)
     }
 
     const positionTeam = (team: 'ally' | 'enemy') => {
@@ -200,8 +225,9 @@ export function Battlefield2DView({
           const laneTuck = teamActors.length >= 4 ? 0.8 : 1
           const xStep = (isCompact ? 1.6 : 2.1) * laneTuck
           const xDirection = team === 'ally' ? 1 : -1
-          const x = clamp(baseX + (idx - (count - 1) / 2) * xStep * xDirection, 8, 90)
-          const y = getLaneSpreadY(actor, idx, count)
+          const [safeXLeft, safeXRight] = getSafeXBounds(actor, teamActors.length)
+          const x = clamp(baseX + (idx - (count - 1) / 2) * xStep * xDirection, safeXLeft, safeXRight)
+          const y = getLaneSpreadY(actor, idx, count, teamActors.length)
           coords[actor.id] = { x, y }
         })
       })
@@ -346,8 +372,20 @@ export function Battlefield2DView({
         ? 'h-[25vh] min-h-[190px] xs:h-[29vh] xs:min-h-[220px] sm:h-[31vh] sm:min-h-[240px] md:h-[420px] lg:h-[480px]' 
         : (isCompact ? 'h-[190px] sm:h-[220px]' : 'h-[300px] sm:h-[340px]')
     )}>
+      {/* Optimized battlefield image layer. The gradient on the root remains the fallback. */}
+      {theme.bgImage && (
+        <div
+          className="pointer-events-none absolute inset-0 z-0 bg-cover bg-center bg-no-repeat opacity-95"
+          style={{ backgroundImage: `url("${theme.bgImage}")` }}
+        />
+      )}
+
+      {/* Readability wash so units and HUD stay clear over detailed artwork. */}
+      <div className="pointer-events-none absolute inset-0 z-0 bg-[radial-gradient(ellipse_at_50%_48%,rgba(0,0,0,0.08),rgba(0,0,0,0.42)_76%)]" />
+      <div className="pointer-events-none absolute inset-x-0 bottom-0 z-0 h-[78%] bg-[radial-gradient(ellipse_at_50%_72%,rgba(0,0,0,0.52),rgba(0,0,0,0.24)_48%,transparent_78%)]" />
+
       {/* Sky atmospheric filter */}
-      <div className={clsx('pointer-events-none absolute inset-0 z-0 opacity-80', theme.skyFilter)} />
+      <div className={clsx('pointer-events-none absolute inset-0 z-0 opacity-45', theme.skyFilter)} />
 
       {/* Monarch Premium 2.5D Field Vignette & Aura Layer */}
       {monarchActor && monarchActor.sourceId && (
@@ -362,8 +400,8 @@ export function Battlefield2DView({
       )}
 
       {/* Fog / Mist layers for arena depth */}
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_bottom,rgba(6,182,212,0.04),transparent_70%)] pointer-events-none z-0" />
-      <div className="absolute inset-x-0 bottom-0 h-1/3 bg-gradient-to-t from-slate-950/25 via-transparent to-transparent pointer-events-none z-0 animate-pulse animate-duration-3000" />
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_bottom,rgba(6,182,212,0.025),transparent_70%)] pointer-events-none z-0" />
+      <div className="absolute inset-x-0 bottom-0 h-1/3 bg-gradient-to-t from-slate-950/20 via-transparent to-transparent pointer-events-none z-0 animate-pulse animate-duration-3000" />
 
       {/* Arena Frame Overlay Corners */}
       <div className="absolute top-2 left-2 w-3.5 h-3.5 border-t-2 border-l-2 border-cyan-400/25 pointer-events-none z-10 rounded-tl-sm" />
@@ -379,18 +417,6 @@ export function Battlefield2DView({
           perspective: '500px',
         }}
       />
-
-      {/* Formation depth guides: boardLane is read-only; these only reveal existing lanes. */}
-      <div className="pointer-events-none absolute inset-x-4 top-[35%] z-[1] flex items-center gap-2 opacity-70">
-        <div className="h-px flex-1 border-t border-dashed border-cyan-200/16" />
-        <span className="rounded border border-cyan-200/15 bg-black/25 px-1.5 py-0.5 text-[8px] font-bold text-cyan-100/45">후열</span>
-        <div className="h-px flex-1 border-t border-dashed border-rose-200/16" />
-      </div>
-      <div className="pointer-events-none absolute inset-x-4 top-[61%] z-[1] flex items-center gap-2 opacity-70">
-        <div className="h-px flex-1 border-t border-dashed border-cyan-200/22" />
-        <span className="rounded border border-white/15 bg-black/30 px-1.5 py-0.5 text-[8px] font-bold text-white/50">전열</span>
-        <div className="h-px flex-1 border-t border-dashed border-rose-200/22" />
-      </div>
 
       {/* VFX Layer */}
       <BattlefieldVfxLayer vfxs={vfxs} />
@@ -527,8 +553,9 @@ export function Battlefield2DView({
             hitReaction = preset.targetReaction
             if (!intensity) intensity = preset.intensity
           }
- 
+
           const formationMeta = getFormationMeta(actor)
+          const visualDepth = getFormationScaleCoord(actor)
           return (
             <div
               key={actor.id}
@@ -537,7 +564,7 @@ export function Battlefield2DView({
                 left: `${coords.x}%`,
                 top: `${coords.y}%`,
                 transform: 'translate(-50%, -50%)',
-                zIndex: actor.isActive ? 100 : actor.isTargeted ? 90 : Math.round(coords.y),
+                zIndex: actor.isActive ? 100 : actor.isTargeted ? 90 : Math.round(visualDepth),
               }}
             >
               {actor.telegraph && !actor.isDefeated && (
@@ -579,7 +606,7 @@ export function Battlefield2DView({
                 activeMotion={activeMotion}
                 hitReaction={hitReaction}
                 intensity={intensity}
-                yCoord={coords.y}
+                yCoord={visualDepth}
               />
               <div className={clsx(
                 'mx-auto mt-1 flex w-max max-w-[92px] items-center justify-center gap-1 rounded-full border bg-black/70 px-1.5 py-0.5 text-[8px] font-black leading-none shadow-md backdrop-blur-sm',

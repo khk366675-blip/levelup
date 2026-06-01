@@ -279,6 +279,12 @@ import {
 } from './manualBattleSessionGuards'
 
 import { registerLegionNodeLevelResolver } from './shadowStats'
+import {
+  getEffectiveRenown,
+  getRenownGainForGate,
+  getRenownProgress,
+  getRenownTier,
+} from './renown'
 
 // ── World Map Shadow Guard Constants (L3 / L4) ────────────────
 export const WORLD_SHADOW_GUARD_DEF_FACTOR = 0.25      // 그림자당 헌터 방어력 버프 비율
@@ -640,6 +646,7 @@ const initialHunter: HunterState = {
   level: 1,
   xp: 0,
   totalXp: 0,
+  renown: 0,
   rank: 'E',
   job: '미각성자',
   jobId: 'unawakened',
@@ -778,6 +785,54 @@ const createInitialGateStatus = (): GateStatus => ({
 const initialQuests = [...DEFAULT_DAILIES, ...DEFAULT_MAIN_QUESTS, ...DEFAULT_DUNGEONS]
 
 const uid = () => Math.random().toString(36).slice(2, 10)
+
+const getMonarchsDefeatedCount = (world?: LivingWorldState): number =>
+  world?.activeMonarchs?.filter(monarch => monarch.status === 'defeated').length ?? 0
+
+const applyRenownGain = (
+  hunter: HunterState,
+  previousState: Pick<GameState, 'hunter' | 'achievementStats' | 'livingWorld'>,
+  nextAchievementStats: AchievementStats,
+  gain: number,
+  sourceLabel: string,
+  nextMonarchsDefeatedCount = getMonarchsDefeatedCount(previousState.livingWorld)
+): { hunter: HunterState; messages: SystemMessage[]; worldLog?: string } => {
+  const previousRenown = getEffectiveRenown(
+    previousState.hunter,
+    previousState.achievementStats,
+    getMonarchsDefeatedCount(previousState.livingWorld)
+  )
+  const previousTier = getRenownTier(previousRenown)
+  const baseRenown = Math.max(hunter.renown ?? 0, previousRenown)
+  const nextHunter = { ...hunter, renown: baseRenown + Math.max(0, gain) }
+  const nextRenown = getEffectiveRenown(nextHunter, nextAchievementStats, nextMonarchsDefeatedCount)
+  const nextTier = getRenownTier(nextRenown)
+
+  if (nextTier.id === previousTier.id) {
+    return { hunter: nextHunter, messages: [] }
+  }
+
+  const nextInfo = getRenownProgress(nextRenown)
+  const message: SystemMessage = {
+    id: uid(),
+    kind: 'rank',
+    title: '명성 등급 상승',
+    lines: [
+      `${previousTier.label} → ${nextTier.label}`,
+      `세계가 당신을 ${nextTier.label} 헌터로 인정하기 시작했습니다.`,
+      `협력 응답 상한: ${nextTier.maxHelperRank}급 이하`,
+      nextInfo.next ? `다음 명성까지 ${Math.max(0, nextInfo.next.min - nextRenown)} 필요` : '국가권력급 헌터까지 협력 후보에 응답합니다.',
+      `계기: ${sourceLabel}`,
+    ],
+    createdAt: todayISO(),
+  }
+
+  return {
+    hunter: nextHunter,
+    messages: [message],
+    worldLog: `[명성 상승] 세계가 플레이어를 [${nextTier.label}]으로 인정하기 시작했습니다. (${nextTier.maxHelperRank}급 이하 협력 가능)`,
+  }
+}
 
 const directSkillIdFromTurn = (turn: BattleTurn): string | undefined => {
   if (turn.actorType !== 'player' || !turn.skillId) return undefined
@@ -5983,10 +6038,12 @@ export const useGame = create<GameState>()(
         if (!gate) return
 
         const isExam = activeGate.runState?.isPromotionExam
+        const redGateStatus = activeGate.runState?.redGateState?.status
+        const isActiveRedGate = redGateStatus === 'opened' || redGateStatus === 'cleared'
         const finalSourceLog: CombatLog = {
           ...combatLog,
           result: combatLog.result === 'victory' ? 'victory' : (combatLog.result === 'defeat' ? 'defeat' : 'draw'),
-          source: isExam ? 'promotion_exam' : (activeGate.runState?.redGateState ? 'red_gate' : 'gate'),
+          source: isExam ? 'promotion_exam' : (isActiveRedGate ? 'red_gate' : 'gate'),
         }
 
         // 하드코어 사망 감지 시 즉시 리셋 처리 후 반환 (이중 set 방지)
@@ -6417,7 +6474,7 @@ export const useGame = create<GameState>()(
             startedAt: todayISO(),
             source: isWorldMap
               ? 'world_map' as const
-              : (activeGate.runState?.isPromotionExam ? 'promotion_exam' as const : (activeGate.runState?.redGateState ? 'red_gate' as const : 'gate' as const)),
+              : (activeGate.runState?.isPromotionExam ? 'promotion_exam' as const : (isRedGate ? 'red_gate' as const : 'gate' as const)),
             difficultyMod: computedDifficultyMod,
           },
         })
@@ -8413,6 +8470,33 @@ export const useGame = create<GameState>()(
             }
           }
 
+          const nextAchievementStats: AchievementStats = {
+            ...freshState.achievementStats,
+            gateClearedCount: (freshState.achievementStats.gateClearedCount ?? 0) + 1,
+            bossKillsCount: isMonarchId || gate.rank === 'S' || gate.rewardTableId?.includes('boss')
+              ? (freshState.achievementStats.bossKillsCount ?? 0) + 1
+              : (freshState.achievementStats.bossKillsCount ?? 0),
+          }
+          const nextDefeatedMonarchsForRenown = updatedActiveMonarchs
+            ? updatedActiveMonarchs.filter(monarch => monarch.status === 'defeated').length
+            : getMonarchsDefeatedCount(freshState.livingWorld)
+          const renownResult = applyRenownGain(
+            nextHunter,
+            freshState,
+            nextAchievementStats,
+            getRenownGainForGate((gate.rank ?? 'E') as Rank, isMonarchId),
+            gate.name,
+            nextDefeatedMonarchsForRenown
+          )
+          nextHunter = renownResult.hunter
+          newMessages.push(...renownResult.messages)
+          if (renownResult.worldLog) {
+            worldLogs = [
+              ...worldLogs,
+              `[Day ${freshState.livingWorld?.day ?? 0}] ${renownResult.worldLog}`,
+            ].slice(-60)
+          }
+
           let nextCoopCount = freshState.livingWorld?.coopCount ?? 0
           if (helperHunterIds.length > 0) {
             nextCoopCount += 1
@@ -8476,6 +8560,7 @@ export const useGame = create<GameState>()(
 
           const baseState: Partial<GameState> = {
             hunter: nextHunter,
+            achievementStats: nextAchievementStats,
             gold: nextGold,
             shadowEssence: nextShadowEssence,
             items: nextItems,
@@ -11064,7 +11149,9 @@ export const useGame = create<GameState>()(
         const nextRiftNodes = { ...s.riftNodes }
         if (s.livingWorld) {
           const rng = createSeededRng(s.livingWorld.seed + s.livingWorld.day)
-          nextLivingWorld = advanceWorldDay(s.livingWorld, rng)
+          nextLivingWorld = advanceWorldDay(s.livingWorld, rng, {
+            loveCallHelperMaxRank: getRenownTier(getEffectiveRenown(s.hunter, s.achievementStats, getMonarchsDefeatedCount(s.livingWorld))).maxHelperRank,
+          })
           nextLivingWorld.lastTickDate = targetDate
 
           // 틱에서 변화된 게이트 클리어 상태를 기존 store.riftNodes와 동기화
@@ -12045,7 +12132,9 @@ export const useGame = create<GameState>()(
       debugAdvanceLivingWorldDay: () => set((s) => {
         if (!s.livingWorld) return {}
         const rng = createSeededRng(s.livingWorld.seed + s.livingWorld.day)
-        const nextLivingWorld = advanceWorldDay(s.livingWorld, rng)
+        const nextLivingWorld = advanceWorldDay(s.livingWorld, rng, {
+          loveCallHelperMaxRank: getRenownTier(getEffectiveRenown(s.hunter, s.achievementStats, getMonarchsDefeatedCount(s.livingWorld))).maxHelperRank,
+        })
         const nextRiftNodes = { ...s.riftNodes }
         if (nextLivingWorld.riftNodes) {
           for (const nodeId in nextLivingWorld.riftNodes) {
@@ -13399,14 +13488,32 @@ export const useGame = create<GameState>()(
           const isRedGate = runState?.redGateState?.status === 'cleared' || runState?.redGateState?.status === 'opened'
           const isBoss = gate.rank === 'S' || gate.rewardTableId?.includes('boss')
 
-          set(prev => ({
-            achievementStats: {
+          set(prev => {
+            const nextAchievementStats: AchievementStats = {
               ...prev.achievementStats,
               gateClearedCount: (prev.achievementStats.gateClearedCount ?? 0) + 1,
               redGateClearedCount: isRedGate ? (prev.achievementStats.redGateClearedCount ?? 0) + 1 : (prev.achievementStats.redGateClearedCount ?? 0),
               bossKillsCount: isBoss ? (prev.achievementStats.bossKillsCount ?? 0) + 1 : (prev.achievementStats.bossKillsCount ?? 0),
             }
-          }))
+            const renownGain = getRenownGainForGate(gate.rank, false) + (isBoss ? 8 : 0)
+            const renownResult = applyRenownGain(prev.hunter, prev, nextAchievementStats, renownGain, gate.name)
+            const nextLivingWorld = renownResult.worldLog && prev.livingWorld
+              ? {
+                ...prev.livingWorld,
+                eventLogs: [
+                  ...prev.livingWorld.eventLogs,
+                  `[Day ${prev.livingWorld.day}] ${renownResult.worldLog}`,
+                ].slice(-60),
+              }
+              : prev.livingWorld
+
+            return {
+              hunter: renownResult.hunter,
+              achievementStats: nextAchievementStats,
+              messages: renownResult.messages.length > 0 ? [...prev.messages, ...renownResult.messages] : prev.messages,
+              livingWorld: nextLivingWorld,
+            }
+          })
 
           // 8% 확률로 Echo 단서(낯익은 표식) 주입
           if (Math.random() < 0.08) {
@@ -13442,7 +13549,7 @@ export const useGame = create<GameState>()(
     }),
     {
       name: 'levelup-save',
-      version: 27,
+      version: 28,
       partialize: (state) => ({
         ...state,
         manualBattleSession: undefined,
@@ -13511,8 +13618,28 @@ export const useGame = create<GameState>()(
             }
           }
         }
+        if (version < 28 && persistedState?.hunter) {
+          persistedState.hunter.renown = getEffectiveRenown(
+            {
+              level: persistedState.hunter.level ?? 1,
+              renown: persistedState.hunter.renown ?? 0,
+            },
+            persistedState.achievementStats,
+            getMonarchsDefeatedCount(persistedState.livingWorld)
+          )
+        }
         // Ensure hunter has title fields
         if (persistedState?.hunter) {
+          if (!('renown' in persistedState.hunter)) {
+            persistedState.hunter.renown = getEffectiveRenown(
+              {
+                level: persistedState.hunter.level ?? 1,
+                renown: 0,
+              },
+              persistedState.achievementStats,
+              getMonarchsDefeatedCount(persistedState.livingWorld)
+            )
+          }
           if (!persistedState.hunter.ownedTitleIds) {
             persistedState.hunter.ownedTitleIds = []
           }

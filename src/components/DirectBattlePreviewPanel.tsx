@@ -133,6 +133,7 @@ export interface DirectBattlePreviewPanelProps {
   isRedGate?: boolean
   customEnemyUnits?: BattleUnit[]
   customBattleId?: string
+  battleThemeKey?: string
   maxRoundsOverride?: number
   source?: string
   initialHunterStatsModifier?: Partial<BattleStats>
@@ -768,6 +769,7 @@ export function DirectBattlePreviewPanel({
   isRedGate,
   customEnemyUnits,
   customBattleId,
+  battleThemeKey,
   maxRoundsOverride,
   source,
   initialHunterStatsModifier,
@@ -1545,6 +1547,7 @@ export function DirectBattlePreviewPanel({
           title={title}
           note={note}
           preview={preview}
+          battleThemeKey={battleThemeKey}
           roundReveal={roundReveal}
           playbackSpeed={playbackSpeed}
           setPlaybackSpeed={setPlaybackSpeed}

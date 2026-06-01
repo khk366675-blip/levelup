@@ -1970,6 +1970,7 @@ export interface HunterState {
   level: number
   xp: number
   totalXp: number
+  renown: number
   rank: Rank
   job: string // legacy display field
   jobId: JobId

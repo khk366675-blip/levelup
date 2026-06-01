@@ -33,6 +33,7 @@ import { todayKey } from '../lib/game'
 import { getRegionalTheme } from '../lib/livingWorldGateContent'
 import { getHunterTrait } from '../lib/hunterTraits'
 import { getEchoTruthReadiness } from '../lib/secrets'
+import { getEffectiveRenown, getRenownProgress } from '../lib/renown'
 
 // D3 World Map Imports & Initialization
 import { geoNaturalEarth1, geoPath, geoGraticule10 } from 'd3-geo'
@@ -310,6 +311,7 @@ export function WorldMapPanel() {
 
   // 헌터 스펙 및 실효 CP 연동용 상태
   const hunter = useGame((s) => s.hunter)
+  const achievementStats = useGame((s) => s.achievementStats)
   const items = useGame((s) => s.items)
   const equipment = useGame((s) => s.equipment)
   const ownedShadows = useGame((s) => s.ownedShadows ?? [])
@@ -327,6 +329,12 @@ export function WorldMapPanel() {
     equippedShadowIds,
     activeConsumableEffects,
   })
+  const renownValue = getEffectiveRenown(
+    hunter,
+    achievementStats,
+    livingWorld?.activeMonarchs?.filter(monarch => monarch.status === 'defeated').length ?? 0
+  )
+  const renownInfo = getRenownProgress(renownValue)
 
   // D3 Zoom & Overlay HUD States
   const [zoomTransform, setZoomTransform] = useState(() => {
@@ -1246,6 +1254,24 @@ export function WorldMapPanel() {
                   }`}
                   style={{ width: `${livingWorld.worldCorruption}%` }}
                 />
+              </div>
+              <div className="mt-3 rounded border border-cyan-400/15 bg-cyan-400/5 p-2">
+                <div className="flex items-center justify-between gap-2 text-[10px] font-black">
+                  <span className="flex items-center gap-1 text-cyan-200">
+                    <Trophy className="h-3.5 w-3.5" /> 명성: {renownInfo.current.label}
+                  </span>
+                  <span className="text-white/55">{renownValue.toLocaleString()}</span>
+                </div>
+                <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-black/45">
+                  <div
+                    className="h-full rounded-full bg-gradient-to-r from-cyan-400 to-amber-300 transition-all"
+                    style={{ width: `${Math.round(renownInfo.ratio * 100)}%` }}
+                  />
+                </div>
+                <div className="mt-1 flex items-center justify-between gap-2 text-[8.5px] font-bold text-white/45">
+                  <span>협력 상한 {renownInfo.current.maxHelperRank}급</span>
+                  <span>{renownInfo.next ? `다음: ${renownInfo.next.label}` : '최고 명성'}</span>
+                </div>
               </div>
             </div>
             <p className="mt-3 text-[11px] text-white/50 leading-relaxed font-semibold">
@@ -2765,7 +2791,15 @@ export function WorldMapPanel() {
 
                                   {/* 러브콜 공조 헌터 선택 */}
                                   <div className="space-y-1">
-                                    <span className="text-[8.5px] text-white/40 font-bold">협력 공조 헌터 목록</span>
+                                    <div className="flex items-center justify-between gap-2">
+                                      <span className="text-[8.5px] text-white/40 font-bold">협력 공조 헌터 목록</span>
+                                      <span className="rounded border border-cyan-400/20 bg-cyan-400/10 px-1.5 py-0.5 text-[7.5px] font-black text-cyan-200">
+                                        명성 {renownInfo.current.label}: {renownInfo.current.maxHelperRank}급 이하 응답
+                                      </span>
+                                    </div>
+                                    <div className="text-[8px] text-white/40 leading-relaxed">
+                                      명성이 오르면 더 높은 등급의 헌터가 러브콜 협력 후보에 합류합니다.
+                                    </div>
                                     {loveCallState.helperHunterIds.length === 0 ? (
                                       <div className="text-[8px] text-white/40 italic">공조 참전 가능한 지원 헌터 없음.</div>
                                     ) : (

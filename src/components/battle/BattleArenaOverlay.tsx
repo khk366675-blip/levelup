@@ -19,6 +19,7 @@ interface BattleArenaOverlayProps {
     issues: string[]
     logs: any[]
   }
+  battleThemeKey?: string
   roundReveal?: {
     steps: any[]
     index: number
@@ -50,6 +51,7 @@ export function BattleArenaOverlay({
   title,
   note,
   preview,
+  battleThemeKey,
   roundReveal,
   playbackSpeed,
   setPlaybackSpeed,
@@ -215,6 +217,7 @@ export function BattleArenaOverlay({
           actors={actors}
           battleType="gate"
           encounterKey={preview.encounterKey}
+          battleThemeKey={battleThemeKey}
           phase={battlefieldPhase}
           latestAction={latestAction}
           mode="overlay"

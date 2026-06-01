@@ -2049,6 +2049,7 @@ export function GatePanel({ isWorldMapContext }: { isWorldMapContext?: boolean }
           ]}
           customEnemyUnits={[buildMonarchBattleUnit(monarchId, monarchData?.battleCP ?? recommendedCP)]}
           customBattleId={`direct-monarch-${monarchId}`}
+          battleThemeKey={livingWorld?.homeReachedMonarchId === monarchId ? 'stronghold' : 'monarch'}
           maxRoundsOverride={25}
           autoStart
           allowEncounterSelection={false}
@@ -2437,6 +2438,11 @@ export function GatePanel({ isWorldMapContext }: { isWorldMapContext?: boolean }
     }
 
     const currentEnc = activeGate.runState?.encounters[activeGate.runState.currentEncounterIndex]
+    const redGateStatus = activeGate.runState?.redGateState?.status
+    const isActiveRedGate = redGateStatus === 'opened' || redGateStatus === 'cleared'
+    const battleThemeKey = isActiveRedGate
+      ? 'red'
+      : (gate.rank === 'S' || gate.rewardTableId?.includes('boss') ? 'boss' : undefined)
 
     return (
       <div className="space-y-4">
@@ -2444,7 +2450,7 @@ export function GatePanel({ isWorldMapContext }: { isWorldMapContext?: boolean }
         {!isWorldMapContext && <ArchiveTraceChip count={traceCount} />}
         <DirectBattlePreviewPanel
           key={`direct-gate-${activeGate.instanceId}`}
-          source={activeGate?.runState?.isPromotionExam ? 'promotion_exam' : (activeGate?.runState?.redGateState ? 'red_gate' : 'gate')}
+          source={activeGate?.runState?.isPromotionExam ? 'promotion_exam' : (isActiveRedGate ? 'red_gate' : 'gate')}
           title="직접 조작 게이트 전투"
           note="실제 게이트 전투 후보입니다. 승리/패배 결과는 기존 게이트 보상/패널티 처리로 한 번만 연결됩니다."
           hunter={hunter}
@@ -2466,7 +2472,8 @@ export function GatePanel({ isWorldMapContext }: { isWorldMapContext?: boolean }
           cancelButtonLabel="전투 취소"
           onBattleComplete={handleDirectGateBattleComplete}
           pressureSnapshot={activeGate.runState?.pressureSnapshot}
-          isRedGate={Boolean(activeGate.runState?.redGateState)}
+          isRedGate={isActiveRedGate}
+          battleThemeKey={battleThemeKey}
           initialHunterStatsModifier={statsModifier}
           initialHunterStatusEffects={statusEffects}
           difficultyMod={currentEnc?.difficultyMod}

@@ -123,29 +123,54 @@ export function getBattlefieldTheme(battleType: 'gate' | 'tower', encounterKey?:
   bgGradient: string
   arenaGrid: string
   skyFilter: string
+  bgImage: string
 } {
-  if (battleType === 'tower') {
+  const key = encounterKey?.toLowerCase() ?? ''
+
+  if (key.includes('stronghold') || key.includes('home-defense') || key.includes('kr-defense')) {
     return {
-      bgGradient: 'from-slate-950 via-purple-950/80 to-ink-950',
-      arenaGrid: 'border-purple-500/10 bg-purple-500/[0.02]',
-      skyFilter: 'bg-[radial-gradient(circle_at_50%_20%,rgba(139,92,246,0.18),transparent_55%)] shadow-mist-legendary',
+      bgGradient: 'from-slate-950 via-cyan-950/70 to-rose-950/70',
+      arenaGrid: 'border-cyan-400/10 bg-cyan-500/[0.015]',
+      skyFilter: 'bg-[radial-gradient(circle_at_35%_22%,rgba(34,211,238,0.13),transparent_50%),radial-gradient(circle_at_70%_30%,rgba(244,63,94,0.11),transparent_55%)]',
+      bgImage: '/battle-backgrounds/battle-bg-stronghold.webp',
+    }
+  }
+
+  if (key.includes('monarch') || key.includes('angel') || key.includes('direct-monarch')) {
+    return {
+      bgGradient: 'from-slate-950 via-purple-950/80 to-rose-950/70',
+      arenaGrid: 'border-purple-500/10 bg-purple-500/[0.015]',
+      skyFilter: 'bg-[radial-gradient(circle_at_50%_20%,rgba(139,92,246,0.14),transparent_55%),radial-gradient(circle_at_70%_35%,rgba(244,63,94,0.10),transparent_55%)] shadow-mist-legendary',
+      bgImage: '/battle-backgrounds/battle-bg-monarch.webp',
     }
   }
   
+  // The retired tower path falls back to the normal gate image.
+  if (battleType === 'tower') {
+    return {
+      bgGradient: 'from-slate-950 via-cyan-950/70 to-ink-950',
+      arenaGrid: 'border-cyan-500/10 bg-cyan-500/[0.02]',
+      skyFilter: 'bg-[radial-gradient(circle_at_50%_20%,rgba(34,211,238,0.10),transparent_55%)]',
+      bgImage: '/battle-backgrounds/battle-bg-normal.webp',
+    }
+  }
+
   // Gate themes based on key
-  if (encounterKey?.includes('red') || encounterKey?.includes('boss')) {
+  if (key.includes('red') || key.includes('boss')) {
     return {
       bgGradient: 'from-slate-950 via-rose-950/80 to-ink-950',
       arenaGrid: 'border-rose-500/10 bg-rose-500/[0.02]',
-      skyFilter: 'bg-[radial-gradient(circle_at_50%_20%,rgba(244,63,94,0.15),transparent_55%)]',
+      skyFilter: 'bg-[radial-gradient(circle_at_50%_20%,rgba(244,63,94,0.12),transparent_55%)]',
+      bgImage: '/battle-backgrounds/battle-bg-boss.webp',
     }
   }
   
-  if (encounterKey?.includes('named') || encounterKey?.includes('large')) {
+  if (key.includes('named') || key.includes('large')) {
     return {
       bgGradient: 'from-slate-950 via-indigo-950/80 to-ink-950',
       arenaGrid: 'border-indigo-500/10 bg-indigo-500/[0.02]',
-      skyFilter: 'bg-[radial-gradient(circle_at_50%_20%,rgba(99,102,241,0.14),transparent_55%)]',
+      skyFilter: 'bg-[radial-gradient(circle_at_50%_20%,rgba(99,102,241,0.11),transparent_55%)]',
+      bgImage: '/battle-backgrounds/battle-bg-named.webp',
     }
   }
   
@@ -153,6 +178,7 @@ export function getBattlefieldTheme(battleType: 'gate' | 'tower', encounterKey?:
   return {
     bgGradient: 'from-slate-950 via-cyan-950/70 to-ink-950',
     arenaGrid: 'border-cyan-500/10 bg-cyan-500/[0.02]',
-    skyFilter: 'bg-[radial-gradient(circle_at_50%_20%,rgba(34,211,238,0.12),transparent_55%)]',
+    skyFilter: 'bg-[radial-gradient(circle_at_50%_20%,rgba(34,211,238,0.10),transparent_55%)]',
+    bgImage: '/battle-backgrounds/battle-bg-normal.webp',
   }
 }

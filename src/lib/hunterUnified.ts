@@ -28,6 +28,7 @@ export function convertNamedHunterToHunterState(hunter: NamedHunter): HunterStat
     level,
     xp: 0,
     totalXp: 0,
+    renown: 0,
     rank: hunter.rank,
     job: 'Warrior', // legacy display
     jobId,
