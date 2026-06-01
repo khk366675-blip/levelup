@@ -640,8 +640,12 @@ export function WorldMapPanel() {
         .map((reqId: string) => RIFT_NODES.find((rn: any) => rn.id === reqId)?.name ?? reqId)
         .join(', ')
       triggerToast(`🔒 이 구역은 잠겨있습니다. 선행 정화 필요: [${reqNames}]`)
+    } else if (status === 'cleared') {
+      setSelectedNode(node)
+      setSelectedHelpers([])
+      triggerToast(`[${node.name}]은 이미 정화된 구역입니다.`)
     } else {
-      // active 또는 cleared
+      // active
       setSelectedNode(node)
       const worldNode = livingWorld?.riftNodes[node.id]
       if (worldNode?.loveCall?.active) {
@@ -2820,11 +2824,12 @@ export function WorldMapPanel() {
                                 <>
                                   {status === 'cleared' && (
                                     <div className="rounded border border-emerald-500/20 bg-emerald-500/5 p-1.5 text-[8.5px] text-emerald-200 text-center mb-1">
-                                      정화 완료 구역입니다. 반복 재정화(전투)가 가능합니다.
+                                      정화 완료 구역입니다. 반복 공략할 수 없습니다.
                                     </div>
                                   )}
                                   <button
                                     onClick={() => {
+                                      if (status !== 'active') return
                                       const level = getDangerLevel(selectedNode)
                                       if (level === 'reckless') {
                                         setRecklessConfirmType('manual')
@@ -2833,11 +2838,11 @@ export function WorldMapPanel() {
                                         startWorldManualBattle(selectedNode.id, selectedHelpers)
                                       }
                                     }}
-                                    disabled={status === 'locked'}
-                                    className="btn border border-cyan-500/30 bg-cyan-950/20 hover:bg-cyan-500/15 w-full flex items-center justify-center gap-1 py-1.5 text-[10px] text-cyan-200 transition-all cursor-pointer font-bold"
+                                    disabled={status !== 'active'}
+                                    className="btn border border-cyan-500/30 bg-cyan-950/20 hover:bg-cyan-500/15 w-full flex items-center justify-center gap-1 py-1.5 text-[10px] text-cyan-200 transition-all cursor-pointer font-bold disabled:opacity-50 disabled:cursor-not-allowed"
                                   >
                                     <Zap className="h-3 w-3 text-cyan-400" />
-                                    수동 조작 정화 개시 (카드 전투)
+                                    {status === 'cleared' ? '정화 완료' : '수동 조작 정화 개시 (카드 전투)'}
                                   </button>
                                 </>
                               )}

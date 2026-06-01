@@ -5040,7 +5040,7 @@ export const useGame = create<GameState>()(
           const regionId = node.regionId
           const regionState = nextLivingWorld.regions[regionId]
           if (regionState) {
-            const activeGate = s.activeGate
+            const activeGate = s.activeWorldGate?.gateId === nodeId ? s.activeWorldGate : s.activeGate
             const relief = (activeGate && activeGate.gateId === nodeId && activeGate.runState)
               ? (activeGate.runState.contaminationRelief ?? 0)
               : 0
@@ -6997,6 +6997,7 @@ export const useGame = create<GameState>()(
         }
 
         const isLast = run.currentEncounterIndex === run.encounters.length - 1
+        const shouldClearWorldNode = activeGateKey === 'activeWorldGate' && isLast
         if (!isLast) {
           const nextIndex = run.currentEncounterIndex + 1
           run.currentEncounterIndex = nextIndex
@@ -7077,6 +7078,14 @@ export const useGame = create<GameState>()(
             createdAt: todayISO(),
           }]
         }))
+        if (shouldClearWorldNode) {
+          get().markRiftNodeCleared(activeGate.gateId)
+          set({
+            activeWorldGate: undefined,
+            activeRiftNodeId: undefined,
+            manualBattleSession: undefined,
+          })
+        }
       },
 
       claimGateRunTreasure: (gateInstanceId) => {
@@ -7107,6 +7116,7 @@ export const useGame = create<GameState>()(
         run.accumulatedRewards.essence += essAmt
 
         const isLast = run.currentEncounterIndex === run.encounters.length - 1
+        const shouldClearWorldNode = activeGateKey === 'activeWorldGate' && isLast
         if (!isLast) {
           const nextIndex = run.currentEncounterIndex + 1
           run.currentEncounterIndex = nextIndex
@@ -7151,6 +7161,14 @@ export const useGame = create<GameState>()(
             createdAt: todayISO(),
           }]
         }))
+        if (shouldClearWorldNode) {
+          get().markRiftNodeCleared(activeGate.gateId)
+          set({
+            activeWorldGate: undefined,
+            activeRiftNodeId: undefined,
+            manualBattleSession: undefined,
+          })
+        }
       },
 
       performGateRunRest: (option, gateInstanceId) => {
@@ -7167,6 +7185,7 @@ export const useGame = create<GameState>()(
         run.clearedEncounterIds = [...run.clearedEncounterIds, currentEncounter.id]
 
         const isLast = run.currentEncounterIndex === run.encounters.length - 1
+        const shouldClearWorldNode = activeGateKey === 'activeWorldGate' && isLast
         if (!isLast) {
           const nextIndex = run.currentEncounterIndex + 1
           run.currentEncounterIndex = nextIndex
@@ -7208,6 +7227,14 @@ export const useGame = create<GameState>()(
             createdAt: todayISO(),
           }]
         }))
+        if (shouldClearWorldNode) {
+          get().markRiftNodeCleared(activeGate.gateId)
+          set({
+            activeWorldGate: undefined,
+            activeRiftNodeId: undefined,
+            manualBattleSession: undefined,
+          })
+        }
       },
 
       absorbGateRunShadowTrace: (gateInstanceId) => {
@@ -7226,6 +7253,7 @@ export const useGame = create<GameState>()(
         run.extractionBonusPercent = (run.extractionBonusPercent ?? 0) + 6
 
         const isLast = run.currentEncounterIndex === run.encounters.length - 1
+        const shouldClearWorldNode = activeGateKey === 'activeWorldGate' && isLast
         if (!isLast) {
           const nextIndex = run.currentEncounterIndex + 1
           run.currentEncounterIndex = nextIndex
@@ -7258,6 +7286,14 @@ export const useGame = create<GameState>()(
             createdAt: todayISO(),
           }]
         }))
+        if (shouldClearWorldNode) {
+          get().markRiftNodeCleared(activeGate.gateId)
+          set({
+            activeWorldGate: undefined,
+            activeRiftNodeId: undefined,
+            manualBattleSession: undefined,
+          })
+        }
       },
 
       abandonGateRun: (gateInstanceId) => {
@@ -8057,6 +8093,7 @@ export const useGame = create<GameState>()(
             } : undefined,
             riftNodes: finalRiftNodes,
             activeGate: undefined,
+            activeWorldGate: undefined,
             manualBattleSession: undefined,
             activeRiftNodeId: undefined,
             secretProgress: nextSecretProgress,
@@ -8078,12 +8115,14 @@ export const useGame = create<GameState>()(
                 eventLogs: worldLogs
               },
               activeGate: undefined,
+              activeWorldGate: undefined,
               manualBattleSession: undefined,
               activeRiftNodeId: undefined,
             })
           } else {
             set({
               activeGate: undefined,
+              activeWorldGate: undefined,
               manualBattleSession: undefined,
               activeRiftNodeId: undefined,
             })
@@ -8092,7 +8131,7 @@ export const useGame = create<GameState>()(
       },
 
       cancelWorldBattle: () => set((s) => {
-        const activeGate = s.activeGate
+        const activeGate = s.activeWorldGate ?? s.activeGate
         const manualSession = s.manualBattleSession
         if (!activeGate && (!manualSession || manualSession.source !== 'world_map')) return {}
 
@@ -8105,6 +8144,7 @@ export const useGame = create<GameState>()(
         if (manualSession?.result === 'victory' || manualSession?.logs?.some(l => l.message?.includes('성공') || l.message?.includes('승리'))) {
           return {
             activeGate: undefined,
+            activeWorldGate: undefined,
             activeRiftNodeId: undefined,
             manualBattleSession: undefined,
           }
@@ -8124,6 +8164,7 @@ export const useGame = create<GameState>()(
 
         return {
           activeGate: undefined,
+          activeWorldGate: undefined,
           activeRiftNodeId: undefined,
           manualBattleSession: undefined,
           worldBattleRetreats: nextRetreats,
@@ -8449,6 +8490,7 @@ export const useGame = create<GameState>()(
             messages: [...freshState.messages, ...newMessages],
             riftNodes: finalRiftNodes,
             activeGate: undefined,
+            activeWorldGate: undefined,
             manualBattleSession: undefined,
             activeRiftNodeId: undefined,
             secretProgress: nextSecretProgress,
@@ -8476,6 +8518,7 @@ export const useGame = create<GameState>()(
                 eventLogs: worldLogs
               },
               activeGate: undefined,
+              activeWorldGate: undefined,
               manualBattleSession: undefined,
               activeRiftNodeId: undefined,
             })
@@ -8778,7 +8821,11 @@ export const useGame = create<GameState>()(
       switchWorldManualBattleToAuto: () => {},
       attemptShadowExtraction: (gateInstanceId) => {
         const s = get()
-        const activeGate = s.activeGate
+        const activeGate = s.activeGate?.instanceId === gateInstanceId
+          ? s.activeGate
+          : s.activeWorldGate?.instanceId === gateInstanceId
+          ? s.activeWorldGate
+          : undefined
         if (!activeGate || activeGate.instanceId !== gateInstanceId) return
         const gate = GATE_DEFINITIONS.find(item => item.id === activeGate.gateId) ?? activeGate.customGateDef
         if (!gate) return
@@ -8863,6 +8910,15 @@ export const useGame = create<GameState>()(
           shadowFragments: nextFragments,
           hunter: nextHunter
         }))
+
+        if (activeGate.source === 'worldmap') {
+          get().markRiftNodeCleared(activeGate.gateId)
+          set({
+            activeWorldGate: undefined,
+            activeRiftNodeId: undefined,
+            manualBattleSession: undefined,
+          })
+        }
 
         setTimeout(() => {
           const nextFailCount = nextFailCountMap[gate.id] ?? 0
