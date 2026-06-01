@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import {
   Globe,
   Lock,
@@ -31,6 +31,85 @@ import { getHunterCombatPower } from '../lib/combatPower'
 import { todayKey } from '../lib/game'
 import { getRegionalTheme } from '../lib/livingWorldGateContent'
 import { getHunterTrait } from '../lib/hunterTraits'
+
+// D3 World Map Imports & Initialization
+import { geoNaturalEarth1, geoPath, geoGraticule10 } from 'd3-geo'
+import { feature } from 'topojson-client'
+import worldAtlasData from 'world-atlas/countries-110m.json'
+
+// Country Name Mapping to game region IDs
+const getRegionIdByCountryName = (name: string): string | null => {
+  if (!name) return null
+  const lowerName = name.toLowerCase()
+  if (lowerName.includes('united states')) return 'us'
+  if (lowerName.includes('canada')) return 'ca'
+  if (lowerName.includes('mexico')) return 'mx'
+  if (lowerName.includes('brazil')) return 'br'
+  if (lowerName.includes('united kingdom')) return 'uk'
+  if (lowerName.includes('germany')) return 'de'
+  if (lowerName.includes('france')) return 'fr'
+  if (lowerName.includes('italy')) return 'it'
+  if (lowerName.includes('russia')) return 'ru'
+  if (lowerName.includes('egypt')) return 'eg'
+  if (lowerName.includes('india')) return 'in'
+  if (lowerName.includes('china')) return 'cn'
+  if (lowerName.includes('korea') || lowerName.includes('south korea')) return 'kr'
+  if (lowerName.includes('japan')) return 'jp'
+  if (lowerName.includes('australia')) return 'au'
+  return null
+}
+
+const MAP_WIDTH = 800
+const MAP_HEIGHT = 450
+
+// Natural Earth 1 projection optimized for aspect ratio
+const projection = geoNaturalEarth1()
+  .scale(132)
+  .translate([MAP_WIDTH / 2, MAP_HEIGHT / 2])
+
+const pathGenerator = geoPath().projection(projection)
+const graticuleGenerator = geoGraticule10()
+
+// Convert TopoJSON to GeoJSON features
+let worldFeatures: any[] = []
+try {
+  worldFeatures = (feature(worldAtlasData as any, worldAtlasData.objects.countries as any) as any).features
+} catch (err) {
+  console.error('Failed to parse world-atlas TopoJSON:', err)
+}
+
+// Calculate precomputed centroids for our 15 game countries with adjustments for optimal visual alignment
+const REGION_CENTROIDS: Record<string, [number, number]> = {}
+const CENTROID_ADJUSTMENTS: Record<string, [number, number]> = {
+  us: [-20, 10],
+  ca: [-10, 15],
+  ru: [25, 10],
+  cn: [-5, 5],
+  kr: [1, -2],
+  jp: [2, -2],
+  au: [0, -5],
+  uk: [-3, -6],
+  fr: [-2, 2],
+  de: [0, -2],
+  it: [0, 2],
+  in: [-2, -2],
+  eg: [0, -2],
+  br: [2, 2],
+  mx: [-5, 0],
+}
+
+worldFeatures.forEach((f: any) => {
+  const name = f.properties?.name
+  const rId = getRegionIdByCountryName(name)
+  if (rId) {
+    const centroid = pathGenerator.centroid(f)
+    if (centroid && !isNaN(centroid[0]) && !isNaN(centroid[1])) {
+      const adj = CENTROID_ADJUSTMENTS[rId] || [0, 0]
+      REGION_CENTROIDS[rId] = [centroid[0] + adj[0], centroid[1] + adj[1]]
+    }
+  }
+})
+
 
 
 const REGION_FLAGS: Record<string, string> = {
@@ -1623,154 +1702,589 @@ export function WorldMapPanel() {
 
         {/* 맵 컨테이너 */}
         <div className="lg:col-span-2">
-          <div
-            className="relative w-full rounded-xl border border-white/10 bg-slate-950 overflow-hidden"
-            style={{ aspectRatio: '16/9', minHeight: '300px' }}
-          >
-            {/* 그리드 모티프 배경 */}
-            <div className="absolute inset-0 bg-[linear-gradient(to_right,#0f0f15_1px,transparent_1px),linear-gradient(to_bottom,#0f0f15_1px,transparent_1px)] bg-[size:4rem_4rem] [mask-image:radial-gradient(ellipse_60%_50%_at_50%_50%,#000_70%,transparent_100%)] opacity-70" />
+          {(() => {
+            const isMapDataLoaded = worldFeatures && worldFeatures.length > 0
 
-            {/* 지도 상의 가상 대륙 경계선 대체 홀더 */}
-            <div className="absolute inset-0 flex items-center justify-center text-[10px] text-white/5 select-none pointer-events-none font-mono">
-              [ DIMENSIONAL RIFT MAP - MVP-2 ]
-            </div>
+            // Helper to determine region coloring based on game state
+            const getCountryColors = (regionId: string, corruption: number, isOccupied: boolean) => {
+              if (regionId === 'kr') {
+                return {
+                  fill: '#1a143b', // deep violet-black
+                  stroke: '#7f77dd', // electric purple
+                  glowColor: '#7f77dd',
+                  stateText: '거점',
+                }
+              }
+              if (isOccupied) {
+                return {
+                  fill: '#380c10', // deep blood red
+                  stroke: '#e24b4a', // intense military red
+                  glowColor: '#e24b4a',
+                  stateText: '점령됨',
+                }
+              }
+              if (corruption <= 20) {
+                return {
+                  fill: '#0d261e', // dark emerald shadow
+                  stroke: '#1d9e75', // bright jade green
+                  glowColor: '#1d9e75',
+                  stateText: '안전',
+                }
+              }
+              if (corruption <= 50) {
+                return {
+                  fill: '#2e1d09', // dark copper amber
+                  stroke: '#ef9f27', // warm alert orange
+                  glowColor: '#ef9f27',
+                  stateText: '경계',
+                }
+              }
+              return {
+                fill: '#380c10', // deep blood red
+                stroke: '#e24b4a', // intense military red
+                glowColor: '#e24b4a',
+                stateText: '위험',
+              }
+            }
 
-            {/* 국가(Region) 레이블 렌더링 */}
-            {RIFT_REGIONS.map((region: RiftRegion) => {
-              const prog = getRegionProgress(region.id, riftNodesState)
-              const regionState = livingWorld?.regions[region.id]
-              const totalPower = regionState ? getRegionTotalPower(regionState, livingWorld.namedHunters) : 0
-              const occupiedMonarch = livingWorld?.activeMonarchs?.find(m => m.status === 'rampaging' && m.occupiedRegionIds.includes(region.id))
+            // Get coordinate helper for gate nodes with custom offsets for Korean gates
+            const getNodeCoordinates = (node: any): [number, number] => {
+              const baseCentroid = REGION_CENTROIDS[node.regionId]
+              if (!baseCentroid) {
+                return [(node.x / 100) * MAP_WIDTH, (node.y / 100) * MAP_HEIGHT]
+              }
 
-              return (
-                <div
-                  key={region.id}
-                  className="absolute pointer-events-none flex flex-col items-center -translate-x-1/2 -translate-y-1/2"
-                  style={{ left: `${region.labelX}%`, top: `${region.labelY}%` }}
-                >
-                  {/* 점령 시 붉은 글로우 백그라운드 효과 */}
-                  {occupiedMonarch && (
-                    <div className="absolute -inset-10 rounded-full bg-rose-600/10 blur-xl animate-pulse -z-10" />
-                  )}
-                  <div className={`rounded-full bg-black/75 border ${occupiedMonarch ? 'border-red-500/80 shadow-glow-red animate-pulse' : 'border-white/5'} px-2.5 py-0.5 text-[10px] font-black ${occupiedMonarch ? 'text-red-400' : 'text-white/60'} backdrop-blur-sm`}>
-                    {occupiedMonarch ? `⚠️ ${region.name} (점령됨)` : region.name}
-                  </div>
-                  <div className={`text-[8px] ${occupiedMonarch ? 'text-red-300 font-bold bg-red-950/40 border border-red-500/25 px-1.5' : 'text-purple-300/80 bg-black/45 px-1'} font-mono mt-0.5 whitespace-nowrap rounded`}>
-                    {occupiedMonarch 
-                      ? `군주: ${MONARCHS.find(m => m.id === occupiedMonarch.monarchId)?.name ?? occupiedMonarch.monarchId}`
-                      : `(${prog.cleared}/${prog.total})${totalPower > 0 ? ` ⚔️${(totalPower / 1000).toFixed(0)}k` : ''}`
-                    }
-                  </div>
-                </div>
-              )
-            })}
+              if (node.id === 'node-kr-seoul') {
+                return [baseCentroid[0] + 5, baseCentroid[1] - 4]
+              }
+              if (node.id === 'node-kr-incheon') {
+                return [baseCentroid[0] - 5, baseCentroid[1] + 3]
+              }
 
-            {/* 노드(Node) 마커 렌더링 - 한국 활성 게이트 또는 활성화된 러브콜(지원 요청) 노출 */}
-            {Object.values(livingWorld?.riftNodes ?? {})
-              .filter((node: any) => (node.regionId === 'kr' || node.loveCall?.active) && (riftNodesState[node.id] ?? node.status) === 'active')
-              .map((node: any) => {
-                const status = riftNodesState[node.id] ?? node.status
-                const meta = RIFT_NODE_STATUS_META[status]
-                const worldNode = livingWorld?.riftNodes[node.id]
-                const isNodeRegionOccupied = livingWorld?.activeMonarchs?.some(m => m.status === 'rampaging' && m.occupiedRegionIds.includes(node.regionId))
-                const hasLoveCall = worldNode?.loveCall?.active
+              return baseCentroid
+            }
+
+            // Render curved, animated network lines connecting South Korea to active regions
+            const renderConnectingLines = () => {
+              const krCentroid = REGION_CENTROIDS['kr']
+              if (!krCentroid) return null
+
+              const activeNodes = Object.values(livingWorld?.riftNodes ?? {})
+                .filter((node: any) => node.loveCall?.active && (riftNodesState[node.id] ?? node.status) === 'active')
+              
+              const activeMonarchs = livingWorld?.activeMonarchs?.filter((m: any) => m.status === 'rampaging') ?? []
+
+              const targets: { id: string; coords: [number, number]; type: 'lovecall' | 'monarch' }[] = []
+
+              activeNodes.forEach((node: any) => {
+                const coords = REGION_CENTROIDS[node.regionId]
+                if (coords) {
+                  targets.push({ id: node.id, coords, type: 'lovecall' })
+                }
+              })
+
+              activeMonarchs.forEach((m: any) => {
+                const regionId = m.occupiedRegionIds[0] || 'kr'
+                const coords = REGION_CENTROIDS[regionId]
+                if (coords && regionId !== 'kr') {
+                  targets.push({ id: m.monarchId, coords, type: 'monarch' })
+                }
+              })
+
+              return targets.map((t) => {
+                const [x1, y1] = krCentroid
+                const [x2, y2] = t.coords
+                
+                // Draw arc via quadratic bezier control point
+                const mx = (x1 + x2) / 2
+                const my = (y1 + y2) / 2
+                const dx = x2 - x1
+                const dy = y2 - y1
+                const offset = 30
+                const length = Math.sqrt(dx * dx + dy * dy)
+                const px = -dy / length
+                const py = dx / length
+                const cx = mx + px * offset
+                const cy = my + py * offset
+
+                const pathD = `M ${x1} ${y1} Q ${cx} ${cy} ${x2} ${y2}`
+                const strokeColor = t.type === 'monarch' ? '#e24b4a' : '#ef9f27'
 
                 return (
-                  <button
-                    key={node.id}
-                    onClick={() => handleNodeClick(node)}
-                    className={`absolute -translate-x-1/2 -translate-y-1/2 flex flex-col items-center group transition-all duration-300 z-10`}
-                    style={{ left: `${node.x}%`, top: `${node.y}%` }}
-                  >
-                    {/* 노드 링과 코어 */}
-                    <div
-                      className={`relative h-5 w-5 rounded-full border-2 ${
-                        isNodeRegionOccupied 
-                          ? 'border-red-500 bg-red-950/80 shadow-glow-red animate-pulse' 
-                          : hasLoveCall
-                            ? 'border-amber-400 bg-amber-950/80 shadow-glow-amber'
-                            : `${meta.borderClass} ${meta.bgClass}`
-                      } flex items-center justify-center transition-all group-hover:scale-125 ${
-                        hasLoveCall ? 'group-hover:border-amber-300' : 'group-hover:border-purple-400'
-                      }`}
-                    >
-                      {hasLoveCall && (
-                        <span className="absolute -top-3 -right-3 flex h-4 w-4 items-center justify-center rounded-full bg-yellow-500 text-[8px] font-black text-black shadow-glow-yellow animate-bounce z-20">
-                          📞
-                        </span>
-                      )}
-                      {status === 'locked' && (
-                        <Lock className="h-2 w-2 text-zinc-600" />
-                      )}
-                      {status === 'cleared' && (
-                        <CheckCircle className="h-2 text-emerald-400" style={{ width: '8px' }} />
-                      )}
-                      {status === 'undiscovered' && (
-                        <Eye className="h-2 w-2 text-zinc-500" />
-                      )}
-                      {status === 'active' && (
-                        <div className={`h-1.5 w-1.5 rounded-full ${isNodeRegionOccupied ? 'bg-red-400' : hasLoveCall ? 'bg-amber-400' : 'bg-cyan-400'} animate-ping`} />
-                      )}
-                    </div>
-
-                    {/* 마커 아래 노드명 말풍선 */}
-                    <div className="mt-1 opacity-60 group-hover:opacity-100 transition-all">
-                      <div className={`rounded bg-black/80 border ${
-                        isNodeRegionOccupied 
-                          ? 'border-red-500/40 text-red-300' 
-                          : hasLoveCall
-                            ? 'border-amber-500/45 text-amber-200 shadow-glow-amber/10'
-                            : 'border-white/5 text-white/70'
-                      } px-1.5 py-0.5 text-[9px] font-bold backdrop-blur-sm whitespace-nowrap shadow-md`}>
-                        {hasLoveCall ? `📞 [지원요청] ${node.name} (D-${node.daysRemaining})` : node.name}
-                      </div>
-                    </div>
-                  </button>
+                  <path
+                    key={`link-${t.id}`}
+                    d={pathD}
+                    fill="none"
+                    stroke={strokeColor}
+                    strokeWidth="1.5"
+                    strokeDasharray="4,4"
+                    className="link-animation opacity-60"
+                    style={{
+                      filter: `drop-shadow(0 0 2px ${strokeColor})`,
+                    }}
+                  />
                 )
-              })}
+              })
+            }
 
-            {/* 군주 노드 마커 렌더링 */}
-            {livingWorld?.activeMonarchs?.filter((m: any) => m.status === 'rampaging').map((monarch: any) => {
-              const mData = MONARCHS.find(m => m.id === monarch.monarchId)
-              if (!mData) return null
-              const regionId = monarch.occupiedRegionIds[0] || 'kr'
-              const regionMeta = RIFT_REGIONS.find(r => r.id === regionId)
-              const x = regionMeta ? regionMeta.labelX : 50
-              const y = regionMeta ? regionMeta.labelY + 6 : 56
-
+            // Fallback representation if D3 datasets fail to load
+            if (!isMapDataLoaded) {
               return (
-                <button
-                  key={monarch.monarchId}
-                  onClick={() => handleNodeClick({
-                    id: monarch.monarchId,
-                    regionId,
-                    name: mData.name,
-                    x,
-                    y,
-                    status: 'active',
-                    gateDefId: monarch.monarchId,
-                    difficultyRank: 'S',
-                    difficulty: mData.recommendedCP,
-                    deadline: 999,
-                    daysRemaining: 999,
-                    isSGrade: true
-                  })}
-                  className="absolute -translate-x-1/2 -translate-y-1/2 flex flex-col items-center group transition-all duration-300 z-20 animate-pulse cursor-pointer"
-                  style={{ left: `${x}%`, top: `${y}%` }}
+                <div
+                  className="relative w-full rounded-xl border border-white/10 bg-slate-950 overflow-hidden"
+                  style={{ aspectRatio: '16/9', minHeight: '300px' }}
                 >
-                  <div className="relative h-6 w-6 rounded-full border-2 border-red-500 bg-red-950/90 shadow-glow-red flex items-center justify-center transition-all group-hover:scale-125">
-                    <span className="text-[10px]">👑</span>
+                  <div className="absolute inset-0 bg-[linear-gradient(to_right,#0f0f15_1px,transparent_1px),linear-gradient(to_bottom,#0f0f15_1px,transparent_1px)] bg-[size:4rem_4rem] [mask-image:radial-gradient(ellipse_60%_50%_at_50%_50%,#000_70%,transparent_100%)] opacity-70" />
+                  <div className="absolute inset-0 flex items-center justify-center text-[10px] text-white/5 select-none pointer-events-none font-mono">
+                    [ DIMENSIONAL RIFT MAP - FALLBACK GRID ]
                   </div>
-                  <div className="mt-1">
-                    <div className="rounded bg-red-950/90 border border-red-500/40 text-red-200 px-1.5 py-0.5 text-[8px] font-black backdrop-blur-sm whitespace-nowrap shadow-md">
-                      {mData.name} (침공)
-                    </div>
-                  </div>
-                </button>
+                  {RIFT_REGIONS.map((region: RiftRegion) => {
+                    const prog = getRegionProgress(region.id, riftNodesState)
+                    const regionState = livingWorld?.regions[region.id]
+                    const totalPower = regionState ? getRegionTotalPower(regionState, livingWorld.namedHunters) : 0
+                    const occupiedMonarch = livingWorld?.activeMonarchs?.find(m => m.status === 'rampaging' && m.occupiedRegionIds.includes(region.id))
+
+                    return (
+                      <div
+                        key={region.id}
+                        className="absolute pointer-events-none flex flex-col items-center -translate-x-1/2 -translate-y-1/2 cursor-pointer"
+                        style={{ left: `${region.labelX}%`, top: `${region.labelY}%` }}
+                      >
+                        {occupiedMonarch && (
+                          <div className="absolute -inset-10 rounded-full bg-rose-600/10 blur-xl animate-pulse -z-10" />
+                        )}
+                        <div className={`rounded-full bg-black/75 border ${occupiedMonarch ? 'border-red-500/80 shadow-glow-red animate-pulse' : 'border-white/5'} px-2.5 py-0.5 text-[10px] font-black ${occupiedMonarch ? 'text-red-400' : 'text-white/60'} backdrop-blur-sm`}>
+                          {occupiedMonarch ? `⚠️ ${region.name} (점령됨)` : region.name}
+                        </div>
+                        <div className={`text-[8px] ${occupiedMonarch ? 'text-red-300 font-bold bg-red-950/40 border border-red-500/25 px-1.5' : 'text-purple-300/80 bg-black/45 px-1'} font-mono mt-0.5 whitespace-nowrap rounded`}>
+                          {occupiedMonarch 
+                            ? `군주: ${MONARCHS.find(m => m.id === occupiedMonarch.monarchId)?.name ?? occupiedMonarch.monarchId}`
+                            : `(${prog.cleared}/${prog.total})${totalPower > 0 ? ` ⚔️${(totalPower / 1000).toFixed(0)}k` : ''}`
+                          }
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
               )
-            })}
-          </div>
+            }
+
+            return (
+              <div
+                className="relative w-full rounded-xl border border-white/10 bg-[#04050c] overflow-hidden"
+                style={{ aspectRatio: '16/9', minHeight: '300px' }}
+              >
+                <svg
+                  viewBox={`0 0 ${MAP_WIDTH} ${MAP_HEIGHT}`}
+                  width="100%"
+                  height="100%"
+                  className="w-full h-full select-none block"
+                >
+                  <defs>
+                    <radialGradient id="ocean-gradient" cx="50%" cy="50%" r="70%">
+                      <stop offset="0%" stopColor="#0b1226" />
+                      <stop offset="100%" stopColor="#04050c" />
+                    </radialGradient>
+                    <filter id="glow-base" x="-20%" y="-20%" width="140%" height="140%">
+                      <feGaussianBlur stdDeviation="4" result="blur" />
+                      <feComposite in="SourceGraphic" in2="blur" operator="over" />
+                    </filter>
+                    <style>{`
+                      @keyframes map-dash {
+                        to {
+                          stroke-dashoffset: -40;
+                        }
+                      }
+                      .link-animation {
+                        animation: map-dash 2s linear infinite;
+                      }
+                      @keyframes pulse-ring {
+                        0% { transform: scale(0.3); opacity: 0; }
+                        50% { opacity: 0.8; }
+                        100% { transform: scale(1.6); opacity: 0; }
+                      }
+                      .ring-pulse {
+                        transform-origin: center;
+                        animation: pulse-ring 2s cubic-bezier(0.215, 0.610, 0.355, 1) infinite;
+                      }
+                    `}</style>
+                  </defs>
+
+                  {/* 바다 구형 배경 */}
+                  <path d={pathGenerator({ type: 'Sphere' }) || ''} fill="url(#ocean-gradient)" />
+
+                  {/* 경위선 */}
+                  <path
+                    d={pathGenerator(graticuleGenerator) || ''}
+                    fill="none"
+                    stroke="#1f2c4d"
+                    strokeOpacity="0.2"
+                    strokeWidth="0.5"
+                  />
+
+                  {/* 대륙 지리 렌더링 */}
+                  <g className="countries-shapes">
+                    {worldFeatures.map((f: any, idx: number) => {
+                      const name = f.properties?.name
+                      const regionId = getRegionIdByCountryName(name)
+
+                      if (regionId) {
+                        const regionState = livingWorld?.regions[regionId]
+                        const corruption = regionState ? regionState.corruption : 0
+                        const occupiedMonarch = livingWorld?.activeMonarchs?.find(
+                          (m) => m.status === 'rampaging' && m.occupiedRegionIds.includes(regionId)
+                        )
+                        const colors = getCountryColors(regionId, corruption, !!occupiedMonarch)
+
+                        return (
+                          <path
+                            key={`country-shape-${regionId}-${idx}`}
+                            d={pathGenerator(f) || ''}
+                            fill={colors.fill}
+                            stroke={colors.stroke}
+                            strokeWidth={regionId === 'kr' ? '1.5' : '1.0'}
+                            className="transition-all duration-300 hover:fill-opacity-80 cursor-pointer"
+                            style={{
+                              filter: regionId === 'kr' || occupiedMonarch ? 'url(#glow-base)' : 'none',
+                            }}
+                            onClick={() => {
+                              const regionObj = RIFT_REGIONS.find((r) => r.id === regionId)
+                              if (regionObj) {
+                                setActiveDetailRegion(regionObj)
+                              }
+                            }}
+                          />
+                        )
+                      } else {
+                        // 비주요 국가는 어두운 대륙색으로 렌더링
+                        return (
+                          <path
+                            key={`country-shape-dark-${idx}`}
+                            d={pathGenerator(f) || ''}
+                            fill="#0d1120"
+                            stroke="#171b30"
+                            strokeWidth="0.5"
+                            className="pointer-events-none opacity-85"
+                          />
+                        )
+                      }
+                    })}
+                  </g>
+
+                  {/* 차원 균열 네트워크 연결선 */}
+                  <g className="connecting-lines-layer">
+                    {renderConnectingLines()}
+                  </g>
+
+                  {/* 거점 국가 중심점 마커 및 레이블 */}
+                  <g className="region-markers-layer">
+                    {RIFT_REGIONS.map((region: RiftRegion) => {
+                      const centroid = REGION_CENTROIDS[region.id]
+                      if (!centroid) return null
+
+                      const [x, y] = centroid
+                      const prog = getRegionProgress(region.id, riftNodesState)
+                      const regionState = livingWorld?.regions[region.id]
+                      const totalPower = regionState ? getRegionTotalPower(regionState, livingWorld.namedHunters) : 0
+                      const occupiedMonarch = livingWorld?.activeMonarchs?.find(
+                        (m) => m.status === 'rampaging' && m.occupiedRegionIds.includes(region.id)
+                      )
+                      const corruption = regionState ? regionState.corruption : 0
+                      const colors = getCountryColors(region.id, corruption, !!occupiedMonarch)
+
+                      // 모바일에선 복잡도 감소를 위해 가독성 중심 필터링
+                      const isLabelPriority = region.id === 'kr' || !!occupiedMonarch || corruption > 20
+
+                      return (
+                        <g key={`marker-region-${region.id}`} className="cursor-pointer">
+                          {/* 클릭 영역 증강용 투명 써클 */}
+                          <circle
+                            cx={x}
+                            cy={y}
+                            r="22"
+                            fill="transparent"
+                            onClick={() => setActiveDetailRegion(region)}
+                          />
+
+                          {/* 점령/위험 상태 시 맥박 링 */}
+                          {(occupiedMonarch || corruption > 50) && (
+                            <circle
+                              cx={x}
+                              cy={y}
+                              r="15"
+                              fill="none"
+                              stroke={colors.stroke}
+                              strokeWidth="1.5"
+                              className="ring-pulse"
+                            />
+                          )}
+
+                          {/* 국가 중심 원 코어 */}
+                          <circle
+                            cx={x}
+                            cy={y}
+                            r={region.id === 'kr' ? '5.5' : '4'}
+                            fill={colors.stroke}
+                            stroke="#04050c"
+                            strokeWidth="1"
+                            onClick={() => setActiveDetailRegion(region)}
+                            style={{
+                              filter: `drop-shadow(0 0 3px ${colors.stroke})`,
+                            }}
+                          />
+
+                          {/* 텍스트 정보 레이블 */}
+                          <g
+                            transform={`translate(${x}, ${y - 12})`}
+                            onClick={() => setActiveDetailRegion(region)}
+                            className={`${
+                              isLabelPriority ? '' : 'hidden sm:block'
+                            } transition-opacity duration-200 hover:opacity-100 pointer-events-none`}
+                          >
+                            <text
+                              textAnchor="middle"
+                              className="text-[9px] font-black fill-white stroke-black stroke-[3px] select-none"
+                              style={{
+                                paintOrder: 'stroke',
+                                strokeLinejoin: 'round',
+                              }}
+                            >
+                              {occupiedMonarch ? `⚠️ ${region.name} (점령됨)` : region.name}
+                            </text>
+                            <text
+                              y="10"
+                              textAnchor="middle"
+                              className={`text-[7.5px] font-mono font-bold ${
+                                occupiedMonarch ? 'fill-red-400' : 'fill-purple-300/90'
+                              } stroke-black stroke-[2px] select-none`}
+                              style={{
+                                paintOrder: 'stroke',
+                                strokeLinejoin: 'round',
+                              }}
+                            >
+                              {occupiedMonarch
+                                ? `군주: ${MONARCHS.find((m) => m.id === occupiedMonarch.monarchId)?.name ?? occupiedMonarch.monarchId}`
+                                : `(${prog.cleared}/${prog.total})${totalPower > 0 ? ` ⚔️${(totalPower / 1000).toFixed(0)}k` : ''}`}
+                            </text>
+                          </g>
+                        </g>
+                      )
+                    })}
+                  </g>
+
+                  {/* 게이트 노드 렌더링 - 한국 활성 게이트 및 활성화된 러브콜 노드 */}
+                  <g className="gate-nodes-layer">
+                    {Object.values(livingWorld?.riftNodes ?? {})
+                      .filter(
+                        (node: any) =>
+                          (node.regionId === 'kr' || node.loveCall?.active) &&
+                          (riftNodesState[node.id] ?? node.status) === 'active'
+                      )
+                      .map((node: any) => {
+                        const status = riftNodesState[node.id] ?? node.status
+                        const worldNode = livingWorld?.riftNodes[node.id]
+                        const isNodeRegionOccupied = livingWorld?.activeMonarchs?.some(
+                          (m) => m.status === 'rampaging' && m.occupiedRegionIds.includes(node.regionId)
+                        )
+                        const hasLoveCall = worldNode?.loveCall?.active
+                        const [x, y] = getNodeCoordinates(node)
+
+                        const strokeColor = isNodeRegionOccupied ? '#ef4444' : hasLoveCall ? '#fbbf24' : '#22d3ee'
+                        const bgColor = isNodeRegionOccupied ? '#380c10' : hasLoveCall ? '#2e1d09' : '#083344'
+
+                        return (
+                          <g
+                            key={`gate-node-${node.id}`}
+                            className="cursor-pointer group"
+                            onClick={() => handleNodeClick(node)}
+                          >
+                            <circle
+                              cx={x}
+                              cy={y}
+                              r="8"
+                              fill="none"
+                              stroke={strokeColor}
+                              strokeWidth="1"
+                              className="ring-pulse"
+                            />
+                            <circle
+                              cx={x}
+                              cy={y}
+                              r="4.5"
+                              fill={bgColor}
+                              stroke={strokeColor}
+                              strokeWidth="1.5"
+                              style={{
+                                filter: `drop-shadow(0 0 3px ${strokeColor})`,
+                              }}
+                            />
+
+                            {hasLoveCall && (
+                              <g transform={`translate(${x + 6}, ${y - 6})`}>
+                                <circle cx="0" cy="0" r="4.5" fill="#fbbf24" />
+                                <text x="0" y="2" textAnchor="middle" className="text-[6px] font-black fill-black">
+                                  📞
+                                </text>
+                              </g>
+                            )}
+
+                            <g
+                              transform={`translate(${x}, ${y + 11})`}
+                              className="opacity-75 group-hover:opacity-100 transition-opacity pointer-events-none"
+                            >
+                              <text
+                                textAnchor="middle"
+                                className={`text-[7.5px] font-black ${
+                                  isNodeRegionOccupied
+                                    ? 'fill-red-300'
+                                    : hasLoveCall
+                                    ? 'fill-amber-200'
+                                    : 'fill-cyan-300'
+                                } stroke-black stroke-[2.5px] select-none`}
+                                style={{
+                                  paintOrder: 'stroke',
+                                  strokeLinejoin: 'round',
+                                }}
+                              >
+                                {hasLoveCall ? `📞 [지원] ${node.name} (D-${node.daysRemaining})` : node.name}
+                              </text>
+                            </g>
+                          </g>
+                        )
+                      })}
+                  </g>
+
+                  {/* 군주 노드 침공 아이콘 */}
+                  <g className="monarch-invasion-layer">
+                    {livingWorld?.activeMonarchs
+                      ?.filter((m: any) => m.status === 'rampaging')
+                      .map((monarch: any) => {
+                        const mData = MONARCHS.find((m) => m.id === monarch.monarchId)
+                        if (!mData) return null
+                        const regionId = monarch.occupiedRegionIds[0] || 'kr'
+                        const centroid = REGION_CENTROIDS[regionId]
+                        if (!centroid) return null
+
+                        // 헌터 마커와 겹치지 않게 오른쪽 아래에 배치
+                        const x = centroid[0] + 5
+                        const y = centroid[1] + 6
+
+                        return (
+                          <g
+                            key={`monarch-marker-${monarch.monarchId}`}
+                            className="cursor-pointer group"
+                            onClick={() =>
+                              handleNodeClick({
+                                id: monarch.monarchId,
+                                regionId,
+                                name: mData.name,
+                                x,
+                                y,
+                                status: 'active',
+                                gateDefId: monarch.monarchId,
+                                difficultyRank: 'S',
+                                difficulty: mData.recommendedCP,
+                                deadline: 999,
+                                daysRemaining: 999,
+                                isSGrade: true,
+                              })
+                            }
+                          >
+                            <circle
+                              cx={x}
+                              cy={y}
+                              r="11"
+                              fill="rgba(226, 75, 74, 0.15)"
+                              stroke="#e24b4a"
+                              strokeWidth="1"
+                              className="ring-pulse"
+                            />
+                            <circle
+                              cx={x}
+                              cy={y}
+                              r="6.5"
+                              fill="#3d1216"
+                              stroke="#ef4444"
+                              strokeWidth="1.5"
+                              style={{
+                                filter: 'drop-shadow(0 0 4px #ef4444)',
+                              }}
+                            />
+                            <text x={x} y={y + 2.5} textAnchor="middle" className="text-[7.5px] select-none font-bold">
+                              👑
+                            </text>
+
+                            <g transform={`translate(${x}, ${y + 13})`} className="pointer-events-none">
+                              <text
+                                textAnchor="middle"
+                                className="text-[7.5px] font-black fill-red-200 stroke-black stroke-[2.5px] select-none"
+                                style={{
+                                  paintOrder: 'stroke',
+                                  strokeLinejoin: 'round',
+                                }}
+                              >
+                                {mData.name} (침공)
+                              </text>
+                            </g>
+                          </g>
+                        )
+                      })}
+                  </g>
+
+                  {/* 지도 범례 */}
+                  <g transform="translate(15, 365)" className="select-none pointer-events-none hidden sm:block">
+                    <rect
+                      x="0"
+                      y="0"
+                      width="110"
+                      height="70"
+                      rx="4"
+                      fill="rgba(4, 5, 12, 0.85)"
+                      stroke="rgba(255, 255, 255, 0.08)"
+                      strokeWidth="1"
+                    />
+                    <text
+                      x="8"
+                      y="14"
+                      className="text-[7.5px] font-black fill-white/45 tracking-widest uppercase font-mono"
+                    >
+                      MAP LEGEND
+                    </text>
+
+                    <g transform="translate(8, 25)">
+                      <circle cx="4" cy="0" r="3" fill="#7f77dd" style={{ filter: 'drop-shadow(0 0 2px #7f77dd)' }} />
+                      <text x="14" y="2.5" className="text-[7.5px] font-bold fill-purple-200">
+                        한국 거점
+                      </text>
+                    </g>
+
+                    <g transform="translate(8, 36)">
+                      <circle cx="4" cy="0" r="3" fill="#e24b4a" style={{ filter: 'drop-shadow(0 0 2px #e24b4a)' }} />
+                      <text x="14" y="2.5" className="text-[7.5px] font-bold fill-red-300">
+                        군주 점령 / 위험
+                      </text>
+                    </g>
+
+                    <g transform="translate(8, 47)">
+                      <circle cx="4" cy="0" r="3" fill="#ef9f27" style={{ filter: 'drop-shadow(0 0 2px #ef9f27)' }} />
+                      <text x="14" y="2.5" className="text-[7.5px] font-bold fill-amber-200">
+                        경계 (오염도 20-50)
+                      </text>
+                    </g>
+
+                    <g transform="translate(8, 58)">
+                      <circle cx="4" cy="0" r="3" fill="#1d9e75" style={{ filter: 'drop-shadow(0 0 2px #1d9e75)' }} />
+                      <text x="14" y="2.5" className="text-[7.5px] font-bold fill-emerald-200">
+                        안전 (오염도 &lt; 20)
+                      </text>
+                    </g>
+                  </g>
+                </svg>
+              </div>
+            )
+          })()}
         </div>
+
       </div>
 
       {/* 인라인 게이트 활성화 HUD (기존 게이트 전선 호환용) */}
