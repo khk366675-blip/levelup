@@ -998,11 +998,11 @@ export function WorldMapPanel() {
         {(() => {
           const isMapDataLoaded = worldFeatures && worldFeatures.length > 0
 
-          // Helper to determine region coloring based on game state
+          // Helper to determine region coloring based on game state with premium territorial continental identities
           const getCountryColors = (regionId: string, corruption: number, isOccupied: boolean) => {
             if (regionId === 'kr') {
               return {
-                fill: '#1a143b', // deep violet-black
+                fill: '#1a143b', // Korea (Home Base): deep violet-black
                 stroke: '#7f77dd', // electric purple
                 glowColor: '#7f77dd',
                 stateText: '거점',
@@ -1016,15 +1016,15 @@ export function WorldMapPanel() {
                 stateText: '점령됨',
               }
             }
-            if (corruption <= 20) {
+            if (corruption > 50) {
               return {
-                fill: '#0c0e18', // 프리미엄 다크 메탈 그레이 (Dark slate metallic)
-                stroke: '#2e3856', // 차분한 메탈 블루-그레이 경계선
-                glowColor: '#2e3856',
-                stateText: '안전',
+                fill: '#380c10', // deep blood red
+                stroke: '#e24b4a', // intense military red
+                glowColor: '#e24b4a',
+                stateText: '위험',
               }
             }
-            if (corruption <= 50) {
+            if (corruption > 20) {
               return {
                 fill: '#2e1d09', // dark copper amber
                 stroke: '#ef9f27', // warm alert orange
@@ -1032,11 +1032,60 @@ export function WorldMapPanel() {
                 stateText: '경계',
               }
             }
-            return {
-              fill: '#380c10', // deep blood red
-              stroke: '#e24b4a', // intense military red
-              glowColor: '#e24b4a',
-              stateText: '위험',
+
+            // Safe state (corruption <= 20): Use premium distinct continental palette instead of uniform green
+            switch (regionId) {
+              case 'us':
+              case 'ca':
+              case 'mx':
+                return {
+                  fill: '#0e1626', // North America: Navy Steel
+                  stroke: '#3b517d', // Muted Steel Blue
+                  glowColor: '#3b517d',
+                  stateText: '안전 (북미)',
+                }
+              case 'uk':
+              case 'de':
+              case 'fr':
+              case 'it':
+                return {
+                  fill: '#0d1a1b', // Europe: Deep Teal Shadow
+                  stroke: '#2f5c5e', // Muted Teal
+                  glowColor: '#2f5c5e',
+                  stateText: '안전 (유럽)',
+                }
+              case 'cn':
+              case 'jp':
+              case 'ru':
+              case 'in':
+                return {
+                  fill: '#141120', // Asia: Dark Indigo Slate
+                  stroke: '#443a6b', // Muted Indigo/Violet
+                  glowColor: '#443a6b',
+                  stateText: '안전 (아시아)',
+                }
+              case 'br':
+              case 'eg':
+                return {
+                  fill: '#1a130e', // South America / Africa: Dark Terracotta
+                  stroke: '#5a4533', // Muted Bronze
+                  glowColor: '#5a4533',
+                  stateText: '안전 (남미/아프리카)',
+                }
+              case 'au':
+                return {
+                  fill: '#101912', // Oceania: Earthy Deep Forest
+                  stroke: '#314f38', // Muted Forest Green
+                  glowColor: '#314f38',
+                  stateText: '안전 (오세아니아)',
+                }
+              default:
+                return {
+                  fill: '#0c0e18', // Default Premium Dark slate metallic
+                  stroke: '#2e3856', // Metal blue-gray border
+                  glowColor: '#2e3856',
+                  stateText: '안전',
+                }
             }
           }
 
@@ -2114,8 +2163,8 @@ export function WorldMapPanel() {
                   <span>경계 (오염 20-50)</span>
                 </div>
                 <div className="flex items-center gap-1.5">
-                  <span className="w-2.5 h-2.5 rounded-full bg-[#2e3856]" style={{ filter: 'drop-shadow(0 0 2px #2e3856)' }} />
-                  <span>안전 (오염 &lt; 20)</span>
+                  <span className="w-2.5 h-2.5 rounded-full bg-[#3b517d]" style={{ filter: 'drop-shadow(0 0 2px #3b517d)' }} />
+                  <span>안전 (대륙별 컬러)</span>
                 </div>
               </div>
             </>
