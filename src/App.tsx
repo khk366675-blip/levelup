@@ -36,6 +36,7 @@ import { ShopPanel } from './components/ShopPanel'
 import { AiCoachPanel } from './components/AiCoachPanel'
 import { FocusSessionOverlay } from './components/FocusSessionOverlay'
 import { WorldMapPanel } from './components/WorldMapPanel'
+import { TitleScreen } from './components/TitleScreen'
 
 type Tab = 'rewards' | 'shop' | 'daily' | 'main' | 'gate' | 'shadows' | 'inventory' | 'grade' | 'coach' | 'worldmap'
 
@@ -63,6 +64,7 @@ const MOBILE_TABS: { key: Tab; label: string; icon: typeof Calendar }[] = [
 ]
 
 export default function App() {
+  const [showTitle, setShowTitle] = useState(true)
   const [tab, setTab] = useState<Tab>('rewards')
   const [addOpen, setAddOpen] = useState(false)
   const [showRoutineLibrary, setShowRoutineLibrary] = useState(false)
@@ -217,7 +219,18 @@ export default function App() {
     : undefined
 
   return (
-    <div className="relative z-10 min-h-screen text-white">
+    <AnimatePresence mode="wait">
+      {showTitle ? (
+        <TitleScreen key="title-screen" onEnter={() => setShowTitle(false)} />
+      ) : (
+        <motion.div
+          key="game-screen"
+          className="relative z-10 min-h-screen text-white"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.35 }}
+        >
       <SystemMessageQueue />
 
       {/* Header */}
@@ -530,7 +543,9 @@ export default function App() {
       )}
 
       <FocusSessionOverlay />
-    </div>
+        </motion.div>
+      )}
+    </AnimatePresence>
   )
 }
 
