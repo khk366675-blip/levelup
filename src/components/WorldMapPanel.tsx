@@ -36,6 +36,9 @@ import { getHunterTrait } from '../lib/hunterTraits'
 import { geoNaturalEarth1, geoPath, geoGraticule10 } from 'd3-geo'
 import { feature } from 'topojson-client'
 import worldAtlasData from 'world-atlas/countries-110m.json'
+import { select } from 'd3-selection'
+import { zoom, zoomIdentity } from 'd3-zoom'
+import 'd3-transition'
 
 // Country Name Mapping to game region IDs
 const getRegionIdByCountryName = (name: string): string | null => {
@@ -220,6 +223,12 @@ export function WorldMapPanel() {
     activeConsumableEffects,
   })
 
+  // D3 Zoom & Overlay HUD States
+  const [zoomTransform, setZoomTransform] = useState({ k: 1, x: 0, y: 0 })
+  const [isLoveCallsExpanded, setIsLoveCallsExpanded] = useState(true)
+  const svgRef = useRef<SVGSVGElement | null>(null)
+  const zoomBehaviorRef = useRef<any>(null)
+
   const [expandedRegionId, setExpandedRegionId] = useState<string | null>(null)
   const [regionSortBy, setRegionSortBy] = useState<'danger' | 'purify' | 'name'>('danger')
   const [activeDetailRegion, setActiveDetailRegion] = useState<RiftRegion | null>(null)
@@ -326,6 +335,82 @@ export function WorldMapPanel() {
       setSelectedHelpers([])
     }
   }, [activeRiftNodeId])
+
+  // 4. D3 Zoom & Pan behavior configuration
+  useEffect(() => {
+    if (!svgRef.current) return
+
+    const svg = select(svgRef.current as any)
+    const zoomBehavior = zoom<any, any>()
+      .scaleExtent([1, 8]) // Zoom limits: 1x to 8x
+      .translateExtent([[0, 0], [MAP_WIDTH, MAP_HEIGHT]]) // Pan bounds
+      .on('zoom', (event) => {
+        setZoomTransform(event.transform)
+      })
+
+    zoomBehaviorRef.current = zoomBehavior
+    svg.call(zoomBehavior)
+
+    return () => {
+      svg.on('.zoom', null)
+    }
+  }, [])
+
+  const handleResetZoom = () => {
+    if (svgRef.current && zoomBehaviorRef.current) {
+      select(svgRef.current as any)
+        .transition()
+        .duration(500)
+        .call(zoomBehaviorRef.current.transform, zoomIdentity)
+    }
+  }
+
+  const focusOnCoords = (x: number, y: number, scale: number = 4) => {
+    if (svgRef.current && zoomBehaviorRef.current) {
+      select(svgRef.current as any)
+        .transition()
+        .duration(750)
+        .call(
+          zoomBehaviorRef.current.transform,
+          zoomIdentity
+            .translate(MAP_WIDTH / 2 - x * scale, MAP_HEIGHT / 2 - y * scale)
+            .scale(scale)
+        )
+    }
+  }
+
+  const getNodeCoordinates = (node: any): [number, number] => {
+    const baseCentroid = REGION_CENTROIDS[node.regionId]
+    if (!baseCentroid) {
+      return [(node.x / 100) * MAP_WIDTH, (node.y / 100) * MAP_HEIGHT]
+    }
+
+    const activeNodesInRegion = Object.values(livingWorld?.riftNodes ?? {})
+      .filter(
+        (n: any) =>
+          n.regionId === node.regionId &&
+          (riftNodesState[n.id] ?? n.status) === 'active'
+      )
+
+    const idx = activeNodesInRegion.findIndex((n: any) => n.id === node.id)
+    if (idx === -1 || activeNodesInRegion.length <= 1) {
+      if (node.id === 'node-kr-seoul') {
+        return [baseCentroid[0] + 5, baseCentroid[1] - 4]
+      }
+      if (node.id === 'node-kr-incheon') {
+        return [baseCentroid[0] - 5, baseCentroid[1] + 3]
+      }
+      return baseCentroid
+    }
+
+    const count = activeNodesInRegion.length
+    const radius = 12
+    const angle = (idx * 2 * Math.PI) / count
+    return [
+      baseCentroid[0] + radius * Math.cos(angle),
+      baseCentroid[1] + radius * Math.sin(angle)
+    ]
+  }
 
   // 토스트 메시지 도우미
   const triggerToast = (msg: string) => {
@@ -908,1008 +993,203 @@ export function WorldMapPanel() {
         </div>
       )}
 
-      <div className="grid gap-6 lg:grid-cols-3">
-        {/* 국가 진행도 목록 */}
-        <div className="space-y-3 lg:col-span-1">
-          {/* 세계 지원 요청 (Rift Help Desk) */}
-          <div className="panel corner-bracket border-amber-500/20 bg-ink-950/40 p-4">
-            <div className="br" />
-            <h3 className="mb-3 text-sm font-bold text-amber-400 flex items-center gap-1.5 font-bold">
-              📞 세계 지원 요청 (Love Calls)
-            </h3>
-            
-            {(() => {
-              const activeLoveCalls = Object.values(livingWorld?.riftNodes ?? {})
-                .filter((node: any) => node.loveCall?.active && (riftNodesState[node.id] ?? node.status) === 'active')
+      {/* MAXIMIZED FULL-WIDTH MAP CONTAINER WITH TAC OVERLAYS */}
+      <div className="relative w-full rounded-xl border border-white/10 bg-[#04050c] overflow-hidden select-none h-[620px] lg:h-[72vh] min-h-[480px] shadow-2xl flex">
+        {(() => {
+          const isMapDataLoaded = worldFeatures && worldFeatures.length > 0
 
-              if (activeLoveCalls.length === 0) {
-                return (
-                  <div className="rounded border border-white/5 bg-ink-950/20 p-4 text-center text-white/35 text-xs py-6">
-                    <Globe className="mx-auto mb-2 h-6 w-6 text-white/15 animate-pulse" />
-                    <p className="font-medium text-white/50 leading-relaxed">
-                      현재 세계는 아직 당신을 직접 부르지 않습니다.
-                    </p>
-                    <p className="text-[10px] text-white/30 mt-0.5">
-                      대한민국 전선을 지키고 감시해 주십시오.
-                    </p>
-                  </div>
-                )
+          // Helper to determine region coloring based on game state
+          const getCountryColors = (regionId: string, corruption: number, isOccupied: boolean) => {
+            if (regionId === 'kr') {
+              return {
+                fill: '#1a143b', // deep violet-black
+                stroke: '#7f77dd', // electric purple
+                glowColor: '#7f77dd',
+                stateText: '거점',
               }
-
-              return (
-                <div className="space-y-2.5 max-h-[340px] overflow-y-auto pr-1 scrollbar-thin scrollbar-thumb-amber-500/10">
-                  {activeLoveCalls.map((node: any) => {
-                    const rName = RIFT_REGIONS.find((r) => r.id === node.regionId)?.name ?? node.regionId.toUpperCase()
-                    const flag = REGION_FLAGS[node.regionId] || '🌐'
-                    const loveCall = node.loveCall
-                    if (!loveCall) return null
-                    
-                    // CP 비교 지표 계산
-                    let cpLabel = '진입 무모'
-                    let cpColorBadge = 'bg-red-500/10 border-red-500/20 text-red-400'
-                    if (playerPower >= node.difficulty) {
-                      cpLabel = '안전'
-                      cpColorBadge = 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'
-                    } else if (playerPower >= node.difficulty * 0.7) {
-                      cpLabel = '위험'
-                      cpColorBadge = 'bg-yellow-500/10 border-yellow-500/20 text-yellow-400'
-                    }
-
-                    // S급 Named 헌터들 실명 취합
-                    const helpersNameList = loveCall.helperHunterIds
-                      .map((hid: string) => livingWorld?.namedHunters[hid]?.name)
-                      .filter(Boolean)
-                      .join(', ')
-
-                    return (
-                      <div
-                        key={node.id}
-                        className="rounded border border-amber-500/25 bg-amber-500/5 hover:bg-amber-500/10 p-3 transition-all space-y-2 relative shadow-glow-amber/5"
-                      >
-                        {/* 헤더 */}
-                        <div className="flex items-center justify-between">
-                          <span className="font-extrabold text-[11px] text-amber-300 flex items-center gap-1">
-                            {flag} {rName} 협회
-                          </span>
-                          <div className="flex gap-1.5 items-center">
-                            <span className="rounded bg-amber-500/20 px-1.5 py-0.5 text-[8px] font-black text-amber-200 border border-amber-400/20 uppercase tracking-widest animate-pulse">
-                              {node.difficultyRank}급
-                            </span>
-                            <span className={`rounded border px-1.5 py-0.5 text-[8px] font-bold ${
-                              (node.daysRemaining ?? 0) <= 2 ? 'bg-red-500/20 border-red-500/30 text-red-300 animate-pulse' : 'bg-black/30 border-white/5 text-yellow-300'
-                            }`}>
-                              D-{node.daysRemaining}
-                            </span>
-                          </div>
-                        </div>
-
-                        {/* 게이트 이름 & CP */}
-                        <div>
-                          <div className="font-bold text-xs text-white/95 truncate">
-                            {node.name}
-                          </div>
-                          <div className="flex justify-between items-center text-[10px] mt-1 bg-black/35 rounded px-2 py-1">
-                            <div className="flex items-center gap-1">
-                              <span className="text-white/40">권장:</span>
-                              <span className="font-bold text-white/80 font-mono text-[9px]">
-                                {node.difficulty?.toLocaleString()}
-                              </span>
-                            </div>
-                            <div className="flex items-center gap-1">
-                              <span className="text-white/40">내 CP:</span>
-                              <span className="font-bold text-white/80 font-mono text-[9px]">
-                                {playerPower?.toLocaleString()}
-                              </span>
-                            </div>
-                            <span className={`rounded border px-1 py-0.2 text-[8px] font-black tracking-tighter ${cpColorBadge}`}>
-                              {cpLabel}
-                            </span>
-                          </div>
-                        </div>
-
-                        {/* 짧은 서사 요약 */}
-                        {(() => {
-                          const nodeTheme = getRegionalTheme(node.subRegionId || node.regionId)
-                          return (
-                            <p className="text-[9.5px] text-white/50 leading-relaxed italic bg-black/20 rounded p-1.5 border border-white/5">
-                              "{nodeTheme.loveCallNarrative}"
-                            </p>
-                          )
-                        })()}
-
-                        {/* 협력 헌터 목록 */}
-                        {helpersNameList ? (
-                          <div className="text-[9px] text-white/60 bg-black/20 rounded p-1.5 border border-white/5">
-                            <span className="font-bold text-amber-300/80">🤝 공조: </span>
-                            <span className="font-medium text-white/70 italic">{helpersNameList}</span>
-                          </div>
-                        ) : null}
-
-                        {/* 약속 보상 */}
-                        <div className="flex items-center justify-between text-[9px] bg-black/40 rounded px-2 py-1 border border-white/5 font-mono">
-                          <span className="text-white/40 font-sans">보상:</span>
-                          <span className="font-bold text-amber-400">+{loveCall.promisedReward.gold}G</span>
-                          <span className="font-bold text-purple-400">+{loveCall.promisedReward.shadowEssence}정수</span>
-                          <span className="font-bold text-emerald-400">+{loveCall.promisedReward.hunterXp}XP</span>
-                        </div>
-
-                        {/* 조작 버튼 */}
-                        <div className="grid grid-cols-2 gap-1.5 pt-1">
-                          <button
-                            onClick={() => handleNodeClick(node)}
-                            className="rounded border border-white/10 bg-black/25 hover:bg-black/60 px-2 py-1 text-[9px] font-bold text-white/70 transition-all cursor-pointer text-center"
-                          >
-                            📍 지도 확인
-                          </button>
-                          <button
-                            onClick={() => {
-                              setSelectedNode(node)
-                              setSelectedHelpers(loveCall.helperHunterIds ?? [])
-                              
-                              const level = getDangerLevel(node)
-                              if (level === 'reckless') {
-                                setRecklessConfirmType('manual')
-                                setShowRecklessConfirm(true)
-                              } else {
-                                startWorldManualBattle(node.id, loveCall.helperHunterIds ?? [])
-                              }
-                            }}
-                            className="rounded bg-gradient-to-r from-amber-500/20 to-orange-500/20 hover:from-amber-500/30 hover:to-orange-500/30 border border-amber-500/40 hover:border-amber-400 px-2 py-1 text-[9px] font-black text-amber-200 transition-all cursor-pointer text-center flex items-center justify-center gap-1 shadow-md shadow-amber-950/20"
-                          >
-                            ⚔️ 원정 수락
-                          </button>
-                        </div>
-                      </div>
-                    )
-                  })}
-                </div>
-              )
-            })()}
-          </div>
-
-          <div className="panel corner-bracket border-white/10 bg-ink-950/40 p-4">
-            <div className="br" />
-            
-            {/* 정렬 토글 바 */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
-              <h3 className="text-sm font-black text-white/80 tracking-wider">🌐 WORLD PURIFICATION GRID</h3>
-              <div className="flex bg-black/45 rounded-md p-0.5 border border-white/5 text-[9px] font-bold">
-                <button
-                  onClick={() => setRegionSortBy('danger')}
-                  className={`px-2 py-0.5 rounded transition-all cursor-pointer ${regionSortBy === 'danger' ? 'bg-red-500/20 text-red-300 font-extrabold border border-red-500/30' : 'text-white/50 border border-transparent'}`}
-                >
-                  🚨 위험도순
-                </button>
-                <button
-                  onClick={() => setRegionSortBy('purify')}
-                  className={`px-2 py-0.5 rounded transition-all cursor-pointer ${regionSortBy === 'purify' ? 'bg-purple-500/20 text-purple-300 font-extrabold border border-purple-500/30' : 'text-white/50 border border-transparent'}`}
-                >
-                  🛡️ 정화도순
-                </button>
-                <button
-                  onClick={() => setRegionSortBy('name')}
-                  className={`px-2 py-0.5 rounded transition-all cursor-pointer ${regionSortBy === 'name' ? 'bg-cyan-500/20 text-cyan-300 font-extrabold border border-cyan-500/30' : 'text-white/50 border border-transparent'}`}
-                >
-                  🌐 국가명순
-                </button>
-              </div>
-            </div>
-
-            {/* 국가 카드 반응형 그리드 */}
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-              {sortedRegions.map((region: RiftRegion) => {
-                const prog = getRegionProgress(region.id, riftNodesState)
-                const regionState = livingWorld?.regions[region.id]
-                const flag = REGION_FLAGS[region.id] || '🌐'
-                const occupiedMonarch = livingWorld?.activeMonarchs?.find(m => m.status === 'rampaging' && m.occupiedRegionIds.includes(region.id))
-                const hasLoveCall = Object.values(livingWorld?.riftNodes ?? {}).some((node: any) => node.regionId === region.id && node.loveCall?.active && (riftNodesState[node.id] ?? node.status) === 'active')
-
-                return (
-                  <div
-                    key={region.id}
-                    onClick={() => openReport('country', region.id)}
-                    className={`rounded-lg border p-2 transition-all duration-300 hover:bg-white/5 cursor-pointer flex flex-col justify-between h-[82px] select-none ${
-                      occupiedMonarch 
-                        ? 'border-red-500 bg-red-950/20 shadow-glow-red animate-pulse text-red-300' 
-                        : hasLoveCall 
-                          ? 'border-amber-400/40 bg-amber-950/10 text-amber-200' 
-                          : region.id === 'kr'
-                            ? 'border-sky-500/40 bg-sky-950/10 text-sky-200 shadow-glow-blue/5'
-                            : 'border-white/5 bg-ink-950/30 text-white/70'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between gap-1 overflow-hidden">
-                      <span className="font-extrabold text-[10px] truncate flex items-center gap-1">
-                        <span>{flag}</span>
-                        <span className="truncate">{region.name}</span>
-                      </span>
-                      <div className="flex gap-0.5 shrink-0 scale-90 origin-right">
-                        {region.id === 'kr' && (
-                          <span className="rounded bg-sky-500/25 px-1 py-0.2 text-[6.5px] font-black text-sky-300 border border-sky-500/30 uppercase tracking-tighter">
-                            거점
-                          </span>
-                        )}
-                        {occupiedMonarch && (
-                          <span className="rounded bg-red-500/25 px-1 py-0.2 text-[6.5px] font-black text-red-200 border border-red-500/30 uppercase tracking-tighter animate-pulse">
-                            🚨침공
-                          </span>
-                        )}
-                        {hasLoveCall && (
-                          <span className="rounded bg-amber-500/25 px-1 py-0.2 text-[6.5px] font-black text-amber-300 border border-amber-500/30 uppercase tracking-tighter">
-                            📞콜
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                    
-                    <div className="mt-1 flex items-end justify-between leading-none">
-                      <div className="flex flex-col">
-                        <span className="text-[7.5px] text-white/30 font-bold uppercase tracking-tighter">오염도</span>
-                        <span className={`font-mono text-xs font-black ${
-                          occupiedMonarch ? 'text-red-400' :
-                          regionState && regionState.corruption >= 50 ? 'text-orange-400 font-black animate-pulse' :
-                          regionState && regionState.corruption >= 20 ? 'text-yellow-300 font-bold' :
-                          'text-emerald-400 font-bold'
-                        }`}>
-                          {regionState ? `${regionState.corruption}%` : '0%'}
-                        </span>
-                      </div>
-                      <div className="flex flex-col text-right">
-                        <span className="text-[7.5px] text-white/30 font-bold uppercase tracking-tighter">정화도</span>
-                        <span className="font-mono text-xs font-black text-purple-300">
-                          {prog.percent}%
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* 얇은 게이지 바 */}
-                    <div className="mt-1 h-1 w-full rounded-full bg-white/5 overflow-hidden">
-                      <div
-                        className={`h-full transition-all duration-500 bg-gradient-to-r ${
-                          occupiedMonarch ? 'from-red-500 to-rose-600' : 'from-purple-500 to-cyan-400'
-                        }`}
-                        style={{ width: `${prog.percent}%` }}
-                      />
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
-          </div>
-
-
-
-          {/* 구역 요약 상세 패널 */}
-          {selectedNode ? (() => {
-            const isMonarchNode = MONARCHS.some(m => m.id === selectedNode.id) || selectedNode.id === 'angel'
-            const monarchData = selectedNode.id === 'angel' ? FINAL_ANGEL : MONARCHS.find(m => m.id === selectedNode.id)
-
-            if (isMonarchNode && monarchData) {
-              const regionState = livingWorld?.regions[selectedNode.regionId]
-              const namedHuntersInRegion = selectedNode.id === 'angel'
-                ? Object.keys(livingWorld?.namedHunters ?? {}).filter(hid => livingWorld?.namedHunters[hid]?.status === 'active')
-                : (regionState?.namedHunterIds || [])
-              const activeMonarchState = livingWorld?.activeMonarchs?.find(m => m.monarchId === selectedNode.id)
-              const isDefeated = selectedNode.id === 'angel'
-                ? (livingWorld?.endingState === 'victory')
-                : (activeMonarchState?.status === 'defeated')
-              
-              return (
-                <div className="panel corner-bracket border-red-500/30 bg-red-950/10 p-4 animate-fade-in">
-                  <div className="br" />
-                  <div className="flex items-start justify-between">
-                    <div>
-                      <span className="rounded border border-red-500/20 bg-red-500/10 px-1.5 py-0.5 text-[10px] text-red-200 font-bold">
-                        👑 군주 출현 지역: {RIFT_REGIONS.find((r: RiftRegion) => r.id === selectedNode.regionId)?.name}
-                      </span>
-                      <h4 className="mt-1.5 text-base font-black text-white">
-                        {monarchData.name}
-                      </h4>
-                    </div>
-                    <button
-                      onClick={() => setSelectedNode(null)}
-                      className="rounded p-1 hover:bg-white/5 text-white/45 hover:text-white cursor-pointer"
-                    >
-                      <X className="h-4 w-4" />
-                    </button>
-                  </div>
-
-                  <div className="mt-4 space-y-3">
-                    <div className="flex justify-between border-b border-white/5 pb-2 text-xs">
-                      <span className="text-white/45">군주 상태</span>
-                      <span className={isDefeated ? 'text-emerald-400 font-bold' : 'text-red-400 font-bold animate-pulse'}>
-                        {isDefeated ? '격퇴됨 (평화)' : '점령지 폭주 중'}
-                      </span>
-                    </div>
-                    <div className="flex justify-between border-b border-white/5 pb-2 text-xs">
-                      <span className="text-white/45">서열</span>
-                      <span className="font-bold text-red-300">
-                        {monarchData.rank === 0 ? 'SPECIAL' : `제 ${monarchData.rank}위`}
-                      </span>
-                    </div>
-                    <div className="flex justify-between border-b border-white/5 pb-2 text-xs">
-                      <span className="text-white/45">개념/테마</span>
-                      <span className="font-mono text-purple-300">
-                        {monarchData.theme} ({monarchData.concept})
-                      </span>
-                    </div>
-                    <div className="flex justify-between border-b border-white/5 pb-2 text-xs">
-                      <span className="text-white/45">권장 전투력</span>
-                      <span className="font-bold text-pink-300">
-                        {monarchData.recommendedCP.toLocaleString()} CP
-                      </span>
-                    </div>
-                    <div className="flex justify-between border-b border-white/5 pb-2 text-xs">
-                      <span className="text-white/45">헌터 실효 전투력</span>
-                      <span className="font-bold text-cyan-300">
-                        {playerPower.toLocaleString()} CP
-                      </span>
-                    </div>
-
-                    {/* 위험도 경고 */}
-                    <div className="mt-2.5 rounded border p-3 flex flex-col gap-1.5 bg-black/35 border-white/5">
-                      {getDangerLevel(selectedNode) === 'safe' && (
-                        <div className="text-emerald-400 flex items-center gap-1.5 text-xs font-bold">
-                          <CheckCircle className="h-4 w-4" />
-                          <span>안전: 전력이 충분합니다.</span>
-                        </div>
-                      )}
-                      {getDangerLevel(selectedNode) === 'danger' && (
-                        <div className="text-yellow-400 flex items-center gap-1.5 text-xs font-bold">
-                          <AlertCircle className="h-4 w-4" />
-                          <span>위험: 격전이 예상됩니다.</span>
-                        </div>
-                      )}
-                      {getDangerLevel(selectedNode) === 'reckless' && (
-                        <div className="text-rose-400 flex flex-col gap-1 text-xs font-bold border border-rose-500/20 bg-rose-500/5 rounded p-2">
-                          <div className="flex items-center gap-1.5">
-                            <AlertCircle className="h-4 w-4 animate-pulse" />
-                            <span>⚠️ 무모: 대단히 위험한 수준!</span>
-                          </div>
-                          <span className="text-[10px] font-medium text-rose-300/80 leading-normal">
-                            그림자 수호 장막(그림자 탱킹) 없이는 원킬당합니다.
-                          </span>
-                        </div>
-                      )}
-                    </div>
-
-                    {/* 그림자 탱킹 상태 안내 */}
-                    <div className="rounded border border-purple-500/20 bg-purple-500/5 p-3 text-[11px] text-purple-200">
-                      <div className="font-bold text-purple-300 mb-1">🛡️ 그림자 탱킹 준비 상태</div>
-                      {equippedShadows.length > 0 ? (
-                        <span>
-                          장착 그림자 <span className="font-bold text-cyan-300">{equippedShadows.length}명</span>으로 수호 장막 활성화 완료! 즉사 방지 쉴드가 준비되었습니다.
-                        </span>
-                      ) : (
-                        <span className="text-rose-400 font-bold">
-                          ⚠️ 현재 장착된 그림자가 없습니다! 군주전 진입 시 탱킹 버프가 작동하지 않아 100% 즉사합니다. 그림자를 장착하고 도전하십시오.
-                        </span>
-                      )}
-                    </div>
-
-                    {/* 협력 헌터 선택 리스트 */}
-                    {!isDefeated && namedHuntersInRegion.length > 0 && (
-                      <div className="mt-4 rounded-lg border border-yellow-500/30 bg-yellow-500/5 p-3 space-y-2">
-                        <div className="text-xs font-black text-yellow-300">
-                          {selectedNode.id === 'angel' 
-                            ? '🤝 인류의 최후 연합: 지고의 심판자 격퇴 연대' 
-                            : `🤝 연대 전투: ${RIFT_REGIONS.find((r: RiftRegion) => r.id === selectedNode.regionId)?.name} 협력 헌터`}
-                        </div>
-                        <p className="text-[10px] text-white/70 leading-normal">
-                          {selectedNode.id === 'angel'
-                            ? '전 세계 모든 생존한 정예 헌터들과 연합하여 공략 전력을 극대화할 수 있습니다.'
-                            : '지역 헌터들과 연합하여 공략 버프(스탯 증가)를 얻을 수 있으나 보상이 일부 분배(차감)됩니다.'}
-                        </p>
-                        <div className="max-h-24 overflow-y-auto space-y-1 scrollbar-thin">
-                          {namedHuntersInRegion.map(hid => {
-                            const h = livingWorld?.namedHunters[hid]
-                            if (!h) return null
-                            const isSelected = selectedHelpers.includes(hid)
-                            const totalPower = h.power + (h.equipmentScore ?? 0)
-                            return (
-                              <label key={hid} className="flex items-center justify-between rounded bg-black/35 hover:bg-black/60 px-2 py-1 cursor-pointer select-none text-[10px] border border-white/5">
-                                <div className="flex items-center gap-2">
-                                  <input
-                                    type="checkbox"
-                                    checked={isSelected}
-                                    onChange={() => handleHelperToggle(hid)}
-                                    className="accent-purple-500 h-3 w-3 cursor-pointer"
-                                  />
-                                  <span className="font-bold text-white/80">{h.name}</span>
-                                  {selectedNode.id === 'angel' && (
-                                    <span className="text-[8px] text-white/40 font-bold bg-white/5 px-1.5 py-0.2 rounded border border-white/5">
-                                      {RIFT_REGIONS.find(r => r.id === h.regionId)?.name}
-                                    </span>
-                                  )}
-                                  <span className="rounded bg-purple-500/20 px-1 text-purple-300 font-bold" style={{ fontSize: '8px' }}>
-                                    {h.rank}
-                                  </span>
-                                </div>
-                                <span className="text-cyan-300 font-mono font-bold">⚔️{totalPower.toLocaleString()}</span>
-                              </label>
-                            )
-                          })}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="mt-6 space-y-2">
-                    {isNodeRetreatedToday(selectedNode.id) ? (
-                      <div className="rounded border border-rose-500/25 bg-rose-500/5 p-3 text-xs text-rose-300/85 text-center font-bold">
-                        ⚠️ 오늘 이 군주에게서 후퇴하여 다시 도전할 수 없습니다. 내일 다시 도전하십시오.
-                      </div>
-                    ) : isDefeated ? (
-                      <div className="rounded border border-emerald-500/20 bg-emerald-500/5 p-2.5 text-[11px] text-emerald-200 text-center font-bold">
-                        이 군주는 이미 격퇴되었습니다.
-                      </div>
-                    ) : (
-                        <button
-                          onClick={() => {
-                            const level = getDangerLevel(selectedNode)
-                            if (level === 'reckless') {
-                              setRecklessConfirmType('manual')
-                              setShowRecklessConfirm(true)
-                            } else {
-                              startWorldManualBattle(selectedNode.id, selectedHelpers)
-                            }
-                          }}
-                          className="btn border border-cyan-500/40 bg-cyan-950/20 hover:bg-cyan-500/15 w-full flex items-center justify-center gap-2 py-2.5 text-xs text-cyan-200 font-black tracking-widest transition-all cursor-pointer shadow-glow-blue"
-                        >
-                          <Zap className="h-4 w-4 text-cyan-400" />
-                          군주 수동 격퇴 개시
-                        </button>
-                    )}
-                  </div>
-                </div>
-              )
             }
-
-            return (
-              <div className="panel corner-bracket border-purple-500/30 bg-purple-950/15 p-4 animate-fade-in">
-                <div className="br" />
-                <div className="flex items-start justify-between">
-                  <div>
-                    <span className="rounded border border-purple-400/20 bg-purple-500/10 px-1.5 py-0.5 text-[10px] text-purple-200">
-                      {RIFT_REGIONS.find((r: RiftRegion) => r.id === selectedNode.regionId)?.name}
-                    </span>
-                    <h4 className="mt-1.5 text-base font-bold text-white">
-                      {selectedNode.name}
-                    </h4>
-                  </div>
-                  <button
-                    onClick={() => setSelectedNode(null)}
-                    className="rounded p-1 hover:bg-white/5 text-white/45 hover:text-white cursor-pointer"
-                  >
-                    <X className="h-4 w-4" />
-                  </button>
-                </div>
-
-                <div className="mt-4 space-y-3">
-                  <div className="flex justify-between border-b border-white/5 pb-2 text-xs">
-                    <span className="text-white/45">정화 상태</span>
-                    <span
-                      className={
-                        (riftNodesState[selectedNode.id] ?? selectedNode.status) === 'cleared' ? 'text-emerald-400 font-bold' :
-                        (riftNodesState[selectedNode.id] ?? selectedNode.status) === 'active' ? 'text-cyan-400 font-bold' :
-                        (riftNodesState[selectedNode.id] ?? selectedNode.status) === 'undiscovered' ? 'text-white/55' : 'text-white/30'
-                      }
-                    >
-                      {
-                        (riftNodesState[selectedNode.id] ?? selectedNode.status) === 'cleared' ? '완전 정화' :
-                        (riftNodesState[selectedNode.id] ?? selectedNode.status) === 'active' ? '공략 진행 중' :
-                        (riftNodesState[selectedNode.id] ?? selectedNode.status) === 'undiscovered' ? '탐사 대기' : '잠금'
-                      }
-                    </span>
-                  </div>
-                  <div className="flex justify-between border-b border-white/5 pb-2 text-xs">
-                    <span className="text-white/45">난이도 랭크</span>
-                    <span className="font-bold text-cyan-300">
-                      {selectedNode.difficultyRank ?? 'E'}-RANK
-                    </span>
-                  </div>
-                  
-                  {/* 권장 CP vs 실효 CP 비교 브리핑 */}
-                  {(selectedNode.difficulty ?? 0) > 0 && (
-                    <>
-                      <div className="flex justify-between border-b border-white/5 pb-2 text-xs">
-                        <span className="text-white/45">권장 전투력</span>
-                        <span className="font-bold text-pink-300">
-                          {(selectedNode.difficulty ?? 0).toLocaleString()} CP
-                        </span>
-                      </div>
-                      <div className="flex justify-between border-b border-white/5 pb-2 text-xs">
-                        <span className="text-white/45">헌터 실효 전투력</span>
-                        <span className="font-bold text-cyan-300">
-                          {playerPower.toLocaleString()} CP
-                        </span>
-                      </div>
-
-                      {/* 위험도 경고 표시 */}
-                      <div className="mt-2.5 rounded border p-3 flex flex-col gap-1.5">
-                        {getDangerLevel(selectedNode) === 'safe' && (
-                          <div className="text-emerald-400 flex items-center gap-1.5 text-xs font-bold">
-                            <CheckCircle className="h-4 w-4" />
-                            <span>안전: 격파 수월. 안정적인 정화 전선입니다.</span>
-                          </div>
-                        )}
-                        {getDangerLevel(selectedNode) === 'danger' && (
-                          <div className="text-yellow-400 flex items-center gap-1.5 text-xs font-bold">
-                            <AlertCircle className="h-4 w-4" />
-                            <span>위험: 균열의 압박이 강하나 도전해볼 만합니다.</span>
-                          </div>
-                        )}
-                        {getDangerLevel(selectedNode) === 'reckless' && (
-                          <div className="text-rose-400 flex flex-col gap-1 text-xs font-bold border border-rose-500/20 bg-rose-500/5 rounded p-2">
-                            <div className="flex items-center gap-1.5">
-                              <AlertCircle className="h-4 w-4 animate-pulse" />
-                              <span>⚠️ 무모: 매우 높은 즉사 위험 구역!</span>
-                            </div>
-                            <span className="text-[10px] font-medium text-rose-300/80 leading-normal">
-                              치명적인 즉사 위험이 있으니 그림자를 보강하거나 레벨업 후 진입하십시오.
-                            </span>
-                          </div>
-                        )}
-                      </div>
-                    </>
-                  )}
-
-                  {selectedNode.daysRemaining !== undefined && (
-                    <div className="flex justify-between border-b border-white/5 pb-2 text-xs">
-                      <span className="text-white/45">소멸/폭주 시한</span>
-                      <span className={`font-bold ${(selectedNode.daysRemaining ?? 0) <= 3 ? 'text-red-400 animate-pulse' : 'text-yellow-300'}`}>
-                        {selectedNode.daysRemaining}일 남음 / 총 {selectedNode.deadline}일
-                      </span>
-                    </div>
-                  )}
-                </div>
-
-                {/* [L1-A] 러브콜 특별 섹션 */}
-                {hasLoveCall && loveCallState && (() => {
-                  const nodeTheme = getRegionalTheme(selectedNode.subRegionId || selectedNode.regionId)
-                  const flag = REGION_FLAGS[selectedNode.regionId] || '🌐'
-                  const rName = RIFT_REGIONS.find((r) => r.id === selectedNode.regionId)?.name ?? selectedNode.regionId.toUpperCase()
-                  const subName = nodeTheme.name
-                  
-                  return (
-                    <div className="mt-4 rounded-lg border border-yellow-500/30 bg-yellow-500/5 p-3 space-y-3 animate-fade-in">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-1.5 text-xs font-black text-yellow-300">
-                          <span>📞 긴급 러브콜 지원 요청</span>
-                        </div>
-                        <span className="text-[9px] text-amber-300 font-bold bg-amber-500/10 border border-amber-400/20 px-1.5 py-0.5 rounded">
-                          {flag} {rName} ({subName})
-                        </span>
-                      </div>
-
-                      {/* 서사적 상황 설명 */}
-                      <div className="text-[10px] text-white/70 leading-relaxed border-l-2 border-yellow-500/40 pl-2 py-0.5 bg-black/15 rounded-r">
-                        <p className="font-semibold text-yellow-200/90 mb-1 text-[9px] uppercase tracking-wider">상황 보고:</p>
-                        <p className="italic">"{nodeTheme.loveCallNarrative}"</p>
-                      </div>
-
-                      {/* 방치 위험 경고 */}
-                      <div className="rounded bg-rose-950/20 border border-rose-500/20 p-2 text-[9.5px] leading-relaxed text-rose-200">
-                        <div className="flex justify-between items-center mb-1">
-                          <span className="font-bold">⚠️ 방치 시 예상 피해:</span>
-                          {selectedNode && livingWorld?.regions[selectedNode.regionId] && (
-                            <span className="text-[9px] bg-rose-500/20 border border-rose-400/30 text-rose-300 font-bold px-1.5 py-0.2 rounded">
-                              현지 오염도: {livingWorld.regions[selectedNode.regionId].corruption}%
-                            </span>
-                          )}
-                        </div>
-                        {(selectedNode.daysRemaining ?? 0) <= 2 ? (
-                          <span className="text-red-300 font-bold animate-pulse">
-                            소멸/폭주 직전! {selectedNode.daysRemaining}일 내 격퇴 실패 시 해당 지역 오염도가 급증하고 방어선이 완전 붕괴됩니다.
-                          </span>
-                        ) : (
-                          <span>
-                            D-{selectedNode.daysRemaining}일 이내에 정화하지 못하면 게이트가 폭주하여 주변 전선을 삼켜 오염을 심화시킵니다.
-                          </span>
-                        )}
-                      </div>
-
-                      {/* 보상 정보 */}
-                      <div className="rounded bg-black/40 p-2 space-y-1 text-[10px] border border-white/5">
-                        <div className="flex justify-between items-center text-[9px] font-bold text-white/40 mb-1">
-                          <span>약속 보상 (기본)</span>
-                          <span className="text-amber-400 font-normal scale-90 origin-right">※ 특별 위험 수당 적용됨</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-white/60">골드 지원금</span>
-                          <span className="font-bold text-amber-300">+{loveCallState.promisedReward.gold} Gold</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-white/60">어둠의 정수</span>
-                          <span className="font-bold text-purple-300">+{loveCallState.promisedReward.shadowEssence} 정수</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-white/60">전투 경험치</span>
-                          <span className="font-bold text-emerald-300">+{loveCallState.promisedReward.hunterXp} XP</span>
-                        </div>
-                      </div>
-
-                      {/* 협력 헌터 선택 목록 */}
-                      <div className="space-y-1.5">
-                        <div className="text-[9px] font-bold text-white/40">협력 헌터 선택 (참전 지원 후보)</div>
-                        {loveCallState.helperHunterIds.length === 0 ? (
-                          <div className="text-[9px] text-white/40 italic">현재 지원 가능한 헌터가 없습니다.</div>
-                        ) : (
-                          <div className="max-h-28 overflow-y-auto space-y-1 pr-1 scrollbar-thin">
-                            {loveCallState.helperHunterIds.map(hid => {
-                              const h = livingWorld?.namedHunters[hid]
-                              if (!h) return null
-                              const isSelected = selectedHelpers.includes(hid)
-                              return (
-                                <label key={hid} className="flex items-center justify-between rounded bg-black/35 hover:bg-black/60 px-2 py-1.5 text-[10px] cursor-pointer select-none border border-white/5">
-                                  <div className="flex items-center gap-2">
-                                    <input
-                                      type="checkbox"
-                                      checked={isSelected}
-                                      onChange={() => handleHelperToggle(hid)}
-                                      className="accent-purple-500 h-3 w-3 cursor-pointer"
-                                    />
-                                    <span className="font-bold text-white/80">{h.name}</span>
-                                    <span className="rounded bg-purple-500/20 px-1 text-[8px] font-black text-purple-300 border border-purple-500/20">
-                                      {h.rank}
-                                    </span>
-                                  </div>
-                                  <span className="text-cyan-300 font-mono font-bold">⚔️{(h.power + (h.equipmentScore ?? 0)).toLocaleString()}</span>
-                                </label>
-                              )
-                            })}
-                          </div>
-                        )}
-                      </div>
-
-                      {/* 트레이드오프 브리핑 */}
-                      <div className="rounded border border-purple-500/20 bg-purple-500/5 p-2 text-[10px] space-y-1.5">
-                        <div className="text-[9px] font-bold text-purple-300">⚖️ 협력 전투 트레이드오프 실시간 예측</div>
-                        <div className="grid grid-cols-2 gap-1 font-mono text-[9px] text-white/70">
-                          <div>공격력 보너스:</div>
-                          <div className="text-emerald-400 font-bold">+{coopBuffs.atk.toLocaleString()} ATK</div>
-                          <div>방어력 보너스:</div>
-                          <div className="text-emerald-400 font-bold">+{coopBuffs.def.toLocaleString()} DEF</div>
-                          <div>받는 피해 감소:</div>
-                          <div className="text-emerald-400 font-bold">-{Math.round(coopBuffs.dr * 100)}% DMG</div>
-                          <div>보상 획득 비율:</div>
-                          <div className={coopBuffs.rewardRatio === 1 ? "text-cyan-300 font-bold" : "text-yellow-400 font-bold"}>
-                            {Math.round(coopBuffs.rewardRatio * 100)}% (독식 대비 -{Math.round((1 - coopBuffs.rewardRatio) * 100)}%)
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  )
-                })()}
-
-                {/* 대한민국 게이트 특별 합류(협력) 섹션 */}
-                {!hasLoveCall && selectedNode.regionId === 'kr' && (riftNodesState[selectedNode.id] ?? selectedNode.status) === 'active' && (
-                  <div className="mt-4 rounded-lg border border-cyan-500/30 bg-cyan-500/5 p-3 space-y-3 animate-fade-in">
-                    <div className="flex items-center gap-1.5 text-xs font-black text-cyan-300">
-                      <span>🤝 대한민국 헌터 연합 합류</span>
-                    </div>
-                    <p className="text-[10px] text-white/70 leading-normal">
-                      대한민국 헌터 협회 동료들과 함께 게이트 공략을 공조합니다. 참전할 S급 헌터를 선택해 주십시오. (협력 시 전투 안정성이 상승합니다.)
-                    </p>
-                    
-                    {/* 협력 헌터 선택 목록 */}
-                    <div className="space-y-1.5">
-                      <div className="text-[9px] font-bold text-white/40">참전 지원 가능 헌터</div>
-                      {(() => {
-                        const krRegionState = livingWorld?.regions['kr']
-                        const krHelperHunterIds = krRegionState 
-                          ? krRegionState.namedHunterIds.filter(hid => livingWorld?.namedHunters[hid]?.status === 'active') 
-                          : []
-
-                        if (krHelperHunterIds.length === 0) {
-                          return <div className="text-[9px] text-white/40 italic">현재 지원 가능한 헌터가 없습니다.</div>
-                        }
-
-                        return (
-                          <div className="max-h-28 overflow-y-auto space-y-1 pr-1 scrollbar-thin">
-                            {krHelperHunterIds.map(hid => {
-                              const h = livingWorld?.namedHunters[hid]
-                              if (!h) return null
-                              const isSelected = selectedHelpers.includes(hid)
-                              return (
-                                <label key={hid} className="flex items-center justify-between rounded bg-black/35 hover:bg-black/60 px-2 py-1.5 text-[10px] cursor-pointer select-none border border-white/5">
-                                  <div className="flex items-center gap-2">
-                                    <input
-                                      type="checkbox"
-                                      checked={isSelected}
-                                      onChange={() => handleHelperToggle(hid)}
-                                      className="accent-cyan-500 h-3 w-3 cursor-pointer"
-                                    />
-                                    <span className="font-bold text-white/80">{h.name}</span>
-                                    <span className="rounded bg-cyan-500/20 px-1 text-[8px] font-black text-cyan-300 border border-cyan-500/20">
-                                      {h.rank}
-                                    </span>
-                                  </div>
-                                  <span className="text-cyan-300 font-mono font-bold">⚔️{(h.power + (h.equipmentScore ?? 0)).toLocaleString()}</span>
-                                </label>
-                              )
-                            })}
-                          </div>
-                        )
-                      })()}
-                    </div>
-
-                    {/* 트레이드오프 브리핑 (헬퍼 선택 시에만 표시) */}
-                    {selectedHelpers.length > 0 && (
-                      <div className="rounded border border-cyan-500/20 bg-cyan-500/5 p-2 text-[10px] space-y-1.5">
-                        <div className="text-[9px] font-bold text-cyan-300">⚖️ 협력 전투 트레이드오프 실시간 예측</div>
-                        <div className="grid grid-cols-2 gap-1 font-mono text-[9px] text-white/70">
-                          <div>공격력 보너스:</div>
-                          <div className="text-emerald-400 font-bold">+{coopBuffs.atk.toLocaleString()} ATK</div>
-                          <div>방어력 보너스:</div>
-                          <div className="text-emerald-400 font-bold">+{coopBuffs.def.toLocaleString()} DEF</div>
-                          <div>받는 피해 감소:</div>
-                          <div className="text-emerald-400 font-bold">-{Math.round(coopBuffs.dr * 100)}% DMG</div>
-                          <div>보상 획득 비율:</div>
-                          <div className={coopBuffs.rewardRatio === 1 ? "text-cyan-300 font-bold" : "text-yellow-400 font-bold"}>
-                            {Math.round(coopBuffs.rewardRatio * 100)}% (독식 대비 -{Math.round((1 - coopBuffs.rewardRatio) * 100)}%)
-                          </div>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                <div className="mt-6 space-y-2">
-                  {isNodeRetreatedToday(selectedNode.id) ? (
-                    <div className="rounded border border-rose-500/25 bg-rose-500/5 p-3 text-xs text-rose-300/85 text-center font-bold">
-                      ⚠️ 오늘 이 구역에서 후퇴하여 다시 진입할 수 없습니다. 내일 다시 시도하십시오.
-                    </div>
-                  ) : (
-                    <>
-                      {(riftNodesState[selectedNode.id] ?? selectedNode.status) === 'cleared' ? (
-                        <div className="rounded border border-emerald-500/20 bg-emerald-500/5 p-2.5 text-[11px] text-emerald-200 text-center">
-                          이미 완전히 정화된 구역입니다. 재정화가 가능합니다.
-                        </div>
-                      ) : null}
-
-                      {/* 수동 전투 버튼 */}
-                      <button
-                        onClick={() => {
-                          const level = getDangerLevel(selectedNode)
-                          if (level === 'reckless') {
-                            setRecklessConfirmType('manual')
-                            setShowRecklessConfirm(true)
-                          } else {
-                            startWorldManualBattle(selectedNode.id, selectedHelpers)
-                          }
-                        }}
-                        disabled={
-                          (riftNodesState[selectedNode.id] ?? selectedNode.status) === 'locked'
-                        }
-                        className="btn border border-cyan-500/30 bg-cyan-950/20 hover:bg-cyan-500/15 w-full flex items-center justify-center gap-2 py-2 text-xs text-cyan-200 transition-all cursor-pointer"
-                      >
-                        <Zap className="h-4 w-4 text-cyan-400" />
-                        수동 조작 정화 (카드 전투)
-                      </button>
-                    </>
-                  )}
-                </div>
-              </div>
-            )
-          })() : (
-            <div className="panel corner-bracket border-white/5 bg-ink-950/20 p-8 text-center text-white/35 text-xs">
-              <HelpCircle className="mx-auto mb-2 h-8 w-8 text-white/20" />
-              지도상의 균열 노드를 선택하여 상세 정보를 확인하십시오.
-            </div>
-          )}
-        </div>
-
-        {/* 맵 컨테이너 */}
-        <div className="lg:col-span-2">
-          {(() => {
-            const isMapDataLoaded = worldFeatures && worldFeatures.length > 0
-
-            // Helper to determine region coloring based on game state
-            const getCountryColors = (regionId: string, corruption: number, isOccupied: boolean) => {
-              if (regionId === 'kr') {
-                return {
-                  fill: '#1a143b', // deep violet-black
-                  stroke: '#7f77dd', // electric purple
-                  glowColor: '#7f77dd',
-                  stateText: '거점',
-                }
-              }
-              if (isOccupied) {
-                return {
-                  fill: '#380c10', // deep blood red
-                  stroke: '#e24b4a', // intense military red
-                  glowColor: '#e24b4a',
-                  stateText: '점령됨',
-                }
-              }
-              if (corruption <= 20) {
-                return {
-                  fill: '#0d261e', // dark emerald shadow
-                  stroke: '#1d9e75', // bright jade green
-                  glowColor: '#1d9e75',
-                  stateText: '안전',
-                }
-              }
-              if (corruption <= 50) {
-                return {
-                  fill: '#2e1d09', // dark copper amber
-                  stroke: '#ef9f27', // warm alert orange
-                  glowColor: '#ef9f27',
-                  stateText: '경계',
-                }
-              }
+            if (isOccupied) {
               return {
                 fill: '#380c10', // deep blood red
                 stroke: '#e24b4a', // intense military red
                 glowColor: '#e24b4a',
-                stateText: '위험',
+                stateText: '점령됨',
               }
             }
-
-            // Get coordinate helper for gate nodes with custom offsets for Korean gates
-            const getNodeCoordinates = (node: any): [number, number] => {
-              const baseCentroid = REGION_CENTROIDS[node.regionId]
-              if (!baseCentroid) {
-                return [(node.x / 100) * MAP_WIDTH, (node.y / 100) * MAP_HEIGHT]
+            if (corruption <= 20) {
+              return {
+                fill: '#0d261e', // dark emerald shadow
+                stroke: '#1d9e75', // bright jade green
+                glowColor: '#1d9e75',
+                stateText: '안전',
               }
-
-              if (node.id === 'node-kr-seoul') {
-                return [baseCentroid[0] + 5, baseCentroid[1] - 4]
-              }
-              if (node.id === 'node-kr-incheon') {
-                return [baseCentroid[0] - 5, baseCentroid[1] + 3]
-              }
-
-              return baseCentroid
             }
+            if (corruption <= 50) {
+              return {
+                fill: '#2e1d09', // dark copper amber
+                stroke: '#ef9f27', // warm alert orange
+                glowColor: '#ef9f27',
+                stateText: '경계',
+              }
+            }
+            return {
+              fill: '#380c10', // deep blood red
+              stroke: '#e24b4a', // intense military red
+              glowColor: '#e24b4a',
+              stateText: '위험',
+            }
+          }
 
-            // Render curved, animated network lines connecting South Korea to active regions
-            const renderConnectingLines = () => {
-              const krCentroid = REGION_CENTROIDS['kr']
-              if (!krCentroid) return null
+          // Render curved, animated network lines connecting South Korea to active regions
+          const renderConnectingLines = () => {
+            const krCentroid = REGION_CENTROIDS['kr']
+            if (!krCentroid) return null
 
-              const activeNodes = Object.values(livingWorld?.riftNodes ?? {})
-                .filter((node: any) => node.loveCall?.active && (riftNodesState[node.id] ?? node.status) === 'active')
+            const activeNodes = Object.values(livingWorld?.riftNodes ?? {})
+              .filter((node: any) => node.loveCall?.active && (riftNodesState[node.id] ?? node.status) === 'active')
+            
+            const activeMonarchs = livingWorld?.activeMonarchs?.filter((m: any) => m.status === 'rampaging') ?? []
+
+            const targets: { id: string; coords: [number, number]; type: 'lovecall' | 'monarch' }[] = []
+
+            activeNodes.forEach((node: any) => {
+              const coords = REGION_CENTROIDS[node.regionId]
+              if (coords) {
+                targets.push({ id: node.id, coords, type: 'lovecall' })
+              }
+            })
+
+            activeMonarchs.forEach((m: any) => {
+              const regionId = m.occupiedRegionIds[0] || 'kr'
+              const coords = REGION_CENTROIDS[regionId]
+              if (coords && regionId !== 'kr') {
+                targets.push({ id: m.monarchId, coords, type: 'monarch' })
+              }
+            })
+
+            return targets.map((t) => {
+              const [x1, y1] = krCentroid
+              const [x2, y2] = t.coords
               
-              const activeMonarchs = livingWorld?.activeMonarchs?.filter((m: any) => m.status === 'rampaging') ?? []
+              // Draw arc via quadratic bezier control point
+              const mx = (x1 + x2) / 2
+              const my = (y1 + y2) / 2
+              const dx = x2 - x1
+              const dy = y2 - y1
+              const offset = 30
+              const length = Math.sqrt(dx * dx + dy * dy)
+              const px = -dy / length
+              const py = dx / length
+              const cx = mx + px * offset
+              const cy = my + py * offset
 
-              const targets: { id: string; coords: [number, number]; type: 'lovecall' | 'monarch' }[] = []
+              const pathD = `M ${x1} ${y1} Q ${cx} ${cy} ${x2} ${y2}`
+              const strokeColor = t.type === 'monarch' ? '#e24b4a' : '#ef9f27'
 
-              activeNodes.forEach((node: any) => {
-                const coords = REGION_CENTROIDS[node.regionId]
-                if (coords) {
-                  targets.push({ id: node.id, coords, type: 'lovecall' })
-                }
-              })
-
-              activeMonarchs.forEach((m: any) => {
-                const regionId = m.occupiedRegionIds[0] || 'kr'
-                const coords = REGION_CENTROIDS[regionId]
-                if (coords && regionId !== 'kr') {
-                  targets.push({ id: m.monarchId, coords, type: 'monarch' })
-                }
-              })
-
-              return targets.map((t) => {
-                const [x1, y1] = krCentroid
-                const [x2, y2] = t.coords
-                
-                // Draw arc via quadratic bezier control point
-                const mx = (x1 + x2) / 2
-                const my = (y1 + y2) / 2
-                const dx = x2 - x1
-                const dy = y2 - y1
-                const offset = 30
-                const length = Math.sqrt(dx * dx + dy * dy)
-                const px = -dy / length
-                const py = dx / length
-                const cx = mx + px * offset
-                const cy = my + py * offset
-
-                const pathD = `M ${x1} ${y1} Q ${cx} ${cy} ${x2} ${y2}`
-                const strokeColor = t.type === 'monarch' ? '#e24b4a' : '#ef9f27'
-
-                return (
-                  <path
-                    key={`link-${t.id}`}
-                    d={pathD}
-                    fill="none"
-                    stroke={strokeColor}
-                    strokeWidth="1.5"
-                    strokeDasharray="4,4"
-                    className="link-animation opacity-60"
-                    style={{
-                      filter: `drop-shadow(0 0 2px ${strokeColor})`,
-                    }}
-                  />
-                )
-              })
-            }
-
-            // Fallback representation if D3 datasets fail to load
-            if (!isMapDataLoaded) {
               return (
-                <div
-                  className="relative w-full rounded-xl border border-white/10 bg-slate-950 overflow-hidden"
-                  style={{ aspectRatio: '16/9', minHeight: '300px' }}
-                >
-                  <div className="absolute inset-0 bg-[linear-gradient(to_right,#0f0f15_1px,transparent_1px),linear-gradient(to_bottom,#0f0f15_1px,transparent_1px)] bg-[size:4rem_4rem] [mask-image:radial-gradient(ellipse_60%_50%_at_50%_50%,#000_70%,transparent_100%)] opacity-70" />
-                  <div className="absolute inset-0 flex items-center justify-center text-[10px] text-white/5 select-none pointer-events-none font-mono">
-                    [ DIMENSIONAL RIFT MAP - FALLBACK GRID ]
-                  </div>
-                  {RIFT_REGIONS.map((region: RiftRegion) => {
-                    const prog = getRegionProgress(region.id, riftNodesState)
-                    const regionState = livingWorld?.regions[region.id]
-                    const totalPower = regionState ? getRegionTotalPower(regionState, livingWorld.namedHunters) : 0
-                    const occupiedMonarch = livingWorld?.activeMonarchs?.find(m => m.status === 'rampaging' && m.occupiedRegionIds.includes(region.id))
-
-                    return (
-                      <div
-                        key={region.id}
-                        className="absolute pointer-events-none flex flex-col items-center -translate-x-1/2 -translate-y-1/2 cursor-pointer"
-                        style={{ left: `${region.labelX}%`, top: `${region.labelY}%` }}
-                      >
-                        {occupiedMonarch && (
-                          <div className="absolute -inset-10 rounded-full bg-rose-600/10 blur-xl animate-pulse -z-10" />
-                        )}
-                        <div className={`rounded-full bg-black/75 border ${occupiedMonarch ? 'border-red-500/80 shadow-glow-red animate-pulse' : 'border-white/5'} px-2.5 py-0.5 text-[10px] font-black ${occupiedMonarch ? 'text-red-400' : 'text-white/60'} backdrop-blur-sm`}>
-                          {occupiedMonarch ? `⚠️ ${region.name} (점령됨)` : region.name}
-                        </div>
-                        <div className={`text-[8px] ${occupiedMonarch ? 'text-red-300 font-bold bg-red-950/40 border border-red-500/25 px-1.5' : 'text-purple-300/80 bg-black/45 px-1'} font-mono mt-0.5 whitespace-nowrap rounded`}>
-                          {occupiedMonarch 
-                            ? `군주: ${MONARCHS.find(m => m.id === occupiedMonarch.monarchId)?.name ?? occupiedMonarch.monarchId}`
-                            : `(${prog.cleared}/${prog.total})${totalPower > 0 ? ` ⚔️${(totalPower / 1000).toFixed(0)}k` : ''}`
-                          }
-                        </div>
-                      </div>
-                    )
-                  })}
-                </div>
+                <path
+                  key={`link-${t.id}`}
+                  d={pathD}
+                  fill="none"
+                  stroke={strokeColor}
+                  strokeWidth="1.5"
+                  strokeDasharray="4,4"
+                  className="link-animation opacity-60"
+                  style={{
+                    filter: `drop-shadow(0 0 2px ${strokeColor})`,
+                  }}
+                />
               )
-            }
+            })
+          }
 
+          // Fallback representation if D3 datasets fail to load
+          if (!isMapDataLoaded) {
             return (
               <div
-                className="relative w-full rounded-xl border border-white/10 bg-[#04050c] overflow-hidden"
-                style={{ aspectRatio: '16/9', minHeight: '300px' }}
+                className="relative w-full h-full bg-slate-950 overflow-hidden"
               >
-                <svg
-                  viewBox={`0 0 ${MAP_WIDTH} ${MAP_HEIGHT}`}
-                  width="100%"
-                  height="100%"
-                  className="w-full h-full select-none block"
-                >
-                  <defs>
-                    <radialGradient id="ocean-gradient" cx="50%" cy="50%" r="70%">
-                      <stop offset="0%" stopColor="#0b1226" />
-                      <stop offset="100%" stopColor="#04050c" />
-                    </radialGradient>
-                    <filter id="glow-base" x="-20%" y="-20%" width="140%" height="140%">
-                      <feGaussianBlur stdDeviation="4" result="blur" />
-                      <feComposite in="SourceGraphic" in2="blur" operator="over" />
-                    </filter>
-                    <style>{`
-                      @keyframes map-dash {
-                        to {
-                          stroke-dashoffset: -40;
-                        }
-                      }
-                      .link-animation {
-                        animation: map-dash 2s linear infinite;
-                      }
-                      @keyframes pulse-ring {
-                        0% { transform: scale(0.3); opacity: 0; }
-                        50% { opacity: 0.8; }
-                        100% { transform: scale(1.6); opacity: 0; }
-                      }
-                      .ring-pulse {
-                        transform-origin: center;
-                        animation: pulse-ring 2s cubic-bezier(0.215, 0.610, 0.355, 1) infinite;
-                      }
-                    `}</style>
-                  </defs>
+                <div className="absolute inset-0 bg-[linear-gradient(to_right,#0f0f15_1px,transparent_1px),linear-gradient(to_bottom,#0f0f15_1px,transparent_1px)] bg-[size:4rem_4rem] [mask-image:radial-gradient(ellipse_60%_50%_at_50%_50%,#000_70%,transparent_100%)] opacity-70" />
+                <div className="absolute inset-0 flex items-center justify-center text-[10px] text-white/5 select-none pointer-events-none font-mono">
+                  [ DIMENSIONAL RIFT MAP - FALLBACK GRID ]
+                </div>
+                {RIFT_REGIONS.map((region: RiftRegion) => {
+                  const prog = getRegionProgress(region.id, riftNodesState)
+                  const regionState = livingWorld?.regions[region.id]
+                  const totalPower = regionState ? getRegionTotalPower(regionState, livingWorld.namedHunters) : 0
+                  const occupiedMonarch = livingWorld?.activeMonarchs?.find(m => m.status === 'rampaging' && m.occupiedRegionIds.includes(region.id))
 
+                  return (
+                    <div
+                      key={region.id}
+                      className="absolute pointer-events-none flex flex-col items-center -translate-x-1/2 -translate-y-1/2 cursor-pointer"
+                      style={{ left: `${region.labelX}%`, top: `${region.labelY}%` }}
+                    >
+                      {occupiedMonarch && (
+                        <div className="absolute -inset-10 rounded-full bg-rose-600/10 blur-xl animate-pulse -z-10" />
+                      )}
+                      <div className={`rounded-full bg-black/75 border ${occupiedMonarch ? 'border-red-500/80 shadow-glow-red animate-pulse' : 'border-white/5'} px-2.5 py-0.5 text-[10px] font-black ${occupiedMonarch ? 'text-red-400' : 'text-white/60'} backdrop-blur-sm`}>
+                        {occupiedMonarch ? `⚠️ ${region.name} (점령됨)` : region.name}
+                      </div>
+                      <div className={`text-[8px] ${occupiedMonarch ? 'text-red-300 font-bold bg-red-950/40 border border-red-500/25 px-1.5' : 'text-purple-300/80 bg-black/45 px-1'} font-mono mt-0.5 whitespace-nowrap rounded`}>
+                        {occupiedMonarch 
+                          ? `군주: ${MONARCHS.find(m => m.id === occupiedMonarch.monarchId)?.name ?? occupiedMonarch.monarchId}`
+                          : `(${prog.cleared}/${prog.total})${totalPower > 0 ? ` ⚔️${(totalPower / 1000).toFixed(0)}k` : ''}`
+                        }
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )
+          }
+
+          // D3 World Map elements
+          const activeLoveCalls = Object.values(livingWorld?.riftNodes ?? {})
+            .filter((node: any) => node.loveCall?.active && (riftNodesState[node.id] ?? node.status) === 'active')
+
+          return (
+            <>
+              {/* 바다 및 대륙 렌더링 SVG */}
+              <svg
+                ref={svgRef}
+                viewBox={`0 0 ${MAP_WIDTH} ${MAP_HEIGHT}`}
+                width="100%"
+                height="100%"
+                className="w-full h-full select-none block"
+              >
+                <defs>
+                  <radialGradient id="ocean-gradient" cx="50%" cy="50%" r="70%">
+                    <stop offset="0%" stopColor="#0b1226" />
+                    <stop offset="100%" stopColor="#04050c" />
+                  </radialGradient>
+                  <filter id="glow-base" x="-20%" y="-20%" width="140%" height="140%">
+                    <feGaussianBlur stdDeviation="4" result="blur" />
+                    <feComposite in="SourceGraphic" in2="blur" operator="over" />
+                  </filter>
+                  <style>{`
+                    @keyframes map-dash {
+                      to {
+                        stroke-dashoffset: -40;
+                      }
+                    }
+                    .link-animation {
+                      animation: map-dash 2s linear infinite;
+                    }
+                    @keyframes pulse-ring {
+                      0% { transform: scale(0.3); opacity: 0; }
+                      50% { opacity: 0.8; }
+                      100% { transform: scale(1.6); opacity: 0; }
+                    }
+                    .ring-pulse {
+                      transform-origin: center;
+                      animation: pulse-ring 2s cubic-bezier(0.215, 0.610, 0.355, 1) infinite;
+                    }
+                  `}</style>
+                </defs>
+
+                {/* ZOOMABLE GROUP WRAPPER */}
+                <g transform={`translate(${zoomTransform.x}, ${zoomTransform.y}) scale(${zoomTransform.k})`}>
                   {/* 바다 구형 배경 */}
                   <path d={pathGenerator({ type: 'Sphere' }) || ''} fill="url(#ocean-gradient)" />
 
@@ -1992,8 +1272,10 @@ export function WorldMapPanel() {
                       const corruption = regionState ? regionState.corruption : 0
                       const colors = getCountryColors(region.id, corruption, !!occupiedMonarch)
 
-                      // 모바일에선 복잡도 감소를 위해 가독성 중심 필터링
-                      const isLabelPriority = region.id === 'kr' || !!occupiedMonarch || corruption > 20
+                      // 줌 스케일 (zoomTransform.k) 연동 우선순위 정렬
+                      // 거점(한국), 점령, 높은 오염도(>20%) 또는 줌인이 충분히 되었을 때(k >= 2.2) 표시
+                      const isLabelPriority = region.id === 'kr' || !!occupiedMonarch || corruption > 20 || zoomTransform.k >= 2.2
+                      const showStats = zoomTransform.k >= 1.8
 
                       return (
                         <g key={`marker-region-${region.id}`} className="cursor-pointer">
@@ -2033,13 +1315,13 @@ export function WorldMapPanel() {
                             }}
                           />
 
-                          {/* 텍스트 정보 레이블 */}
+                          {/* 텍스트 정보 레이블 (가독성 Contrast Outline 적용) */}
                           <g
                             transform={`translate(${x}, ${y - 12})`}
                             onClick={() => setActiveDetailRegion(region)}
-                            className={`${
-                              isLabelPriority ? '' : 'hidden sm:block'
-                            } transition-opacity duration-200 hover:opacity-100 pointer-events-none`}
+                            className={`transition-opacity duration-300 pointer-events-none ${
+                              isLabelPriority ? 'opacity-100' : 'opacity-0 hidden'
+                            }`}
                           >
                             <text
                               textAnchor="middle"
@@ -2051,21 +1333,24 @@ export function WorldMapPanel() {
                             >
                               {occupiedMonarch ? `⚠️ ${region.name} (점령됨)` : region.name}
                             </text>
-                            <text
-                              y="10"
-                              textAnchor="middle"
-                              className={`text-[7.5px] font-mono font-bold ${
-                                occupiedMonarch ? 'fill-red-400' : 'fill-purple-300/90'
-                              } stroke-black stroke-[2px] select-none`}
-                              style={{
-                                paintOrder: 'stroke',
-                                strokeLinejoin: 'round',
-                              }}
-                            >
-                              {occupiedMonarch
-                                ? `군주: ${MONARCHS.find((m) => m.id === occupiedMonarch.monarchId)?.name ?? occupiedMonarch.monarchId}`
-                                : `(${prog.cleared}/${prog.total})${totalPower > 0 ? ` ⚔️${(totalPower / 1000).toFixed(0)}k` : ''}`}
-                            </text>
+                            
+                            {showStats && (
+                              <text
+                                y="10"
+                                textAnchor="middle"
+                                className={`text-[7.5px] font-mono font-bold ${
+                                  occupiedMonarch ? 'fill-red-400' : 'fill-purple-300/90'
+                                } stroke-black stroke-[2px] select-none`}
+                                style={{
+                                  paintOrder: 'stroke',
+                                  strokeLinejoin: 'round',
+                                }}
+                              >
+                                {occupiedMonarch
+                                  ? `군주: ${MONARCHS.find((m) => m.id === occupiedMonarch.monarchId)?.name ?? occupiedMonarch.monarchId}`
+                                  : `(${prog.cleared}/${prog.total})${totalPower > 0 ? ` ⚔️${(totalPower / 1000).toFixed(0)}k` : ''}`}
+                              </text>
+                            )}
                           </g>
                         </g>
                       )
@@ -2091,6 +1376,9 @@ export function WorldMapPanel() {
 
                         const strokeColor = isNodeRegionOccupied ? '#ef4444' : hasLoveCall ? '#fbbf24' : '#22d3ee'
                         const bgColor = isNodeRegionOccupied ? '#380c10' : hasLoveCall ? '#2e1d09' : '#083344'
+
+                        // 줌 스케일 및 러브콜 여부에 따른 라벨 가독성 제어
+                        const showGateLabel = hasLoveCall || (selectedNode && selectedNode.id === node.id) || zoomTransform.k >= 2.0
 
                         return (
                           <g
@@ -2128,27 +1416,29 @@ export function WorldMapPanel() {
                               </g>
                             )}
 
-                            <g
-                              transform={`translate(${x}, ${y + 11})`}
-                              className="opacity-75 group-hover:opacity-100 transition-opacity pointer-events-none"
-                            >
-                              <text
-                                textAnchor="middle"
-                                className={`text-[7.5px] font-black ${
-                                  isNodeRegionOccupied
-                                    ? 'fill-red-300'
-                                    : hasLoveCall
-                                    ? 'fill-amber-200'
-                                    : 'fill-cyan-300'
-                                } stroke-black stroke-[2.5px] select-none`}
-                                style={{
-                                  paintOrder: 'stroke',
-                                  strokeLinejoin: 'round',
-                                }}
+                            {showGateLabel && (
+                              <g
+                                transform={`translate(${x}, ${y + 11})`}
+                                className="opacity-80 group-hover:opacity-100 transition-opacity pointer-events-none"
                               >
-                                {hasLoveCall ? `📞 [지원] ${node.name} (D-${node.daysRemaining})` : node.name}
-                              </text>
-                            </g>
+                                <text
+                                  textAnchor="middle"
+                                  className={`text-[7.5px] font-black ${
+                                    isNodeRegionOccupied
+                                      ? 'fill-red-300'
+                                      : hasLoveCall
+                                      ? 'fill-amber-200'
+                                      : 'fill-cyan-300'
+                                  } stroke-black stroke-[2.5px] select-none`}
+                                  style={{
+                                    paintOrder: 'stroke',
+                                    strokeLinejoin: 'round',
+                                  }}
+                                >
+                                  {hasLoveCall ? `📞 [지원] ${node.name}` : node.name}
+                                </text>
+                              </g>
+                            )}
                           </g>
                         )
                       })}
@@ -2230,61 +1520,617 @@ export function WorldMapPanel() {
                         )
                       })}
                   </g>
+                </g>
+              </svg>
 
-                  {/* 지도 범례 */}
-                  <g transform="translate(15, 365)" className="select-none pointer-events-none hidden sm:block">
-                    <rect
-                      x="0"
-                      y="0"
-                      width="110"
-                      height="70"
-                      rx="4"
-                      fill="rgba(4, 5, 12, 0.85)"
-                      stroke="rgba(255, 255, 255, 0.08)"
-                      strokeWidth="1"
-                    />
-                    <text
-                      x="8"
-                      y="14"
-                      className="text-[7.5px] font-black fill-white/45 tracking-widest uppercase font-mono"
-                    >
-                      MAP LEGEND
-                    </text>
+              {/* [OVERLAY 1] COLLAPSIBLE LOVE CALLS HUD (TOP LEFT) */}
+              <div 
+                className={`absolute top-4 left-4 z-10 w-[300px] max-w-[calc(100vw-2rem)] flex flex-col pointer-events-auto backdrop-blur-md bg-ink-950/85 border border-amber-500/20 rounded-lg shadow-glow-amber/5 overflow-hidden transition-all duration-300 ${
+                  isLoveCallsExpanded ? 'max-h-[85%]' : 'max-h-[42px]'
+                }`}
+              >
+                <div className="p-3 border-b border-amber-500/15 flex items-center justify-between bg-amber-500/5">
+                  <span className="font-extrabold text-[11px] text-amber-400 flex items-center gap-1.5">
+                    📞 세계 지원 요청 ({activeLoveCalls.length})
+                  </span>
+                  <button
+                    onClick={() => setIsLoveCallsExpanded(!isLoveCallsExpanded)}
+                    className="rounded hover:bg-white/10 px-2 py-0.5 text-[9px] font-black text-amber-300 transition-all cursor-pointer border border-amber-500/25"
+                  >
+                    {isLoveCallsExpanded ? '접기 ▲' : '열기 ▼'}
+                  </button>
+                </div>
 
-                    <g transform="translate(8, 25)">
-                      <circle cx="4" cy="0" r="3" fill="#7f77dd" style={{ filter: 'drop-shadow(0 0 2px #7f77dd)' }} />
-                      <text x="14" y="2.5" className="text-[7.5px] font-bold fill-purple-200">
-                        한국 거점
-                      </text>
-                    </g>
+                {isLoveCallsExpanded && (
+                  <div className="overflow-y-auto p-2.5 space-y-2.5 max-h-[360px] scrollbar-thin">
+                    {activeLoveCalls.length === 0 ? (
+                      <div className="text-center text-white/35 text-[10px] py-6">
+                        <Globe className="mx-auto mb-2 h-5 w-5 text-white/15 animate-pulse" />
+                        <p className="font-medium text-white/50">현재 대기 중인 세계의 호출이 없습니다.</p>
+                        <p className="text-[8px] text-white/30 mt-0.5">대한민국 거점 전선을 지켜주십시오.</p>
+                      </div>
+                    ) : (
+                      activeLoveCalls.map((node: any) => {
+                        const rName = RIFT_REGIONS.find((r) => r.id === node.regionId)?.name ?? node.regionId.toUpperCase()
+                        const flag = REGION_FLAGS[node.regionId] || '🌐'
+                        const loveCall = node.loveCall
+                        if (!loveCall) return null
 
-                    <g transform="translate(8, 36)">
-                      <circle cx="4" cy="0" r="3" fill="#e24b4a" style={{ filter: 'drop-shadow(0 0 2px #e24b4a)' }} />
-                      <text x="14" y="2.5" className="text-[7.5px] font-bold fill-red-300">
-                        군주 점령 / 위험
-                      </text>
-                    </g>
+                        let cpLabel = '진입 무모'
+                        let cpColorBadge = 'bg-red-500/10 border-red-500/20 text-red-400'
+                        if (playerPower >= node.difficulty) {
+                          cpLabel = '안전'
+                          cpColorBadge = 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'
+                        } else if (playerPower >= node.difficulty * 0.7) {
+                          cpLabel = '위험'
+                          cpColorBadge = 'bg-yellow-500/10 border-yellow-500/20 text-yellow-400'
+                        }
 
-                    <g transform="translate(8, 47)">
-                      <circle cx="4" cy="0" r="3" fill="#ef9f27" style={{ filter: 'drop-shadow(0 0 2px #ef9f27)' }} />
-                      <text x="14" y="2.5" className="text-[7.5px] font-bold fill-amber-200">
-                        경계 (오염도 20-50)
-                      </text>
-                    </g>
+                        const helpersNameList = loveCall.helperHunterIds
+                          .map((hid: string) => livingWorld?.namedHunters[hid]?.name)
+                          .filter(Boolean)
+                          .join(', ')
 
-                    <g transform="translate(8, 58)">
-                      <circle cx="4" cy="0" r="3" fill="#1d9e75" style={{ filter: 'drop-shadow(0 0 2px #1d9e75)' }} />
-                      <text x="14" y="2.5" className="text-[7.5px] font-bold fill-emerald-200">
-                        안전 (오염도 &lt; 20)
-                      </text>
-                    </g>
-                  </g>
-                </svg>
+                        return (
+                          <div
+                            key={node.id}
+                            className="rounded border border-amber-500/20 bg-amber-500/5 hover:bg-amber-500/10 p-2.5 transition-all space-y-1.5 shadow-md"
+                          >
+                            <div className="flex items-center justify-between">
+                              <span className="font-black text-[10px] text-amber-300 flex items-center gap-1">
+                                {flag} {rName}
+                              </span>
+                              <div className="flex gap-1 items-center scale-90 origin-right">
+                                <span className="rounded bg-amber-500/25 px-1 py-0.2 text-[8px] font-black text-amber-200 border border-amber-400/20 uppercase tracking-tighter">
+                                  {node.difficultyRank}급
+                                </span>
+                                <span className={`rounded border px-1 py-0.2 text-[8px] font-bold ${
+                                  (node.daysRemaining ?? 0) <= 2 ? 'bg-red-500/20 border-red-500/30 text-red-300 animate-pulse' : 'bg-black/30 border-white/5 text-yellow-300'
+                                }`}>
+                                  D-{node.daysRemaining}
+                                </span>
+                              </div>
+                            </div>
+
+                            <div className="font-bold text-[11px] text-white/95 truncate">
+                              {node.name}
+                            </div>
+
+                            <div className="flex justify-between items-center text-[8.5px] bg-black/40 rounded px-1.5 py-0.5 text-white/70">
+                              <span>권장: <strong className="font-mono">{node.difficulty?.toLocaleString()}</strong></span>
+                              <span>내 CP: <strong className="font-mono text-cyan-300">{playerPower?.toLocaleString()}</strong></span>
+                              <span className={`rounded border px-1 text-[7.5px] font-black ${cpColorBadge}`}>{cpLabel}</span>
+                            </div>
+
+                            {helpersNameList && (
+                              <div className="text-[8px] text-white/50 bg-black/20 rounded p-1 border border-white/5 truncate">
+                                <span className="font-bold text-amber-300/80">공조: </span>
+                                <span className="italic">{helpersNameList}</span>
+                              </div>
+                            )}
+
+                            {/* [GEOGRAPHICAL SMOOTH ZOOM FOCUS] */}
+                            <div className="grid grid-cols-2 gap-1 pt-1.5">
+                              <button
+                                onClick={() => {
+                                  const coords = REGION_CENTROIDS[node.regionId]
+                                  if (coords) {
+                                    focusOnCoords(coords[0], coords[1], 3.5)
+                                  }
+                                  handleNodeClick(node)
+                                }}
+                                className="rounded border border-white/10 bg-black/25 hover:bg-black/60 py-1 text-[8.5px] font-bold text-white/75 transition-all cursor-pointer text-center"
+                              >
+                                📍 추적/확인
+                              </button>
+                              <button
+                                onClick={() => {
+                                  setSelectedNode(node)
+                                  setSelectedHelpers(loveCall.helperHunterIds ?? [])
+                                  
+                                  const level = getDangerLevel(node)
+                                  if (level === 'reckless') {
+                                    setRecklessConfirmType('manual')
+                                    setShowRecklessConfirm(true)
+                                  } else {
+                                    startWorldManualBattle(node.id, loveCall.helperHunterIds ?? [])
+                                  }
+                                }}
+                                className="rounded bg-gradient-to-r from-amber-500/20 to-orange-500/20 hover:from-amber-500/30 hover:to-orange-500/30 border border-amber-500/40 hover:border-amber-400 py-1 text-[8.5px] font-black text-amber-200 transition-all cursor-pointer text-center flex items-center justify-center gap-0.5 shadow shadow-amber-950/20"
+                              >
+                                ⚔️ 원정 수락
+                              </button>
+                            </div>
+                          </div>
+                        )
+                      })
+                    )}
+                  </div>
+                )}
               </div>
-            )
-          })()}
-        </div>
 
+              {/* [OVERLAY 2] GEOGRAPHICAL DETAILED DOSSIER HUD (SLIDE IN RIGHT SIDEBAR) */}
+              {selectedNode && (() => {
+                const isMonarchNode = MONARCHS.some(m => m.id === selectedNode.id) || selectedNode.id === 'angel'
+                const monarchData = selectedNode.id === 'angel' ? FINAL_ANGEL : MONARCHS.find(m => m.id === selectedNode.id)
+                const regionState = livingWorld?.regions[selectedNode.regionId]
+
+                return (
+                  <div className="absolute top-4 right-4 bottom-4 z-10 w-[330px] max-w-[calc(100vw-2rem)] flex flex-col pointer-events-auto backdrop-blur-md bg-ink-950/85 border border-purple-500/25 rounded-lg shadow-glow-purple/10 overflow-hidden animate-slide-in">
+                    
+                    {/* Header */}
+                    <div className="p-3.5 border-b border-purple-500/20 flex items-start justify-between bg-purple-500/5">
+                      <div>
+                        <span className="rounded border border-purple-400/20 bg-purple-500/10 px-1.5 py-0.5 text-[8.5px] text-purple-200 uppercase tracking-widest font-black">
+                          {isMonarchNode ? '👑 군주 출현지' : '📍 차원 균열 작전'} : {RIFT_REGIONS.find((r) => r.id === selectedNode.regionId)?.name}
+                        </span>
+                        <h4 className="mt-1.5 text-xs font-black text-white truncate max-w-[240px]">
+                          {selectedNode.name || selectedNode.id.toUpperCase()}
+                        </h4>
+                      </div>
+                      <button
+                        onClick={() => setSelectedNode(null)}
+                        className="rounded p-1 hover:bg-white/10 text-white/45 hover:text-white cursor-pointer transition-all border border-transparent hover:border-white/10"
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+
+                    {/* Dossier Body Scrollable */}
+                    <div className="flex-1 overflow-y-auto p-3.5 space-y-3.5 scrollbar-thin">
+                      {isMonarchNode && monarchData ? (() => {
+                        const namedHuntersInRegion = selectedNode.id === 'angel'
+                          ? Object.keys(livingWorld?.namedHunters ?? {}).filter(hid => livingWorld?.namedHunters[hid]?.status === 'active')
+                          : (regionState?.namedHunterIds || [])
+                        const activeMonarchState = livingWorld?.activeMonarchs?.find(m => m.monarchId === selectedNode.id)
+                        const isDefeated = selectedNode.id === 'angel'
+                          ? (livingWorld?.endingState === 'victory')
+                          : (activeMonarchState?.status === 'defeated')
+
+                        return (
+                          <>
+                            <div className="space-y-2 text-[10px]">
+                              <div className="flex justify-between border-b border-white/5 pb-1.5">
+                                <span className="text-white/45">군주 전술 상태</span>
+                                <span className={isDefeated ? 'text-emerald-400 font-bold' : 'text-red-400 font-bold animate-pulse'}>
+                                  {isDefeated ? '격퇴됨 (평화)' : '점령지 폭주/위협 중'}
+                                </span>
+                              </div>
+                              <div className="flex justify-between border-b border-white/5 pb-1.5">
+                                <span className="text-white/45">군주 서열</span>
+                                <span className="font-bold text-red-300">
+                                  {monarchData.rank === 0 ? 'SPECIAL' : `제 ${monarchData.rank}위`}
+                                </span>
+                              </div>
+                              <div className="flex justify-between border-b border-white/5 pb-1.5">
+                                <span className="text-white/45">테마 / 속성</span>
+                                <span className="font-mono text-purple-300">
+                                  {monarchData.theme}
+                                </span>
+                              </div>
+                              <div className="flex justify-between border-b border-white/5 pb-1.5">
+                                <span className="text-white/45">권장 전투력</span>
+                                <span className="font-bold text-pink-300">
+                                  {monarchData.recommendedCP.toLocaleString()} CP
+                                </span>
+                              </div>
+                              <div className="flex justify-between border-b border-white/5 pb-1.5">
+                                <span className="text-white/45">내 실효 전투력</span>
+                                <span className="font-bold text-cyan-300">
+                                  {playerPower.toLocaleString()} CP
+                                </span>
+                              </div>
+                            </div>
+
+                            {/* 위험도 판단 경고 */}
+                            <div className="rounded border p-2 flex flex-col gap-1 bg-black/35 border-white/5 text-[9.5px]">
+                              {getDangerLevel(selectedNode) === 'safe' && (
+                                <div className="text-emerald-400 flex items-center gap-1.5 font-bold">
+                                  <CheckCircle className="h-3.5 w-3.5" />
+                                  <span>안전: 전력이 충분히 장악하고 있습니다.</span>
+                                </div>
+                              )}
+                              {getDangerLevel(selectedNode) === 'danger' && (
+                                <div className="text-yellow-400 flex items-center gap-1.5 font-bold">
+                                  <AlertCircle className="h-3.5 w-3.5" />
+                                  <span>위험: 거센 타격이 예상되는 격전지입니다.</span>
+                                </div>
+                              )}
+                              {getDangerLevel(selectedNode) === 'reckless' && (
+                                <div className="text-rose-400 flex flex-col gap-1 font-bold border border-rose-500/20 bg-rose-500/5 rounded p-1.5">
+                                  <div className="flex items-center gap-1.5">
+                                    <AlertCircle className="h-3.5 w-3.5 animate-pulse" />
+                                    <span>⚠️ 무모: 장비 파손 및 즉사 경보!</span>
+                                  </div>
+                                  <span className="text-[8.5px] font-medium text-rose-300/80 leading-normal">
+                                    그림자 수호 장막(탱킹) 없이는 원샷원킬됩니다.
+                                  </span>
+                                </div>
+                              )}
+                            </div>
+
+                            {/* 그림자 탱킹 준비 */}
+                            <div className="rounded border border-purple-500/20 bg-purple-500/5 p-2.5 text-[9px] text-purple-200">
+                              <div className="font-bold text-purple-300 mb-0.5">🛡️ 그림자 탱킹 시스템</div>
+                              {equippedShadows.length > 0 ? (
+                                <span>
+                                  장착 그림자 <span className="font-bold text-cyan-300">{equippedShadows.length}명</span>으로 수호 장막(Shield) 활성화 완료!
+                                </span>
+                              ) : (
+                                <span className="text-rose-400 font-bold animate-pulse">
+                                  ⚠️ 장착 그림자 없음! 진입 시 탱킹 장막 미작동으로 100% 즉사합니다. 그림자 장착 필수!
+                                </span>
+                              )}
+                            </div>
+
+                            {/* 협력 헌터 선택 리스트 */}
+                            {!isDefeated && namedHuntersInRegion.length > 0 && (
+                              <div className="rounded border border-yellow-500/20 bg-yellow-500/5 p-2.5 space-y-1.5">
+                                <div className="text-[10px] font-black text-yellow-300">
+                                  {selectedNode.id === 'angel' 
+                                    ? '🤝 인류의 최후 연합: 지고의 격퇴 연대' 
+                                    : `🤝 연대 전투: 현지 공조 헌터`}
+                                </div>
+                                <p className="text-[8.5px] text-white/50 leading-normal">
+                                  {selectedNode.id === 'angel'
+                                    ? '전 세계 모든 생존한 정예 헌터들과 연합하여 공략 전력을 극대화할 수 있습니다.'
+                                    : '지역 헌터들과 연합하여 버프를 얻는 대신, 보상이 일부 차감됩니다.'}
+                                </p>
+                                <div className="max-h-24 overflow-y-auto space-y-1 pr-0.5 scrollbar-thin">
+                                  {namedHuntersInRegion.map(hid => {
+                                    const h = livingWorld?.namedHunters[hid]
+                                    if (!h) return null
+                                    const isSelected = selectedHelpers.includes(hid)
+                                    const totalPower = h.power + (h.equipmentScore ?? 0)
+                                    return (
+                                      <label key={hid} className="flex items-center justify-between rounded bg-black/35 hover:bg-black/60 px-1.5 py-0.5 cursor-pointer select-none text-[8.5px] border border-white/5">
+                                        <div className="flex items-center gap-1.5">
+                                          <input
+                                            type="checkbox"
+                                            checked={isSelected}
+                                            onChange={() => handleHelperToggle(hid)}
+                                            className="accent-purple-500 h-2.5 w-2.5 cursor-pointer"
+                                          />
+                                          <span className="font-bold text-white/80">{h.name}</span>
+                                          <span className="rounded bg-purple-500/20 px-1 text-purple-300 font-bold" style={{ fontSize: '7px' }}>
+                                            {h.rank}
+                                          </span>
+                                        </div>
+                                        <span className="text-cyan-300 font-mono">⚔️{totalPower.toLocaleString()}</span>
+                                      </label>
+                                    )
+                                  })}
+                                </div>
+                              </div>
+                            )}
+
+                            {/* 조작 버튼 */}
+                            <div className="pt-2">
+                              {isNodeRetreatedToday(selectedNode.id) ? (
+                                <div className="rounded border border-rose-500/25 bg-rose-500/5 p-2 text-[9px] text-rose-300/85 text-center font-bold">
+                                  ⚠️ 오늘 후퇴 전력이 있어 차단됨. 내일 재진입 가능.
+                                </div>
+                              ) : isDefeated ? (
+                                <div className="rounded border border-emerald-500/20 bg-emerald-500/5 p-2 text-[9.5px] text-emerald-200 text-center font-bold">
+                                  이 군주는 이미 격퇴되었습니다.
+                                </div>
+                              ) : (
+                                <button
+                                  onClick={() => {
+                                    const level = getDangerLevel(selectedNode)
+                                    if (level === 'reckless') {
+                                      setRecklessConfirmType('manual')
+                                      setShowRecklessConfirm(true)
+                                    } else {
+                                      startWorldManualBattle(selectedNode.id, selectedHelpers)
+                                    }
+                                  }}
+                                  className="btn border border-cyan-500/40 bg-cyan-950/20 hover:bg-cyan-500/15 w-full flex items-center justify-center gap-1.5 py-2 text-[10px] text-cyan-200 font-black tracking-widest transition-all cursor-pointer shadow-glow-blue"
+                                >
+                                  <Zap className="h-3.5 w-3.5 text-cyan-400" />
+                                  군주 격퇴 원정 개시
+                                </button>
+                              )}
+                            </div>
+                          </>
+                        )
+                      })() : (() => {
+                        const status = riftNodesState[selectedNode.id] ?? selectedNode.status
+
+                        return (
+                          <>
+                            <div className="space-y-2 text-[10px]">
+                              <div className="flex justify-between border-b border-white/5 pb-1.5">
+                                <span className="text-white/45">구역 정화 상태</span>
+                                <span className={
+                                  status === 'cleared' ? 'text-emerald-400 font-bold' :
+                                  status === 'active' ? 'text-cyan-400 font-bold' : 'text-white/30'
+                                }>
+                                  {
+                                    status === 'cleared' ? '완전 정화 완료' :
+                                    status === 'active' ? '정화 작전 진행 중' : '탐사 대기'
+                                  }
+                                </span>
+                              </div>
+                              <div className="flex justify-between border-b border-white/5 pb-1.5">
+                                <span className="text-white/45">난이도 등급</span>
+                                <span className="font-bold text-cyan-300">
+                                  {selectedNode.difficultyRank ?? 'E'}-RANK
+                                </span>
+                              </div>
+                              <div className="flex justify-between border-b border-white/5 pb-1.5">
+                                <span className="text-white/45">권장 전투력</span>
+                                <span className="font-bold text-pink-300">
+                                  {(selectedNode.difficulty ?? 0).toLocaleString()} CP
+                                </span>
+                              </div>
+                              <div className="flex justify-between border-b border-white/5 pb-1.5">
+                                <span className="text-white/45">내 전투력</span>
+                                <span className="font-bold text-cyan-300">
+                                  {playerPower.toLocaleString()} CP
+                                </span>
+                              </div>
+
+                              {selectedNode.daysRemaining !== undefined && (
+                                <div className="flex justify-between border-b border-white/5 pb-1.5">
+                                  <span className="text-white/45">소멸/폭주 한계</span>
+                                  <span className={`font-bold ${(selectedNode.daysRemaining ?? 0) <= 2 ? 'text-red-400 animate-pulse' : 'text-yellow-300'}`}>
+                                    {selectedNode.daysRemaining}일 남음 / 총 {selectedNode.deadline}일
+                                  </span>
+                                </div>
+                              )}
+                            </div>
+
+                            {/* 위험도 경고 */}
+                            <div className="rounded border p-2 flex flex-col gap-1 bg-black/35 border-white/5 text-[9.5px]">
+                              {getDangerLevel(selectedNode) === 'safe' && (
+                                <div className="text-emerald-400 flex items-center gap-1.5 font-bold">
+                                  <CheckCircle className="h-3.5 w-3.5" />
+                                  <span>안전: 아군 전력이 충분히 수월한 공략입니다.</span>
+                                </div>
+                              )}
+                              {getDangerLevel(selectedNode) === 'danger' && (
+                                <div className="text-yellow-400 flex items-center gap-1.5 font-bold">
+                                  <AlertCircle className="h-3.5 w-3.5" />
+                                  <span>위험: 균열 압박이 있으나 도전 해볼 만합니다.</span>
+                                </div>
+                              )}
+                              {getDangerLevel(selectedNode) === 'reckless' && (
+                                <div className="text-rose-400 flex flex-col gap-1 font-bold border border-rose-500/20 bg-rose-500/5 rounded p-1.5">
+                                  <div className="flex items-center gap-1.5">
+                                    <AlertCircle className="h-3.5 w-3.5 animate-pulse" />
+                                    <span>⚠️ 무모: 대단히 높은 전사 위험!</span>
+                                  </div>
+                                  <span className="text-[8.5px] font-medium text-rose-300/80 leading-normal">
+                                    레벨업 후 진입하거나 공조 헌터를 대거 영입하십시오.
+                                  </span>
+                                </div>
+                              )}
+                            </div>
+
+                            {/* 대한민국 게이트 특별 합류(공조) */}
+                            {!hasLoveCall && selectedNode.regionId === 'kr' && status === 'active' && (
+                              <div className="rounded-lg border border-cyan-500/30 bg-cyan-500/5 p-2.5 space-y-1.5">
+                                <div className="text-[10px] font-black text-cyan-300">
+                                  🤝 대한민국 헌터 연합 동맹
+                                </div>
+                                <p className="text-[8.5px] text-white/60 leading-normal">
+                                  대한민국 헌터 협회 동료들과 공조하여 전투의 안정성을 올립니다.
+                                </p>
+                                <div className="max-h-24 overflow-y-auto space-y-1 pr-0.5 scrollbar-thin">
+                                  {(() => {
+                                    const krRegionState = livingWorld?.regions['kr']
+                                    const krHelperHunterIds = krRegionState 
+                                      ? krRegionState.namedHunterIds.filter(hid => livingWorld?.namedHunters[hid]?.status === 'active') 
+                                      : []
+
+                                    if (krHelperHunterIds.length === 0) {
+                                      return <div className="text-[8px] text-white/40 italic">현재 생존 지원 헌터 없음.</div>
+                                    }
+
+                                    return krHelperHunterIds.map(hid => {
+                                      const h = livingWorld?.namedHunters[hid]
+                                      if (!h) return null
+                                      const isSelected = selectedHelpers.includes(hid)
+                                      return (
+                                        <label key={hid} className="flex items-center justify-between rounded bg-black/35 hover:bg-black/60 px-1.5 py-0.5 cursor-pointer select-none text-[8.5px] border border-white/5">
+                                          <div className="flex items-center gap-1.5">
+                                            <input
+                                              type="checkbox"
+                                              checked={isSelected}
+                                              onChange={() => handleHelperToggle(hid)}
+                                              className="accent-cyan-500 h-2.5 w-2.5 cursor-pointer"
+                                            />
+                                            <span className="font-bold text-white/80">{h.name}</span>
+                                            <span className="rounded bg-cyan-500/20 px-1 text-[7px] font-bold text-cyan-300">
+                                              {h.rank}
+                                            </span>
+                                          </div>
+                                          <span className="text-cyan-300 font-mono">⚔️{(h.power + (h.equipmentScore ?? 0)).toLocaleString()}</span>
+                                        </label>
+                                      )
+                                    })
+                                  })()}
+                                </div>
+                              </div>
+                            )}
+
+                            {/* 긴급 러브콜 지원 요청인 경우 상황판 */}
+                            {hasLoveCall && loveCallState && (() => {
+                              const nodeTheme = getRegionalTheme(selectedNode.subRegionId || selectedNode.regionId)
+                              return (
+                                <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-2.5 space-y-2">
+                                  <div className="text-[9.5px] text-white/70 border-l-2 border-amber-500/40 pl-2 py-0.5 bg-black/15 rounded-r leading-relaxed italic">
+                                    "{nodeTheme.loveCallNarrative}"
+                                  </div>
+                                  <div className="rounded bg-black/40 p-1.5 space-y-0.5 text-[8.5px] border border-white/5">
+                                    <div className="flex justify-between font-bold text-white/40">
+                                      <span>지원금 약속</span>
+                                      <span className="text-amber-400">특수 수당 적용</span>
+                                    </div>
+                                    <div className="flex justify-between text-white/75">
+                                      <span>골드 배당</span>
+                                      <span className="font-bold text-amber-300">+{loveCallState.promisedReward.gold} G</span>
+                                    </div>
+                                    <div className="flex justify-between text-white/75">
+                                      <span>어둠의 정수</span>
+                                      <span className="font-bold text-purple-300">+{loveCallState.promisedReward.shadowEssence} 정수</span>
+                                    </div>
+                                  </div>
+
+                                  {/* 러브콜 공조 헌터 선택 */}
+                                  <div className="space-y-1">
+                                    <span className="text-[8.5px] text-white/40 font-bold">협력 공조 헌터 목록</span>
+                                    {loveCallState.helperHunterIds.length === 0 ? (
+                                      <div className="text-[8px] text-white/40 italic">공조 참전 가능한 지원 헌터 없음.</div>
+                                    ) : (
+                                      <div className="max-h-24 overflow-y-auto space-y-1 pr-0.5 scrollbar-thin">
+                                        {loveCallState.helperHunterIds.map(hid => {
+                                          const h = livingWorld?.namedHunters[hid]
+                                          if (!h) return null
+                                          const isSelected = selectedHelpers.includes(hid)
+                                          return (
+                                            <label key={hid} className="flex items-center justify-between rounded bg-black/35 hover:bg-black/60 px-1.5 py-0.5 cursor-pointer select-none text-[8.5px] border border-white/5">
+                                              <div className="flex items-center gap-1.5">
+                                                <input
+                                                  type="checkbox"
+                                                  checked={isSelected}
+                                                  onChange={() => handleHelperToggle(hid)}
+                                                  className="accent-purple-500 h-2.5 w-2.5 cursor-pointer"
+                                                />
+                                                <span className="font-bold text-white/80">{h.name}</span>
+                                                <span className="rounded bg-purple-500/20 px-1 text-[7px] font-bold text-purple-300">
+                                                  {h.rank}
+                                                </span>
+                                              </div>
+                                              <span className="text-cyan-300 font-mono">⚔️{(h.power + (h.equipmentScore ?? 0)).toLocaleString()}</span>
+                                            </label>
+                                          )
+                                        })}
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              )
+                            })()}
+
+                            {/* 공조 버프 계산 및 트레이드오프 예측 피드백 */}
+                            {selectedHelpers.length > 0 && (
+                              <div className="rounded border border-purple-500/20 bg-purple-500/5 p-2 text-[8.5px] space-y-1 font-mono">
+                                <div className="text-purple-300 font-bold font-sans">⚖️ 연대 전투 시뮬레이션</div>
+                                <div className="grid grid-cols-2 gap-x-1 text-white/70">
+                                  <div>공격력 지원:</div>
+                                  <div className="text-emerald-400 font-bold">+{coopBuffs.atk.toLocaleString()} ATK</div>
+                                  <div>받는 피해:</div>
+                                  <div className="text-emerald-400 font-bold">-{Math.round(coopBuffs.dr * 100)}% DMG</div>
+                                  <div>보상 배율:</div>
+                                  <div className="text-yellow-400 font-bold">{Math.round(coopBuffs.rewardRatio * 100)}% (분배 수당 적용)</div>
+                                </div>
+                              </div>
+                            )}
+
+                            {/* 조작 정화 전투 개시 */}
+                            <div className="pt-2">
+                              {isNodeRetreatedToday(selectedNode.id) ? (
+                                <div className="rounded border border-rose-500/25 bg-rose-500/5 p-2 text-[9px] text-rose-300/85 text-center font-bold">
+                                  ⚠️ 오늘 후퇴 이력이 있어 차단됨. 내일 재시도 가능.
+                                </div>
+                              ) : (
+                                <>
+                                  {status === 'cleared' && (
+                                    <div className="rounded border border-emerald-500/20 bg-emerald-500/5 p-1.5 text-[8.5px] text-emerald-200 text-center mb-1">
+                                      정화 완료 구역입니다. 반복 재정화(전투)가 가능합니다.
+                                    </div>
+                                  )}
+                                  <button
+                                    onClick={() => {
+                                      const level = getDangerLevel(selectedNode)
+                                      if (level === 'reckless') {
+                                        setRecklessConfirmType('manual')
+                                        setShowRecklessConfirm(true)
+                                      } else {
+                                        startWorldManualBattle(selectedNode.id, selectedHelpers)
+                                      }
+                                    }}
+                                    disabled={status === 'locked'}
+                                    className="btn border border-cyan-500/30 bg-cyan-950/20 hover:bg-cyan-500/15 w-full flex items-center justify-center gap-1 py-1.5 text-[10px] text-cyan-200 transition-all cursor-pointer font-bold"
+                                  >
+                                    <Zap className="h-3 w-3 text-cyan-400" />
+                                    수동 조작 정화 개시 (카드 전투)
+                                  </button>
+                                </>
+                              )}
+                            </div>
+                          </>
+                        )
+                      })()}
+                    </div>
+                  </div>
+                )
+              })()}
+
+              {/* [OVERLAY 3] FLOATING MAP CONTROL ACTIONS (BOTTOM RIGHT) */}
+              <div className="absolute bottom-4 right-4 z-10 flex flex-col gap-2 pointer-events-none">
+                <button
+                  onClick={() => {
+                    if (svgRef.current && zoomBehaviorRef.current) {
+                      select(svgRef.current as any)
+                        .transition()
+                        .duration(300)
+                        .call(zoomBehaviorRef.current.scaleBy, 1.5)
+                    }
+                  }}
+                  title="확대"
+                  className="w-9 h-9 rounded-full bg-ink-950/85 border border-white/10 flex items-center justify-center text-white/80 hover:text-white hover:bg-white/10 transition-all font-mono font-bold text-lg pointer-events-auto shadow-md cursor-pointer select-none"
+                >
+                  ＋
+                </button>
+                <button
+                  onClick={() => {
+                    if (svgRef.current && zoomBehaviorRef.current) {
+                      select(svgRef.current as any)
+                        .transition()
+                        .duration(300)
+                        .call(zoomBehaviorRef.current.scaleBy, 1 / 1.5)
+                    }
+                  }}
+                  title="축소"
+                  className="w-9 h-9 rounded-full bg-ink-950/85 border border-white/10 flex items-center justify-center text-white/80 hover:text-white hover:bg-white/10 transition-all font-mono font-bold text-lg pointer-events-auto shadow-md cursor-pointer select-none"
+                >
+                  －
+                </button>
+                <button
+                  onClick={handleResetZoom}
+                  title="화면 리셋"
+                  className="w-9 h-9 rounded-full bg-ink-950/85 border border-white/10 flex items-center justify-center text-white/80 hover:text-white hover:bg-white/10 transition-all pointer-events-auto shadow-md cursor-pointer select-none"
+                >
+                  🎯
+                </button>
+              </div>
+
+              {/* [OVERLAY 4] GORGEOUS GLASSMORPHIC MAP LEGEND (BOTTOM LEFT) */}
+              <div className="absolute bottom-4 left-4 z-10 pointer-events-none bg-ink-950/85 border border-white/10 p-2.5 rounded-lg text-[8.5px] text-white/55 backdrop-blur-sm flex flex-col gap-1 w-32 shadow-lg">
+                <span className="font-bold text-white/30 uppercase tracking-widest text-[7.5px] mb-0.5 font-mono">MAP LEGEND</span>
+                <div className="flex items-center gap-1.5">
+                  <span className="w-2.5 h-2.5 rounded-full bg-[#7f77dd] shadow-glow-blue/40" style={{ filter: 'drop-shadow(0 0 2px #7f77dd)' }} />
+                  <span>한국 거점</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <span className="w-2.5 h-2.5 rounded-full bg-[#e24b4a] shadow-glow-red/40 animate-pulse" style={{ filter: 'drop-shadow(0 0 2px #e24b4a)' }} />
+                  <span>군주 점령 / 위험</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <span className="w-2.5 h-2.5 rounded-full bg-[#ef9f27]" style={{ filter: 'drop-shadow(0 0 2px #ef9f27)' }} />
+                  <span>경계 (오염 20-50)</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <span className="w-2.5 h-2.5 rounded-full bg-[#1d9e75]" style={{ filter: 'drop-shadow(0 0 2px #1d9e75)' }} />
+                  <span>안전 (오염 &lt; 20)</span>
+                </div>
+              </div>
+            </>
+          )
+        })()}
       </div>
 
       {/* 인라인 게이트 활성화 HUD (기존 게이트 전선 호환용) */}
