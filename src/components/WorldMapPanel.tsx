@@ -82,6 +82,99 @@ try {
   console.error('Failed to parse world-atlas TopoJSON:', err)
 }
 
+// Live intercept quotes mapping global corruption level to immersive Korean reactions
+// Live intercept quotes mapping global corruption level to immersive Korean reactions
+const CITIZEN_INTERCEPTS = {
+  serene: [
+    '🎙️ [뉴스 속보] 기상청 "금일 대기 마력 파동 매우 안정적... 전국 날씨 맑음"',
+    '💬 [SNS] "요즘 던전 마석 가공 산업이 호황이라 주식 대박 났네요. 다들 대장비 시대 돌입!"',
+    '🛡️ [헌터 협회 소통망] "게이트 난이도가 평년 수준입니다. 신입 교육 일정 차질 없이 진행합니다."',
+    '🗣️ [시민 인터뷰] "한국 국가권력급 헌터 분들이 뒤를 든든하게 받쳐주니 마음 편하게 출퇴근하죠."',
+    '📡 [글로벌 마력망] "미국-영국 던전 공동 정화 성공률 98% 돌파... 평화로운 나날 지속"',
+    '💬 [SNS] "주말에 헌터 협회 견학 다녀왔는데 다들 기운이 엄청나더라고요. 인류 수호선은 든든합니다!"',
+    '🎙️ [비즈니스 마켓] "던전 마력석 가공 주얼리 브랜드 매출 급증... 패션 트렌드로 부상"',
+    '🗣️ [지하철 대화] "요즘은 게이트가 열려도 사이렌이 안 울리더라고요. 바로 정화 완료되니까요."',
+    '🛡️ [길드 연합 주간지] "전역 마나 밀도 최저 수준 기록. 헌터들의 훈련 집중도 최대치 도달."',
+    '📡 [마력 방송 인터뷰] "헌터 그레이드 측정기가 업그레이드되었습니다. 더욱 정밀한 랭킹 조회가 가능해집니다."',
+    '🎙️ [헌터 아카데미] "올해 수석 졸업생 최지훈 군, 차세대 국가권력급 유망주로 지목."',
+    '💬 [SNS] "한강 둔치에서 마력 정화 버블 놀이하는데 꼬마들이 엄청 좋아하네요. 평화롭다~"',
+    '🛡️ [길드 마스터 회의] "유럽 전역 던전 관리 상태 양호. 장비 소모품 공급 과잉 현상 대처법 논의."',
+    '🗣️ [직장인 대화] "던전 탐험 예능 진짜 재밌지 않냐? 요새 최애 헌터 굿즈 모으는 중임."',
+    '📡 [라디오 인터뷰] "마나 에너지 하이브리드 차량 출시! 1회 충전으로 서울-부산 30회 왕복 가능!"',
+    '🎙️ [글로벌 통계] "올해 전 세계 게이트 발생 건수 역대 최저. 전력 예비율 사상 최고치."',
+    '💬 [SNS] "던전 마나 온천 패키지 다녀옴! 마력으로 피로를 녹여주니까 피부 톤이 완전 미쳤어... 강추!"',
+    '🛡️ [보안 통제실] "한국 영토 내 비활성 마력 격벽 상태 청정. 특별 경계령 해제 검토."',
+    '🗣️ [시민 광장] "헌터 연봉이 너무 높다는 불평도 있지만, 그분들이 목숨 걸고 지켜주니까 안심하고 노는 거죠."',
+    '📡 [학술 발표회] "마력 입자의 의학적 활용 임상 3상 완료. 희귀병 완치율 90% 달해."'
+  ],
+  alert: [
+    '🎙️ [긴급 속보] 일부 국가 차원 오염도 30% 근접... 방재 특별 구역 지정 검토 중',
+    '💬 [SNS] "어제 인접 국가 게이트 터지는 소리가 여기까지 들렸어요... 진짜 피난 짐 싸야 하나?"',
+    '🛡️ [헌터 협회 소통망] "마수들의 생체 마력이 이상 급증하고 있습니다. 초소 경계를 2단계로 상향합니다."',
+    '🗣️ [시민 인터뷰] "대형 마트 통조림이랑 비상식량 매대가 벌써 다 비었어요. 너무 불안합니다."',
+    '📡 [글로벌 마력망] "S급 게이트 징후 도처에서 감지... 헌터 길드 연합, 상호 지원 프로토콜 활성화"',
+    '🎙️ [재난 대책 본부] "마력 방벽 노후화 구간 긴급 수리 개시. 시민 여러분은 비상 매뉴얼을 숙지해 주십시오."',
+    '🗣️ [길거리 대담] "방벽 근처에 사는 사람들은 벌써 이사 가기 시작했대요. 정부 지원금이라도 줘야 하는 거 아닙니까?"',
+    '💬 [SNS] "밤하늘에 가끔 균열 틈새가 청록색으로 번뜩이는데 기분이 너무 묘해요... 몸이 떨리네요."',
+    '🛡️ [전선 통신망] "용병 매칭 건수가 어제보다 40% 증가했습니다. 최전방 방어선 마력 부하 경고."',
+    '📡 [라디오 인터뷰] "일부 비네임드 A급 헌터들이 해외 던전 지원 소집에 자원하여 공항으로 향하고 있습니다."',
+    '🎙️ [세계 마나 포럼] "유라시아 동부 균열 왜곡률 이상 급증. 각국 방어군 연합 재조정 필요."',
+    '💬 [SNS] "요즘 방벽 검문 왜 이리 빡세냐? 헌터 차량들 사이렌 켜고 계속 지나가네. 무슨 일 있나..."',
+    '🛡️ [길드 마스터 성명] "예비 헌터 소집 대기령을 A급까지 확대합니다. 즉시 장비 정비를 완료하십시오."',
+    '🗣️ [민간 방재관 인터뷰] "최근 마나 감지기 리드 타임이 30초 단축됐어요. 그만큼 게이트 팽창 속도가 빠르다는 뜻입니다."',
+    '📡 [에너지 분석망] "해외 차원 오염 유입 가능성 농후. 서해안 방위 격벽 출력 120% 가동 권장."',
+    '🎙️ [긴급 재난 특보] "서태평양 해류 마력 수치 비정상 돌파... 선박 및 항공기 운항 통제 예정."',
+    '💬 [SNS] "마나 감지 앱에서 계속 알림 오는데 무서워서 못 자겠어요. 이거 오류 맞죠? 제발..."',
+    '🛡️ [헌터 협회 전술실] "대한민국 동부 해안 마나 간섭 무늬 포착. 초소 전력 1.5배 보강 조치."',
+    '🗣️ [대형 피난소 현장] "구호용 텐트와 물이 더 필요합니다. 예산 배정이 늦어지면 큰 혼란이 올 겁니다."',
+    '📡 [글로벌 뉴스 라디오] "일부 중소국가들, 게이트 억제 실패로 헌터 탈출 행렬... 인접국들 국경 긴장 완화 촉구."'
+  ],
+  fear: [
+    '🎙️ [전쟁 위기 선포] 차원 오염 급속 전파! 방어막 유지 붕괴 위기... 전국 비상 전시에 준하는 특별 조치 발동',
+    '💬 [SNS] "옆 도시가 균열 폭풍에 휘말려 완전히 통제 불능이 되었대요... 헌터님들 제발 우리를 살려주세요!"',
+    '🛡️ [헌터 협회 소통망] "부상자가 너무 많아 회복 약이 동났습니다... 더 이상 버틸 예비 전력이 없습니다!"',
+    '🗣️ [시민 인터뷰] "하늘에 보라색 번개가 계속 쳐요... 무서워서 애를 데리고 지하 대피소 밖으로 나갈 수 없습니다."',
+    '📡 [글로벌 마력망] "군주 급 개체의 활동성 급증... 이미 동구권 연합 지휘소가 파괴되었습니다."',
+    '🎙️ [속보] 러시아 전역 계엄령 선포... 게이트 주변 마력 폭풍으로 대규모 피난 행렬 발생',
+    '🗣️ [지하 벙커 방송] "식수와 비상 전력이 부족합니다. 배급을 1일 1회로 제한하오니 협조 바랍니다."',
+    '💬 [SNS] "국가권력급 네임드 헌터들이 방어선에서 피를 흘리며 후퇴했다는 찌라시가 돌고 있어요... 진짜 끝인가요?"',
+    '🛡️ [최전방 통신] "치유 계열 헌터들이 마력 고갈로 쓰러졌습니다! 후방 차단 격벽 폐쇄를 승인해주십시오!"',
+    '📡 [글로벌 뉴스 채널] "전 세계 항로 및 무역망 전면 폐쇄. 균열 심해에서 침식 파동 감지."',
+    '🎙️ [국방부 특별 담화] "한국 영토 외곽 최후 저항선 구축 개시. 모든 가용 장비와 물자 징발령 선포."',
+    '💬 [SNS] "외국 뉴스 보는데 국경 무너진 나라들 난민 수용 한계 넘었대... 우리나라 방벽도 무너지면 끝이잖아..."',
+    '🛡️ [헌터 협회 긴급 지령] "전사자 및 부상 헌터 발생 수 급증. S급 네임드 분들은 신체 마력 무시하고 즉시 비상 소집!"',
+    '🗣️ [주민 대피소] "아들 녀석이 A급 자원 헌터로 차출됐는데, 무사히 돌아올 수 있을까요... 매일 기도만 합니다."',
+    '📡 [마력 통신 감청] "아아... 들리나? 사령부 무너졌다! 생존 헌터들은 즉시 개별 생존 프로토콜로..."',
+    '🎙️ [속보] 일본 전역 대피 명령... 도쿄 상공 초대형 균열 심각 단계 도달, 국경 초토화 위험',
+    '🗣️ [라디오 임시 채널] "전력 공급이 간헐적입니다. 라디오 배터리를 아끼고 정부 통제령에만 채널을 맞추세요."',
+    '💬 [SNS] "우리 네임드 헌터님들 이름 검색하니까 전부 \'상태: 부상/요양\'으로 뜨는데... 내 심장이 덜컥 내려앉음..."',
+    '🛡️ [요새 사령관 절규] "탄약과 마나 배터리가 떨어졌다! 공중 포격 지원은 왜 아직도 안 오나! 한 시가 급하다!"',
+    '📡 [글로벌 마나 감지] "아시아-태평양 상공 대형 소용돌이 관측. 차원 붕괴 한계선 돌파 시점 72시간 남음."'
+  ],
+  despair: [
+    '🎙️ [종말의 카운트다운] 세계 차원 오염도 극값 돌파. 균열 지평선 하늘을 뒤덮어... 생존을 위한 마지막 기도를 올리십시오',
+    '💬 [SNS] "하늘 전체가 피빛으로 물들었습니다. 괴수들의 날갯짓 소리가 고막을 찢네요... 인류에게 내일은 없는 건가요?"',
+    '🛡️ [헌터 협회 소통망] "군단이 거점을 완전히 에워쌌습니다. 통신 두절 임박... 우리 뒤는 이제 민간인뿐이다. 최후의 항전을!"',
+    '🗣️ [시민 인터뷰] "국가권력급 헌터 분들도 다 쓰러졌대요... 이제 누가 우릴 구해주죠? 구원자는 정녕 없습니까?"',
+    '📡 [글로벌 마력망] "🚨 초비상 🚨 대한민국 거점 심연의 군주 다이렉트 침공 돌파! 세계 최종 파멸 방어선 가동"',
+    '🎙️ [마지막 방송] "이 방송이 인류 역사상 마지막 소리가 될지도 모르겠습니다. 여러분, 부디 침묵 속에서 종말을..."',
+    '💬 [SNS] "내일 멸망하더라도 전 끝까지 가족의 손을 놓지 않을 겁니다. 신이여... 한 번만 기적을 내려주십시오."',
+    '🛡️ [절망의 보초망] "마력 차단기가 터졌습니다. 군주들의 그림자가 방벽 너머로 기어 올라오고 있습니다. 사격 개시!"',
+    '🗣️ [폐허 속 라디오] "모든 대륙의 정부 기능이 정지되었습니다. 우리에게 남겨진 땅은 이제 대한민국 거점뿐입니다."',
+    '📡 [마지막 구조 신호] "이 메시지를 듣는 생존자가 있다면... 부디 포기하지 말고 마지막 구원자를 기다리십시오..."',
+    '🎙️ [최후의 보루] "전 지구상에 독립 행정이 유지 중인 국가는 단 한 곳, 대한민국뿐입니다. 끝까지 저항하십시오!"',
+    '💬 [SNS] "어두운 하늘에서 피눈물이 내립니다. 마수들의 울부짖음이 도시를 뒤흔들어요... 지구여..."',
+    '🛡️ [연합 방어선 통신] "대원 80% 전멸. 남은 마력 차단기 1기... 이것마저 꺼지면 끝이다. 마지막 불꽃을 태우자!"',
+    '🗣️ [방벽 아래 텐트] "신을 원망하지도 않습니다. 단지 고통 없이 눈을 감게만 해주세요... 안녕, 우리들의 세계."',
+    '📡 [절멸 보고] "유럽/아메리카 연합 격벽 침묵. 생존 신호 수신 불가... 오직 대한민국의 격벽만이 홀로 고동칩니다."',
+    '🎙️ [인류 최후 방송] "언젠가 후세가 우리 기록을 발견한다면... 우리가 끝까지 포기하지 않고 싸웠음을 기억해주길..."',
+    '💬 [SNS] "방벽 밖 하늘에 붉은 마룡이 날아다녀요. 이 세상의 끝은 이토록 아름답고 절망적이군요."',
+    '🛡️ [총공격 명령] "마력 충전 완료. 네임드, 비네임드 구분 없이 모든 무장 생존자는 격벽 앞으로 집결하라! 돌격!"',
+    '🗣️ [폐墟 라디오 송신] "누군가 듣고 계신가요? 이곳은 서울 지하 3구역 대피소... 제발... 누구라도 대답 좀..."',
+    '📡 [종말 징후] "전 지구 해수면 붉은 마나 플라즈마 증발 시작. 차원의 장벽이 완벽히 허물어졌습니다."'
+  ]
+}
+
 // Calculate precomputed centroids for our 15 game countries with adjustments for optimal visual alignment
 const REGION_CENTROIDS: Record<string, [number, number]> = {}
 const CENTROID_ADJUSTMENTS: Record<string, [number, number]> = {
@@ -135,6 +228,13 @@ const REGION_FLAGS: Record<string, string> = {
 }
 
 function classifyEventLog(log: string) {
+  if (!log || typeof log !== 'string') {
+    return {
+      badge: '📢 SYSTEM',
+      badgeClass: 'bg-zinc-800/80 text-zinc-400',
+      textClass: 'text-zinc-500 italic'
+    }
+  }
   const isAngel = log.includes('Angel') || log.includes('천사') || log.includes('지고의')
   const isMonarch = log.includes('군주') || log.includes('침공') || log.includes('거점')
   const isCollapse = log.includes('폭주') || log.includes('붕괴') || log.includes('위험')
@@ -238,6 +338,19 @@ export function WorldMapPanel() {
   const [toastMessage, setToastMessage] = useState<string | null>(null)
   const [selectedHelpers, setSelectedHelpers] = useState<string[]>([])
 
+  // Stage 2: Settings HUD and scrolling ticker states
+  const [animationMode, setAnimationMode] = useState<'all' | 'critical' | 'off'>('all')
+  const [animationSpeed, setAnimationSpeed] = useState<1.0 | 1.5 | 2.0>(1.0)
+  const [tickerOffset, setTickerOffset] = useState(0)
+
+  // Rotate scrolling news quote every 14 seconds
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setTickerOffset(prev => prev + 1)
+    }, 14000)
+    return () => clearInterval(interval)
+  }, [])
+
   // State & Ref for SVG Map Shockwaves & Ripple VFX
   const [mapEffects, setMapEffects] = useState<Array<{
     id: string
@@ -245,11 +358,19 @@ export function WorldMapPanel() {
     y: number
     color: string
     type: string
+    regionId: string
   }>>([])
   const processedMapEvents = useRef<Set<string>>(new Set())
+  const lastProcessedMapDay = useRef<number>(-1)
 
   useEffect(() => {
     if (!livingWorld?.recentEvents || livingWorld.recentEvents.length === 0) return
+
+    const currentDay = livingWorld.day ?? 1
+    if (currentDay <= 1 || currentDay < lastProcessedMapDay.current) {
+      processedMapEvents.current.clear()
+    }
+    lastProcessedMapDay.current = currentDay
 
     const newEffects: typeof mapEffects = []
 
@@ -257,16 +378,18 @@ export function WorldMapPanel() {
       if (processedMapEvents.current.has(evt.id)) return
       processedMapEvents.current.add(evt.id)
 
-      // Only animate map shockwaves for critical/major events that have a regionId
-      if (evt.regionId && (evt.severity === 'critical' || evt.severity === 'major')) {
+      if (evt.regionId) {
         const centroid = REGION_CENTROIDS[evt.regionId]
         if (centroid) {
           const [x, y] = centroid
           let color = '#ef4444' // default red
           if (evt.type === 'awakening') color = '#eab308' // gold
-          else if (evt.type === 'defeated') color = '#8b5cf6' // purple
-          else if (evt.type === 'home_threat') color = '#f97316' // orange
+          else if (evt.type === 'defeated') color = '#10b981' // emerald green for purification
+          else if (evt.type === 'home_threat' || evt.type === 'home_reached') color = '#dc2626' // bright red
+          else if (evt.type === 'occupied' || evt.type === 'expand') color = '#f43f5e' // rose
           else if (evt.type === 'sgrade_gate') color = '#a855f7' // S-grade violet
+          else if (evt.type === 'gate_surge') color = '#f97316' // orange
+          else if (evt.type === 'gate_open') color = '#06b6d4' // cyan
 
           const effectId = `eff-${evt.id}-${Date.now()}`
           newEffects.push({
@@ -274,13 +397,14 @@ export function WorldMapPanel() {
             x,
             y,
             color,
-            type: evt.type
+            type: evt.type,
+            regionId: evt.regionId
           })
 
-          // Auto-remove after 3 seconds
+          // Auto-remove after 4.5 seconds to allow full CSS animation playback
           setTimeout(() => {
             setMapEffects(prev => prev.filter(eff => eff.id !== effectId))
-          }, 3000)
+          }, 4500)
         }
       }
     })
@@ -553,6 +677,20 @@ export function WorldMapPanel() {
     return corrB - corrA
   })
 
+  const getCitizenQuote = () => {
+    const corruption = livingWorld?.worldCorruption ?? 0
+    let pool = CITIZEN_INTERCEPTS.serene
+    if (corruption >= 75) pool = CITIZEN_INTERCEPTS.despair
+    else if (corruption >= 50) pool = CITIZEN_INTERCEPTS.fear
+    else if (corruption >= 25) pool = CITIZEN_INTERCEPTS.alert
+
+    // Seeded selection based on day and a tick timer to make it dynamic
+    const idx = Math.floor((livingWorld?.day ?? 0) + tickerOffset) % pool.length
+    return pool[idx]
+  }
+
+  const citizenQuote = getCitizenQuote()
+
   return (
     <div className="space-y-6 relative">
       {/* 진엔딩 오버레이 (True Ending Overlay) */}
@@ -763,16 +901,64 @@ export function WorldMapPanel() {
       })()}
 
       {/* 헤더 */}
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between border-b border-white/5 pb-4 mb-4">
         <div>
           <div className="flex items-center gap-2 text-purple-300">
-            <Globe className="h-6 w-6" />
+            <Globe className="h-6 w-6 animate-pulse" />
             <h2 className="text-xl font-black tracking-wider">살아있는 균열 세계</h2>
           </div>
           <p className="mt-1 text-xs text-white/55">
             세계 곳곳의 차원 틈새를 조사하고 균열을 정화하여 차원 평화를 유지하십시오.
           </p>
         </div>
+
+        {/* Live Broadcast Marquee Ticker (Relocated to Header Right with premium massive readability upgrade) */}
+        {livingWorld && (
+          <div 
+            className="flex-1 lg:max-w-2xl rounded-lg bg-black border-2 px-4 py-2.5 flex items-center gap-4 overflow-hidden select-none relative shadow-[0_6px_25px_rgba(0,0,0,0.8)]"
+            style={{
+              borderColor: 
+                livingWorld.worldCorruption >= 75 ? 'rgba(239, 68, 68, 0.45)' :
+                livingWorld.worldCorruption >= 50 ? 'rgba(249, 115, 22, 0.35)' :
+                livingWorld.worldCorruption >= 25 ? 'rgba(234, 179, 8, 0.3)' :
+                'rgba(6, 182, 212, 0.25)',
+              borderLeftWidth: '5px',
+              borderLeftColor:
+                livingWorld.worldCorruption >= 75 ? '#ef4444' :
+                livingWorld.worldCorruption >= 50 ? '#f97316' :
+                livingWorld.worldCorruption >= 25 ? '#eab308' :
+                '#06b6d4'
+            }}
+          >
+            <span 
+              className={`shrink-0 text-[10px] sm:text-xs font-black tracking-widest px-3 py-1 rounded border animate-pulse transition-colors duration-500 uppercase ${
+                livingWorld.worldCorruption >= 75 ? 'text-red-400 bg-red-950/60 border-red-700/60 shadow-[0_0_12px_rgba(239,68,68,0.35)]' :
+                livingWorld.worldCorruption >= 50 ? 'text-orange-400 bg-orange-950/50 border-orange-700/50' :
+                livingWorld.worldCorruption >= 25 ? 'text-yellow-400 bg-yellow-950/50 border-yellow-700/50' :
+                'text-cyan-400 bg-cyan-950/50 border-cyan-700/50'
+              }`}
+            >
+              📡 INTERCEPTED SIGNAL
+            </span>
+            <div className="flex-1 overflow-hidden relative h-6 flex items-center">
+              <span 
+                className={`absolute whitespace-nowrap animate-marquee font-mono tracking-wide text-xs sm:text-sm font-extrabold ${
+                  livingWorld.worldCorruption >= 75 ? 'text-red-400' :
+                  livingWorld.worldCorruption >= 50 ? 'text-orange-300' :
+                  livingWorld.worldCorruption >= 25 ? 'text-yellow-200' :
+                  'text-cyan-200'
+                }`}
+                style={{
+                  textShadow: 
+                    livingWorld.worldCorruption >= 75 ? '0 0 10px rgba(239, 68, 68, 0.6)' : 
+                    livingWorld.worldCorruption >= 50 ? '0 0 8px rgba(249, 115, 22, 0.4)' : undefined
+                }}
+              >
+                {citizenQuote}
+              </span>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* 지고의 심판자(천사) 최종전 진입 배너 */}
@@ -871,21 +1057,21 @@ export function WorldMapPanel() {
             <div className="br" />
             <div>
               <div className="flex items-center justify-between text-xs font-bold text-white/70">
-                <span className="flex items-center gap-1.5 text-purple-300">
+                <span className="flex items-center gap-1.5 text-purple-300 font-extrabold text-sm">
                   <AlertCircle className="h-4 w-4" /> 전역 오염도 및 침공
                 </span>
-                <span className="text-[10px] text-white/40">Day {livingWorld.day}</span>
+                <span className="text-[11px] font-bold text-white/50">Day {livingWorld.day}</span>
               </div>
               <div className="mt-3 flex items-end justify-between">
-                <div className="text-2xl font-black text-red-400 tracking-tight">
+                <div className="text-3xl font-black text-red-400 tracking-tight">
                   {livingWorld.worldCorruption}%
                 </div>
                 {livingWorld.monarchsAppeared > 0 ? (
-                  <span className="rounded bg-red-500/20 border border-red-500/40 px-2 py-0.5 text-[9px] font-black text-red-300 tracking-wider animate-pulse">
+                  <span className="rounded bg-red-500/20 border border-red-500/40 px-2 py-0.5 text-[10px] font-black text-red-300 tracking-wider animate-pulse">
                     🔥 군주 {livingWorld.monarchsAppeared}명 침공 중
                   </span>
                 ) : (
-                  <span className="rounded bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 text-[9px] font-bold text-emerald-400">
+                  <span className="rounded bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 text-[10px] font-bold text-emerald-400">
                     평화로움 (군주 0)
                   </span>
                 )}
@@ -901,7 +1087,7 @@ export function WorldMapPanel() {
                 />
               </div>
             </div>
-            <p className="mt-3 text-[10px] text-white/40 leading-normal">
+            <p className="mt-3 text-[11px] text-white/50 leading-relaxed font-semibold">
               오염도가 40%, 60%, 78%, 92%, 99%를 초과할 때마다 더 강력한 군주가 강림합니다.
             </p>
           </div>
@@ -909,10 +1095,43 @@ export function WorldMapPanel() {
           {/* Box 2: Incident Logs Terminal (WORLD SIGNAL LOG) */}
           <div className="panel corner-bracket border-white/10 bg-ink-950/40 p-4 md:col-span-2 flex flex-col justify-between min-h-[174px]">
             <div className="br" />
-            <div className="flex items-center justify-between text-xs font-bold text-white/70 mb-2.5">
-              <span className="text-cyan-300 flex items-center gap-1.5 font-bold tracking-wider uppercase">
-                <Swords className="h-4 w-4" /> 📡 WORLD SIGNAL LOG
-              </span>
+
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between text-xs font-bold text-white/70 mb-2.5 gap-2">
+              <div className="flex items-center gap-2.5">
+                <span className="text-cyan-300 flex items-center gap-1.5 font-bold tracking-wider uppercase">
+                  <Swords className="h-4 w-4" /> 📡 WORLD SIGNAL LOG
+                </span>
+                
+                {/* Stage 2 Playback HUD Settings Panel */}
+                <div className="flex items-center gap-2 bg-black/40 border border-white/5 rounded px-2 py-0.5 scale-90 origin-left select-none">
+                  <div className="flex items-center gap-1 text-[8px] font-black uppercase text-white/40">
+                    🎬 연출
+                  </div>
+                  <select
+                    value={animationMode}
+                    onChange={(e) => setAnimationMode(e.target.value as any)}
+                    className="bg-transparent border-0 text-[9px] text-white/75 font-bold focus:ring-0 cursor-pointer outline-none p-0"
+                  >
+                    <option value="all" className="bg-slate-950 text-white font-medium">전체 (All)</option>
+                    <option value="critical" className="bg-slate-950 text-white font-medium">핵심만 (Critical)</option>
+                    <option value="off" className="bg-slate-950 text-white font-medium">끄기 (Muted)</option>
+                  </select>
+                  <span className="w-[1px] h-3 bg-white/10" />
+                  <div className="flex items-center gap-1 text-[8px] font-black uppercase text-white/40">
+                    ⏩ 속도
+                  </div>
+                  <select
+                    value={animationSpeed}
+                    onChange={(e) => setAnimationSpeed(parseFloat(e.target.value) as any)}
+                    className="bg-transparent border-0 text-[9px] text-white/75 font-bold focus:ring-0 cursor-pointer outline-none p-0"
+                  >
+                    <option value={1.0} className="bg-slate-950 text-white font-medium">1.0x</option>
+                    <option value={1.5} className="bg-slate-950 text-white font-medium">1.5x</option>
+                    <option value={2.0} className="bg-slate-950 text-white font-medium">2.0x</option>
+                  </select>
+                </div>
+              </div>
+
               <div className="flex items-center gap-2 scale-90 sm:scale-100 origin-right">
                 <button
                   onClick={openDailyReport}
@@ -982,7 +1201,7 @@ export function WorldMapPanel() {
                         return (
                           <div 
                             key={evt.id} 
-                            className={`flex items-center gap-2 text-[10.5px] border rounded p-1.5 leading-normal transition-all hover:bg-white/5 ${borderClass} ${
+                            className={`flex items-center gap-2 text-xs border rounded p-1.5 leading-normal transition-all hover:bg-white/5 ${borderClass} ${
                               isLatest ? 'border-l-2' : ''
                             }`}
                             style={{ 
@@ -990,14 +1209,14 @@ export function WorldMapPanel() {
                             }}
                           >
                             <span className="shrink-0 text-xs select-none">{icon}</span>
-                            <span className={`chip shrink-0 scale-95 ${badgeClass}`} style={{ fontSize: '7.5px', padding: '0.05rem 0.25rem' }}>
+                            <span className={`chip shrink-0 scale-95 ${badgeClass}`} style={{ fontSize: '9px', fontWeight: 900, padding: '0.1rem 0.35rem' }}>
                               Day {evt.day}
                             </span>
-                            <span className={`flex-1 font-mono break-all ${textClass}`}>
+                            <span className={`flex-1 font-mono break-all text-white/85 ${textClass}`}>
                               {evt.body}
                             </span>
                             {isLatest && (
-                              <span className="text-[7px] font-black uppercase text-cyan-400 bg-cyan-400/10 px-1 py-0.2 rounded animate-pulse select-none shrink-0 tracking-wider">
+                              <span className="text-[8px] font-black uppercase text-cyan-400 bg-cyan-400/10 px-1 py-0.2 rounded animate-pulse select-none shrink-0 tracking-wider">
                                 LATEST
                               </span>
                             )}
@@ -1026,11 +1245,11 @@ export function WorldMapPanel() {
                     {displayedLogs.map((log, idx) => {
                       const style = classifyEventLog(log)
                       return (
-                        <div key={idx} className="flex items-center gap-2 text-xs border-b border-white/5 pb-1 leading-normal transition-all hover:bg-white/5 p-1 rounded">
-                          <span className={`chip shrink-0 scale-90 ${style.badgeClass}`} style={{ fontSize: '7.5px', padding: '0.05rem 0.25rem' }}>
+                        <div key={idx} className="flex items-center gap-2 text-xs border-b border-white/5 pb-1.5 leading-normal transition-all hover:bg-white/5 p-1 rounded">
+                          <span className={`chip shrink-0 scale-90 ${style.badgeClass}`} style={{ fontSize: '9px', fontWeight: 800, padding: '0.08rem 0.3rem' }}>
                             {style.badge}
                           </span>
-                          <span className={`flex-1 font-mono text-[10px] break-all ${style.textClass}`}>
+                          <span className={`flex-1 font-mono text-[11px] break-all text-white/75 ${style.textClass}`}>
                             {log}
                           </span>
                         </div>
@@ -1081,23 +1300,23 @@ export function WorldMapPanel() {
                             })
                           }
                         }}
-                        className={`rounded bg-black/35 border p-1.5 flex items-center justify-between text-[10px] transition-all ${
+                        className={`rounded bg-black/45 border p-2 flex items-center justify-between text-xs transition-all ${
                           isRampaging 
-                            ? 'border-red-500/30 hover:border-red-500 hover:bg-red-950/20 cursor-pointer' 
+                            ? 'border-red-500/40 hover:border-red-400 hover:bg-red-950/20 cursor-pointer shadow-sm' 
                             : 'border-white/5 opacity-60'
                         }`}
                       >
                         <div className="flex flex-col">
-                          <span className="font-bold text-white/80">{mData.name}</span>
-                          <span className="text-[8px] text-white/40 font-mono">서열 {mData.rank}위 | {mData.theme}</span>
+                          <span className="font-extrabold text-white">{mData.name}</span>
+                          <span className="text-[9px] text-white/50 font-bold tracking-wide mt-0.5">서열 {mData.rank}위 | {mData.theme}</span>
                         </div>
-                        <div className="text-right">
+                        <div className="text-right shrink-0">
                           {isRampaging ? (
-                            <span className="rounded bg-red-500/15 border border-red-500/25 px-1 py-0.5 text-[8px] font-black text-red-300">
+                            <span className="rounded bg-red-500/20 border border-red-500/40 px-2 py-0.5 text-[9px] font-black text-red-300 shadow-[0_0_8px_rgba(239,68,68,0.1)]">
                               {monarch.occupiedRegionIds.length}개국 점령
                             </span>
                           ) : (
-                            <span className="rounded bg-emerald-500/10 border border-emerald-500/20 px-1 py-0.5 text-[8px] font-bold text-emerald-400 font-mono">
+                            <span className="rounded bg-emerald-500/20 border border-emerald-500/35 px-2 py-0.5 text-[9px] font-black text-emerald-300">
                               격퇴됨
                             </span>
                           )}
@@ -1334,6 +1553,28 @@ export function WorldMapPanel() {
                     <stop offset="0%" stopColor="#0b1226" />
                     <stop offset="100%" stopColor="#04050c" />
                   </radialGradient>
+                  
+                  {/* Premium gradients for Stage 2 map effects */}
+                  <linearGradient id="awakening-beam" x1="0" y1="1" x2="0" y2="0">
+                    <stop offset="0%" stopColor="#eab308" stopOpacity="0" />
+                    <stop offset="20%" stopColor="#eab308" stopOpacity="0.85" />
+                    <stop offset="50%" stopColor="#ffffff" stopOpacity="1" />
+                    <stop offset="80%" stopColor="#eab308" stopOpacity="0.85" />
+                    <stop offset="100%" stopColor="#eab308" stopOpacity="0" />
+                  </linearGradient>
+                  
+                  <radialGradient id="purify-glow" cx="50%" cy="50%" r="50%">
+                    <stop offset="0%" stopColor="#10b981" stopOpacity="0.75" />
+                    <stop offset="60%" stopColor="#10b981" stopOpacity="0.25" />
+                    <stop offset="100%" stopColor="#10b981" stopOpacity="0" />
+                  </radialGradient>
+                  
+                  <radialGradient id="occupy-glow" cx="50%" cy="50%" r="50%">
+                    <stop offset="0%" stopColor="#f43f5e" stopOpacity="0.7" />
+                    <stop offset="70%" stopColor="#be123c" stopOpacity="0.3" />
+                    <stop offset="100%" stopColor="#000000" stopOpacity="0" />
+                  </radialGradient>
+
                   <filter id="glow-base" x="-20%" y="-20%" width="140%" height="140%">
                     <feGaussianBlur stdDeviation="4" result="blur" />
                     <feComposite in="SourceGraphic" in2="blur" operator="over" />
@@ -1355,6 +1596,52 @@ export function WorldMapPanel() {
                     .ring-pulse {
                       transform-origin: center;
                       animation: pulse-ring 2s cubic-bezier(0.215, 0.610, 0.355, 1) infinite;
+                    }
+                    
+                    /* Stage 2 Micro-animations */
+                    @keyframes map-light-beam {
+                      0% { transform: scaleX(0.1); opacity: 0; }
+                      15% { transform: scaleX(1); opacity: 1; }
+                      85% { transform: scaleX(1); opacity: 1; }
+                      100% { transform: scaleX(0); opacity: 0; }
+                    }
+                    .light-beam {
+                      animation: map-light-beam 3.5s ease-out forwards;
+                    }
+                    
+                    @keyframes map-purify-glow {
+                      0% { transform: scale(0.1); opacity: 0.9; }
+                      100% { transform: scale(2.2); opacity: 0; }
+                    }
+                    .purify-glow {
+                      animation: map-purify-glow 3s cubic-bezier(0.1, 0.8, 0.3, 1) forwards;
+                    }
+                    
+                    @keyframes map-occupy-pulse {
+                      0% { transform: scale(0.1); opacity: 0; }
+                      25% { opacity: 0.8; }
+                      75% { opacity: 0.8; }
+                      100% { transform: scale(1.8); opacity: 0; }
+                    }
+                    .occupy-pulse {
+                      animation: map-occupy-pulse 4s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
+                    }
+                    
+                    @keyframes warning-ping {
+                      0% { transform: scale(0.5); opacity: 0.9; stroke-width: 4; }
+                      100% { transform: scale(2.4); opacity: 0; stroke-width: 1; }
+                    }
+                    .warning-ping-slow {
+                      animation: warning-ping 3s cubic-bezier(0.16, 1, 0.3, 1) infinite;
+                    }
+                    
+                    /* Scrolling News Marquee Ticker */
+                    @keyframes marquee {
+                      0% { transform: translateX(100%); }
+                      100% { transform: translateX(-100%); }
+                    }
+                    .animate-marquee {
+                      animation: marquee 28s linear infinite;
                     }
                   `}</style>
                 </defs>
@@ -1429,48 +1716,146 @@ export function WorldMapPanel() {
 
                   {/* 시네마틱 충격파 / 지진 이펙트 레이어 */}
                   <g className="map-effects-layer">
-                    {mapEffects.map((eff) => (
-                      <g key={eff.id}>
-                        <circle
-                          cx={eff.x}
-                          cy={eff.y}
-                          r="1"
-                          fill="none"
-                          stroke={eff.color}
-                          strokeWidth="2.5"
-                          className="animate-ping animate-infinite"
-                          style={{
-                            transformOrigin: `${eff.x}px ${eff.y}px`,
-                            animationDuration: '2s',
-                          }}
-                        />
-                        <circle
-                          cx={eff.x}
-                          cy={eff.y}
-                          r="1"
-                          fill="none"
-                          stroke={eff.color}
-                          strokeWidth="1.5"
-                          className="animate-ping animate-infinite"
-                          style={{
-                            transformOrigin: `${eff.x}px ${eff.y}px`,
-                            animationDuration: '2.5s',
-                            animationDelay: '0.5s',
-                          }}
-                        />
-                        <circle
-                          cx={eff.x}
-                          cy={eff.y}
-                          r="8"
-                          fill={eff.color}
-                          className="animate-pulse"
-                          style={{
-                            opacity: 0.45,
-                            filter: `drop-shadow(0 0 8px ${eff.color})`,
-                          }}
-                        />
-                      </g>
-                    ))}
+                    {mapEffects.map((eff) => {
+                      if (eff.type === 'awakening') {
+                        return (
+                          <g key={eff.id}>
+                            <circle cx={eff.x} cy={eff.y} r="6" fill="#eab308" opacity="0.8" className="animate-pulse" />
+                            <line 
+                              x1={eff.x} y1={eff.y} x2={eff.x} y2={eff.y - 120} 
+                              stroke="url(#awakening-beam)" strokeWidth="8" 
+                              className="light-beam" 
+                              style={{ transformOrigin: `${eff.x}px ${eff.y}px` }} 
+                            />
+                          </g>
+                        )
+                      }
+                      
+                      if (eff.type === 'defeated') {
+                        return (
+                          <g key={eff.id}>
+                            <circle 
+                              cx={eff.x} cy={eff.y} r="45" 
+                              fill="url(#purify-glow)" 
+                              className="purify-glow" 
+                              style={{ transformOrigin: `${eff.x}px ${eff.y}px` }} 
+                            />
+                            <circle 
+                              cx={eff.x} cy={eff.y} r="45" 
+                              fill="none" stroke="#10b981" strokeWidth="2" 
+                              className="purify-glow" 
+                              style={{ transformOrigin: `${eff.x}px ${eff.y}px`, animationDelay: '0.3s' }} 
+                            />
+                          </g>
+                        )
+                      }
+                      
+                      if (eff.type === 'home_threat' || eff.type === 'home_reached') {
+                        return (
+                          <g key={eff.id}>
+                            <circle 
+                              cx={eff.x} cy={eff.y} r="35" 
+                              fill="none" stroke="#ef4444" strokeWidth="2.5" 
+                              className="warning-ping-slow" 
+                              style={{ transformOrigin: `${eff.x}px ${eff.y}px` }} 
+                            />
+                            <circle 
+                              cx={eff.x} cy={eff.y} r="35" 
+                              fill="none" stroke="#f97316" strokeWidth="1.5" 
+                              className="warning-ping-slow" 
+                              style={{ transformOrigin: `${eff.x}px ${eff.y}px`, animationDelay: '1s' }} 
+                            />
+                            <circle 
+                              cx={eff.x} cy={eff.y} r="8" 
+                              fill="#ef4444" 
+                              className="animate-ping" 
+                              style={{ transformOrigin: `${eff.x}px ${eff.y}px` }} 
+                            />
+                          </g>
+                        )
+                      }
+                      
+                      if (eff.type === 'occupied' || eff.type === 'expand') {
+                        return (
+                          <g key={eff.id}>
+                            <circle 
+                              cx={eff.x} cy={eff.y} r="50" 
+                              fill="url(#occupy-glow)" 
+                              className="occupy-pulse" 
+                              style={{ transformOrigin: `${eff.x}px ${eff.y}px` }} 
+                            />
+                            <circle 
+                              cx={eff.x} cy={eff.y} r="50" 
+                              fill="none" stroke="#f43f5e" strokeWidth="3" 
+                              className="occupy-pulse" 
+                              style={{ transformOrigin: `${eff.x}px ${eff.y}px` }} 
+                            />
+                            <circle 
+                              cx={eff.x} cy={eff.y} r="50" 
+                              fill="none" stroke="#e11d48" strokeWidth="1.5" 
+                              className="occupy-pulse" 
+                              style={{ transformOrigin: `${eff.x}px ${eff.y}px`, animationDelay: '0.8s' }} 
+                            />
+                          </g>
+                        )
+                      }
+                      
+                      if (eff.type === 'gate_open') {
+                        return (
+                          <g key={eff.id}>
+                            <circle 
+                              cx={eff.x} cy={eff.y} r="15" 
+                              fill="none" stroke="#06b6d4" strokeWidth="1.5" 
+                              className="ring-pulse" 
+                              style={{ transformOrigin: `${eff.x}px ${eff.y}px`, animationDuration: '1.8s' }} 
+                            />
+                          </g>
+                        )
+                      }
+                      
+                      if (eff.type === 'gate_surge') {
+                        return (
+                          <g key={eff.id}>
+                            <circle 
+                              cx={eff.x} cy={eff.y} r="25" 
+                              fill="none" stroke="#dc2626" strokeWidth="3" 
+                              className="ring-pulse" 
+                              style={{ transformOrigin: `${eff.x}px ${eff.y}px`, animationDuration: '1.2s' }} 
+                            />
+                            <circle 
+                              cx={eff.x} cy={eff.y} r="25" 
+                              fill="none" stroke="#ea580c" strokeWidth="1.5" 
+                              className="ring-pulse" 
+                              style={{ transformOrigin: `${eff.x}px ${eff.y}px`, animationDuration: '1.2s', animationDelay: '0.3s' }} 
+                            />
+                          </g>
+                        )
+                      }
+                      
+                      // Default Monarch Appear / Fallback shockwave
+                      return (
+                        <g key={eff.id}>
+                          <circle 
+                            cx={eff.x} cy={eff.y} r="60" 
+                            fill="none" stroke={eff.color} strokeWidth="4" 
+                            className="ring-pulse" 
+                            style={{ transformOrigin: `${eff.x}px ${eff.y}px`, animationDuration: '2.5s' }} 
+                          />
+                          <circle 
+                            cx={eff.x} cy={eff.y} r="60" 
+                            fill="none" stroke={eff.color === '#ef4444' ? '#991b1b' : '#334155'} strokeWidth="2" 
+                            className="ring-pulse" 
+                            style={{ transformOrigin: `${eff.x}px ${eff.y}px`, animationDuration: '2.5s', animationDelay: '0.6s' }} 
+                          />
+                          <circle 
+                            cx={eff.x} cy={eff.y} r="10" 
+                            fill={eff.color} 
+                            className="animate-pulse" 
+                            style={{ opacity: 0.5, filter: `drop-shadow(0 0 10px ${eff.color})` }} 
+                          />
+                        </g>
+                      )
+                    })}
                   </g>
 
                   {/* 거점 국가 중심점 마커 및 레이블 */}
@@ -1541,7 +1926,7 @@ export function WorldMapPanel() {
                           >
                             <text
                               textAnchor="middle"
-                              className="text-[9px] font-black fill-white stroke-black stroke-[3px] select-none"
+                              className="text-[10px] font-black fill-white stroke-black stroke-[3.5px] select-none tracking-wide"
                               style={{
                                 paintOrder: 'stroke',
                                 strokeLinejoin: 'round',
@@ -1552,11 +1937,11 @@ export function WorldMapPanel() {
                             
                             {showStats && (
                               <text
-                                y="10"
+                                y="10.5"
                                 textAnchor="middle"
-                                className={`text-[7.5px] font-mono font-bold ${
-                                  occupiedMonarch ? 'fill-red-400' : 'fill-purple-300/90'
-                                } stroke-black stroke-[2px] select-none`}
+                                className={`text-[8.5px] font-mono font-black ${
+                                  occupiedMonarch ? 'fill-red-400 font-extrabold' : 'fill-purple-200'
+                                } stroke-black stroke-[2.5px] select-none`}
                                 style={{
                                   paintOrder: 'stroke',
                                   strokeLinejoin: 'round',
@@ -3507,6 +3892,8 @@ export function WorldMapPanel() {
       <WorldCinematicEngine 
         events={livingWorld?.recentEvents ?? []} 
         currentDay={livingWorld?.day ?? 0} 
+        animationMode={animationMode}
+        playbackSpeed={animationSpeed}
       />
     </div>
   )

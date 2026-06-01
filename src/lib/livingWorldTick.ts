@@ -194,7 +194,9 @@ export function advanceWorldDay(state: LivingWorldState, rng: RngFn): LivingWorl
     body: string,
     regionId?: string,
     monarchId?: string,
-    cinematic = false
+    cinematic = false,
+    quote?: string,
+    subtitle?: string
   ) {
     const event: WorldEvent = {
       id: `evt-${nextDay}-${type}-${Math.floor(rng() * 100000)}`,
@@ -205,7 +207,9 @@ export function advanceWorldDay(state: LivingWorldState, rng: RngFn): LivingWorl
       body,
       regionId,
       monarchId,
-      cinematic
+      cinematic,
+      quote,
+      subtitle
     }
     recentEvents.push(event)
     if (recentEvents.length > 60) {
@@ -224,8 +228,25 @@ export function advanceWorldDay(state: LivingWorldState, rng: RngFn): LivingWorl
       if (turns <= 0) {
         hunter.status = 'active'
         hunter.injuredTurns = undefined
-        addLog(`🏥 ${region.regionId.toUpperCase()}의 네임드 헌터 [${hunter.name}]이(가) 부상에서 완치되어 복귀했습니다.`)
-        addEvent('awakening', 'minor', '헌터 복귀', `🏥 [${hunter.name}] 헌터가 부상에서 완치되어 전선에 복귀했습니다.`, region.regionId, undefined, false)
+        const regIdUpper = hunter.regionId.toUpperCase()
+        const recoveryBops = [
+          `🏥 [완치 복귀] [${regIdUpper}]의 네임드 헌터 [${hunter.name}]이(가) 병상을 털고 일어나 마력 조율을 끝마치고 현역 전선에 복귀했습니다!`,
+          `💪 [전력 복구] 오랜 치료 끝에 [${regIdUpper}]의 수호자 [${hunter.name}] 헌터가 부상에서 완전히 회복되어 즉시 던전 공략에 다시 합류합니다!`,
+          `✨ [전선 복귀] [${regIdUpper}]의 핵심 헌터 [${hunter.name}]이(가) 마나 치료를 완수하고 건강한 상태로 격벽 방어선에 도달했습니다!`,
+          `🏥 [건강 회복] 부상을 이겨낸 [${hunter.name}] 헌터가 마력 회로의 역류를 다스리고 부상 전력에서 활성 상태로 격벽 수호에 복귀했습니다!`
+        ]
+        const chosenRecovery = recoveryBops[Math.floor(rng() * recoveryBops.length)]
+        addLog(chosenRecovery)
+        
+        const recoveryQuotes = [
+          `"치료는 끝났다. 내 칼날은 여전히 예리해. 기다려라 마수들아!"`,
+          `"다시는 방심하지 않는다. 내 몸을 지켜준 의료진과 동료들을 위해 싸우겠다."`,
+          `"마력 회로 복구 완료. 전 대원, 내 뒤를 따르라! 전장으로 간다!"`,
+          `"오래 기다렸지? 자, 밀린 방재 임무를 확실하게 끝내볼까!"`
+        ]
+        const chosenQuote = recoveryQuotes[Math.floor(rng() * recoveryQuotes.length)]
+        
+        addEvent('awakening', 'minor', '헌터 완치 복귀', chosenRecovery, hunter.regionId, undefined, false, chosenQuote, `HUNTER SIGNAL RESTORED`)
       } else {
         hunter.injuredTurns = turns
       }
@@ -296,8 +317,23 @@ export function advanceWorldDay(state: LivingWorldState, rng: RngFn): LivingWorl
         // 활성 게이트 목록에서 제거
         region.activeGateIds = region.activeGateIds.filter(id => id !== node.id)
 
-        addLog(`💥 [${rName}]의 [${node.name}] 게이트가 방치되어 폭주했습니다! 지역 오염도 +${corruptionAdd}%, 전역 오염도 +${globalCorruptionAdd}%`)
-        addEvent('gate_surge', 'major', '게이트 폭주', `💥 [${rName}]의 [${node.name}] 게이트가 방치되어 폭주했습니다!`, node.regionId, undefined, false)
+        const rampageBops = [
+          `💥 [대재앙] [${rName}]의 [${node.name}] 게이트가 무방비로 방치된 끝에 한계를 초과하여 광역 폭주(Rampage)했습니다! 마수들이 현실을 피침식합니다! 지역 오염도 +${corruptionAdd}%, 전역 오염도 +${globalCorruptionAdd}%`,
+          `💀 [지면 붕괴] 방치된 [${node.name}] 게이트가 거대 왜곡을 일으키며 [${rName}] 구역에 엄청난 마력을 방출하며 폭발했습니다! 지역 오염도 +${corruptionAdd}%, 전역 오염도 +${globalCorruptionAdd}%`,
+          `🚨 [격벽 파손] [${rName}]에서 장기간 관리되지 않은 [${node.name}] 게이트가 현실 침식 장막을 뚫고 폭주하여 마물들이 쏟아져 나옵니다! 지역 오염도 +${corruptionAdd}%, 전역 오염도 +${globalCorruptionAdd}%`
+        ]
+        const chosenRampage = rampageBops[Math.floor(rng() * rampageBops.length)]
+        addLog(chosenRampage)
+        
+        const panicQuotes = [
+          `"사령부 보고! 차원 차단 격벽이 녹아내리고 있습니다! 제발 누구든 도와줘요!"`,
+          `"마수들의 해일이 밀려옵니다... 방어 병력은 전부 흩어졌습니다! 긴급 대피 통보!"`,
+          `"이곳은 침식 구역 통제실... 치익... 전원 차단... 으아아아악!"`,
+          `"게이트의 마력이 폭발했습니다... 도시 전체가 보라색 오염층에 잠기고 있습니다!"`
+        ]
+        const chosenPanic = panicQuotes[Math.floor(rng() * panicQuotes.length)]
+
+        addEvent('gate_surge', 'major', '게이트 폭주', chosenRampage, node.regionId, undefined, false, chosenPanic, `CIVILIAN CRISIS INTERCEPT`)
 
         nextRegions[node.regionId] = region
       } else {
@@ -556,8 +592,22 @@ export function advanceWorldDay(state: LivingWorldState, rng: RngFn): LivingWorl
                     }
 
                     const regName = RIFT_REGIONS.find(r => r.id === regionId)?.name ?? regionId.toUpperCase()
-                    addLog(`✨ [각성 발동] [${regName}]의 [${hunter.name}] 헌터가 전투 중 극적인 각성을 거치며 등급이 [${oldRank}] $\\to$ [${newRank}]급으로 도약했습니다! 스탯이 대폭 강화되어 새로운 전력이 되었습니다.`)
-                    addEvent('awakening', 'major', '헌터 각성', `✨ [${regName}]의 [${hunter.name}] 헌터가 극적으로 각성하여 [${newRank}]급으로 도약했습니다!`, regionId, undefined, true)
+                    const awakenBops = [
+                      `✨ [각성 발동] [${regName}]의 [${hunter.name}] 헌터가 전투 중 극적인 각성을 거치며 등급이 [${oldRank}] $\\to$ [${newRank}]급으로 도약했습니다! 스탯이 대폭 강화되어 새로운 전력이 되었습니다.`,
+                      `⚡ [한계 돌파] [${regName}]의 [${hunter.name}] 헌터가 사투 끝에 잠재 마력을 폭발시키며 [${oldRank}] $\\to$ [${newRank}]급으로 전율적인 한계 돌파에 성공했습니다!`,
+                      `🌟 [영웅 탄생] [${regName}]의 수호자 [${hunter.name}] 헌터가 마력 공명을 통해 극적으로 각성하며 등급이 [${oldRank}] $\\to$ [${newRank}]급으로 급상승했습니다!`
+                    ]
+                    const chosenAwaken = awakenBops[Math.floor(rng() * awakenBops.length)]
+                    addLog(chosenAwaken)
+
+                    const awakenQuotes = [
+                      `"마력이... 끊임없이 솟구쳐 오르는구나. 내 안의 한계를 깨부수고 말겠다!"`,
+                      `"이제 마수들의 격랑이 두렵지 않다. 내가 바로 인류의 선봉이 되리라!"`,
+                      `"이 강력한 울림... 내 영혼의 불꽃이 드디어 각성했군. 지켜봐라, 우리의 내일을!"`,
+                      `"힘이 끓어 넘친다... 동료들이여, 내 등 뒤를 지켜라. 내가 전부 베어 넘기겠다!"`
+                    ]
+                    const chosenQuote = awakenQuotes[Math.floor(rng() * awakenQuotes.length)]
+                    addEvent('awakening', 'major', '헌터 한계돌파 각성', chosenAwaken, regionId, undefined, true, chosenQuote, `HUNTER EVOLUTION SIGNAL`)
                   }
                 }
 
@@ -570,8 +620,23 @@ export function advanceWorldDay(state: LivingWorldState, rng: RngFn): LivingWorl
                 if (isLuckyDrop) {
                   const luckyAdd = Math.round(500 + rng() * 600)
                   equipGain += luckyAdd
-                  addLog(`🍀 [대박 드랍] [${hunter.name}] 헌터가 전리품으로 고성능 장비를 획득했습니다! (+${luckyAdd} 장비전투력)`)
-                  addEvent('gate_open', 'minor', '고성능 장비 획득', `🍀 [${hunter.name}] 헌터가 던전 공략 결과 전리품을 획득했습니다.`, hunter.regionId, undefined, false)
+                  const dropBops = [
+                    `🍀 [대박 드랍] [${hunter.name}] 헌터가 던전 깊은 곳의 고대 상자에서 전설급 명검을 발굴하여 무장을 업그레이드했습니다! (+${luckyAdd} 장비전투력)`,
+                    `💎 [희귀 유물] [${hunter.name}] 헌터가 마수 우두머리로부터 오라가 서린 성스러운 장갑을 획득했습니다! (+${luckyAdd} 장비전투력)`,
+                    `📦 [신성 보구] [${hunter.name}] 헌터가 게이트 지휘관실에서 눈부신 절대 방어 판금 갑옷을 노획했습니다! (+${luckyAdd} 장비전투력)`,
+                    `🛡️ [마력 유물] [${hunter.name}] 헌터가 고농축 마력 왜곡구 내에서 충격 흡수 오라 코트를 손에 넣었습니다! (+${luckyAdd} 장비전투력)`
+                  ]
+                  const chosenDrop = dropBops[Math.floor(rng() * dropBops.length)]
+                  addLog(chosenDrop)
+                  
+                  const dropQuotes = [
+                    `"이 무기에서 뿜어져 나오는 서늘한 기운... 이걸로 더 많은 게이트를 봉인하겠어!"`,
+                    `"내 오랜 장비를 교체할 때가 되었군. 엄청난 성능이다..."`,
+                    `"이 귀중한 보구는 우리 팀의 든든한 방패가 될 것입니다."`,
+                    `"하핫! 던전 탐험 끝에 이런 귀한 물건을 건지다니, 운이 아주 좋군!"`
+                  ]
+                  const chosenDropQuote = dropQuotes[Math.floor(rng() * dropQuotes.length)]
+                  addEvent('gate_open', 'minor', '고성능 전설 장비 획득', chosenDrop, hunter.regionId, undefined, false, chosenDropQuote, `TACTICAL DROP INTERCEPT`)
                 }
 
                 const oldScore = hunter.equipmentScore ?? 0
@@ -626,8 +691,24 @@ export function advanceWorldDay(state: LivingWorldState, rng: RngFn): LivingWorl
           }
           region.corruption = Math.max(0, region.corruption - adjustedCleanse)
 
-          addLog(`⚔️ [${rName}] 헌터들이 [${gate.name}] 게이트 공략에 성공했습니다! (승률: ${Math.round(winChance * 100)}%) 지역 오염도 -${adjustedCleanse}%`)
-          addEvent('gate_open', 'minor', '게이트 정화', `⚔️ [${rName}] 헌터들이 [${gate.name}] 정화에 성공했습니다.`, gate.regionId, undefined, false)
+          const victoryBops = [
+            `⚔️ [게이트 정화] [${rName}] 헌터들이 [${gate.name}] 게이트 깊숙이 침투하여 군단장을 참수하고 공략에 성공했습니다! (승률: ${Math.round(winChance * 100)}%) 지역 오염도 -${adjustedCleanse}%`,
+            `🛡️ [완벽 방어] [${rName}] 수호대가 [${gate.name}] 게이트 마수들의 대규모 차원 파동을 격퇴하고 정화했습니다! (승률: ${Math.round(winChance * 100)}%) 지역 오염도 -${adjustedCleanse}%`,
+            `✨ [정화 완수] [${rName}] 연합팀이 고난도의 [${gate.name}] 게이트 코어를 분쇄하며 차원 틈새를 성공적으로 봉인했습니다! (승률: ${Math.round(winChance * 100)}%) 지역 오염도 -${adjustedCleanse}%`,
+            `🌀 [균열 봉쇄] [${rName}] 헌터들이 마수들의 포위를 뚫고 [${gate.name}] 던전을 완벽히 제어 및 정화했습니다! (승률: ${Math.round(winChance * 100)}%) 지역 오염도 -${adjustedCleanse}%`
+          ]
+          const chosenVictory = victoryBops[Math.floor(rng() * victoryBops.length)]
+          addLog(chosenVictory)
+          
+          const victoryQuotes = [
+            `"마지막 마수까지 처단 완료. 게이트 붕괴가 멈췄습니다!"`,
+            `"후우... 꽤 거친 전투였지만, 인류의 수호선은 오늘도 건재하다!"`,
+            `"코어 해제 성공! 전원 부상 수습하고 귀환 및 다음 방지 임무 준비!"`,
+            `"우리가 해냈다! 이 땅은 우리가 지킨다!"`
+          ]
+          const chosenVictoryQuote = victoryQuotes[Math.floor(rng() * victoryQuotes.length)]
+          
+          addEvent('gate_open', 'minor', '게이트 정화 성공', chosenVictory, gate.regionId, undefined, false, chosenVictoryQuote, `GATE SEALED SUCCESSFULLY`)
         } else {
           // 공략 실패! (부상 또는 사망)
           const diffRatio = (gate.difficulty ?? 0) / Math.max(1, activePower)
@@ -677,12 +758,48 @@ export function advanceWorldDay(state: LivingWorldState, rng: RngFn): LivingWorl
             if (isDead) {
               hunter.status = 'dead'
               addLog(`💀 [${rName}] 헌터들이 [${gate.name}] 공략 중 패배했습니다. 무모한 전투의 결과로 네임드 헌터 [${hunter.name}]이(가) 전사했습니다!`)
-              addEvent('awakening', 'major', '네임드 헌터 전사', `💀 [${rName}]의 네임드 헌터 [${hunter.name}]이(가) 던전 공략 중 전사했습니다...`, region.regionId, undefined, true)
+              const deathBops = [
+                `💀 비보 전달. [${rName}]의 찬란한 영웅 [${hunter.name}] 헌터가 차원 던전 심부에서 최후까지 항전하다 장렬히 전사했습니다...`,
+                `🖤 전선의 거성이 지다. [${rName}]의 S급 헌터 [${hunter.name}]이(가) 침식 게이트 공략 중 아군을 수호하고 전사했습니다...`,
+                `🥀 [${rName}]의 희망 [${hunter.name}] 헌터가 균열 속에서 밀려드는 마수들의 격랑을 홀로 막아내며 산화했습니다...`,
+                `🪦 명복을 빕니다. [${rName}]의 수호자 [${hunter.name}] 헌터가 차원 침공 방어선에서 고결한 희생을 치렀습니다.`,
+                `🥀 전사 통보. [${rName}]의 기둥이었던 [${hunter.name}] 헌터가 [${gate.name}]의 보스 마수와 공멸하며 뜨거운 생을 마감했습니다...`,
+                `🪦 영웅 잠들다. [${rName}] 방어 기지의 수장 [${hunter.name}]이(가) 침공 세력을 저지하고 영면하셨음을 엄숙히 알립니다.`
+              ]
+              const chosenDeath = deathBops[Math.floor(rng() * deathBops.length)]
+              
+              const deathQuotes = [
+                `"방벽을... 사수해라. 나의 동료들이여, 인류의 불빛을 꺼뜨리지 마라..."`,
+                `"난 부끄럽지 않다... 마지막까지 인류를 위해 방패가 되었으니..."`,
+                `"괴물놈들... 너희들의 파멸도 멀지 않았다... 먼저 가서 기다리마..."`,
+                `"내 죽음이 헛되지 않게... 끝까지 이 세계를 지켜다오..."`
+              ]
+              const chosenDeathQuote = deathQuotes[Math.floor(rng() * deathQuotes.length)]
+              
+              addEvent('awakening', 'major', '네임드 헌터 전사', chosenDeath, region.regionId, undefined, true, chosenDeathQuote, `HEROIC SACRIFICE LOG`)
             } else {
               hunter.status = 'injured'
               hunter.injuredTurns = 3
               addLog(`🩹 [${rName}] 헌터들이 [${gate.name}] 공략 중 퇴각했습니다. 네임드 헌터 [${hunter.name}]이(가) 심한 부상을 입어 3일간 요양합니다.`)
-              addEvent('awakening', 'minor', '헌터 심각한 부상', `🩹 [${rName}]의 네임드 헌터 [${hunter.name}]이(가) 던전 공략 실패로 부상을 입었습니다.`, region.regionId, undefined, false)
+              const injuryBops = [
+                `🩹 [${rName}]의 네임드 헌터 [${hunter.name}]이(가) 던전 공략 실패로 중상을 입어 전선에서 일시 이탈했습니다.`,
+                `🩹 부상 비상! [${rName}]의 [${hunter.name}] 헌터가 마수와의 사투 끝에 깊은 상흔을 입고 3일간 집중 치료에 돌입합니다.`,
+                `🩹 전력 공백... [${rName}]의 주축인 [${hunter.name}] 헌터가 게이트 전투 중 마력 역류로 부상을 입어 안정을 취합니다.`,
+                `🩹 [${rName}]의 수호단장 [${hunter.name}] 헌터가 기습적인 균열 폭발을 온몸으로 막아내고 심각한 부상을 입어 후송되었습니다.`,
+                `🩹 심한 부상. [${hunter.name}] 헌터가 무리한 돌파를 감행하다 차원 마력 폭풍에 휩쓸려 전신 마비성 골절을 입었습니다.`,
+                `🩹 긴급 요양. [${hunter.name}] 헌터가 퇴각 대열을 수호하다 오른팔 마나 통로에 치명적인 타격을 입었습니다.`
+              ]
+              const chosenInjury = injuryBops[Math.floor(rng() * injuryBops.length)]
+              
+              const injuryQuotes = [
+                `"크윽... 상처가 깊지만 아직 내 심장은 고동치고 있다. 3일만 기다려라..."`,
+                `"크억, 뼈가 으스러졌나... 하지만 이 정도 통증으론 날 멈출 수 없다!"`,
+                `"미안하군... 방심했어. 치료되는 즉시 전선으로 돌아가 마수들의 목을 베겠다."`,
+                `"아직... 싸울 수... 흐윽... 동료들아 무사히 퇴각해서 다행이다..."`
+              ]
+              const chosenInjuryQuote = injuryQuotes[Math.floor(rng() * injuryQuotes.length)]
+              
+              addEvent('awakening', 'minor', '헌터 심각한 부상', chosenInjury, region.regionId, undefined, false, chosenInjuryQuote, `HUNTER CASUALTY SIGNAL`)
             }
             nextNamedHunters[targetHunterId] = hunter
         } else {
@@ -955,7 +1072,23 @@ export function advanceWorldDay(state: LivingWorldState, rng: RngFn): LivingWorl
               const expName = RIFT_REGIONS.find(r => r.id === challengeRegId)?.name ?? challengeRegId.toUpperCase()
 
               addLog(`⚔️ 🎉 [군주 격퇴] [${expName}]의 NPC 헌터들이 연합하여 군주 [${monarchData.name}]을(를) 격퇴하는 기적을 일으켰습니다! 영역이 해방되었습니다.`)
-              addEvent('defeated', 'critical', '군주 격퇴', `⚔️ [${expName}]의 헌터들이 연합하여 군주 [${monarchData.name}]을(를) 격퇴하는 기적을 일으켰습니다!`, challengeRegId, monarchData.id, true)
+              const defeatBops = [
+                `⚔️ 인류의 반격! [${expName}]의 영웅들이 연합 전선을 구축해 침략자 군주 [${monarchData.name}]을(를) 격퇴하는 위대한 역사를 썼습니다!`,
+                `✨ 영광의 승전보! 전 세계의 이목이 집중된 사투 끝에, [${expName}] 연합군이 군주 [${monarchData.name}]의 목을 베고 대지를 정화했습니다!`,
+                `🌈 기적의 강림! 멸망의 포화 속에서 [${expName}]의 수호자들이 군주 [${monarchData.name}]의 침략군을 마침내 궤멸시키고 승리했습니다!`,
+                `🛡️ 절망을 가른 검날! [${expName}] 전선에서 수많은 희생 끝에 군주 [${monarchData.name}]의 본체를 소멸하는 데 완전히 성공했습니다!`,
+                `🎉 세기의 대승! [${expName}]에서 인류의 결사수호대가 군주 [${monarchData.name}]의 방어벽을 깨부수고 기적적인 종지부를 찍었습니다!`
+              ]
+              const chosenDefeat = defeatBops[Math.floor(rng() * defeatBops.length)]
+              
+              const victoryQuotes = [
+                `"인류의 불꽃은 결코 꺼지지 않는다! 군주여, 심연으로 되돌아가라!"`,
+                `"승리다! 우리가 마침내 거대한 재앙을 꺾었다! 전 대원, 영토 수복을 선언한다!"`,
+                `"믿기지 않는군... 우리가 신적 존재를 상대로 정말 이겼어..."`,
+                `"오늘의 희생을 잊지 마라. 이 승리는 내일의 희망이다!"`
+              ]
+              const chosenVictoryQuote = victoryQuotes[Math.floor(rng() * victoryQuotes.length)]
+              addEvent('defeated', 'critical', '군주 격퇴 성공', chosenDefeat, challengeRegId, monarchData.id, true, chosenVictoryQuote, `MONARCH DEFEATED TRANSMISSION`)
             }
           }
         } else {
@@ -978,7 +1111,23 @@ export function advanceWorldDay(state: LivingWorldState, rng: RngFn): LivingWorl
                 reg.corruption = Math.min(100, reg.corruption + 15)
 
                 addLog(`💀 [참변] [${regName}]의 헌터들이 군주 [${monarchData.name}]에게 저항을 시도했으나 참패하여 흩어졌습니다! [${hunter.name}] 헌터가 치명적인 부상을 입었습니다.`)
-                addEvent('occupied', 'major', '토벌 실패 참변', `💀 [${regName}]의 헌터들이 군주 [${monarchData.name}] 저항에 실패하고, 네임드 [${hunter.name}]이(가) 큰 부상을 입었습니다.`, challengeRegId, monarchData.id, true)
+                const tragedyBops = [
+                  `💀 참변 발생! [${regName}]의 정예 연합이 군주 [${monarchData.name}] 토벌에 나섰으나 격퇴당했고, 네임드 [${hunter.name}]이(가) 치명상을 입고 퇴각했습니다...`,
+                  `🩸 붉은 전장. [${regName}]의 저항선이 군주 [${monarchData.name}]의 군단 앞에 처참히 붕괴되었으며, [${hunter.name}] 헌터가 생사가 불투명한 중상을 입었습니다.`,
+                  `🚨 파멸의 낙인! 군주 [${monarchData.name}]의 압도적인 힘 앞에 [${regName}]의 수호단이 몰살당하는 참변이 일어났고, [${hunter.name}] 헌터만 겨우 살아서 탈출했습니다.`,
+                  `💥 방어선 잔해... [${regName}]의 헌터들이 군주 [${monarchData.name}]에 맞서 분투했으나 전멸에 가까운 참패를 겪었고, [${hunter.name}] 헌터는 극심한 부상을 지고 복귀했습니다.`,
+                  `🩸 심연의 공포. 군주 [${monarchData.name}]의 압도적인 아우라에 헌터들이 제대로 칼도 휘두르지 못하고 도륙당했으며, [${hunter.name}]은(는) 큰 내상을 입었습니다.`
+                ]
+                const chosenTragedy = tragedyBops[Math.floor(rng() * tragedyBops.length)]
+                
+                const tragicQuotes = [
+                  `"크악... 크흐윽... 이 자의 힘은 차원이 다르다... 후퇴해라! 당장 전원 후퇴!"`,
+                  `"안 돼! 방어벽이 모래성처럼 허물어지고 있어... 괴물... 신이시여..."`,
+                  `"우린... 처음부터 싸울 상대가 안 되었던 거야... 도망쳐..."`,
+                  `"내 칼날이... 닿지도 않아... 크윽! 지원은 없는 건가!"`
+                ]
+                const chosenTragicQuote = tragicQuotes[Math.floor(rng() * tragicQuotes.length)]
+                addEvent('occupied', 'major', '토벌 실패 참변', chosenTragedy, challengeRegId, monarchData.id, true, chosenTragicQuote, `TRAGIC TRANSMISSION INTERCEPTED`)
               }
             }
           }

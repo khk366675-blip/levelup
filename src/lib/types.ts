@@ -2442,6 +2442,8 @@ export interface WorldEvent {
   regionId?: string
   monarchId?: string
   cinematic: boolean
+  quote?: string
+  subtitle?: string
 }
 
 export interface LivingWorldState {
