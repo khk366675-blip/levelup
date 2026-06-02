@@ -76,6 +76,7 @@ export const REGIONAL_EVENT_PACKS: Record<string, WorldGateEventPack> = {
             label: '피난민 퇴로 즉시 확보',
             description: '시민 대피를 최우선으로 엄호합니다. (위험도 -15, 경험치 +150)',
             riskDelta: -15,
+            leadsTo: 'safe',
             immediateReward: { xp: 150, gold: 0, essence: 0, items: [] }
           },
           {
@@ -83,6 +84,7 @@ export const REGIONAL_EVENT_PACKS: Record<string, WorldGateEventPack> = {
             label: '균열 깊은 중추 진격',
             description: '위험을 감수하고 적의 지휘부를 선제 타격합니다. (위험도 +20, 보상 배율 +0.25)',
             riskDelta: 20,
+            leadsTo: 'battle',
             rewardMultiplierDelta: 0.25
           },
           {
@@ -91,6 +93,7 @@ export const REGIONAL_EVENT_PACKS: Record<string, WorldGateEventPack> = {
             description: 'Named 헌터에게 대피선 관리를 일임하고 직진합니다. (위험도 -25, 골드 +500)',
             requiresCoop: true,
             conditionHint: '공조 중인 Named 헌터가 필요합니다.',
+            leadsTo: 'safe',
             coopRiskDelta: -25,
             coopImmediateReward: { gold: 500, xp: 0, essence: 0, items: [] }
           }

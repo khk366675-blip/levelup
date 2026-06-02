@@ -114,7 +114,7 @@ import {
   RIFT_REGIONS,
   RIFT_NODES,
 } from './seed'
-import { generateGateRunState, hydrateGateRunEncounterChoices, getChoiceEffectType, stripGateChoiceOutcomeHint } from './gateRunEvents'
+import { generateGateRunState, hydrateGateRunEncounterChoices, getChoiceEffectType, stripGateChoiceOutcomeHint, getChoiceLeadsTo } from './gateRunEvents'
 import { PROMOTION_EXAM_DEFINITIONS } from './promotionExams'
 import {
   CATEGORY_TO_STAT,
@@ -7126,6 +7126,76 @@ export const useGame = create<GameState>()(
           }, 0)
         }
 
+        // leadsTo 처리 (선택지에 전개 결과 연결 및 이후 단계 시퀀스 동적 조정)
+        const leadsTo = getChoiceLeadsTo(choice)
+        if (leadsTo === 'battle') {
+          const gate = GATE_DEFINITIONS.find(g => g.id === run.gateId) || activeGate.customGateDef
+          const rank = gate?.rank ?? 'E'
+          const isElite = choice.addEncounterType === 'elite' || (Math.random() < 0.4 && rank !== 'E')
+          const encType = isElite ? 'elite' : 'battle'
+          
+          const difficultyMod = isElite ? 1.35 : 1.0
+          const riskDelta = isElite ? 15 : 5
+          const rewardMultiplier = isElite ? 1.45 : 1.25
+
+          const gateMonsters = gate?.monsterIds ?? ['monster-goblin-scout']
+          const numMonsters = isElite ? 2 : 1
+          const monsterIds: string[] = []
+          for (let j = 0; j < numMonsters; j++) {
+            monsterIds.push(gateMonsters[Math.floor(Math.random() * gateMonsters.length)])
+          }
+
+          const stepName = '심층부'
+          const title = isElite 
+            ? `[${stepName}] 균열 심층 정예 전투 [ELITE]` 
+            : `[${stepName}] 균열 심층 야수 격전`
+          const description = isElite
+            ? '균열의 힘이 강해지며 나타난 정예 몬스터가 길을 가로막습니다. 더욱 세심히 공격해 오고 있으니 각별히 유의하십시오.'
+            : '어두운 차원의 틈바구니에서 강하게 날뛰는 심층 몬스터가 튀어나왔습니다! 무기를 움켜쥐십시오.'
+
+          const newEnc: GateRunEncounter = {
+            id: `enc-inserted-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+            type: encType,
+            title,
+            description,
+            monsterIds,
+            difficultyMod,
+            status: 'locked',
+            isElite: isElite ? true : undefined,
+            riskDelta,
+            rewardMultiplier,
+          }
+
+          run.encounters.splice(run.currentEncounterIndex + 1, 0, newEnc)
+          run.rewardMultiplier = Math.max(0.1, Math.min(2.0, run.rewardMultiplier + 0.15))
+
+          if (choice.addEncounterType && choice.addEncounterType !== 'battle' && choice.addEncounterType !== 'elite') {
+            const shiftIndex = run.currentEncounterIndex + 2
+            if (shiftIndex < run.encounters.length) {
+              const targetEnc = run.encounters[shiftIndex]
+              targetEnc.type = choice.addEncounterType
+              if (choice.addEncounterType === 'treasure') {
+                targetEnc.title = '이벤트로 발견된 보물 창고'
+                targetEnc.description = '막다른 벽을 허물어 고대 보물 상자가 숨겨진 다락방을 개방했습니다!'
+                targetEnc.treasureReward = { gold: 500, essence: 150 }
+              } else if (choice.addEncounterType === 'shadow_trace') {
+                targetEnc.title = '균열의 정제된 그림자 흔적'
+                targetEnc.description = '강제 개방된 균열 속에서 정교하게 정제된 그림자 흔적이 고동칩니다.'
+              }
+            }
+          }
+        } else if (leadsTo === 'safe') {
+          run.encounters = run.encounters.filter((enc, index) => {
+            if (index <= run.currentEncounterIndex) return true;
+            if (enc.type === 'boss' || enc.isBoss) return true;
+            if (enc.type === 'battle' || enc.type === 'elite') {
+              return false;
+            }
+            return true;
+          });
+          run.rewardMultiplier = Math.max(0.1, run.rewardMultiplier * 0.7)
+        }
+
         const isLast = run.currentEncounterIndex === run.encounters.length - 1
         const shouldClearWorldNode = activeGateKey === 'activeWorldGate' && isLast
         if (!isLast) {
@@ -7161,7 +7231,7 @@ export const useGame = create<GameState>()(
           get().checkGateClearHooks(activeGate.gateId, true)
         }
 
-        if (choice.addEncounterType && run.currentEncounterIndex < run.encounters.length - 1) {
+        if (leadsTo !== 'battle' && choice.addEncounterType && run.currentEncounterIndex < run.encounters.length - 1) {
           const nextIndex = run.currentEncounterIndex
           const nextEnc = run.encounters[nextIndex]
           nextEnc.type = choice.addEncounterType
@@ -7231,16 +7301,27 @@ export const useGame = create<GameState>()(
         currentEncounter.status = 'cleared'
         run.clearedEncounterIds = [...run.clearedEncounterIds, currentEncounter.id]
 
-        const gate = GATE_DEFINITIONS.find(g => g.id === run.gateId)
-        const rank = gate?.rank ?? 'E'
-        const baseGold = (rank === 'E' || rank === 'D') ? 400 : (rank === 'C' || rank === 'B') ? 800 : 1500
-        const baseEssence = (rank === 'E' || rank === 'D') ? 100 : (rank === 'C' || rank === 'B') ? 200 : 400
-        
-        let rewardMod = run.rewardMultiplier
-        if (run.modifierIds.includes('mod_dense_loot')) rewardMod += 0.25
+        let goldAmt = 0
+        let essAmt = 0
 
-        const goldAmt = Math.round(baseGold * rewardMod * (0.9 + Math.random() * 0.2))
-        const essAmt = Math.round(baseEssence * rewardMod * (0.9 + Math.random() * 0.2))
+        if (currentEncounter.treasureReward) {
+          const rewardMod = run.rewardMultiplier
+          const baseGold = currentEncounter.treasureReward.gold ?? 0
+          const baseEssence = currentEncounter.treasureReward.essence ?? 0
+          goldAmt = Math.round(baseGold * rewardMod)
+          essAmt = Math.round(baseEssence * rewardMod)
+        } else {
+          const gate = GATE_DEFINITIONS.find(g => g.id === run.gateId)
+          const rank = gate?.rank ?? 'E'
+          const baseGold = (rank === 'E' || rank === 'D') ? 400 : (rank === 'C' || rank === 'B') ? 800 : 1500
+          const baseEssence = (rank === 'E' || rank === 'D') ? 100 : (rank === 'C' || rank === 'B') ? 200 : 400
+          
+          let rewardMod = run.rewardMultiplier
+          if (run.modifierIds.includes('mod_dense_loot')) rewardMod += 0.25
+
+          goldAmt = Math.round(baseGold * rewardMod * (0.9 + Math.random() * 0.2))
+          essAmt = Math.round(baseEssence * rewardMod * (0.9 + Math.random() * 0.2))
+        }
 
         run.accumulatedRewards.gold += goldAmt
         run.accumulatedRewards.essence += essAmt

@@ -154,6 +154,7 @@ export const GATE_RUN_EVENTS: GateRunEventTemplate[] = [
         label: '차원 안정화 수행',
         description: '마력 제어로 균열을 강제로 억누릅니다. (누적 위험도 -15, 그림자 정수 +100)',
         riskDelta: -15,
+        leadsTo: 'safe',
         immediateReward: { essence: 100, xp: 0, gold: 0, items: [] },
       },
       {
@@ -163,6 +164,7 @@ export const GATE_RUN_EVENTS: GateRunEventTemplate[] = [
         riskDelta: 20,
         rewardMultiplierDelta: 0.20,
         addEncounterType: 'shadow_trace',
+        leadsTo: 'battle',
       },
     ],
   },
@@ -177,11 +179,13 @@ export const GATE_RUN_EVENTS: GateRunEventTemplate[] = [
         description: '위험을 무릅쓰고 흔적을 뒤쫓아 공명을 유도합니다. (추출 공명 보정 +8%, 다음 방 위험도 증가)',
         extractionBonusDelta: 8,
         riskDelta: 15,
+        leadsTo: 'battle',
       },
       {
         id: 'choice_trace_ignore',
         label: '무시하고 안전 확보',
         description: '불필요한 전투를 피해 조심스럽게 지나갑니다. (골드 +600)',
+        leadsTo: 'safe',
         immediateReward: { gold: 600, xp: 0, essence: 0, items: [] },
       },
     ],
@@ -1144,4 +1148,41 @@ export function getChoiceEffectType(choice: GateRunEventChoice): 'stabilize' | '
 
   return 'stabilize'
 }
+
+export function getChoiceLeadsTo(choice: GateRunEventChoice): 'battle' | 'safe' {
+  if (choice.leadsTo) return choice.leadsTo
+
+  const id = choice.id.toLowerCase()
+
+  // High-risk/combat/deep-penetration choices
+  const isCombatId =
+    id.includes('force') ||
+    id.includes('follow') ||
+    id.includes('open') ||
+    id.includes('hunt') ||
+    id.includes('break') ||
+    id.includes('solve') ||
+    id.includes('accept') ||
+    id.includes('threaten') ||
+    id.includes('rush') ||
+    (id.includes('bypass') && id.includes('passage')) || // choice_passage_bypass
+    id.includes('dash') ||
+    id.includes('smash') ||
+    id.includes('strike') ||
+    id.includes('charge') ||
+    id.includes('crystals') ||
+    id.includes('loot') ||
+    id.includes('fight') ||
+    id.includes('extract') ||
+    id.includes('leap') ||
+    id.includes('shatter') ||
+    id.includes('supplies')
+
+  if (isCombatId) {
+    return 'battle'
+  }
+
+  return 'safe'
+}
+
 

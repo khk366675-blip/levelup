@@ -1004,6 +1004,7 @@ export interface GateRunEventChoice {
   hpCostPercent?: number
   healPercent?: number
   addEncounterType?: GateRunEncounterType
+  leadsTo?: 'battle' | 'safe'
   // [NEW] Conditions for regional events
   requiresCoop?: boolean
   requiresSolo?: boolean
