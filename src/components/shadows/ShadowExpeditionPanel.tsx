@@ -512,7 +512,13 @@ export function ShadowExpeditionPanel() {
         ?? specialExpeditions.find(item => item.status === 'available')
         ?? specialExpeditions[0]
     }
-    return dailyExpeditions.find(item => item.date === dateKey)
+    // 진행 중이거나 대기(available) 상태인 원정을 최우선 선택 (티켓 연속 사용 지원)
+    // uniqueSeed로 생성된 원정은 date가 dateKey와 불일치할 수 있으므로 상태 기반으로 먼저 찾음
+    const activeOrAvailable = dailyExpeditions.find(
+      item => item.status === 'in_progress' || item.status === 'available'
+    )
+    return activeOrAvailable
+      ?? dailyExpeditions.find(item => item.date === dateKey)
       ?? dailyExpeditions[0]
   }, [activeTab, specialExpeditions, dailyExpeditions, dateKey])
 
