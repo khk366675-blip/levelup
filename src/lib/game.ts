@@ -8,6 +8,7 @@ import type {
   EquipmentState,
   HunterState,
   Item,
+  ItemRarity,
   JobId,
   MonsterDefinition,
   OwnedShadow,
@@ -501,6 +502,52 @@ export const canEnhanceItem = (
   equippedItemIds: string[] | Set<string> = []
 ): boolean => {
   return getEnhanceMaterialCandidates(target, inventory, equippedItemIds).length > 0
+}
+
+export const getGoldEnhancementCost = (item: Item): number => {
+  const baseCost = 1000
+  const rarityMultipliers: Record<ItemRarity, number> = {
+    common: 1.0,
+    uncommon: 1.5,
+    rare: 2.5,
+    epic: 4.5,
+    legendary: 8.0,
+  }
+  const stageMultipliers: Record<number, number> = {
+    0: 1.0,
+    1: 1.5,
+    2: 2.2,
+    3: 3.2,
+    4: 5.0,
+  }
+  
+  const rarityMult = rarityMultipliers[item.rarity] || 1.0
+  const currentLevel = getEnhancementLevel(item)
+  const stageMult = stageMultipliers[currentLevel] || 1.0
+  
+  return Math.round(baseCost * rarityMult * stageMult)
+}
+
+export const getGoldEnhancementSuccessRate = (item: Item): number => {
+  const currentLevel = getEnhancementLevel(item)
+  if (currentLevel >= MAX_ITEM_ENHANCEMENT_LEVEL) return 0
+  
+  const baseRates: Record<number, number> = {
+    0: 0.95,
+    1: 0.75,
+    2: 0.55,
+    3: 0.35,
+    4: 0.15,
+  }
+  
+  return baseRates[currentLevel] ?? 0
+}
+
+export const canEnhanceItemWithGold = (item: Item, playerGold: number): boolean => {
+  if (!isEnhanceableEquipment(item)) return false
+  if (getEnhancementLevel(item) >= MAX_ITEM_ENHANCEMENT_LEVEL) return false
+  const cost = getGoldEnhancementCost(item)
+  return playerGold >= cost
 }
 
 /** Get all equipped items from equipment state. */

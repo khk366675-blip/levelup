@@ -154,6 +154,9 @@ import {
   getBalancedRandomQuestXp,
   getActiveGateSuccessBonus,
   canEnhanceItem,
+  canEnhanceItemWithGold,
+  getGoldEnhancementCost,
+  getGoldEnhancementSuccessRate,
   getEquipmentStars,
   getEnhanceMaterialCandidates,
   getEnhancementLevel,
@@ -505,6 +508,7 @@ export interface GameState {
   equipItem: (itemId: string) => void
   unequipItem: (slot: EquipmentSlot) => void
   enhanceItem: (itemId: string) => void
+  enhanceItemWithGold: (itemId: string) => void
 
   // consumables
   useConsumable: (itemId: string) => void
@@ -5112,6 +5116,51 @@ export const useGame = create<GameState>()(
               `${target.name} +${nextLevel}`,
               `재료로 [${material.name}] 1개를 소모했습니다.`,
             ],
+            createdAt: todayISO(),
+          }],
+        })
+      },
+
+      enhanceItemWithGold: (itemId) => {
+        const s = get()
+        const target = s.items.find(i => i.id === itemId)
+        if (!target) return
+
+        const playerGold = s.gold ?? 0
+        if (!canEnhanceItemWithGold(target, playerGold)) return
+
+        const cost = getGoldEnhancementCost(target)
+        const successRate = getGoldEnhancementSuccessRate(target)
+        const isSuccess = Math.random() < successRate
+
+        const nextGold = Math.max(0, playerGold - cost)
+        const currentLevel = getEnhancementLevel(target)
+        const nextLevel = isSuccess ? Math.min(MAX_ITEM_ENHANCEMENT_LEVEL, currentLevel + 1) : currentLevel
+
+        const nextItems = isSuccess
+          ? s.items.map(item => item.id === target.id ? { ...item, enhancementLevel: nextLevel } : item)
+          : s.items
+
+        const ratePct = Math.round(successRate * 100)
+
+        const lines = isSuccess ? [
+          `[${target.name}] 골드 강화 성공 (${ratePct}% 확률)`,
+          `${target.name} +${nextLevel} 강화 달성!`,
+          `비용으로 ${cost.toLocaleString()} 골드를 소모했습니다.`,
+        ] : [
+          `[${target.name}] 골드 강화 실패 (${ratePct}% 확률)`,
+          `강화 수치(+${currentLevel})가 유지됩니다.`,
+          `비용으로 ${cost.toLocaleString()} 골드를 소모했습니다.`,
+        ]
+
+        set({
+          gold: nextGold,
+          items: nextItems,
+          messages: [...s.messages, {
+            id: uid(),
+            kind: 'item',
+            title: isSuccess ? '장비 골드 강화 성공' : '장비 골드 강화 실패',
+            lines,
             createdAt: todayISO(),
           }],
         })

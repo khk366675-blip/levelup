@@ -4,6 +4,9 @@ import { RARITY_META, EQUIPMENT_SLOT_LABEL, CATEGORY_META, type Item, type Equip
 import { SKILL_DEFINITIONS } from '../lib/seed'
 import {
   canEnhanceItem,
+  canEnhanceItemWithGold,
+  getGoldEnhancementCost,
+  getGoldEnhancementSuccessRate,
   formatEquipmentStars,
   formatEnhancementLabel,
   formatStatReward,
@@ -131,6 +134,8 @@ export function Inventory() {
   const equipItem = useGame(s => s.equipItem)
   const unequipItem = useGame(s => s.unequipItem)
   const enhanceItem = useGame(s => s.enhanceItem)
+  const enhanceItemWithGold = useGame(s => s.enhanceItemWithGold)
+  const gold = useGame(s => s.gold)
   const useConsumable = useGame(s => s.useConsumable)
 
   // Equipment slots section
@@ -318,6 +323,22 @@ export function Inventory() {
               if (ok) enhanceItem(item.id)
             }
             
+            const goldCost = getGoldEnhancementCost(item)
+            const successRate = getGoldEnhancementSuccessRate(item)
+            const successRatePct = Math.round(successRate * 100)
+            const canGoldEnhance = canEnhanceItemWithGold(item, gold ?? 0)
+            const goldEnhanceDisabledReason =
+              isConsumable ? '소모품 강화 불가' :
+              !enhanceable ? '강화 불가' :
+              enhancementLevel >= MAX_ITEM_ENHANCEMENT_LEVEL ? '최대 강화' :
+              (gold ?? 0) < goldCost ? '골드 부족' :
+              ''
+            const handleGoldEnhance = () => {
+              if (!canGoldEnhance) return
+              const ok = window.confirm(`${goldCost.toLocaleString()} 골드를 소모해 ${successRatePct}% 확률로 +1 강화에 도전하시겠습니까?`)
+              if (ok) enhanceItemWithGold(item.id)
+            }
+            
             return (
               <motion.div
                 key={item.id}
@@ -404,20 +425,50 @@ export function Inventory() {
                   </div>
                 )}
 
-                <div className="mt-3 rounded-md border border-white/10 bg-white/5 p-2">
-                  <div className="flex items-center justify-between gap-2 text-[10px] system-text">
-                    <span className="text-amber-200/70">강화 {enhancementLevel}/{MAX_ITEM_ENHANCEMENT_LEVEL}</span>
-                    <span className="text-white/40">재료 {enhanceMaterials.length}</span>
+                {enhanceable && (
+                  <div className="mt-3 rounded-md border border-white/10 bg-white/5 p-2 text-left">
+                    <div className="flex items-center justify-between gap-2 text-[10px] system-text border-b border-white/5 pb-1 mb-1.5">
+                      <span className="text-amber-200/70 font-semibold">장비 강화 (+{enhancementLevel}/{MAX_ITEM_ENHANCEMENT_LEVEL})</span>
+                      <span className="text-white/40">재료 {enhanceMaterials.length}개</span>
+                    </div>
+                    
+                    {/* 합성 강화 */}
+                    <div className="space-y-1 mb-2.5">
+                      <div className="flex justify-between items-center text-[9px] text-white/50">
+                        <span>합성 강화 (중복 1개 소모)</span>
+                        <span className={enhanceMaterials.length > 0 ? "text-emerald-400 font-medium" : "text-red-400 font-medium"}>
+                          보유: {enhanceMaterials.length}개
+                        </span>
+                      </div>
+                      <button
+                        onClick={handleEnhance}
+                        disabled={!canEnhance}
+                        className="w-full text-[10px] py-1 rounded bg-amber-400/15 hover:bg-amber-400/25 text-amber-200 border border-amber-400/30 transition disabled:opacity-45 disabled:cursor-not-allowed disabled:hover:bg-amber-400/15"
+                        title={canEnhance ? '중복 장비 1개를 소모해 +1 강화' : enhanceDisabledReason}
+                      >
+                        {enhancementLevel >= MAX_ITEM_ENHANCEMENT_LEVEL ? '최대 강화' : canEnhance ? '합성 강화 (100% 성공)' : '재료 부족'}
+                      </button>
+                    </div>
+
+                    {/* 골드 강화 */}
+                    <div className="space-y-1">
+                      <div className="flex justify-between items-center text-[9px] text-white/50">
+                        <span>골드 강화 ({successRatePct}% 확률)</span>
+                        <span className={(gold ?? 0) >= goldCost ? "text-yellow-400 font-medium" : "text-red-400 font-medium"}>
+                          {goldCost.toLocaleString()} G
+                        </span>
+                      </div>
+                      <button
+                        onClick={handleGoldEnhance}
+                        disabled={!canGoldEnhance}
+                        className="w-full text-[10px] py-1 rounded bg-yellow-500/15 hover:bg-yellow-500/25 text-yellow-200 border border-yellow-500/30 transition disabled:opacity-45 disabled:cursor-not-allowed disabled:hover:bg-yellow-500/15"
+                        title={canGoldEnhance ? `${goldCost.toLocaleString()} 골드 소모해 ${successRatePct}% 확률로 강화 시도` : goldEnhanceDisabledReason}
+                      >
+                        {enhancementLevel >= MAX_ITEM_ENHANCEMENT_LEVEL ? '최대 강화' : (gold ?? 0) < goldCost ? '골드 부족' : '골드 강화 시도'}
+                      </button>
+                    </div>
                   </div>
-                  <button
-                    onClick={handleEnhance}
-                    disabled={!canEnhance}
-                    className="w-full mt-1.5 text-[10px] py-1 rounded bg-amber-400/15 hover:bg-amber-400/25 text-amber-200 border border-amber-400/30 transition disabled:opacity-45 disabled:cursor-not-allowed disabled:hover:bg-amber-400/15"
-                    title={canEnhance ? '중복 장비 1개를 소모해 +1 강화' : enhanceDisabledReason}
-                  >
-                    {canEnhance ? '강화' : enhanceDisabledReason}
-                  </button>
-                </div>
+                )}
                 
                 {/* Action Buttons */}
                 <div className="mt-3">
