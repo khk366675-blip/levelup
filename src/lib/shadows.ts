@@ -1194,5 +1194,32 @@ export const SHADOW_LEGION_NODES: ShadowLegionNode[] = [
     costBase: 60,
     costGrowth: 50,
     effect: { essenceGainPct: 0.03 }
+  },
+  {
+    id: 'node_crit',
+    name: '군단의 예리함',
+    description: '그림자들의 칼날 끝을 극도로 예리하게 벼려냅니다. 치명타 확률 +1.0% (최대 10레벨)',
+    maxLevel: 10,
+    costBase: 50,
+    costGrowth: 40,
+    effect: { shadowCritBonus: 0.01 }
+  },
+  {
+    id: 'node_evasion',
+    name: '군단의 잔상',
+    description: '그림자들이 형체 없는 연기처럼 흩어졌다 다시 뭉칩니다. 회피율 +0.8% (최대 10레벨)',
+    maxLevel: 10,
+    costBase: 50,
+    costGrowth: 40,
+    effect: { shadowEvasionBonus: 0.008 }
+  },
+  {
+    id: 'node_accuracy',
+    name: '군단의 정밀',
+    description: '심연의 시선으로 적의 미세한 틈을 꿰뚫어 봅니다. 명중률 +0.5% (최대 10레벨)',
+    maxLevel: 10,
+    costBase: 50,
+    costGrowth: 40,
+    effect: { shadowAccuracyBonus: 0.005 }
   }
 ]

@@ -870,7 +870,7 @@ export function advanceWorldDay(state: LivingWorldState, rng: RngFn, options: Ad
   // 각 지역별 새로운 게이트 생성 롤링 (한국은 플레이어 활동 보장을 위해 35%로 상향, 타국은 18% 유지)
   for (const regionId in nextRegions) {
     const isKr = regionId === 'kr'
-    const spawnChance = (isKr ? 0.50 : 0.28) + nextDay * 0.006
+    const spawnChance = (isKr ? 0.42 : 0.23) + nextDay * 0.006
     if (rng() < spawnChance) {
       const region = { ...nextRegions[regionId] }
       // 한 국가당 점증하는 활성 게이트 상한 체크

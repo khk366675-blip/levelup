@@ -2,10 +2,10 @@ export type StatKey = 'STR' | 'VIT' | 'AGI' | 'INT' | 'PER' | 'SEN'
 
 export const STAT_META: Record<StatKey, { label: string; color: string; icon: string }> = {
   STR: { label: '근력', color: 'text-red-300', icon: '💪' },
-  VIT: { label: '체력', color: 'text-emerald-300', icon: '🛡️' },
+  VIT: { label: '체력', color: 'text-emerald-300', icon: '❤️' },
   AGI: { label: '민첩', color: 'text-yellow-300', icon: '⚡' },
   INT: { label: '지능', color: 'text-cyan-300', icon: '📘' },
-  PER: { label: '인내', color: 'text-purple-300', icon: '🔥' },
+  PER: { label: '인내', color: 'text-purple-300', icon: '🛡️' },
   SEN: { label: '감각', color: 'text-pink-300', icon: '👁️' },
 }
 
@@ -683,6 +683,9 @@ export interface ShadowLegionNode {
     shadowXpGainPct?: number
     essenceGainPct?: number
     summonShardBonusPct?: number
+    shadowCritBonus?: number
+    shadowEvasionBonus?: number
+    shadowAccuracyBonus?: number
   }
   unlockCondition?: {
     totalOwnedShadows?: number
@@ -889,6 +892,9 @@ export type ItemEffectType =
   | 'drop_bonus'
   | 'rarity_bonus'
   | 'stat_bonus'
+  | 'crit_bonus'
+  | 'evasion_bonus'
+  | 'accuracy_bonus'
 
 export interface ItemEffect {
   type: ItemEffectType

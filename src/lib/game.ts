@@ -471,7 +471,7 @@ export const getEnhancedItemEffects = (item: Item): NonNullable<Item['effects']>
   const multiplier = getEquipmentStarMultiplier(item) * getEnhancementMultiplier(item)
   return item.effects?.map(effect => ({
     ...effect,
-    value: effect.type === 'stat_bonus'
+    value: effect.type === 'stat_bonus' || effect.type === 'crit_bonus' || effect.type === 'evasion_bonus' || effect.type === 'accuracy_bonus'
       ? roundStatValue(effect.value * multiplier)
       : effect.value * multiplier,
   })) ?? []
@@ -560,6 +560,45 @@ export const getEquipmentStatBonuses = (equippedItems: Item[]): Partial<Record<S
     }
   }
   return bonuses
+}
+
+/** Get total crit bonus from equipped items. */
+export const getEquipmentCritBonus = (equippedItems: Item[]): number => {
+  let total = 0
+  for (const item of equippedItems) {
+    for (const effect of getEnhancedItemEffects(item)) {
+      if (effect.type === 'crit_bonus') {
+        total += effect.value
+      }
+    }
+  }
+  return total
+}
+
+/** Get total evasion bonus from equipped items. */
+export const getEquipmentEvasionBonus = (equippedItems: Item[]): number => {
+  let total = 0
+  for (const item of equippedItems) {
+    for (const effect of getEnhancedItemEffects(item)) {
+      if (effect.type === 'evasion_bonus') {
+        total += effect.value
+      }
+    }
+  }
+  return total
+}
+
+/** Get total accuracy bonus from equipped items. */
+export const getEquipmentAccuracyBonus = (equippedItems: Item[]): number => {
+  let total = 0
+  for (const item of equippedItems) {
+    for (const effect of getEnhancedItemEffects(item)) {
+      if (effect.type === 'accuracy_bonus') {
+        total += effect.value
+      }
+    }
+  }
+  return total
 }
 
 /** Get effective stat points (base + equipment bonuses + consumable bonuses).

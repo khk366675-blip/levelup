@@ -75,11 +75,11 @@ const SLOT_ROLE: Record<EquipmentSlot, { key: string; label: string; cue: Equipm
 
 const STAT_VALUE_WEIGHTS: Record<StatKey, Partial<Record<keyof Pick<EquipmentPowerBreakdown, 'offenseValue' | 'defenseValue' | 'utilityValue' | 'survivalValue' | 'shadowSynergyValue' | 'skillValue'>, number>>> = {
   STR: { offenseValue: 5.4, skillValue: 1.4 },
-  VIT: { defenseValue: 3.2, survivalValue: 5.2 },
-  AGI: { offenseValue: 1.6, utilityValue: 4.8 },
+  VIT: { survivalValue: 7.2 },
+  AGI: { defenseValue: 2.0, utilityValue: 4.8 },
   INT: { skillValue: 5.1, utilityValue: 1.8 },
-  PER: { survivalValue: 2.8, utilityValue: 2.8 },
-  SEN: { utilityValue: 3.4, shadowSynergyValue: 2.4 },
+  PER: { defenseValue: 5.2, survivalValue: 2.4 },
+  SEN: { offenseValue: 3.2, utilityValue: 1.8, shadowSynergyValue: 2.4 },
 }
 
 const clampNumber = (value: number): number =>
@@ -183,6 +183,15 @@ export const getEquipmentPowerBreakdown = (item: Item): EquipmentPowerBreakdown 
     }
     if (effect.type === 'xp_bonus') {
       values.utilityValue += effect.value * 80
+    }
+    if (effect.type === 'crit_bonus') {
+      values.offenseValue += effect.value * 800
+    }
+    if (effect.type === 'evasion_bonus') {
+      values.utilityValue += effect.value * 800
+    }
+    if (effect.type === 'accuracy_bonus') {
+      values.utilityValue += effect.value * 800
     }
   }
 

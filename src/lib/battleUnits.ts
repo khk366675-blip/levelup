@@ -20,6 +20,7 @@ import type {
   ShadowSkillTarget,
 } from './shadowSkills'
 import type { ShadowStatBlock } from './shadowStats'
+import { getLegionCritBonus, getLegionEvasionBonus, getLegionAccuracyBonus } from './shadowStats'
 import type {
   BattleActionDefinition,
   BattleStats,
@@ -34,7 +35,7 @@ import { PROMOTION_EXAM_DEFINITIONS } from './promotionExams'
 import { HunterGradeTier } from './types'
 
 import { getEquipmentPowerBreakdown } from './equipmentPower'
-import { calculatePlayerCombatStats, getEquippedItems, getPlayerCombatSkills } from './game'
+import { calculatePlayerCombatStats, getEquippedItems, getPlayerCombatSkills, getEquipmentCritBonus, getEquipmentEvasionBonus, getEquipmentAccuracyBonus } from './game'
 import { getShadowDefinition } from './shadows'
 import { getShadowCombatUnitProfile } from './shadowSkills'
 import { getValuePreview } from './shadowCombatRuntime'
@@ -125,7 +126,7 @@ const capRatio = (value: number): number =>
 const capProbability = (value: number, max = 0.99): number =>
   Math.round(clamp(value, 0, max) * 1000) / 1000
 
-const SHADOW_CRIT_RATE_CAP = 0.45
+const SHADOW_CRIT_RATE_CAP = 0.55
 const SHADOW_CRIT_STAT_SCALE = 0.003
 const SHADOW_FINISHER_CRIT_SCALE = 0.001
 const SHADOW_ACCURACY_BASE = 0.9
@@ -438,6 +439,10 @@ export const convertShadowProfileToBattleStats = (
   const speedLift = profile.role === 'scout' || profile.role === 'hunter' ? 1.02 : 1
   const supportLift = profile.role === 'support' || profile.role === 'analyst' ? 1.02 : 1
 
+  const legionCritBonus = getLegionCritBonus()
+  const legionEvasionBonus = getLegionEvasionBonus()
+  const legionAccuracyBonus = getLegionAccuracyBonus()
+
   const maxHp = round(
     (165 + stats.shadowDurability * 2.3 + stats.shadowSurvival * 1.55 + profile.level * 7.2) * quality * hpRoleModifier * SHADOW_HP_BATTLE_LIFT * guardLift,
     1,
@@ -450,9 +455,9 @@ export const convertShadowProfileToBattleStats = (
     def: round((5 + stats.shadowDefense * 0.82 + stats.shadowDurability * 0.32 + stats.shadowSurvival * 0.28) * quality * SHADOW_BATTLE_LIFT * guardLift, 1),
     spd: round((8 + stats.shadowSpeed * 0.82 + ROLE_PRIORITY[profile.role] * 0.45) * (0.95 + grade * 0.05) * 1.08 * speedLift, 1, 300),
     skillPower: round((7 + roleSkillStat(profile.role, stats)) * quality * SHADOW_BATTLE_LIFT * supportLift, 1),
-    crit: capShadowCritRate((stats.shadowCrit * SHADOW_CRIT_STAT_SCALE + stats.shadowFinisher * SHADOW_FINISHER_CRIT_SCALE) * grade),
-    accuracy: capProbability(SHADOW_ACCURACY_BASE + (stats.shadowControl * SHADOW_CONTROL_ACCURACY_SCALE + stats.shadowSuppression * SHADOW_SUPPRESSION_ACCURACY_SCALE) * grade),
-    evasionRate: capProbability((stats.shadowSpeed * SHADOW_SPEED_EVASION_SCALE + stats.shadowSurvival * SHADOW_SURVIVAL_EVASION_SCALE) * grade, 0.3),
+    crit: capShadowCritRate(((stats.shadowCrit * SHADOW_CRIT_STAT_SCALE + stats.shadowFinisher * SHADOW_FINISHER_CRIT_SCALE) * grade) + legionCritBonus),
+    accuracy: capProbability(SHADOW_ACCURACY_BASE + (stats.shadowControl * SHADOW_CONTROL_ACCURACY_SCALE + stats.shadowSuppression * SHADOW_SUPPRESSION_ACCURACY_SCALE) * grade + legionAccuracyBonus),
+    evasionRate: capProbability(((stats.shadowSpeed * SHADOW_SPEED_EVASION_SCALE + stats.shadowSurvival * SHADOW_SURVIVAL_EVASION_SCALE) * grade) + legionEvasionBonus, 0.38),
     controlPower: round((stats.shadowControl * 0.85 + stats.shadowSuppression * 0.5) * quality * SHADOW_BATTLE_LIFT * supportLift, 0),
     supportPower: round((stats.shadowSupport * 0.88 + stats.shadowSynergy * 0.34) * quality * SHADOW_BATTLE_LIFT * supportLift, 0),
     survivalPower: round((stats.shadowSurvival * 0.9 + stats.shadowDurability * 0.38) * quality * SHADOW_BATTLE_LIFT * guardLift, 0),
@@ -560,6 +565,9 @@ export const buildHunterBattleUnit = (
   const equipmentSurvival = equipmentValues.reduce((sum, item) => sum + item.defenseValue * 0.18 + item.survivalValue * 0.28, 0)
   const equipmentSkill = equipmentValues.reduce((sum, item) => sum + item.skillValue * 0.36 + item.offenseValue * 0.14 + item.shadowSynergyValue * 0.1, 0)
   const equipmentTotal = equipmentValues.reduce((sum, item) => sum + item.totalEquipmentValue, 0)
+  const equipmentCrit = getEquipmentCritBonus(equippedItems)
+  const equipmentEvasion = getEquipmentEvasionBonus(equippedItems)
+  const equipmentAccuracy = getEquipmentAccuracyBonus(equippedItems)
   const maxHp = round(
     combatStats.maxHp * 2.22 +
     stat(hunter.stats, 'VIT') * 12.5 +
@@ -588,7 +596,7 @@ export const buildHunterBattleUnit = (
         maxHp,
         currentHp: safeCurrentHp(options.currentHp, maxHp),
         atk: round(combatStats.atk * 1.52 + stat(hunter.stats, 'STR') * 1.2 + stat(hunter.stats, 'AGI') * 0.38 + equipmentOffense, 1),
-        def: round(combatStats.def * 1.55 + stat(hunter.stats, 'VIT') * 1.25 + stat(hunter.stats, 'PER') * 0.75 + equipmentDefense, 1),
+        def: round(combatStats.def * 1.55 + stat(hunter.stats, 'PER') * 2.0 + equipmentDefense, 1),
         spd: round(combatStats.speed * 1.08 + stat(hunter.stats, 'AGI') * 0.18, 1, 300),
         skillPower: round(
           combatStats.skillTotalPower * 1.82 +
@@ -598,9 +606,9 @@ export const buildHunterBattleUnit = (
           equipmentSkill,
           1,
         ),
-        crit: capRatio(combatStats.critRate),
-        accuracy: capProbability(combatStats.accuracy),
-        evasionRate: capProbability(combatStats.evasionRate, 0.35),
+        crit: capProbability(combatStats.critRate + equipmentCrit, 0.35),
+        accuracy: capProbability(combatStats.accuracy + equipmentAccuracy, 0.99),
+        evasionRate: capProbability(combatStats.evasionRate + equipmentEvasion, 0.30),
         controlPower: round(stat(hunter.stats, 'INT') * 2.2 + stat(hunter.stats, 'SEN') * 1.4, 0),
         supportPower: round(stat(hunter.stats, 'INT') * 1.3 + stat(hunter.stats, 'SEN') * 1.9 + equipmentSupport, 0),
         survivalPower: round(stat(hunter.stats, 'VIT') * 3.5 + stat(hunter.stats, 'PER') * 2.5 + equipmentSurvival, 0),

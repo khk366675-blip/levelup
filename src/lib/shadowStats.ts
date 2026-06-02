@@ -7,6 +7,39 @@ export const registerLegionNodeLevelResolver = (fn: (nodeId: string) => number) 
   getLegionNodeLevelFn = fn
 }
 
+export const getLegionCritBonus = (): number => {
+  let bonus = 0
+  for (const nodeDef of SHADOW_LEGION_NODES) {
+    const level = getLegionNodeLevelFn(nodeDef.id)
+    if (level > 0 && nodeDef.effect.shadowCritBonus) {
+      bonus += nodeDef.effect.shadowCritBonus * level
+    }
+  }
+  return bonus
+}
+
+export const getLegionEvasionBonus = (): number => {
+  let bonus = 0
+  for (const nodeDef of SHADOW_LEGION_NODES) {
+    const level = getLegionNodeLevelFn(nodeDef.id)
+    if (level > 0 && nodeDef.effect.shadowEvasionBonus) {
+      bonus += nodeDef.effect.shadowEvasionBonus * level
+    }
+  }
+  return bonus
+}
+
+export const getLegionAccuracyBonus = (): number => {
+  let bonus = 0
+  for (const nodeDef of SHADOW_LEGION_NODES) {
+    const level = getLegionNodeLevelFn(nodeDef.id)
+    if (level > 0 && nodeDef.effect.shadowAccuracyBonus) {
+      bonus += nodeDef.effect.shadowAccuracyBonus * level
+    }
+  }
+  return bonus
+}
+
 export type ShadowStatBlock = Record<ShadowStatKey, number>
 
 export interface ShadowTopStat {
