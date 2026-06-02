@@ -9,6 +9,31 @@ import memoryDisruptor from '../assets/battle/monsters/monster-memory-disruptor-
 import bossRiftlord from '../assets/battle/monsters/boss-riftlord-clean.png'
 import bossWarden from '../assets/battle/monsters/boss-warden-clean.png'
 
+import angel from '../assets/battle/monsters/angel-clean.png'
+import anxietyLancer from '../assets/battle/monsters/anxiety-lancer-clean.png'
+import belatus from '../assets/battle/monsters/belatus-clean.png'
+import boredomArcher from '../assets/battle/monsters/boredom-archer-clean.png'
+import celaide from '../assets/battle/monsters/celaide-clean.png'
+import compromiseBastion from '../assets/battle/monsters/compromise-bastion-clean.png'
+import despairColossus from '../assets/battle/monsters/despair-colossus-clean.png'
+import dorga from '../assets/battle/monsters/dorga-clean.png'
+import fearReaper from '../assets/battle/monsters/fear-reaper-clean.png'
+import frostVassal from '../assets/battle/monsters/frost-vassal-clean.png'
+import grellic from '../assets/battle/monsters/grellic-clean.png'
+import igris from '../assets/battle/monsters/igris-clean.png'
+import ironOathKnight from '../assets/battle/monsters/iron-oath-knight-clean.png'
+import mirage from '../assets/battle/monsters/mirage-clean.png'
+import mirageCutthroat from '../assets/battle/monsters/mirage-cutthroat-clean.png'
+import nox from '../assets/battle/monsters/nox-clean.png'
+import obsessionChoir from '../assets/battle/monsters/obsession-choir-clean.png'
+import pesta from '../assets/battle/monsters/pesta-clean.png'
+import prideDuelist from '../assets/battle/monsters/pride-duelist-clean.png'
+import procrastinationJailer from '../assets/battle/monsters/procrastination-jailer-clean.png'
+import rationalizationSwarm from '../assets/battle/monsters/rationalization-swarm-clean.png'
+import selfDoubtOracle from '../assets/battle/monsters/self-doubt-oracle-clean.png'
+import stormHerald from '../assets/battle/monsters/storm-herald-clean.png'
+import whiteflameExecutor from '../assets/battle/monsters/whiteflame-executor-clean.png'
+
 export type MonsterBattleSpriteKey =
   | 'monster-rift-minion'
   | 'monster-rift-bruiser'
@@ -20,6 +45,30 @@ export type MonsterBattleSpriteKey =
   | 'monster-memory-disruptor'
   | 'boss-riftlord'
   | 'boss-warden'
+  | 'angel'
+  | 'anxiety-lancer'
+  | 'belatus'
+  | 'boredom-archer'
+  | 'celaide'
+  | 'compromise-bastion'
+  | 'despair-colossus'
+  | 'dorga'
+  | 'fear-reaper'
+  | 'frost-vassal'
+  | 'grellic'
+  | 'igris'
+  | 'iron-oath-knight'
+  | 'mirage'
+  | 'mirage-cutthroat'
+  | 'nox'
+  | 'obsession-choir'
+  | 'pesta'
+  | 'pride-duelist'
+  | 'procrastination-jailer'
+  | 'rationalization-swarm'
+  | 'self-doubt-oracle'
+  | 'storm-herald'
+  | 'whiteflame-executor'
 
 export const MONSTER_BATTLE_SPRITES: Record<MonsterBattleSpriteKey, string> = {
   'monster-rift-minion': riftMinion,
@@ -32,6 +81,30 @@ export const MONSTER_BATTLE_SPRITES: Record<MonsterBattleSpriteKey, string> = {
   'monster-memory-disruptor': memoryDisruptor,
   'boss-riftlord': bossRiftlord,
   'boss-warden': bossWarden,
+  'angel': angel,
+  'anxiety-lancer': anxietyLancer,
+  'belatus': belatus,
+  'boredom-archer': boredomArcher,
+  'celaide': celaide,
+  'compromise-bastion': compromiseBastion,
+  'despair-colossus': despairColossus,
+  'dorga': dorga,
+  'fear-reaper': fearReaper,
+  'frost-vassal': frostVassal,
+  'grellic': grellic,
+  'igris': igris,
+  'iron-oath-knight': ironOathKnight,
+  'mirage': mirage,
+  'mirage-cutthroat': mirageCutthroat,
+  'nox': nox,
+  'obsession-choir': obsessionChoir,
+  'pesta': pesta,
+  'pride-duelist': prideDuelist,
+  'procrastination-jailer': procrastinationJailer,
+  'rationalization-swarm': rationalizationSwarm,
+  'self-doubt-oracle': selfDoubtOracle,
+  'storm-herald': stormHerald,
+  'whiteflame-executor': whiteflameExecutor,
 }
 
 /**
@@ -44,6 +117,38 @@ export function getMonsterBattleSpriteKey(
 ): MonsterBattleSpriteKey {
   const id = monsterId.toLowerCase()
   const r = role?.toLowerCase() ?? ''
+
+  // Exact ID matching for newly added monsters with unique sprites
+  const exactMatches: Record<string, MonsterBattleSpriteKey> = {
+    'angel': 'angel',
+    'anxiety-lancer': 'anxiety-lancer',
+    'belatus': 'belatus',
+    'boredom-archer': 'boredom-archer',
+    'celaide': 'celaide',
+    'compromise-bastion': 'compromise-bastion',
+    'despair-colossus': 'despair-colossus',
+    'dorga': 'dorga',
+    'fear-reaper': 'fear-reaper',
+    'frost-vassal': 'frost-vassal',
+    'grellic': 'grellic',
+    'igris': 'igris',
+    'iron-oath-knight': 'iron-oath-knight',
+    'mirage': 'mirage',
+    'mirage-cutthroat': 'mirage-cutthroat',
+    'nox': 'nox',
+    'obsession-choir': 'obsession-choir',
+    'pesta': 'pesta',
+    'pride-duelist': 'pride-duelist',
+    'procrastination-jailer': 'procrastination-jailer',
+    'rationalization-swarm': 'rationalization-swarm',
+    'self-doubt-oracle': 'self-doubt-oracle',
+    'storm-herald': 'storm-herald',
+    'whiteflame-executor': 'whiteflame-executor',
+  }
+
+  if (id in exactMatches) {
+    return exactMatches[id]
+  }
 
   // 1. Boss check
   if (isBoss || id.includes('boss') || r === 'boss') {

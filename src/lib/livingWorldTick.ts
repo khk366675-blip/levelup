@@ -1,5 +1,5 @@
 import type { LivingWorldState, NamedHunter, RegionState, RiftNode, Rank, ActiveMonarch, WorldEvent } from './types'
-import { RIFT_REGIONS, REGION_ADJACENCY, RIFT_NODES } from './seed'
+import { RIFT_REGIONS, REGION_ADJACENCY, RIFT_NODES, GATE_DEFINITIONS } from './seed'
 import { MONARCHS } from './monarchs'
 import { getRegionalTheme } from './livingWorldGateContent'
 import { getNPCEquipmentForScore } from './hunterEquipment'
@@ -870,7 +870,7 @@ export function advanceWorldDay(state: LivingWorldState, rng: RngFn, options: Ad
   // 각 지역별 새로운 게이트 생성 롤링 (한국은 플레이어 활동 보장을 위해 35%로 상향, 타국은 18% 유지)
   for (const regionId in nextRegions) {
     const isKr = regionId === 'kr'
-    const spawnChance = (isKr ? 0.35 : 0.18) + nextDay * 0.006
+    const spawnChance = (isKr ? 0.50 : 0.28) + nextDay * 0.006
     if (rng() < spawnChance) {
       const region = { ...nextRegions[regionId] }
       // 한 국가당 점증하는 활성 게이트 상한 체크
@@ -882,7 +882,7 @@ export function advanceWorldDay(state: LivingWorldState, rng: RngFn, options: Ad
         
         let subRegionId = regionId
         if (regionId === 'kr') {
-          const krSubRegions = ['seoul', 'incheon', 'busan', 'jeju']
+          const krSubRegions = ['seoul', 'incheon', 'busan', 'jeju', 'daejeon', 'daegu', 'gwangju']
           subRegionId = krSubRegions[Math.floor(rng() * krSubRegions.length)]
         }
         const theme = getRegionalTheme(subRegionId)
