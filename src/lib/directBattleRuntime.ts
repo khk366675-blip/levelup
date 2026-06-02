@@ -55,8 +55,24 @@ const cloneUnit = (unit: BattleUnit): BattleUnit => ({
 const clamp = (value: number, min = 0, max = 99999999): number =>
   Math.min(max, Math.max(min, Number.isFinite(value) ? value : min))
 
+const clampRatio = (value: number, max = 1): number =>
+  clamp(value, 0, max)
+
 const round = (value: number): number =>
   Math.round(clamp(value))
+
+const DIRECT_BATTLE_ACCURACY_BASELINE = 0.95
+const DIRECT_BATTLE_MAX_EVASION = 0.35
+const DIRECT_BATTLE_MAX_CRIT = 0.5
+
+const stableRoll = (seed: string): number => {
+  let hash = 2166136261
+  for (let index = 0; index < seed.length; index += 1) {
+    hash ^= seed.charCodeAt(index)
+    hash = Math.imul(hash, 16777619)
+  }
+  return ((hash >>> 0) % 1000000) / 1000000
+}
 
 const isAlive = (unit: BattleUnit): boolean =>
   unit.stats.currentHp > 0
@@ -606,10 +622,42 @@ const getDefenseValue = (unit: BattleUnit): number =>
 const getDamageBonus = (target: BattleUnit): number =>
   hasStatus(target, 'mark') || hasStatus(target, 'weakness') ? 1.12 : 1
 
+const getCritRate = (unit: BattleUnit, action: BattleActionDefinition): number =>
+  clampRatio(
+    (unit.stats.crit ?? 0) +
+      (action.critRateBonus ?? 0) * 0.5 +
+      statusValue(unit, 'critUp') -
+      Math.min(0.35, statusValue(unit, 'critDown')),
+    DIRECT_BATTLE_MAX_CRIT,
+  )
+
+const getAccuracy = (unit: BattleUnit): number =>
+  clampRatio(
+    (unit.stats.accuracy ?? DIRECT_BATTLE_ACCURACY_BASELINE) +
+      statusValue(unit, 'accuracyUp') -
+      Math.min(0.35, statusValue(unit, 'accuracyDown')),
+    0.99,
+  )
+
+const getEvasionRate = (unit: BattleUnit): number =>
+  clampRatio(
+    (unit.stats.evasionRate ?? 0) +
+      statusValue(unit, 'evasionUp') -
+      Math.min(0.35, statusValue(unit, 'evasionDown')),
+    DIRECT_BATTLE_MAX_EVASION,
+  )
+
+const getEffectiveEvasionChance = (actor: BattleUnit, target: BattleUnit): number =>
+  clampRatio(
+    getEvasionRate(target) - (getAccuracy(actor) - DIRECT_BATTLE_ACCURACY_BASELINE),
+    DIRECT_BATTLE_MAX_EVASION,
+  )
+
 const computeDamage = (
   actor: BattleUnit,
   target: BattleUnit,
   action: BattleActionDefinition,
+  isCritical = false,
 ): number => {
   const actorAttack = action.actionType === 'skill'
     ? actor.stats.skillPower * 1.2 + actor.stats.atk * 0.52
@@ -636,14 +684,77 @@ const computeDamage = (
       : 1
       
   // 치명타 보정 (critRateBonus) 기대값 및 보스 보너스 (bossDamageBonus) 적용
-  const critMultiplier = action.critRateBonus ? (1 + action.critRateBonus * 0.5) : 1
   const bossDmgMultiplier = (action.bossDamageBonus && target.unitType === 'boss') ? (1 + action.bossDamageBonus) : 1
   
   const minimumDamage = Math.max(3, actor.level * 0.75, rawPower * 0.14)
-  return round(Math.max(
+  const baseDamage = Math.max(
     minimumDamage,
-    rawPower * (1 - defenseReduction) * skillMultiplier * targetSpreadMultiplier * getAttackMultiplier(actor) * getDamageBonus(target) * critMultiplier * bossDmgMultiplier,
-  ))
+    rawPower * (1 - defenseReduction) * skillMultiplier * targetSpreadMultiplier * getAttackMultiplier(actor) * getDamageBonus(target) * bossDmgMultiplier,
+  )
+  return round(baseDamage * (isCritical ? 2 : 1))
+}
+
+const resolveAttackOutcome = (
+  state: DirectBattleState,
+  actor: BattleUnit,
+  target: BattleUnit,
+  action: BattleActionDefinition,
+) => {
+  const seedBase = `${state.battleId}:r${state.round}:${actor.unitId}:${target.unitId}:${action.actionId}`
+  const evasionChance = getEffectiveEvasionChance(actor, target)
+  const evasionRoll = stableRoll(`${seedBase}:evade`)
+  const evaded = evasionRoll < evasionChance
+  const critRate = getCritRate(actor, action)
+  const critRoll = stableRoll(`${seedBase}:crit`)
+  const isCritical = !evaded && critRoll < critRate
+
+  return {
+    evaded,
+    isCritical,
+    evasionChance,
+    evasionRoll,
+    critRate,
+    critRoll,
+    accuracy: getAccuracy(actor),
+    targetEvasionRate: getEvasionRate(target),
+  }
+}
+
+const addEvadeLog = (
+  state: DirectBattleState,
+  actor: BattleUnit,
+  target: BattleUnit,
+  action: BattleActionDefinition,
+  outcome: ReturnType<typeof resolveAttackOutcome>,
+) => {
+  const snapshotIds = uniqueUnitIds([target.unitId])
+  const hpBeforeByUnitId = hpSnapshotsFor(state, snapshotIds)
+  const statusBeforeByUnitId = statusSnapshotsFor(state, snapshotIds)
+  addLog(state, {
+    actorUnitId: actor.unitId,
+    targetUnitIds: [target.unitId],
+    actionId: action.actionId,
+    timing: actionTiming(action),
+    message: `${target.displayName} 회피! ${actor.displayName}'s ${action.label} missed. MISS.`,
+    eventType: 'fizzle',
+    value: 0,
+    actionCue: action.actionCue,
+    animationCue: action.animationCue,
+    effectColor: action.effectColor,
+    effectKind: action.effectKind,
+    hpBeforeByUnitId,
+    hpAfterByUnitId: hpSnapshotsFor(state, snapshotIds),
+    statusBeforeByUnitId,
+    statusAfterByUnitId: statusSnapshotsFor(state, snapshotIds),
+    metadata: {
+      outcome: 'evade',
+      accuracy: outcome.accuracy,
+      targetEvasionRate: outcome.targetEvasionRate,
+      evasionChance: outcome.evasionChance,
+      evasionRoll: outcome.evasionRoll,
+      critRate: outcome.critRate,
+    },
+  })
 }
 
 const findProtector = (state: DirectBattleState, target: BattleUnit, attacker: BattleUnit): BattleUnit | undefined => {
@@ -659,6 +770,7 @@ const applyDamage = (
   target: BattleUnit,
   amount: number,
   action: BattleActionDefinition,
+  outcome?: ReturnType<typeof resolveAttackOutcome>,
 ): number => {
   let damage = amount
   const protector = findProtector(state, target, actor)
@@ -701,9 +813,10 @@ const applyDamage = (
     targetUnitIds: [target.unitId],
     actionId: action.actionId,
     timing: actionTiming(action),
-    message: `${actor.displayName} used ${action.label} on ${target.displayName} for ${damage} damage.`,
+    message: `${actor.displayName} used ${action.label} on ${target.displayName} for ${damage} damage.${outcome?.isCritical ? ' 치명타!' : ''}`,
     eventType: 'damage',
     value: damage,
+    isCrit: outcome?.isCritical,
     actionCue: action.actionCue,
     animationCue: action.animationCue,
     effectColor: action.effectColor,
@@ -712,8 +825,31 @@ const applyDamage = (
     hpAfterByUnitId: hpSnapshotsFor(state, snapshotIds),
     statusBeforeByUnitId,
     statusAfterByUnitId: statusSnapshotsFor(state, snapshotIds),
+    metadata: outcome ? {
+      outcome: outcome.isCritical ? 'critical' : 'hit',
+      critRate: outcome.critRate,
+      critRoll: outcome.critRoll,
+      accuracy: outcome.accuracy,
+      targetEvasionRate: outcome.targetEvasionRate,
+      evasionChance: outcome.evasionChance,
+      evasionRoll: outcome.evasionRoll,
+    } : undefined,
   })
   return damage
+}
+
+const resolveAndApplyDamage = (
+  state: DirectBattleState,
+  actor: BattleUnit,
+  target: BattleUnit,
+  action: BattleActionDefinition,
+): number => {
+  const outcome = resolveAttackOutcome(state, actor, target, action)
+  if (outcome.evaded) {
+    addEvadeLog(state, actor, target, action, outcome)
+    return 0
+  }
+  return applyDamage(state, actor, target, computeDamage(actor, target, action, outcome.isCritical), action, outcome)
 }
 
 const applyHeal = (
@@ -782,9 +918,9 @@ const applyDynamicEffects = (
       if (eff.stat === 'atk') statusType = isBuff ? 'attackUp' : 'attackDown'
       else if (eff.stat === 'def') statusType = isBuff ? 'defenseUp' : 'defenseDown'
       else if (eff.stat === 'speed') statusType = isBuff ? 'speedUp' : 'speedDown'
-      else if (eff.stat === 'critRate') statusType = isBuff ? 'attackUp' : 'attackDown'
-      else if (eff.stat === 'accuracy') statusType = isBuff ? 'speedUp' : 'speedDown'
-      else if (eff.stat === 'evasionRate') statusType = isBuff ? 'defenseUp' : 'defenseDown'
+      else if (eff.stat === 'critRate') statusType = isBuff ? 'critUp' : 'critDown'
+      else if (eff.stat === 'accuracy') statusType = isBuff ? 'accuracyUp' : 'accuracyDown'
+      else if (eff.stat === 'evasionRate') statusType = isBuff ? 'evasionUp' : 'evasionDown'
     }
 
     if (statusType) {
@@ -1176,7 +1312,7 @@ const executeAction = (state: DirectBattleState, queued: QueuedBattleAction) => 
         statusAfterByUnitId: statusSnapshotsFor(state, snapshotIds),
       })
       if (action.effectKind === 'control') {
-        applyDamage(state, actor, target, computeDamage(actor, target, action), action)
+        resolveAndApplyDamage(state, actor, target, action)
       }
     }
     if (action.cooldown) actor.cooldowns[action.actionId] = action.cooldown
@@ -1189,8 +1325,8 @@ const executeAction = (state: DirectBattleState, queued: QueuedBattleAction) => 
     return
   }
   for (const target of enemyTargets) {
-    applyDamage(state, actor, target, computeDamage(actor, target, action), action)
-    applyDynamicEffects(state, actor, target, action)
+    const damage = resolveAndApplyDamage(state, actor, target, action)
+    if (damage > 0) applyDynamicEffects(state, actor, target, action)
   }
   if (action.cooldown) actor.cooldowns[action.actionId] = action.cooldown
 }

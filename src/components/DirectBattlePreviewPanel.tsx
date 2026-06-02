@@ -536,6 +536,13 @@ const formatBattleLogKo = (
         : '전투가 끝났다. 결과 없음.'
   }
 
+  if (log.eventType === 'damage' && log.isCrit && !message.includes('치명타')) {
+    message = `${message} 치명타!`
+  }
+  if (log.eventType === 'fizzle' && log.metadata?.outcome === 'evade') {
+    message = `${targetName} 회피! ${actorName}의 ${actionName} MISS.`
+  }
+
   return { ...log, message }
 }
 
@@ -546,6 +553,7 @@ const directLogToneToCinematicTone = (
 ): CinematicLogTone => {
   if (log.eventType === 'result') return 'result'
   if (log.eventType === 'heal') return 'reward'
+  if (log.eventType === 'fizzle' && log.metadata?.outcome === 'evade') return 'defense'
   if (log.eventType === 'reaction') return 'defense'
   if (log.eventType === 'status' || action?.actionType === 'guard' || action?.effectKind === 'guard' || action?.effectKind === 'survival') return 'defense'
   if (actor?.team === 'enemy') return 'monster'
@@ -561,6 +569,7 @@ const directLogBadge = (
 ): string => {
   if (log.eventType === 'result') return 'RESULT'
   if (log.timing === 'passive_trigger' || log.actionId?.includes(':passive:') || action?.actionType === 'passive') return 'PASSIVE'
+  if (log.eventType === 'damage' && log.isCrit) return 'CRIT'
   if (log.eventType === 'damage') return action?.actionType === 'skill' ? 'SKILL' : 'ATTACK'
   if (log.eventType === 'heal') return 'HEAL'
   if (log.eventType === 'status' || log.eventType === 'reaction') return 'DEFENSE'
@@ -831,7 +840,7 @@ export function DirectBattlePreviewPanel({
       kind,
       amount: isNumericEvent && val > 0 ? Math.round(val) : undefined,
       text: log.message,
-      isCrit: Boolean((log as any).isCrit),
+      isCrit: Boolean(log.isCrit),
       actionId: log.actionId,
       actionType: log.eventType,
     }

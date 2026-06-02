@@ -104,6 +104,8 @@ const DEFAULT_STATS: BattleStats = {
   spd: 1,
   skillPower: 1,
   crit: 0,
+  accuracy: 0.95,
+  evasionRate: 0,
   controlPower: 0,
   supportPower: 0,
   survivalPower: 0,
@@ -119,6 +121,9 @@ const round = (value: number, min = 0, max = 99999999): number =>
 
 const capRatio = (value: number): number =>
   Math.round(clamp(value, 0, 1.5) * 100) / 100
+
+const capProbability = (value: number, max = 0.99): number =>
+  Math.round(clamp(value, 0, max) * 1000) / 1000
 
 const safeCurrentHp = (currentHp: number | undefined, maxHp: number): number =>
   round(currentHp ?? maxHp, 0, maxHp)
@@ -434,6 +439,8 @@ export const convertShadowProfileToBattleStats = (
     spd: round((8 + stats.shadowSpeed * 0.82 + ROLE_PRIORITY[profile.role] * 0.45) * (0.95 + grade * 0.05) * 1.08 * speedLift, 1, 300),
     skillPower: round((7 + roleSkillStat(profile.role, stats)) * quality * SHADOW_BATTLE_LIFT * supportLift, 1),
     crit: capRatio((stats.shadowCrit * 0.006 + stats.shadowFinisher * 0.002) * grade),
+    accuracy: capProbability(0.93 + (stats.shadowControl * 0.0012 + stats.shadowSuppression * 0.0008) * grade),
+    evasionRate: capProbability((stats.shadowSpeed * 0.003 + stats.shadowSurvival * 0.0008) * grade, 0.3),
     controlPower: round((stats.shadowControl * 0.85 + stats.shadowSuppression * 0.5) * quality * SHADOW_BATTLE_LIFT * supportLift, 0),
     supportPower: round((stats.shadowSupport * 0.88 + stats.shadowSynergy * 0.34) * quality * SHADOW_BATTLE_LIFT * supportLift, 0),
     survivalPower: round((stats.shadowSurvival * 0.9 + stats.shadowDurability * 0.38) * quality * SHADOW_BATTLE_LIFT * guardLift, 0),
@@ -580,6 +587,8 @@ export const buildHunterBattleUnit = (
           1,
         ),
         crit: capRatio(combatStats.critRate),
+        accuracy: capProbability(combatStats.accuracy),
+        evasionRate: capProbability(combatStats.evasionRate, 0.35),
         controlPower: round(stat(hunter.stats, 'INT') * 2.2 + stat(hunter.stats, 'SEN') * 1.4, 0),
         supportPower: round(stat(hunter.stats, 'INT') * 1.3 + stat(hunter.stats, 'SEN') * 1.9 + equipmentSupport, 0),
         survivalPower: round(stat(hunter.stats, 'VIT') * 3.5 + stat(hunter.stats, 'PER') * 2.5 + equipmentSurvival, 0),
@@ -723,6 +732,16 @@ export const buildMonsterBattleUnit = (
          spd: round((10 + level * 1.05) * biasSpd * (definition.role === 'assassin' ? 1.08 : 1) * 1.02, 1, 300),
          skillPower: round((15 + level * 3.95) * biasSkill * scale * threatScale * atkMultiplier * MONSTER_BATTLE_LIFT * pressure.atk * diffMod * 0.85, 1),
         crit: capRatio((0.04 + level * 0.003) * biasCrit),
+        accuracy: capProbability(0.93 + level * 0.0015 + (definition.role === 'caster' || definition.role === 'controller' ? 0.01 : 0)),
+        evasionRate: capProbability(
+          (
+            definition.role === 'assassin' ? 0.055 :
+            definition.role === 'caster' ? 0.035 :
+            definition.role === 'minion' ? 0.025 :
+            0.018
+          ) * biasSpd + level * 0.0008,
+          0.25,
+        ),
         controlPower: round((5 + level * 1.7) * biasControl * scale * MONSTER_BATTLE_LIFT, 0),
         supportPower: round((4 + level * 1.5) * biasSupport * scale * MONSTER_BATTLE_LIFT, 0),
         survivalPower: round((6 + level * 1.6) * biasSurvival * scale * MONSTER_BATTLE_LIFT, 0),

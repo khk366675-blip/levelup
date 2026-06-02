@@ -29,6 +29,12 @@ export type BattleActionTiming =
 export type BattleStatusType =
   | 'attackUp'
   | 'attackDown'
+  | 'critUp'
+  | 'critDown'
+  | 'accuracyUp'
+  | 'accuracyDown'
+  | 'evasionUp'
+  | 'evasionDown'
   | 'defenseUp'
   | 'defenseDown'
   | 'speedUp'
@@ -42,7 +48,7 @@ export type BattleStatusType =
   | 'healOverTime'
   | 'shield'
 
-export const DIRECT_BATTLE_STATUS_LABELS_KO: Record<BattleStatusType, string> = {
+export const DIRECT_BATTLE_STATUS_LABELS_KO: Partial<Record<BattleStatusType, string>> = {
   attackUp: '공격 강화',
   attackDown: '공격 약화',
   defenseUp: '방어 강화',
@@ -59,7 +65,7 @@ export const DIRECT_BATTLE_STATUS_LABELS_KO: Record<BattleStatusType, string> = 
   shield: '보호막',
 }
 
-export const DIRECT_BATTLE_STATUS_DESCRIPTIONS_KO: Record<BattleStatusType, string> = {
+export const DIRECT_BATTLE_STATUS_DESCRIPTIONS_KO: Partial<Record<BattleStatusType, string>> = {
   attackUp: '이번 라운드 공격 피해가 증가합니다.',
   attackDown: '이번 라운드 공격 피해가 감소합니다.',
   defenseUp: '이번 라운드 받는 피해가 감소합니다.',
@@ -84,6 +90,8 @@ export interface BattleStats {
   spd: number
   skillPower: number
   crit: number
+  accuracy?: number
+  evasionRate?: number
   controlPower: number
   supportPower: number
   survivalPower: number
@@ -236,6 +244,7 @@ export interface DirectBattleLogEntry {
   message: string
   eventType: 'queue' | 'action' | 'damage' | 'heal' | 'status' | 'reaction' | 'fizzle' | 'round' | 'result'
   value?: number
+  isCrit?: boolean
   actionCue?: string
   animationCue?: string
   effectColor?: string

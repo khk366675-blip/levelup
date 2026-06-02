@@ -4,7 +4,7 @@ import { motion } from 'framer-motion'
 import { Box, CalendarCheck, Crown, Gem, Gift, Sparkles, Ticket } from 'lucide-react'
 import { useGame } from '../lib/store'
 import type { BoxReward, BoxTier, RewardBox } from '../lib/types'
-import { formatStatReward, todayKey } from '../lib/game'
+import { formatStatReward } from '../lib/game'
 import { getShadowDefinition } from '../lib/shadows'
 import { getItemDisplayName } from '../lib/retiredTowerUi'
 import { DramaticReveal, type DramaticRevealTone, type RevealStep } from './DramaticReveal'
@@ -45,8 +45,13 @@ const BOX_TYPE_META: Record<RewardBox['type'], { label: string; short: string; d
   },
 }
 
-function getDisplayTier(box: RewardBox, upgradePoints: number): BoxTier {
-  if (box.type !== 'daily' || box.status !== 'available' || !box.label.startsWith(todayKey())) {
+function isActiveDailyRouteBox(box: RewardBox, routeDate?: string): boolean {
+  if (box.type !== 'daily' || box.source !== 'daily_login') return false
+  return routeDate ? box.label.startsWith(routeDate) : true
+}
+
+function getDisplayTier(box: RewardBox, upgradePoints: number, routeDate?: string): BoxTier {
+  if (box.status !== 'available' || !isActiveDailyRouteBox(box, routeDate)) {
     return box.tier
   }
   if (upgradePoints >= 6) return 'epic'
@@ -139,6 +144,7 @@ export function RewardBoxPanel() {
   const boxes = useGame(s => s.rewardBoxes ?? [])
   const cards = useGame(s => s.todayChallengeCards ?? [])
   const selectedIds = useGame(s => s.selectedChallengeCardIds ?? [])
+  const dailyRouteDate = useGame(s => s.lastDailyBoxDate ?? s.lastChallengeCardDate)
   const openRewardBox = useGame(s => s.openRewardBox)
 
   const selectedSet = new Set(selectedIds)
@@ -147,7 +153,7 @@ export function RewardBoxPanel() {
     .reduce((sum, card) => sum + card.reward.boxUpgradePoints, 0)
   const available = boxes.filter(box => box.status === 'available')
   const recentOpened = boxes.filter(box => box.status === 'opened').slice(0, 10)
-  const todayDailyBox = available.find(box => box.type === 'daily' && box.label.startsWith(todayKey()))
+  const todayDailyBox = available.find(box => isActiveDailyRouteBox(box, dailyRouteDate))
   const otherBoxes = available.filter(box => box.id !== todayDailyBox?.id)
   const todayDailyAvailable = Boolean(todayDailyBox)
   const completedCardCount = cards.filter(card => selectedSet.has(card.id) && card.status === 'completed').length
@@ -394,7 +400,7 @@ export function RewardBoxPanel() {
               <div className="text-xs font-bold text-white">일일 보급 개봉</div>
               <div className="mt-0.5 text-[10px] text-white/45">
                 {todayDailyAvailable
-                  ? `${TIER_LABEL[getDisplayTier(todayDailyBox!, upgradePoints)]} 등급 대기`
+                  ? `${TIER_LABEL[getDisplayTier(todayDailyBox!, upgradePoints, dailyRouteDate)]} 등급 대기`
                   : available.length > 0
                     ? "박스 개봉 대기 중"
                     : "대기 박스 없음"}
@@ -409,7 +415,7 @@ export function RewardBoxPanel() {
         <div className="absolute -left-20 -top-20 h-52 w-52 rounded-full bg-cyan-500/10 blur-3xl pointer-events-none" />
         
         {todayDailyBox ? (() => {
-          const tier = getDisplayTier(todayDailyBox, upgradePoints)
+          const tier = getDisplayTier(todayDailyBox, upgradePoints, dailyRouteDate)
           const Icon = boxIcon(todayDailyBox)
           const dropHints = previewRewardHints(todayDailyBox, tier)
           

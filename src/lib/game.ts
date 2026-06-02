@@ -878,11 +878,11 @@ export const calculatePlayerCombatStats = ({
   return {
     maxHp: 100 + effectiveStats.VIT * 10 + safeLevel * 5,
     atk: 10 + effectiveStats.STR * 2 + safeLevel * 2,
-    def: 5 + effectiveStats.VIT * 1.2 + safeLevel,
+    def: 5 + effectiveStats.PER * 1.25 + safeLevel,
     speed: 10 + effectiveStats.AGI * 1.5,
-    critRate: Math.min(0.5, effectiveStats.SEN * 0.008),
-    evasionRate: Math.min(0.3, effectiveStats.AGI * 0.004 + effectiveStats.PER * 0.003),
-    accuracy: Math.min(0.99, 0.95 + effectiveStats.SEN * 0.001),
+    critRate: Math.min(0.35, effectiveStats.SEN * 0.006),
+    evasionRate: Math.min(0.35, effectiveStats.AGI * 0.004),
+    accuracy: Math.min(0.99, 0.94 + effectiveStats.SEN * 0.002),
     skillTotalPower: calculateSkillTotalPower(skills),
   }
 }
@@ -893,12 +893,11 @@ export const calculateCombatPower = (stats: PlayerCombatStats): number => {
     stats.maxHp * 0.5 +
     stats.def * 2 +
     stats.speed * 1.5 +
-    stats.critRate * 100 +
-    stats.evasionRate * 100 +
+    stats.critRate * 160 +
+    stats.evasionRate * 140 +
+    Math.max(0, stats.accuracy - 0.9) * 120 +
     stats.skillTotalPower * 1.5
   )
-  // accuracy is intentionally excluded: it usually stays in the 0.95-0.99 band,
-  // so it has low discrimination and can behave like a fixed bonus.
 }
 
 export type GateRisk = 'low' | 'normal' | 'high' | 'extreme'

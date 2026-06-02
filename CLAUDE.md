@@ -179,3 +179,42 @@ Living Rift World 군주 및 Angel 결전 검증을 위한 임시 치트 모듈�
 ## 참고 문서
 
 `docs/` 폴더에 시스템별 설계 문서가 있습니다(전투, 게이트, 직업 v2, 그림자 스킬/전투/장비/원정, AI 성장 코치 등). 해당 시스템을 수정하기 전에 관련 설계 문서를 먼저 확인하면 의도를 빠르게 파악할 수 있습니다.
+
+### 최근 검증 문서
+- `docs/combat-balance-verification-report.md` — 전투 시스템 종합 밸런스 검증 보고서 (2026-06-02)
+
+---
+
+## 작업 이력
+
+### 2026-06-02: 전투 시스템 밸런스 검증 (10-4 작업)
+
+**작업 내용**:
+- 전투 시스템 5개 경로 파악: Gate, Infinite Tower, Living World, Direct Battle, Shadow Expedition
+- 플레이어/네임드 헌터 스탯 체계(6종) 및 전투력 공식 분석
+- 그림자 스탯 체계(13종) 및 전투 스탯 변환 공식 파악 (`battleUnits.ts:convertShadowProfileToBattleStats`)
+- 몬스터 고정 스탯 체계 분석 (정책적으로 성장 없음)
+- 스탯 가치 분석: VIT(7.4)/STR(6.0) 고가치, PER(0.3)/SEN(0.9) 저가치 발견
+- 난이도 곡선 문제: E급 너무 쉬움, C급 급격한 벽, S급 인플레이션
+- 그림자 전투 기여도 메커니즘 분석 (`resolveShadowSupportActions`)
+
+**검증 결과**:
+1. ✅ **스탯 통일성**: 헌터/플레이어는 6종 스탯 통일, 그림자는 13종 전용 스탯 + 변환 레이어, 몬스터는 고정 스탯
+2. ⚠️ **스탯 가치 불균형**: PER/SEN 과소평가 (VIT의 1/25 수준), 조정 권장
+3. ⚠️ **난이도 밸런스**: C급 벽(218% 점프), E급/S급 재조정 필요
+
+**권장 사항**:
+- PER에 DEF 기여 추가 또는 상태이상 저항 추가
+- SEN의 크리티컬 비율 상향 또는 스킬위력 기여 추가
+- C급 권장 전투력 하향 (1200 → 1000)
+- 그림자 지원 확률 상한 상향 (58% → 70%)
+
+**관련 파일**:
+- `docs/combat-balance-verification-report.md` — 검증 보고서 (신규)
+- `src/lib/game.ts` — 전투 공식 및 전투력 계산
+- `src/lib/battleUnits.ts` — 그림자 스탯 변환 로직
+- `src/lib/shadowStats.ts` — 그림자 전투력 계산
+- `src/lib/hunterUnified.ts` — 네임드 헌터 통합 전투력
+- `src/lib/combatPower.ts` — 헌터 전투력 분해
+
+**persist version**: 12 유지 (스키마 변경 없음)

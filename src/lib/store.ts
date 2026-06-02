@@ -2915,11 +2915,11 @@ const getWeekKey = (date = new Date()): string => {
   return `${d.getFullYear()}-W${String(week).padStart(2, '0')}`
 }
 
-const countTodayDailyCompletions = (s: GameState): number =>
-  s.achievementStats.dailyHistory[todayKey()]?.completedDailyCount ?? 0
+const countDailyCompletionsForDate = (s: GameState, date = todayKey()): number =>
+  s.achievementStats.dailyHistory[date]?.completedDailyCount ?? 0
 
-const countTodayDailyCategoryCompletions = (s: GameState, categories: Category[]): number => {
-  const ids = s.achievementStats.dailyHistory[todayKey()]?.completedDailyQuestIds ?? []
+const countDailyCategoryCompletionsForDate = (s: GameState, categories: Category[], date = todayKey()): number => {
+  const ids = s.achievementStats.dailyHistory[date]?.completedDailyQuestIds ?? []
   return ids.filter(id => {
     const quest = s.quests.find(q => q.id === id)
     return quest ? categories.includes(quest.category) : false
@@ -3044,6 +3044,33 @@ const createRewardBox = (
   label,
   floor,
 })
+
+const isDailyRewardRouteBox = (box: RewardBox, routeDate: string): boolean =>
+  box.type === 'daily' &&
+  box.source === 'daily_login' &&
+  box.label.startsWith(routeDate)
+
+const createDailyRewardRouteState = (
+  s: GameState,
+  quests: Quest[],
+  routeDate: string
+): Pick<GameState, 'rewardBoxes' | 'lastDailyBoxDate' | 'todayChallengeCards' | 'selectedChallengeCardIds' | 'lastChallengeCardDate' | 'challengeCardHistory'> => {
+  const nextRewardBoxes = [
+    createRewardBox('daily', 'normal', 'daily_login', `${routeDate} 일일 박스`),
+    ...(s.rewardBoxes ?? []).filter(box => !(box.status === 'available' && isDailyRewardRouteBox(box, routeDate))),
+  ].slice(0, 30)
+  const challengeCardHistory = { ...(s.challengeCardHistory ?? {}) }
+  delete challengeCardHistory[routeDate]
+
+  return {
+    rewardBoxes: nextRewardBoxes,
+    lastDailyBoxDate: routeDate,
+    todayChallengeCards: generateChallengeCardsForToday(quests, routeDate),
+    selectedChallengeCardIds: [],
+    lastChallengeCardDate: routeDate,
+    challengeCardHistory,
+  }
+}
 
 const getCurrentWeekChallengeCompletedCount = (history: GameState['challengeCardHistory'] = {}): number => {
   const now = new Date()
@@ -3490,19 +3517,20 @@ const rollBoxReward = (s: GameState, box: RewardBox): BoxReward => {
 
 const isChallengeConditionMet = (s: GameState, card: ChallengeCard, event: ChallengeProgressEvent): boolean => {
   const target = card.condition.target ?? 1
+  const routeDate = card.date || s.lastChallengeCardDate || todayKey()
   switch (card.condition.type) {
     case 'completeAnyDaily':
     case 'completeDailyCount':
-      return countTodayDailyCompletions(s) >= target
+      return countDailyCompletionsForDate(s, routeDate) >= target
     case 'completeQuestCategory': {
       const category = card.condition.category
       if (category === 'workout' || category === 'health') {
-        return countTodayDailyCategoryCompletions(s, ['workout', 'health']) >= target
+        return countDailyCategoryCompletionsForDate(s, ['workout', 'health'], routeDate) >= target
       }
       if (category === 'study' || category === 'career' || category === 'finance') {
-        return countTodayDailyCategoryCompletions(s, ['study', 'career', 'finance']) >= target
+        return countDailyCategoryCompletionsForDate(s, ['study', 'career', 'finance'], routeDate) >= target
       }
-      return category ? countTodayDailyCategoryCompletions(s, [category]) >= target : false
+      return category ? countDailyCategoryCompletionsForDate(s, [category], routeDate) >= target : false
     }
     case 'completeGateAttempt':
       return Boolean(event.gateAttempt || event.gateVictory)
@@ -3517,15 +3545,15 @@ const isChallengeConditionMet = (s: GameState, card: ChallengeCard, event: Chall
     case 'openBox':
       return Boolean(event.boxOpened)
     case 'completeWorkoutAndStudy':
-      return countTodayDailyCategoryCompletions(s, ['workout', 'health']) >= 1 &&
-        countTodayDailyCategoryCompletions(s, ['study', 'career', 'finance']) >= 1
+      return countDailyCategoryCompletionsForDate(s, ['workout', 'health'], routeDate) >= 1 &&
+        countDailyCategoryCompletionsForDate(s, ['study', 'career', 'finance'], routeDate) >= 1
     default:
       return false
   }
 }
 
 const applyChallengeProgress = (s: GameState, event: ChallengeProgressEvent): Partial<GameState> => {
-  const date = todayKey()
+  const date = s.lastChallengeCardDate ?? todayKey()
   const selected = new Set(s.selectedChallengeCardIds ?? [])
   const cards = s.todayChallengeCards ?? []
   if (cards.length === 0 || selected.size === 0) return {}
@@ -4000,7 +4028,7 @@ export const useGame = create<GameState>()(
       setHunterJob: (job) => set((s) => ({ hunter: { ...s.hunter, job } })),
 
       ensureDailyRewardSystems: () => set((s) => {
-        const date = todayKey()
+        const routeDate = s.lastChallengeCardDate ?? s.lastDailyBoxDate ?? todayKey()
         let rewardBoxes = s.rewardBoxes ?? []
         let lastDailyBoxDate = s.lastDailyBoxDate
         let todayChallengeCards = s.todayChallengeCards ?? []
@@ -4008,18 +4036,21 @@ export const useGame = create<GameState>()(
         let lastChallengeCardDate = s.lastChallengeCardDate
         const hasRetiredTowerCards = todayChallengeCards.some(isRetiredTowerChallengeCard)
 
-        if (lastChallengeCardDate !== date || hasRetiredTowerCards) {
-          todayChallengeCards = generateChallengeCardsForToday(s.quests, date)
+        if (todayChallengeCards.length === 0 || hasRetiredTowerCards) {
+          todayChallengeCards = generateChallengeCardsForToday(s.quests, routeDate)
           selectedChallengeCardIds = []
-          lastChallengeCardDate = date
+          lastChallengeCardDate = routeDate
         }
 
-        if (lastDailyBoxDate !== date) {
+        const hasRouteDailyBox = rewardBoxes.some(box =>
+          box.status === 'available' && isDailyRewardRouteBox(box, routeDate)
+        )
+        if (!lastDailyBoxDate && !hasRouteDailyBox) {
           rewardBoxes = [
-            createRewardBox('daily', 'normal', 'daily_login', `${date} 일일 박스`),
+            createRewardBox('daily', 'normal', 'daily_login', `${routeDate} 일일 박스`),
             ...rewardBoxes,
           ].slice(0, 30)
-          lastDailyBoxDate = date
+          lastDailyBoxDate = routeDate
         }
 
         const weekly = addWeeklyBoxIfEligible(rewardBoxes, s.lastWeeklyBoxWeek, s.challengeCardHistory ?? {})
@@ -4035,13 +4066,13 @@ export const useGame = create<GameState>()(
       }),
 
       selectChallengeCards: (cardIds) => set((s) => {
-        const date = todayKey()
+        const routeDate = s.lastChallengeCardDate ?? s.lastDailyBoxDate ?? todayKey()
         const cards = s.todayChallengeCards ?? []
-        if (s.lastChallengeCardDate !== date || cards.length === 0) {
+        if (cards.length === 0) {
           return {
-            todayChallengeCards: generateChallengeCardsForToday(s.quests, date),
+            todayChallengeCards: generateChallengeCardsForToday(s.quests, routeDate),
             selectedChallengeCardIds: [],
-            lastChallengeCardDate: date,
+            lastChallengeCardDate: routeDate,
           }
         }
         const activeCards = cards.filter(card => !isRetiredTowerChallengeCard(card))
@@ -4064,7 +4095,8 @@ export const useGame = create<GameState>()(
         const box = boxes.find(item => item.id === boxId)
         if (!box || box.status !== 'available') return
 
-        const effectiveTier = box.type === 'daily' && box.label.startsWith(todayKey())
+        const activeRouteDate = s.lastDailyBoxDate ?? s.lastChallengeCardDate ?? todayKey()
+        const effectiveTier = isDailyRewardRouteBox(box, activeRouteDate)
           ? getDailyBoxTierForState(s)
           : box.tier
         const effectiveBox = { ...box, tier: effectiveTier }
@@ -11967,12 +11999,16 @@ export const useGame = create<GameState>()(
           }
         }
 
+        const nextQuests = [...remainingQuests, ...newQuests]
+        const dailyRewardRoute = createDailyRewardRouteState(s, nextQuests, targetDate)
+
         return {
-          quests: [...remainingQuests, ...newQuests],
+          quests: nextQuests,
           aiCoachMemory: updatedMemory,
           hardcoreState: nextHardcoreState,
           livingWorld: nextLivingWorld,
-          riftNodes: nextRiftNodes
+          riftNodes: nextRiftNodes,
+          ...dailyRewardRoute,
         }
       }),
 
