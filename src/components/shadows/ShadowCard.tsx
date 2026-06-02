@@ -12,6 +12,7 @@ import {
   getShadowMaxLevel,
   getShadowXpForNextLevel,
   MAX_SHADOW_ENHANCEMENT_LEVEL,
+  SHADOW_DECOMPOSE_ESSENCE,
 } from '../../lib/shadows'
 import { getShadowCombatProfile } from '../../lib/shadowStats'
 import { buildShadowBattleUnit } from '../../lib/battleUnits'
@@ -309,7 +310,8 @@ export function ShadowCard({
               disabled={equipped || shadow.isLocked || shadow.isAchievementNamed}
               onClick={(e) => {
                 e.stopPropagation();
-                if (window.confirm(`${shadow.name}을(를) 분해하시겠습니까? 분해 시 그림자 정수를 획득합니다.`)) {
+                const essenceReward = SHADOW_DECOMPOSE_ESSENCE[shadow.rarity] ?? 0;
+                if (window.confirm(`${shadow.name}을(를) 분해하시겠습니까? 분해 시 그림자 정수 ${essenceReward}개를 획득합니다.`)) {
                   onDecompose();
                 }
               }}
@@ -317,7 +319,7 @@ export function ShadowCard({
               title={
                 equipped ? "출전 중인 그림자는 분해할 수 없습니다" :
                 shadow.isLocked ? "잠금 상태인 그림자는 분해할 수 없습니다" :
-                shadow.isAchievementNamed ? "성취 네임드 그림자는 분해할 수 없습니다" : "분해 (정수 획득)"
+                shadow.isAchievementNamed ? "성취 네임드 그림자는 분해할 수 없습니다" : `분해 (정수 ${SHADOW_DECOMPOSE_ESSENCE[shadow.rarity] ?? 0}개 획득)`
               }
             >
               분해

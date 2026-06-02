@@ -815,11 +815,11 @@ export const ACHIEVEMENT_SHADOWS_BY_QUEST_ID: Record<string, string[]> = SHADOW_
 export const MAX_SHADOW_ENHANCEMENT_LEVEL = 5
 
 export const SHADOW_DECOMPOSE_ESSENCE: Record<ShadowRarity, number> = {
-  common: 1,
-  uncommon: 2,
-  rare: 5,
-  epic: 12,
-  legendary: 30,
+  common: 60,
+  uncommon: 120,
+  rare: 250,
+  epic: 500,
+  legendary: 1000,
 }
 
 export const getShadowAbsorbMaterialCount = (
