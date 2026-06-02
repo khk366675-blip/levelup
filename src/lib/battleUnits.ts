@@ -427,8 +427,10 @@ export const convertShadowProfileToBattleStats = (
   const rarity = RARITY_MODIFIER[profile.rarity]
   const grade = GRADE_MODIFIER[profile.innateGrade]
   const levelGrowth = 1 + Math.max(0, profile.level - 1) * 0.015
+  const levelGrowthHp = 1 + Math.max(0, profile.level - 1) * 0.072
   const enhancementGrowth = 1 + Math.max(0, profile.enhancement) * 0.028
   const quality = rarity * grade * levelGrowth * enhancementGrowth
+  const qualityHp = rarity * grade * levelGrowthHp * enhancementGrowth
   const hpRoleModifier = profile.role === 'guard'
     ? 1.65
     : profile.role === 'support' || profile.role === 'analyst'
@@ -444,7 +446,7 @@ export const convertShadowProfileToBattleStats = (
   const legionAccuracyBonus = getLegionAccuracyBonus()
 
   const maxHp = round(
-    (165 + stats.shadowDurability * 2.3 + stats.shadowSurvival * 1.55 + profile.level * 7.2) * quality * hpRoleModifier * SHADOW_HP_BATTLE_LIFT * guardLift,
+    (60 + stats.shadowDurability * 0.9 + stats.shadowSurvival * 0.6 + profile.level * 2.0) * qualityHp * hpRoleModifier * SHADOW_HP_BATTLE_LIFT * guardLift,
     1,
     99999999,
   )
