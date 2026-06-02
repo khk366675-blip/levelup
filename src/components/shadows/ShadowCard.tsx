@@ -11,6 +11,7 @@ import {
   getShadowEffects,
   getShadowMaxLevel,
   getShadowXpForNextLevel,
+  MAX_SHADOW_ENHANCEMENT_LEVEL,
 } from '../../lib/shadows'
 import { getShadowCombatProfile } from '../../lib/shadowStats'
 import { buildShadowBattleUnit } from '../../lib/battleUnits'
@@ -29,6 +30,12 @@ type ShadowCardProps = {
   onEquip: () => void
   onUnequip: () => void
   onRestoreCollapsed?: () => void
+  materialCount?: number
+  onAbsorb?: () => void
+  onDecompose?: () => void
+  onToggleLock?: () => void
+  onToggleFavorite?: () => void
+  onEvolve?: () => void
 }
 
 const rarityFrame: Record<OwnedShadow['rarity'], string> = {
@@ -71,6 +78,12 @@ export function ShadowCard({
   onEquip,
   onUnequip,
   onRestoreCollapsed,
+  materialCount = 0,
+  onAbsorb,
+  onDecompose,
+  onToggleLock,
+  onToggleFavorite,
+  onEvolve,
 }: ShadowCardProps) {
   const effects = getShadowEffects(shadow).map(formatShadowEffect)
   const level = shadow.level ?? 1
@@ -79,6 +92,7 @@ export function ShadowCard({
   const xpInfo = xpPercent(level, maxLevel, xp)
   const evolutionCheck = canEvolveShadow(shadow, shadowEssence)
   const enhancement = shadow.enhancementLevel ?? 0
+  const canAbsorb = (shadow.enhancementLevel ?? 0) < MAX_SHADOW_ENHANCEMENT_LEVEL && !shadow.isAchievementNamed && materialCount > 0
   const named = Boolean(shadow.isNamed || shadow.isGateNamed || shadow.isAchievementNamed)
   const collapsed = Boolean(shadow.collapsed || shadow.status === 'collapsed')
   const restoreCost = shadow.restoreCost ?? 0
@@ -251,6 +265,106 @@ export function ShadowCard({
           </button>
         )}
       </div>
+
+      {!collapsed && (onAbsorb || onDecompose || onToggleLock || onToggleFavorite || onEvolve) && (
+        <div className="mt-2 grid grid-cols-5 gap-1 text-[11px]">
+          {/* 잠금 토글 */}
+          {onToggleLock && (
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); onToggleLock() }}
+              className={clsx(
+                "btn py-1 px-1.5 flex items-center justify-center border transition-colors",
+                shadow.isLocked 
+                  ? "border-rose-500/40 bg-rose-950/40 text-rose-300 hover:bg-rose-900/40" 
+                  : "border-white/10 bg-ink-950/40 text-white/45 hover:bg-white/10 hover:text-white/70"
+              )}
+              title={shadow.isLocked ? "잠금 해제" : "잠금"}
+            >
+              <Lock className={clsx("h-3.5 w-3.5", shadow.isLocked && "fill-rose-300/10")} />
+            </button>
+          )}
+          
+          {/* 즐겨찾기 토글 */}
+          {onToggleFavorite && (
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); onToggleFavorite() }}
+              className={clsx(
+                "btn py-1 px-1.5 flex items-center justify-center border transition-colors",
+                shadow.isFavorite 
+                  ? "border-yellow-500/40 bg-yellow-950/40 text-yellow-300 hover:bg-yellow-900/40" 
+                  : "border-white/10 bg-ink-950/40 text-white/45 hover:bg-white/10 hover:text-white/70"
+              )}
+              title={shadow.isFavorite ? "즐겨찾기 해제" : "즐겨찾기"}
+            >
+              <Star className={clsx("h-3.5 w-3.5", shadow.isFavorite && "fill-yellow-300/30")} />
+            </button>
+          )}
+
+          {/* 분해 */}
+          {onDecompose && (
+            <button
+              type="button"
+              disabled={equipped || shadow.isLocked || shadow.isAchievementNamed}
+              onClick={(e) => {
+                e.stopPropagation();
+                if (window.confirm(`${shadow.name}을(를) 분해하시겠습니까? 분해 시 그림자 정수를 획득합니다.`)) {
+                  onDecompose();
+                }
+              }}
+              className="btn py-1 px-1 border border-red-500/30 bg-red-950/20 text-red-400 hover:bg-red-900/30 disabled:opacity-30 disabled:cursor-not-allowed font-bold transition-all"
+              title={
+                equipped ? "출전 중인 그림자는 분해할 수 없습니다" :
+                shadow.isLocked ? "잠금 상태인 그림자는 분해할 수 없습니다" :
+                shadow.isAchievementNamed ? "성취 네임드 그림자는 분해할 수 없습니다" : "분해 (정수 획득)"
+              }
+            >
+              분해
+            </button>
+          )}
+
+          {/* 흡수 */}
+          {onAbsorb && (
+            <button
+              type="button"
+              disabled={!canAbsorb}
+              onClick={(e) => {
+                e.stopPropagation();
+                if (window.confirm(`${shadow.name}에게 재료 그림자를 흡수시켜 강화하시겠습니까?`)) {
+                  onAbsorb();
+                }
+              }}
+              className="btn py-1 px-1 border border-cyan-500/30 bg-cyan-950/20 text-cyan-400 hover:bg-cyan-900/30 disabled:opacity-30 disabled:cursor-not-allowed font-bold transition-all"
+              title={
+                (shadow.enhancementLevel ?? 0) >= MAX_SHADOW_ENHANCEMENT_LEVEL ? "최대 강화 상태입니다" :
+                shadow.isAchievementNamed ? "성취 네임드는 강화할 수 없습니다" :
+                materialCount === 0 ? "동일한 재료 그림자가 없습니다" : `재료 흡수 (보유 재료: ${materialCount}개)`
+              }
+            >
+              흡수
+            </button>
+          )}
+
+          {/* 진화 */}
+          {onEvolve && (
+            <button
+              type="button"
+              disabled={!evolutionCheck.canEvolve}
+              onClick={(e) => {
+                e.stopPropagation();
+                if (window.confirm(`${shadow.name}을(를) 진화시키겠습니까?`)) {
+                  onEvolve();
+                }
+              }}
+              className="btn py-1 px-1 border border-emerald-500/30 bg-emerald-950/20 text-emerald-400 hover:bg-emerald-900/30 disabled:opacity-30 disabled:cursor-not-allowed font-bold transition-all"
+              title={evolutionCheck.canEvolve ? "진화하기" : evolutionCheck.reason || "진화 불가"}
+            >
+              진화
+            </button>
+          )}
+        </div>
+      )}
     </motion.div>
   )
 }
