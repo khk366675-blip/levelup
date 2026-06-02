@@ -125,6 +125,18 @@ const capRatio = (value: number): number =>
 const capProbability = (value: number, max = 0.99): number =>
   Math.round(clamp(value, 0, max) * 1000) / 1000
 
+const SHADOW_CRIT_RATE_CAP = 0.45
+const SHADOW_CRIT_STAT_SCALE = 0.003
+const SHADOW_FINISHER_CRIT_SCALE = 0.001
+const SHADOW_ACCURACY_BASE = 0.9
+const SHADOW_CONTROL_ACCURACY_SCALE = 0.0006
+const SHADOW_SUPPRESSION_ACCURACY_SCALE = 0.0004
+const SHADOW_SPEED_EVASION_SCALE = 0.002
+const SHADOW_SURVIVAL_EVASION_SCALE = 0.0005
+
+const capShadowCritRate = (value: number): number =>
+  capProbability(value, SHADOW_CRIT_RATE_CAP)
+
 const safeCurrentHp = (currentHp: number | undefined, maxHp: number): number =>
   round(currentHp ?? maxHp, 0, maxHp)
 
@@ -438,9 +450,9 @@ export const convertShadowProfileToBattleStats = (
     def: round((5 + stats.shadowDefense * 0.82 + stats.shadowDurability * 0.32 + stats.shadowSurvival * 0.28) * quality * SHADOW_BATTLE_LIFT * guardLift, 1),
     spd: round((8 + stats.shadowSpeed * 0.82 + ROLE_PRIORITY[profile.role] * 0.45) * (0.95 + grade * 0.05) * 1.08 * speedLift, 1, 300),
     skillPower: round((7 + roleSkillStat(profile.role, stats)) * quality * SHADOW_BATTLE_LIFT * supportLift, 1),
-    crit: capRatio((stats.shadowCrit * 0.006 + stats.shadowFinisher * 0.002) * grade),
-    accuracy: capProbability(0.93 + (stats.shadowControl * 0.0012 + stats.shadowSuppression * 0.0008) * grade),
-    evasionRate: capProbability((stats.shadowSpeed * 0.003 + stats.shadowSurvival * 0.0008) * grade, 0.3),
+    crit: capShadowCritRate((stats.shadowCrit * SHADOW_CRIT_STAT_SCALE + stats.shadowFinisher * SHADOW_FINISHER_CRIT_SCALE) * grade),
+    accuracy: capProbability(SHADOW_ACCURACY_BASE + (stats.shadowControl * SHADOW_CONTROL_ACCURACY_SCALE + stats.shadowSuppression * SHADOW_SUPPRESSION_ACCURACY_SCALE) * grade),
+    evasionRate: capProbability((stats.shadowSpeed * SHADOW_SPEED_EVASION_SCALE + stats.shadowSurvival * SHADOW_SURVIVAL_EVASION_SCALE) * grade, 0.3),
     controlPower: round((stats.shadowControl * 0.85 + stats.shadowSuppression * 0.5) * quality * SHADOW_BATTLE_LIFT * supportLift, 0),
     supportPower: round((stats.shadowSupport * 0.88 + stats.shadowSynergy * 0.34) * quality * SHADOW_BATTLE_LIFT * supportLift, 0),
     survivalPower: round((stats.shadowSurvival * 0.9 + stats.shadowDurability * 0.38) * quality * SHADOW_BATTLE_LIFT * guardLift, 0),
