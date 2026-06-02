@@ -244,6 +244,8 @@ import {
   SHADOW_EXPEDITION_OUTCOME_LABEL,
   SHADOW_EXPEDITION_UNLOCK_DAILY_COUNT,
   createShadowExpeditionForDate,
+  getActivePlanDateKey,
+  getPlanBasedCompletedCount,
   getTodayDailyCompletedCount,
   refreshShadowExpeditionLock,
   resolveShadowExpeditionCommand,
@@ -1207,13 +1209,36 @@ const buildDailyProgression = (
   quests: Quest[],
   achievementStats: AchievementStats
 ): DailyProgressionState => {
-  const dateKey = todayKey()
-  const todayHistory = achievementStats.dailyHistory?.[dateKey]
-  const completedIds = todayHistory?.completedDailyQuestIds ?? []
+  // AI 코치 플랜 생성 날짜를 하루의 기준으로 사용 (24시간 캘린더 기준 아님)
+  const dateKey = getActivePlanDateKey(quests)
 
-  // 오늘 완료한 daily 퀘스트들 가져오기
+  // 현재 AI 플랜의 퀘스트 IDs를 추출하여 플랜 기반 완료 집계
+  const aiDailies = quests.filter(
+    (q) =>
+      q.type === 'daily' &&
+      !q.recurring &&
+      (q.coachGenerated === true || q.coachPlanId !== undefined || q.coachReason !== undefined) &&
+      q.coachPlanDate === dateKey,
+  )
+  const planQuestIds = new Set(aiDailies.map((q) => q.id))
+
+  // 플랜 퀘스트 IDs 기준으로 모든 dailyHistory에서 완료 ID 수집
+  const completedIds: string[] = []
+  for (const dayRecord of Object.values(achievementStats.dailyHistory ?? {})) {
+    for (const questId of dayRecord.completedDailyQuestIds ?? []) {
+      if (planQuestIds.has(questId)) completedIds.push(questId)
+    }
+  }
+  // recurring daily 완료는 calendar dateKey 기준으로 확인
+  const calendarCompletedIds = achievementStats.dailyHistory?.[todayKey()]?.completedDailyQuestIds ?? []
+
+  // 현재 플랜의 퀘스트 목록 (AI 플랜 + recurring daily)
   const todayDailies = quests.filter(q => q.type === 'daily')
-  const completedToday = todayDailies.filter(q => completedIds.includes(q.id))
+  // 완료 판단: AI 플랜 퀘스트는 플랜 기반 completedIds, 일반 recurring는 calendar completedIds
+  const completedToday = todayDailies.filter(q => {
+    if (!q.recurring && planQuestIds.has(q.id)) return completedIds.includes(q.id)
+    return calendarCompletedIds.includes(q.id)
+  })
 
   // 카테고리별 완료 수 집계
   const byCategory: Partial<Record<Category, number>> = {}
@@ -2658,7 +2683,7 @@ const createGateBattleOutcomeUpdate = (
   })
   const nextSkillStates = finalLog.battleId.startsWith('direct-gate-')
     ? applyDirectBattleSkillRuntimeUses(s.skillStates, finalLog.turns, isVictory, isBoss,
-        s.dailyProgression?.dateKey === todayKey() ? (s.dailyProgression?.skillXpBonus ?? 0) : 0)
+        s.dailyProgression?.dateKey === getActivePlanDateKey(s.quests) ? (s.dailyProgression?.skillXpBonus ?? 0) : 0)
     : s.skillStates
 
   const clearTickets = isVictory ? getGateClearExpeditionTickets(gate.rank) : 0
@@ -2727,23 +2752,46 @@ const syncTodayShadowExpeditionState = (s: GameState): Pick<GameState, 'shadowEx
   
   let shadowExpeditions = [...(s.shadowExpeditions ?? [])]
   
+  // AI 플랜 기반 완료 수 확인 (잠금 해제 조건)
+  const planDailyCount = getPlanBasedCompletedCount(s.quests ?? [], s.achievementStats)
+  const expeditionUnlocked = planDailyCount >= SHADOW_EXPEDITION_UNLOCK_DAILY_COUNT
+
   // 1. 일상 원정(daily) 생성 검사: 특별 원정이 아닌 일반 원정 중 활성/대기 상태인 게 없을 때만 일상 원정 생성
   const hasActiveOrAvailableDaily = shadowExpeditions.some(item => !item.isSpecial && (item.status === 'in_progress' || item.status === 'available'))
-  
+
   if (!hasActiveOrAvailableDaily) {
-    const uniqueSeed = `${dateKey}-${Date.now()}-${Math.floor(Math.random() * 1000)}`
-    const newExpedition = createShadowExpeditionForDate(uniqueSeed)
-    newExpedition.status = 'available'
-    newExpedition.logs = [{
-      id: `log-${newExpedition.id}-created`,
-      turn: 0,
-      type: 'system',
-      message: '새로운 그림자 원정이 준비되었다. 원정 시작을 위해 티켓 1장을 소모한다.',
-    }]
-    shadowExpeditions.unshift(newExpedition)
+    const hasLockedDaily = shadowExpeditions.some(item => !item.isSpecial && item.status === 'locked')
+    if (!hasLockedDaily) {
+      // 새 원정 생성 (locked 상태로 시작)
+      const uniqueSeed = `${dateKey}-${Date.now()}-${Math.floor(Math.random() * 1000)}`
+      const newExpedition = createShadowExpeditionForDate(uniqueSeed)
+      if (expeditionUnlocked) {
+        // 플랜 완료 조건 충족 시 바로 available로 전환
+        newExpedition.status = 'available'
+        newExpedition.logs = [{
+          id: `log-${newExpedition.id}-created`,
+          turn: 0,
+          type: 'system',
+          message: '새로운 그림자 원정이 준비되었다. 원정 시작을 위해 티켓 1장을 소모한다.',
+        }]
+      }
+      // else: locked 상태 유지 (createShadowExpeditionForDate의 기본 로그 메시지 사용)
+      shadowExpeditions.unshift(newExpedition)
+    } else if (expeditionUnlocked) {
+      // 기존 locked 원정을 available로 업그레이드
+      shadowExpeditions = shadowExpeditions.map(expedition => {
+        if (!expedition.isSpecial && expedition.status === 'locked') {
+          return { ...expedition, status: 'available' }
+        }
+        if (!expedition.isSpecial && new Date(expedition.expiresAt).getTime() < now.getTime() && expedition.status !== 'completed' && expedition.status !== 'in_progress') {
+          return { ...expedition, status: 'expired' }
+        }
+        return expedition
+      })
+    }
   } else {
     shadowExpeditions = shadowExpeditions.map(expedition => {
-      if (!expedition.isSpecial && expedition.status === 'locked') {
+      if (!expedition.isSpecial && expedition.status === 'locked' && expeditionUnlocked) {
         return { ...expedition, status: 'available' }
       }
       if (!expedition.isSpecial && new Date(expedition.expiresAt).getTime() < now.getTime() && expedition.status !== 'completed' && expedition.status !== 'in_progress') {
@@ -5666,7 +5714,7 @@ export const useGame = create<GameState>()(
 
         // 12-40F: 현실 준비도 보너스를 게이트 런 보상 배율에 적용
         const dp = s.dailyProgression
-        if (dp && dp.dateKey === todayKey()) {
+        if (dp && dp.dateKey === getActivePlanDateKey(s.quests)) {
           // 보상 배율에 daily progression 보너스 가산
           if (dp.gateRewardBonus > 0) {
             runState.rewardMultiplier = parseFloat(
@@ -9410,7 +9458,7 @@ export const useGame = create<GameState>()(
 
         const redGateState = activeGate.runState?.redGateState
         // 12-40F: 현실 준비도 기반 추출 보너스 합산
-        const dpExtractBonus = (s.dailyProgression?.dateKey === todayKey())
+        const dpExtractBonus = (s.dailyProgression?.dateKey === getActivePlanDateKey(s.quests))
           ? (s.dailyProgression?.extractionBonus ?? 0)
           : 0
         const rawResult = rollShadowExtraction(gate, s.hunter, equippedShadows, Math.random, bonusChance + dpExtractBonus, redGateState)
@@ -14885,10 +14933,9 @@ export const useGame = create<GameState>()(
         persistedState.hardcoreState = ensureHardcoreState(persistedState.hardcoreState)
 
         // 12-40F: dailyProgression 마이그레이션 가드 (기존 세이브 호환)
-        if (!persistedState.dailyProgression) {
-          persistedState.dailyProgression = undefined
-        } else if (persistedState.dailyProgression.dateKey !== new Date().toISOString().slice(0, 10)) {
-          // 날짜가 바뀌었으면 null로 리셋 → recordAppOpen 시 재계산됨
+        // AI 플랜 날짜 기준이므로 calendar date가 달라져도 진행도를 유지.
+        // dateKey가 없는 경우(구버전 데이터)만 초기화. recordAppOpen 시 재계산됨.
+        if (persistedState.dailyProgression && !persistedState.dailyProgression.dateKey) {
           persistedState.dailyProgression = undefined
         }
 

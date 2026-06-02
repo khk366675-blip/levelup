@@ -3,6 +3,7 @@ import type {
   ExpeditionMidEvent,
   ExpeditionPhase,
   OwnedShadow,
+  Quest,
   ShadowDefinition,
   ShadowExpedition,
   ShadowExpeditionCommand,
@@ -30,7 +31,7 @@ import {
   pickMidEvent,
 } from './expeditionLore'
 
-export const SHADOW_EXPEDITION_UNLOCK_DAILY_COUNT = 2
+export const SHADOW_EXPEDITION_UNLOCK_DAILY_COUNT = 6
 export const SHADOW_EXPEDITION_PARTY_MIN = 1
 export const SHADOW_EXPEDITION_PARTY_MAX = 5
 
@@ -249,6 +250,72 @@ const expiresAtFor = (date: string): string => {
 export const getTodayDailyCompletedCount = (stats: AchievementStats | undefined, dateKey: string): number =>
   stats?.dailyHistory?.[dateKey]?.completedDailyCount ?? 0
 
+/**
+ * 현재 활성 AI 플랜의 날짜 키를 반환합니다.
+ * 퀘스트 목록에서 coachPlanDate가 있는 AI 일일 퀘스트 중 가장 최근 날짜를 기준으로 합니다.
+ * AI 플랜이 없으면 오늘 날짜를 반환합니다.
+ */
+export const getActivePlanDateKey = (quests: Quest[]): string => {
+  const aiDailies = quests.filter(
+    (q) =>
+      q.type === 'daily' &&
+      !q.recurring &&
+      (q.coachGenerated === true || q.coachPlanId !== undefined || q.coachReason !== undefined) &&
+      Boolean(q.coachPlanDate),
+  )
+  if (!aiDailies.length) return new Date().toISOString().slice(0, 10)
+  const planDates = aiDailies.map((q) => q.coachPlanDate!).sort()
+  return planDates[planDates.length - 1]
+}
+
+/**
+ * AI 플랜 기반으로 완료된 일일 퀘스트 수를 계산합니다.
+ * 현재 AI 플랜의 퀘스트 IDs를 추출하고, 모든 dailyHistory 기록에서 해당 IDs의 완료를 카운트합니다.
+ * 이를 통해 AI 플랜 날짜와 실제 완료 날짜(캘린더 날짜)가 달라도 정확히 집계됩니다.
+ */
+export const getPlanBasedCompletedCount = (
+  quests: Quest[],
+  stats: AchievementStats | undefined,
+): number => {
+  const aiDailies = quests.filter(
+    (q) =>
+      q.type === 'daily' &&
+      !q.recurring &&
+      (q.coachGenerated === true || q.coachPlanId !== undefined || q.coachReason !== undefined),
+  )
+  if (!aiDailies.length) {
+    // AI 플랜 없음: 오늘 날짜 기준 completedDailyCount 반환
+    const todayStr = new Date().toISOString().slice(0, 10)
+    return stats?.dailyHistory?.[todayStr]?.completedDailyCount ?? 0
+  }
+
+  // 가장 최근 플랜 날짜 찾기
+  const planDates = aiDailies.map((q) => q.coachPlanDate).filter((d): d is string => Boolean(d)).sort()
+  const activePlanDate = planDates[planDates.length - 1]
+
+  if (!activePlanDate) {
+    const todayStr = new Date().toISOString().slice(0, 10)
+    return stats?.dailyHistory?.[todayStr]?.completedDailyCount ?? 0
+  }
+
+  // 현재 활성 플랜의 퀘스트 ID 목록 구성
+  const planQuestIds = new Set(
+    aiDailies
+      .filter((q) => q.coachPlanDate === activePlanDate)
+      .map((q) => q.id),
+  )
+  if (!planQuestIds.size) return 0
+
+  // 모든 dailyHistory 기록에서 플랜 퀘스트 ID 완료 수 집계
+  let count = 0
+  for (const dayRecord of Object.values(stats?.dailyHistory ?? {})) {
+    for (const questId of dayRecord.completedDailyQuestIds ?? []) {
+      if (planQuestIds.has(questId)) count++
+    }
+  }
+  return count
+}
+
 export const createShadowExpeditionForDate = (date: string): ShadowExpedition => {
   const template = SHADOW_EXPEDITION_TEMPLATES[hashDate(date) % SHADOW_EXPEDITION_TEMPLATES.length]
   return {
@@ -270,7 +337,7 @@ export const createShadowExpeditionForDate = (date: string): ShadowExpedition =>
       id: `shadow-expedition-${date}-created`,
       turn: 0,
       type: 'system',
-      message: '오늘의 그림자 원정이 감지되었다. Daily 2개를 완료하면 지휘 권한이 열린다.',
+      message: '오늘의 그림자 원정이 감지되었다. Daily 6개를 완료하면 지휘 권한이 열린다.',
     }],
     searchStacks: 0,
     analyzeStacks: 0,

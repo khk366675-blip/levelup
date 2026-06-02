@@ -18,7 +18,6 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { motion } from 'framer-motion'
 import { useGame } from '../../lib/store'
 import { canUseMajorAction } from '../../lib/gateEchoes'
-import { todayKey } from '../../lib/game'
 import { type CinematicLogData, type CinematicLogTone } from '../CinematicLogOverlay'
 import { CombatLogPanel, type CombatLogEntry, type CombatLogEntryTone } from '../CombatLogPanel'
 import {
@@ -27,10 +26,11 @@ import {
   SHADOW_EXPEDITION_PARTY_MAX,
   SHADOW_EXPEDITION_UNLOCK_DAILY_COUNT,
   estimateShadowExpeditionSuccess,
+  getActivePlanDateKey,
   getPhaseDisplayName,
+  getPlanBasedCompletedCount,
   getShadowExpeditionPartyPower,
   getShadowExpeditionRecommendedRoleMatches,
-  getTodayDailyCompletedCount,
 } from '../../lib/shadowExpeditions'
 import { SHADOW_INNATE_GRADE_LABEL, SHADOW_ROLE_LABEL, getShadowDefinition } from '../../lib/shadows'
 import { getSecretVisibleFragments } from '../../lib/secrets'
@@ -492,8 +492,9 @@ export function ShadowExpeditionPanel() {
   const [expeditionCinematicLogs, setExpeditionCinematicLogs] = useState<CinematicLogData[]>([])
   const [expeditionSkipSignal, setExpeditionSkipSignal] = useState(0)
   const previousExpeditionLogRef = useRef<{ expeditionId?: string; count: number }>({ count: 0 })
-  const dateKey = todayKey()
-  const dailyCount = getTodayDailyCompletedCount(achievementStats, dateKey)
+  const quests = useGame(s => s.quests)
+  const dateKey = getActivePlanDateKey(quests)
+  const dailyCount = getPlanBasedCompletedCount(quests, achievementStats)
 
   const [activeTab, setActiveTab] = useState<'daily' | 'special'>('daily')
 
