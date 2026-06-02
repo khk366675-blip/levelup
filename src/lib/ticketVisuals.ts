@@ -11,6 +11,7 @@ import ticketEquipmentRelic from '../assets/tickets/ticket-equipment-relic.png.p
 import ticketEquipmentWeapon from '../assets/tickets/ticket-equipment-weapon.png.png'
 import ticketShadowNormal from '../assets/tickets/ticket-shadow-normal.png.png'
 import ticketShadowPremium from '../assets/tickets/ticket-shadow-premium.png.png'
+import ticketShadowTravel from '../assets/tickets/ticket-shadow-travel.png.png'
 
 export type TicketArtKind =
   | 'shadow'
@@ -23,6 +24,7 @@ export type TicketArtKind =
   | 'bundle'
   | 'essence'
   | 'exchange'
+  | 'travel'
 
 export type TicketVisualKey =
   | 'shadow-normal'
@@ -38,6 +40,7 @@ export type TicketVisualKey =
   | 'essence-exchange'
   | 'exchange_essence_gold_to_shard'
   | 'shadow-bundle'
+  | 'shadow-travel'
   | 'shop-supply'
 
 export type TicketVisual = {
@@ -68,6 +71,7 @@ export const TICKET_ASSET_MANIFEST: Partial<Record<TicketVisualKey, string>> = {
   'essence-exchange': exchangeEssenceGoldToShard,
   'exchange_essence_gold_to_shard': exchangeEssenceGoldToShard,
   'shadow-bundle': packShadowShards,
+  'shadow-travel': ticketShadowTravel,
 }
 
 export const getTicketVisualAsset = (key: TicketVisualKey): string | undefined =>
@@ -229,6 +233,19 @@ export const TICKET_VISUALS_BY_PRODUCT_ID: Record<string, TicketVisual> = {
     accentClass: 'text-fuchsia-100 border-fuchsia-200/28 bg-fuchsia-300/10',
     stubClass: 'border-fuchsia-300/22 bg-fuchsia-400/9 text-fuchsia-100',
     poolLabel: '조각',
+  },
+  'expedition-ticket': {
+    key: 'shadow-travel',
+    label: 'SHADOW TRAVEL',
+    shortDescription: '그림자 일상 원정 티켓',
+    glyph: 'TRAVEL',
+    artKind: 'travel',
+    borderClass: 'border-teal-300/35',
+    surfaceClass: 'from-teal-500/16 via-emerald-300/8 to-ink-950/80',
+    glowClass: 'shadow-[0_0_26px_rgba(20,184,166,0.13)]',
+    accentClass: 'text-teal-100 border-teal-200/30 bg-teal-300/12',
+    stubClass: 'border-teal-300/25 bg-teal-400/10 text-teal-100',
+    poolLabel: '원정',
   },
 }
 
