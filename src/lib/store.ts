@@ -1131,13 +1131,16 @@ const buildFocusSessionReward = (
   redGateResistBonus: number = 0
 ): FocusSessionRewardSummary => {
   const focusedMin = focusedMs / (60 * 1000)
+  const plannedMin = plannedDurationMs / (60 * 1000)
 
-  // base 보상: 1분당 대략 gold 15, essence 3
-  let gold = Math.floor(focusedMin * 15)
-  let essence = Math.floor(focusedMin * 3)
+  // Keep focus sessions motivational without making them a primary economy faucet.
+  const goldPerMinute = 2
+  const essencePerFiveMinutes = 3
+  let gold = Math.floor(focusedMin * goldPerMinute)
+  let essence = Math.floor(focusedMin / 5 * essencePerFiveMinutes)
 
-  // 완주 보너스 배율 (성공시 1.5배)
-  const completionMultiplier = completed ? 1.5 : 1.0
+  // Completion still matters, but should not double-dip into large timer payouts.
+  const completionMultiplier = completed ? 1.2 : 1.0
   gold = Math.floor(gold * completionMultiplier)
   essence = Math.floor(essence * completionMultiplier)
 
@@ -1146,17 +1149,16 @@ const buildFocusSessionReward = (
   gold = Math.floor(gold * penaltyFactor)
   essence = Math.floor(essence * penaltyFactor)
 
-  // focus axis score 공정 계산 (1분당 1.0, 완주시 보너스 + plannedDuration 20%)
-  let focusAxisBonus = Math.floor(focusedMin * 1.0)
+  // focus axis score stays separate from spendable currency, but is also toned down.
+  let focusAxisBonus = Math.floor(focusedMin * 0.4)
   if (completed) {
-    focusAxisBonus += Math.floor((plannedDurationMs / (60 * 1000)) * 0.2)
+    focusAxisBonus += Math.floor(plannedMin * 0.1)
   }
 
-  // 25분 이상 완주시 fragment 획득 (완주시에만 획득 가능)
-  // 25분 이상 20% 확률, 50분 이상 40% 확률 1개
+  // 25+ minute clears can still surprise the player, just much less often.
   let shadowFragments: number | undefined = undefined
   if (completed && focusedMin >= 25) {
-    const prob = focusedMin >= 50 ? 0.4 : 0.2
+    const prob = focusedMin >= 50 ? 0.12 : 0.05
     if (Math.random() < prob) {
       shadowFragments = 1
     }
@@ -1171,11 +1173,10 @@ const buildFocusSessionReward = (
     instabilityAdded = Math.max(0, Math.round(rawInstability * (1 - redGateResistBonus)))
   }
 
-  // extraction bonus 계산 (완주시 study timer 이탈 횟수가 적을수록 보너스)
+  // extraction bonus is a small nudge, not a major extraction-rate source.
   let extractionBonus: number | undefined = undefined
   if (completed && linkedGateId) {
-    // 이탈이 전혀 없으면 +12% 보너스, 1회당 -2.5%씩 차감 (최소 0%)
-    extractionBonus = Math.max(0.0, parseFloat((0.12 - interruptionCount * 0.025).toFixed(3)))
+    extractionBonus = Math.max(0.0, parseFloat((0.04 - interruptionCount * 0.01).toFixed(3)))
   }
 
   return {
