@@ -234,10 +234,22 @@ function ShadowDetailPanel({
   shadow,
   equipped,
   shadowEssence,
+  materialCount,
+  onAbsorb,
+  onDecompose,
+  onToggleLock,
+  onToggleFavorite,
+  onEvolve,
 }: {
   shadow?: OwnedShadow
   equipped: boolean
   shadowEssence: number
+  materialCount: number
+  onAbsorb: () => void
+  onDecompose: () => void
+  onToggleLock: () => void
+  onToggleFavorite: () => void
+  onEvolve: () => void
 }) {
   const [detailsOpen, setDetailsOpen] = useState(false)
 
@@ -552,203 +564,70 @@ function ShadowDetailPanel({
       </div>
         </div>
       )}
-    </div>
-  )
-}
 
-function ShadowCard({
-  shadow,
-  equipped,
-  canEquip,
-  onEquip,
-  onUnequip,
-  materialCount,
-  onAbsorb,
-  onDecompose,
-  onToggleLock,
-  onToggleFavorite,
-  onEvolve,
-  shadowEssence,
-}: {
-  shadow: OwnedShadow
-  equipped: boolean
-  canEquip: boolean
-  onEquip: () => void
-  onUnequip: () => void
-  materialCount: number
-  onAbsorb: () => void
-  onDecompose: () => void
-  onToggleLock: () => void
-  onToggleFavorite: () => void
-  onEvolve: () => void
-  shadowEssence: number
-}) {
-  const effects = getShadowEffects(shadow).map(formatShadowEffect)
-  const level = shadow.level ?? 1
-  const maxLevel = getShadowMaxLevel(shadow)
-  const xp = shadow.xp ?? 0
-  const xpNeeded = getShadowXpForNextLevel(level)
-  const xpPct = level >= maxLevel ? 100 : Math.min(100, Math.round((xp / xpNeeded) * 100))
-  const evolutionCheck = canEvolveShadow(shadow, shadowEssence)
-  const named = Boolean(shadow.isNamed || shadow.isGateNamed || shadow.isAchievementNamed)
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 4 }}
-      animate={{ opacity: 1, y: 0 }}
-      whileHover={{ y: -4, scale: 1.015 }}
-      transition={{ duration: 0.22, ease: 'easeOut' }}
-      className={`panel corner-bracket p-4 card-premium-shine group transition-all duration-300 ${rarityStyle[shadow.rarity]} ${
-        equipped ? 'shadow-deployed-glow ring-2 ring-cyan-300/40' : 'hover:border-cyan-400/40 hover:bg-white/[0.015]'
-      } ${shadow.innateGrade === 'S' ? 'grade-aura-s' : shadow.innateGrade === 'A' ? 'grade-aura-a' : ''} ${
-        (shadow.evolutionStage ?? 0) > 0 ? 'shadow-evolved-card' : ''
-      } ${named ? 'named-pulse' : ''}`}
-    >
-      <div className="br" />
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <div className="text-[10px] system-text opacity-70">[{SHADOW_RARITY_LABEL[shadow.rarity]}]</div>
-          <h3 className="font-bold text-white/90 mt-0.5">{shadow.name}{(shadow.enhancementLevel ?? 0) > 0 ? ` +${shadow.enhancementLevel}` : ''}</h3>
-          <div className="text-[11px] text-white/55 mt-1">
-            계급: {SHADOW_RANK_LABEL[shadow.rank]} · 역할: {SHADOW_ROLE_LABEL[shadow.role]} · 태생: {SHADOW_INNATE_GRADE_LABEL[shadow.innateGrade ?? 'B']}
-          </div>
-        </div>
-        <div className="flex flex-col items-end gap-1">
-          {equipped && (
-            <span className="text-[10px] system-text px-2 py-0.5 rounded border border-amber-400/35 bg-amber-400/10 text-amber-200">
-              출전 중
-            </span>
-          )}
-          {shadow.isLocked && (
-            <span className="text-[10px] system-text px-2 py-0.5 rounded border border-rose-400/35 bg-rose-400/10 text-rose-200 flex items-center gap-1">
-              <Lock className="w-2.5 h-2.5" /> 잠금
-            </span>
-          )}
-          {shadow.isFavorite && (
-            <span className="text-[10px] system-text px-2 py-0.5 rounded border border-yellow-400/35 bg-yellow-400/10 text-yellow-200 flex items-center gap-1">
-              <Star className="w-2.5 h-2.5" /> 즐겨찾기
-            </span>
-          )}
-          {evolutionCheck.canEvolve && (
-            <span className="text-[10px] system-text px-2 py-0.5 rounded border border-emerald-400/35 bg-emerald-400/10 text-emerald-200">
-              진화 가능
-            </span>
-          )}
-        </div>
-      </div>
-
-      <div className="mt-2 flex items-center gap-2">
-        <span className="text-[10px] text-white/60">Lv {level}/{maxLevel}</span>
-        <div className="flex-1 h-1.5 bg-white/10 rounded-full overflow-hidden">
-          <div className="h-full bg-cyan-400/60 rounded-full transition-all" style={{ width: `${xpPct}%` }} />
-        </div>
-        <span className="text-[10px] text-white/40">{level >= maxLevel ? 'MAX' : `${xp}/${xpNeeded}`}</span>
-      </div>
-
-      <div className="mt-1.5 flex items-center gap-2">
-        <span className="text-[10px] text-amber-200/90 font-medium">⭐ 숙련 {shadow.expeditionLevel ?? 1}/10</span>
-        <div className="flex-1 h-1 bg-white/10 rounded-full overflow-hidden">
-          <div className="h-full bg-gradient-to-r from-yellow-400 via-orange-400 to-amber-500 rounded-full transition-all" style={{ width: `${(shadow.expeditionLevel ?? 1) >= 10 ? 100 : Math.min(100, Math.round(((shadow.expeditionMastery ?? 0) / (100 + ((shadow.expeditionLevel ?? 1) - 1) * 50)) * 100))}%` }} />
-        </div>
-        <span className="text-[9px] text-amber-200/70 font-semibold">+{((shadow.expeditionLevel ?? 1) - 1) * 3}%</span>
-      </div>
-
-      {shadow.traits.length > 0 && (
-        <div className="mt-2 text-[11px] text-purple-100/80">
-          특성: {shadow.traits.map(trait => trait.name).join(' / ')}
-        </div>
-      )}
-      <div className="mt-2 text-[11px] text-cyan-100/70 leading-relaxed">
-        {effects.join(' · ')}
-      </div>
-      <div className="mt-2 text-[10px] text-white/40 system-text">
-        출처: {sourceText(shadow)}
-      </div>
-      {(shadow.enhancementLevel ?? 0) > 0 && (
-        <div className="mt-1 text-[10px] text-amber-200/70">
-          강화 {shadow.enhancementLevel}/{MAX_SHADOW_ENHANCEMENT_LEVEL} · 흡수 {(shadow.absorbedCount ?? 0)}회
-        </div>
-      )}
-      {(shadow.isLocked || shadow.isFavorite) && (
-        <div className="mt-1 text-[10px] text-white/30 flex gap-2">
-          {shadow.isLocked && <span className="text-rose-200/60">잠금 중: 분해/재료 사용 불가</span>}
-          {shadow.isFavorite && <span className="text-yellow-200/60">즐겨찾기</span>}
-        </div>
-      )}
-      {evolutionCheck.targetDefinition && (
-        <div className="mt-1 text-[10px] text-white/40">
-          진화: {shadow.name} → {evolutionCheck.targetDefinition.name} ({evolutionCheck.cost} 그림자 정수)
-          {!evolutionCheck.canEvolve && evolutionCheck.reason && (
-            <span className="text-white/30 ml-1">· {evolutionCheck.reason}</span>
-          )}
-        </div>
-      )}
-
-      <div className="mt-3 flex flex-col gap-2">
-        {equipped ? (
-          <button type="button" onClick={onUnequip} className="w-full btn text-xs border-rose-400/25 bg-rose-400/10 text-rose-100">
-            <X className="w-3 h-3" />
-            해제
-          </button>
-        ) : (
-          <button type="button" onClick={onEquip} disabled={!canEquip} className="w-full btn btn-primary text-xs disabled:opacity-50 disabled:cursor-not-allowed">
-            출전
-          </button>
-        )}
+      {/* 액션 관리 영역 */}
+      <div className="mt-4 border-t border-white/10 pt-3 space-y-2">
         <div className="flex gap-2">
           <button
             type="button"
             onClick={onAbsorb}
             disabled={materialCount === 0 || (shadow.enhancementLevel ?? 0) >= MAX_SHADOW_ENHANCEMENT_LEVEL || shadow.isAchievementNamed}
-            className="flex-1 btn text-[10px] border-amber-400/25 bg-amber-400/10 text-amber-100 disabled:opacity-40 disabled:cursor-not-allowed"
-            title={shadow.isAchievementNamed ? '성취 네임드는 흡수 불가' : materialCount === 0 ? '재료 없음' : (shadow.enhancementLevel ?? 0) >= MAX_SHADOW_ENHANCEMENT_LEVEL ? '최대 강화' : `재료 ${materialCount}개`}
+            className="flex-1 btn text-xs border-amber-400/25 bg-amber-400/10 text-amber-100 disabled:opacity-40 disabled:cursor-not-allowed min-h-10"
+            title={shadow.isAchievementNamed ? '성취 네임드는 흡수 불가' : materialCount === 0 ? '동일 종류 재료 그림자가 없습니다' : (shadow.enhancementLevel ?? 0) >= MAX_SHADOW_ENHANCEMENT_LEVEL ? '최대 강화 단계입니다' : `동일 재료 그림자 ${materialCount}개 보유 중`}
           >
-            흡수 +{Math.min(MAX_SHADOW_ENHANCEMENT_LEVEL, (shadow.enhancementLevel ?? 0) + 1)} ({materialCount})
+            그림자 흡수 ({materialCount})
           </button>
+          
           <button
             type="button"
             onClick={onDecompose}
             disabled={equipped || shadow.isAchievementNamed || shadow.isLocked}
-            className="flex-1 btn text-[10px] border-rose-400/25 bg-rose-400/10 text-rose-100 disabled:opacity-40 disabled:cursor-not-allowed"
-            title={shadow.isAchievementNamed ? '성취 네임드는 분해 불가' : shadow.isLocked ? '잠금 중: 분해 불가' : equipped ? '장착 중' : `그림자 정수 +${SHADOW_DECOMPOSE_ESSENCE[shadow.rarity] ?? 1}`}
+            className="flex-1 btn text-xs border-rose-400/25 bg-rose-400/10 text-rose-100 disabled:opacity-40 disabled:cursor-not-allowed min-h-10"
+            title={shadow.isAchievementNamed ? '성취 네임드는 분해 불가' : shadow.isLocked ? '잠금 상태를 해제해야 분해 가능' : equipped ? '출전 해제 후 분해 가능' : `정수 +${SHADOW_DECOMPOSE_ESSENCE[shadow.rarity] ?? 1}`}
           >
             분해 (+{SHADOW_DECOMPOSE_ESSENCE[shadow.rarity] ?? 1})
           </button>
         </div>
+
         <div className="flex gap-2">
           <button
             type="button"
             onClick={onToggleLock}
-            className={`flex-1 btn text-[10px] ${shadow.isLocked ? 'border-rose-400/35 bg-rose-400/15 text-rose-100' : 'border-white/10 bg-ink-900/45 text-white/50'}`}
+            className={`flex-1 btn text-xs min-h-9 ${shadow.isLocked ? 'border-rose-400/35 bg-rose-400/15 text-rose-100' : 'border-white/10 bg-ink-900/45 text-white/50'}`}
             title={shadow.isLocked ? '잠금 해제' : '잠금 (분해/재료 방지)'}
           >
-            <Lock className="w-2.5 h-2.5 inline mr-1" />
-            {shadow.isLocked ? '잠금 해제' : '잠금'}
+            <Lock className="w-3.5 h-3.5 inline mr-1" />
+            {shadow.isLocked ? '잠금 해제' : '그림자 잠금'}
           </button>
+
           <button
             type="button"
             onClick={onToggleFavorite}
-            className={`flex-1 btn text-[10px] ${shadow.isFavorite ? 'border-yellow-400/35 bg-yellow-400/15 text-yellow-100' : 'border-white/10 bg-ink-900/45 text-white/50'}`}
+            className={`flex-1 btn text-xs min-h-9 ${shadow.isFavorite ? 'border-yellow-400/35 bg-yellow-400/15 text-yellow-100' : 'border-white/10 bg-ink-900/45 text-white/50'}`}
             title={shadow.isFavorite ? '즐겨찾기 해제' : '즐겨찾기'}
           >
-            <Star className="w-2.5 h-2.5 inline mr-1" />
+            <Star className="w-3.5 h-3.5 inline mr-1" />
             {shadow.isFavorite ? '즐겨찾기 해제' : '즐겨찾기'}
           </button>
         </div>
+
         {evolutionCheck.targetDefinition && (
           <button
             type="button"
             onClick={onEvolve}
             disabled={!evolutionCheck.canEvolve}
-            className={`w-full btn text-[10px] ${evolutionCheck.canEvolve ? 'border-emerald-400/35 bg-emerald-400/15 text-emerald-100' : 'border-white/10 bg-ink-900/45 text-white/40'} disabled:opacity-40 disabled:cursor-not-allowed`}
+            className={`w-full btn text-xs min-h-10 ${evolutionCheck.canEvolve ? 'border-emerald-400/35 bg-emerald-400/15 text-emerald-100' : 'border-white/10 bg-ink-900/45 text-white/40'} disabled:opacity-40 disabled:cursor-not-allowed`}
             title={evolutionCheck.reason ?? `진화: ${evolutionCheck.targetDefinition.name}`}
           >
-            {evolutionCheck.canEvolve ? `진화 → ${evolutionCheck.targetDefinition.name}` : `진화 불가 · ${evolutionCheck.reason}`}
+            {evolutionCheck.canEvolve ? `진화 → ${evolutionCheck.targetDefinition.name} (정수 ${evolutionCheck.cost})` : `진화 불가 · ${evolutionCheck.reason}`}
           </button>
         )}
       </div>
-    </motion.div>
+    </div>
   )
 }
+
+
 
 function CodexCard({
   definition,
@@ -1540,6 +1419,18 @@ export function ShadowPanel() {
             shadow={selectedShadow}
             equipped={selectedShadow ? equippedShadowIds.includes(selectedShadow.instanceId) : false}
             shadowEssence={shadowEssence}
+            materialCount={selectedShadow ? getShadowAbsorbMaterialCount(selectedShadow, ownedShadows, equippedShadowIds) : 0}
+            onAbsorb={() => selectedShadow && absorbShadow(selectedShadow.instanceId)}
+            onDecompose={() => {
+              if (!selectedShadow) return
+              const targetEssence = SHADOW_DECOMPOSE_ESSENCE[selectedShadow.rarity] ?? 1
+              if (window.confirm(`[분해 확인]\n\n[${SHADOW_RARITY_LABEL[selectedShadow.rarity]}] ${selectedShadow.name} 그림자를 분해하시겠습니까?\n\n분해 시 이 그림자는 영구 삭제되며, 그림자 정수 ${targetEssence}개를 획득합니다.`)) {
+                decomposeShadow(selectedShadow.instanceId)
+              }
+            }}
+            onToggleLock={() => selectedShadow && toggleShadowLock(selectedShadow.instanceId)}
+            onToggleFavorite={() => selectedShadow && toggleShadowFavorite(selectedShadow.instanceId)}
+            onEvolve={() => selectedShadow && evolveShadow(selectedShadow.instanceId)}
           />
         </div>
 
