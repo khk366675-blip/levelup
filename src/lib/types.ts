@@ -708,6 +708,8 @@ export interface OwnedShadow {
   traits: ShadowTrait[]
   level?: number
   xp?: number
+  expeditionLevel?: number
+  expeditionMastery?: number
   isNamed?: boolean
   isGateNamed?: boolean
   isAchievementNamed?: boolean
@@ -1893,6 +1895,7 @@ export interface BoxReward {
   shadowSummonTickets?: ShadowSummonTicket[]
   shadowSummonShards?: Partial<Record<ShadowSummonShardType, number>>
   shadowFragments?: ShadowFragmentReward[]
+  expeditionTickets?: number
   items?: Item[]
   consumables?: Item[]
   message?: string

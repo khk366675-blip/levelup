@@ -396,6 +396,9 @@ function MiniShadow({
       <div className="text-[9px] system-text text-white/45">
         Lv {shadow.level ?? 1} / {SHADOW_ROLE_LABEL[shadow.role]}
       </div>
+      <div className="mt-0.5 text-[9px] font-medium text-amber-300/90 system-text flex items-center gap-0.5">
+        ⭐ 숙련 Lv.{shadow.expeditionLevel ?? 1} {((shadow.expeditionLevel ?? 1) > 1) && `(+${((shadow.expeditionLevel ?? 1) - 1) * 3}%)`}
+      </div>
       <div className="mt-1 flex flex-wrap gap-1">
         {collapsed ? (
           <span className="rounded border border-red-500/35 bg-red-500/10 px-1.5 py-0.5 text-[8px] system-text font-bold text-red-300 animate-pulse">
@@ -455,7 +458,7 @@ function ShadowMiniChip({
       <div className="min-w-0">
         <div className={clsx('truncate font-semibold text-white/80', compact ? 'text-[10px]' : 'text-xs')}>{shadow.name}</div>
         <div className="system-text text-[8px] text-white/42">
-          {SHADOW_ROLE_LABEL[shadow.role]} · {SHADOW_INNATE_GRADE_LABEL[shadow.innateGrade ?? 'B']}
+          {SHADOW_ROLE_LABEL[shadow.role]} · {SHADOW_INNATE_GRADE_LABEL[shadow.innateGrade ?? 'B']} · ⭐{shadow.expeditionLevel ?? 1}
         </div>
       </div>
     </div>
@@ -464,6 +467,7 @@ function ShadowMiniChip({
 
 export function ShadowExpeditionPanel() {
   const ownedShadows = useGame(s => s.ownedShadows ?? [])
+  const expeditionTickets = useGame(s => s.expeditionTickets ?? 0)
   const shadowExpeditions = useGame(s => s.shadowExpeditions ?? [])
   const achievementStats = useGame(s => s.achievementStats)
   const selectParty = useGame(s => s.selectShadowExpeditionParty)
@@ -630,6 +634,9 @@ export function ShadowExpeditionPanel() {
             </span>
             <span className="rounded border border-cyan-400/25 bg-cyan-400/10 px-2 py-0.5 text-[10px] system-text text-cyan-100">
               오늘 Daily {dailyCount} / {SHADOW_EXPEDITION_UNLOCK_DAILY_COUNT}
+            </span>
+            <span className="rounded border border-yellow-400/25 bg-yellow-400/10 px-2 py-0.5 text-[10px] system-text text-yellow-100">
+              🎫 보유 원정 티켓: {expeditionTickets}장
             </span>
             <span className={clsx(
               'rounded border px-2 py-0.5 text-[10px] system-text',
@@ -840,20 +847,27 @@ export function ShadowExpeditionPanel() {
                   <button
                     type="button"
                     onClick={() => startExpedition(expedition.id)}
-                    disabled={!expeditionLock.allowed}
+                    disabled={!expeditionLock.allowed || expeditionTickets < 1}
                     className={clsx(
                       "btn text-xs font-bold flex items-center gap-1.5 justify-center",
-                      !expeditionLock.allowed
+                      (!expeditionLock.allowed || expeditionTickets < 1)
                         ? "border-red-500/40 text-red-400 bg-red-950/15 cursor-not-allowed opacity-60"
                         : "btn-primary"
                     )}
                   >
                     <Zap className="h-3.5 w-3.5" />
-                    {!expeditionLock.allowed ? '원정 시작 잠김' : '원정 시작'}
+                    {!expeditionLock.allowed
+                      ? '원정 시작 잠김'
+                      : (expeditionTickets < 1 ? '티켓 부족 (원정 티켓 1장 소모)' : '원정 시작 (티켓 1장 소모)')}
                   </button>
                   {!expeditionLock.allowed && (
                     <span className="text-[9px] text-red-400 font-semibold max-w-[280px] leading-tight">
                       ⚠️ {expeditionLock.reason}
+                    </span>
+                  )}
+                  {expeditionLock.allowed && expeditionTickets < 1 && (
+                    <span className="text-[10px] text-red-400/90 font-medium max-w-[320px] leading-tight mt-1 bg-red-950/20 border border-red-500/10 rounded px-2 py-1">
+                      💡 원정 티켓 획득처: 게이트 클리어, 일일 퀘스트 완료, 상점 구매(200 Gold), 보상 상자
                     </span>
                   )}
                 </div>

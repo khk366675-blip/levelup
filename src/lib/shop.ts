@@ -24,6 +24,7 @@ export type ShopReward =
   | { kind: 'shadow_shards'; shards: Partial<Record<ShadowSummonShardType, number>> }
   | { kind: 'shadow_essence'; amount: number }
   | { kind: 'equipment_draw'; slot: EquipmentSlot | 'random'; quantity: number; drawTier: ShopEquipmentDrawTier }
+  | { kind: 'expedition_ticket'; quantity: number }
   | { kind: 'mixed'; rewards: ShopReward[] }
 
 export interface ShopProduct {
@@ -214,6 +215,15 @@ export const SHOP_PRODUCTS: ShopProduct[] = [
       ],
     },
     rewardSummary: '무기/방어구/장신구 x1',
+  },
+  {
+    id: 'expedition-ticket',
+    name: '원정 티켓',
+    description: '그림자의 일상 원정을 시작하기 위해 필요한 티켓입니다.',
+    category: 'premium',
+    priceGold: 200,
+    reward: { kind: 'expedition_ticket', quantity: 1 },
+    rewardSummary: '원정 티켓 x1',
   },
 ]
 

@@ -224,6 +224,7 @@ import {
   SHADOW_LEGION_NODES,
   getShadowMaxTraitSlots,
   rollShadowTraitDefinition,
+  SHADOW_TRAITS,
   getValidEquippedShadowIds,
 } from './shadows'
 import {
@@ -422,6 +423,7 @@ export interface GameState {
   gold?: number
   shadowEssence?: number
   shadowSummonTickets?: ShadowSummonTicket[]
+  expeditionTickets?: number
   shadowSummonShards?: Partial<Record<ShadowSummonShardType, number>>
   shadowFragments?: Record<string, number>
   shadowAchievementTicketClaims?: Record<string, string>
@@ -2162,6 +2164,19 @@ export const shadowRestoreCost = (shadow: OwnedShadow): number => {
   return Math.round(base * mult + lvlExtra)
 }
 
+const getGateClearExpeditionTickets = (gateRank: string, rng = Math.random): number => {
+  const roll = rng()
+  switch (gateRank) {
+    case 'E': return roll < 0.20 ? 1 : 0
+    case 'D': return roll < 0.40 ? 1 : 0
+    case 'C': return roll < 0.80 ? 1 : 0
+    case 'B': return roll < 0.20 ? 2 : 1
+    case 'A': return roll < 0.50 ? 2 : 1
+    case 'S': return 2
+    default: return 0
+  }
+}
+
 const createGateBattleOutcomeUpdate = (
   s: GameState,
   activeGate: ActiveGate,
@@ -2351,11 +2366,13 @@ const createGateBattleOutcomeUpdate = (
           run.extractionBonusPercent = (run.extractionBonusPercent ?? 0) + 8
         }
 
+        const clearTickets = getGateClearExpeditionTickets(gate.rank)
         const lines = [
           `게이트 던전 런 [${gate.name}] 완벽 공략 성공!`,
           `총 획득 XP: +${finalXP}`,
           `총 획득 골드: +${finalGold}`,
           `총 획득 그림자 정수: +${finalEssence}`,
+          ...(clearTickets > 0 ? [`원정 티켓 +${clearTickets}장`] : []),
           ...run.accumulatedRewards.items.map(r => `전리품: [${r.itemName}]`),
         ]
 
@@ -2395,6 +2412,7 @@ const createGateBattleOutcomeUpdate = (
           shadowEssence: nextEssenceVal,
           items: nextItems,
           shadowSummonTickets: nextShadowSummonTickets,
+          expeditionTickets: (s.expeditionTickets ?? 0) + clearTickets,
           shadowSummonShards: nextShadowSummonShards,
           ownedShadows: nextOwnedShadows,
           equippedShadowIds: nextEquippedShadowIds,
@@ -2613,7 +2631,8 @@ const createGateBattleOutcomeUpdate = (
         s.dailyProgression?.dateKey === todayKey() ? (s.dailyProgression?.skillXpBonus ?? 0) : 0)
     : s.skillStates
 
-  const finalMessages = shadowLevelUps.length > 0
+  const clearTickets = isVictory ? getGateClearExpeditionTickets(gate.rank) : 0
+  let finalMessages = shadowLevelUps.length > 0
     ? [...s.messages, {
         id: uid(),
         kind: 'shadow' as const,
@@ -2623,11 +2642,22 @@ const createGateBattleOutcomeUpdate = (
       }]
     : s.messages
 
+  if (clearTickets > 0) {
+    finalMessages = [...finalMessages, {
+      id: uid(),
+      kind: 'shadow' as const,
+      title: '게이트 정화 보상',
+      lines: [`게이트 공략 완료 보상으로 원정 티켓 +${clearTickets}장을 획득했습니다.`],
+      createdAt: todayISO(),
+    }]
+  }
+
   const baseState: Partial<GameState> = {
     hunter: nextHunter,
     gold: nextGold,
     items: nextItems,
     shadowSummonTickets: nextShadowSummonTickets,
+    expeditionTickets: (s.expeditionTickets ?? 0) + clearTickets,
     shadowSummonShards: nextShadowSummonShards,
     ownedShadows: nextOwnedShadows,
     equippedShadowIds: nextEquippedShadowIds,
@@ -2649,24 +2679,40 @@ const createGateBattleOutcomeUpdate = (
 
 const syncTodayShadowExpeditionState = (s: GameState): Pick<GameState, 'shadowExpeditions' | 'lastShadowExpeditionDate' | 'activeShadowExpeditionId'> => {
   const dateKey = todayKey()
-  const completedDailyCount = getTodayDailyCompletedCount(s.achievementStats, dateKey)
   const now = new Date()
-  let hasToday = false
-  const shadowExpeditions = (s.shadowExpeditions ?? []).map(expedition => {
-    if (expedition.date === dateKey) {
-      hasToday = true
-      return refreshShadowExpeditionLock(expedition, completedDailyCount, now)
-    }
-    return refreshShadowExpeditionLock(expedition, SHADOW_EXPEDITION_UNLOCK_DAILY_COUNT, now)
-  })
-  if (!hasToday) {
-    shadowExpeditions.unshift(refreshShadowExpeditionLock(createShadowExpeditionForDate(dateKey), completedDailyCount, now))
+  
+  let shadowExpeditions = [...(s.shadowExpeditions ?? [])]
+  const hasActiveOrAvailable = shadowExpeditions.some(item => item.status === 'in_progress' || item.status === 'available')
+  
+  if (!hasActiveOrAvailable) {
+    const uniqueSeed = `${dateKey}-${Date.now()}-${Math.floor(Math.random() * 1000)}`
+    const newExpedition = createShadowExpeditionForDate(uniqueSeed)
+    newExpedition.status = 'available'
+    newExpedition.logs = [{
+      id: `log-${newExpedition.id}-created`,
+      turn: 0,
+      type: 'system',
+      message: '새로운 그림자 원정이 준비되었다. 원정 시작을 위해 티켓 1장을 소모한다.',
+    }]
+    shadowExpeditions.unshift(newExpedition)
+  } else {
+    shadowExpeditions = shadowExpeditions.map(expedition => {
+      if (expedition.status === 'locked') {
+        return { ...expedition, status: 'available' }
+      }
+      if (new Date(expedition.expiresAt).getTime() < now.getTime() && expedition.status !== 'completed' && expedition.status !== 'in_progress') {
+        return { ...expedition, status: 'expired' }
+      }
+      return expedition
+    })
   }
+
   const activeShadowExpeditionId = shadowExpeditions.some(
     expedition => expedition.id === s.activeShadowExpeditionId && expedition.status === 'in_progress'
   )
     ? s.activeShadowExpeditionId
     : undefined
+
   return {
     shadowExpeditions: shadowExpeditions.slice(0, 14),
     lastShadowExpeditionDate: dateKey,
@@ -3025,9 +3071,15 @@ const applyShopReward = (
     tickets: ShadowSummonTicket[]
     shards: Partial<Record<ShadowSummonShardType, number>>
     essence: number
+    expeditionTickets: number
     lines: string[]
   }
 ) => {
+  if (reward.kind === 'expedition_ticket') {
+    acc.expeditionTickets += reward.quantity
+    acc.lines.push(`원정 티켓 +${reward.quantity}장`)
+    return
+  }
   if (reward.kind === 'shadow_ticket') {
     for (let i = 0; i < reward.quantity; i++) {
       const ticket = createShadowSummonTicket({ ticketType: reward.ticketType, source: 'system' })
@@ -3272,6 +3324,9 @@ const rollBoxReward = (s: GameState, box: RewardBox): BoxReward => {
       const equipment = getItemFromPool(item => item.equippable === true && item.consumable !== true, dailyMaxRarity, qualitySource)
       if (equipment) reward.items?.push(equipment)
     }
+    if (Math.random() < 0.40 * mult) {
+      reward.expeditionTickets = 1
+    }
     reward.message = '오늘의 루틴에 작은 추진력이 더해졌습니다.'
   } else if (box.type === 'weekly') {
     reward.hunterXp = Math.round(115 * mult)
@@ -3284,6 +3339,7 @@ const rollBoxReward = (s: GameState, box: RewardBox): BoxReward => {
       const equipment = getItemFromPool(item => item.equippable === true && item.consumable !== true, 'rare', qualitySource)
       if (equipment) reward.items?.push(equipment)
     }
+    reward.expeditionTickets = 1 + (Math.random() < 0.30 ? 1 : 0)
     reward.message = '이번 주의 선택과 완료가 묶여 보상으로 돌아왔습니다.'
   } else {
     const rewardFloor = box.floor ?? 5
@@ -3297,6 +3353,9 @@ const rollBoxReward = (s: GameState, box: RewardBox): BoxReward => {
     if (Math.random() < (box.tier === 'epic' ? 0.84 : 0.68)) {
       const equipment = getItemFromPool(item => item.equippable === true && item.consumable !== true, box.tier === 'epic' ? 'epic' : 'rare', qualitySource)
       if (equipment) reward.items?.push(equipment)
+    }
+    if (Math.random() < 0.50 * mult) {
+      reward.expeditionTickets = 1
     }
     reward.message = '상위 보스 전리품의 잔향이 담겨 있습니다.'
   }
@@ -3656,6 +3715,7 @@ const createHardcoreDeathResetState = (
     gold: 0,
     shadowEssence: 0,
     shadowSummonTickets: [],
+    expeditionTickets: 0,
     shadowSummonShards: {},
     shadowFragments: {},
     shadowAchievementTicketClaims: {},
@@ -3797,6 +3857,7 @@ export const useGame = create<GameState>()(
       gold: 0,
       shadowEssence: 0,
       shadowSummonTickets: [],
+      expeditionTickets: 0,
       shadowSummonShards: {},
       shadowFragments: {},
       shadowAchievementTicketClaims: {},
@@ -3908,6 +3969,7 @@ export const useGame = create<GameState>()(
           gold: (s.gold ?? 0) + (reward.gold ?? 0),
           shadowEssence: (s.shadowEssence ?? 0) + (reward.shadowEssence ?? 0),
           shadowSummonTickets: [...(s.shadowSummonTickets ?? []), ...(reward.shadowSummonTickets ?? [])],
+          expeditionTickets: (s.expeditionTickets ?? 0) + (reward.expeditionTickets ?? 0),
           shadowSummonShards: addShadowSummonShards(s.shadowSummonShards, reward.shadowSummonShards),
           shadowFragments: addShadowFragments(s.shadowFragments, reward.shadowFragments),
           items: [...s.items, ...rewardItems],
@@ -3938,6 +4000,7 @@ export const useGame = create<GameState>()(
           tickets: [] as ShadowSummonTicket[],
           shards: {} as Partial<Record<ShadowSummonShardType, number>>,
           essence: 0,
+          expeditionTickets: 0,
           lines: [] as string[],
         }
         for (let i = 0; i < purchaseQuantity; i++) {
@@ -3955,6 +4018,7 @@ export const useGame = create<GameState>()(
           shadowSummonTickets: [...(s.shadowSummonTickets ?? []), ...grants.tickets],
           shadowSummonShards: addShadowSummonShards(s.shadowSummonShards, grants.shards),
           items: [...s.items, ...grants.items],
+          expeditionTickets: (s.expeditionTickets ?? 0) + grants.expeditionTickets,
           messages: [...s.messages, {
             id: uid(),
             kind: grants.items.length > 0 ? 'item' : grants.tickets.length > 0 || Object.keys(grants.shards).length > 0 ? 'shadow' : 'info',
@@ -10018,8 +10082,24 @@ export const useGame = create<GameState>()(
             }],
           }
         }
+        if ((s.expeditionTickets ?? 0) < 1) {
+          return {
+            ...synced,
+            messages: [...s.messages, {
+              id: uid(),
+              kind: 'info' as const,
+              title: '원정 티켓 부족',
+              lines: [
+                '원정을 시작하려면 원정 티켓이 1장 필요합니다.',
+                '💡 원정 티켓은 상점에서 구매하거나 게이트 클리어, 일일 퀘스트, 보상 상자 등에서 얻을 수 있습니다.'
+              ],
+              createdAt: todayISO(),
+            }]
+          }
+        }
         return {
           ...synced,
+          expeditionTickets: (s.expeditionTickets ?? 0) - 1,
           activeShadowExpeditionId: expeditionId,
           shadowExpeditions: expeditions.map(item =>
             item.id === expeditionId
@@ -10030,7 +10110,7 @@ export const useGame = create<GameState>()(
                     id: uid(),
                     turn: 0,
                     type: 'system' as const,
-                    message: '그림자들이 균열 잔재로 진입했다. 헌터는 후방에서 명령을 내린다.',
+                    message: '그림자들이 균열 잔재로 진입했다. 헌터는 후방에서 명령을 내린다. (티켓 1장 소모)',
                   }],
                 }
               : item
@@ -10053,13 +10133,96 @@ export const useGame = create<GameState>()(
 
         if (resolved.result && !expedition.result) {
           const levelUps: string[] = []
+          const masteryLevelUps: string[] = []
+          const awakenedTraits: string[] = []
+
+          const outcome = resolved.result.outcome
+          let masteryXpGained = 5
+          if (outcome === 'great_success') masteryXpGained = 50
+          else if (outcome === 'success') masteryXpGained = 30
+          else if (outcome === 'partial') masteryXpGained = 15
+
           for (const partyShadow of party) {
             const idx = nextOwnedShadows.findIndex(shadow => shadow.instanceId === partyShadow.instanceId)
             if (idx === -1) continue
+
+            // 1. 일반 경험치 획득 및 레벨업
             const xpResult = addShadowXp(nextOwnedShadows[idx], resolved.result.shadowXpGained)
-            nextOwnedShadows = nextOwnedShadows.map((shadow, index) => index === idx ? xpResult.shadow : shadow)
+            let shadowToUpdate = xpResult.shadow
             if (xpResult.leveledUp) levelUps.push(`${partyShadow.name} Lv.${xpResult.newLevel}`)
+
+            // 2. 원정 숙련도 획득 및 레벨업
+            let masteryLevel = shadowToUpdate.expeditionLevel ?? 1
+            let masteryXp = shadowToUpdate.expeditionMastery ?? 0
+            const oldMasteryLevel = masteryLevel
+
+            if (masteryLevel < 10) {
+              masteryXp += masteryXpGained
+              while (masteryLevel < 10) {
+                const neededXp = 100 + (masteryLevel - 1) * 50
+                if (masteryXp >= neededXp) {
+                  masteryXp -= neededXp
+                  masteryLevel += 1
+                } else {
+                  break
+                }
+              }
+              if (masteryLevel === 10) {
+                masteryXp = 0
+              }
+            }
+
+            shadowToUpdate = {
+              ...shadowToUpdate,
+              expeditionLevel: masteryLevel,
+              expeditionMastery: masteryXp,
+            }
+
+            if (masteryLevel > oldMasteryLevel) {
+              masteryLevelUps.push(`${partyShadow.name} (Lv.${oldMasteryLevel} ➔ Lv.${masteryLevel})`)
+            }
+
+            // 3. 고유 특성 추가 각성 (대성공: 5%, 성공: 2%)
+            const traitChance = outcome === 'great_success' ? 0.05 : (outcome === 'success' ? 0.02 : 0)
+            if (Math.random() < traitChance) {
+              const definition = SHADOW_DEFINITIONS.find(def => def.id === partyShadow.definitionId)
+              if (definition) {
+                const shadowRole = definition.role
+                const currentTraitIds = new Set((shadowToUpdate.traits ?? []).map(t => t.id))
+                const traitPool = SHADOW_TRAITS.filter(trait =>
+                  (!trait.allowedRoles || trait.allowedRoles.includes(shadowRole)) &&
+                  (!trait.allowedRarities || trait.allowedRarities.includes(shadowToUpdate.rarity)) &&
+                  !currentTraitIds.has(trait.id)
+                )
+                if (traitPool.length > 0) {
+                  const chosenTrait = traitPool[Math.floor(Math.random() * traitPool.length)]
+                  shadowToUpdate = {
+                    ...shadowToUpdate,
+                    traits: [...(shadowToUpdate.traits ?? []), chosenTrait],
+                  }
+                  awakenedTraits.push(`${partyShadow.name} [${chosenTrait.name}] 각성 (${chosenTrait.description})`)
+                }
+              }
+            }
+
+            nextOwnedShadows = nextOwnedShadows.map((shadow, index) => index === idx ? shadowToUpdate : shadow)
           }
+
+          // UI 표시용 bonusRewards 배열에 추가
+          const bonusRewardLines: string[] = []
+          if (masteryLevelUps.length > 0) {
+            bonusRewardLines.push(`원정 숙련 상승: ${masteryLevelUps.join(', ')}`)
+          }
+          if (awakenedTraits.length > 0) {
+            bonusRewardLines.push(...awakenedTraits.map(line => `특성 각성: ${line}`))
+          }
+          if (bonusRewardLines.length > 0) {
+            resolved.result.bonusRewards = [
+              ...(resolved.result.bonusRewards ?? []),
+              ...bonusRewardLines,
+            ]
+          }
+
           nextShadowEssence += resolved.result.essenceGained
           nextMessages.push({
             id: uid(),
@@ -10074,6 +10237,7 @@ export const useGame = create<GameState>()(
             ],
             createdAt: todayISO(),
           })
+
           const observationSignalId = resolved.result?.report?.observationSignalId
           if (observationSignalId) {
             setTimeout(() => {
@@ -10104,7 +10268,19 @@ export const useGame = create<GameState>()(
           shadowExpeditions: (s.shadowExpeditions ?? []).map(item => item.id === expeditionId ? resolved : item),
           messages: nextMessages,
         }
+
         if (resolved.result && !expedition.result) {
+          if (resolved.status === 'completed') {
+            const tempState = {
+              ...s,
+              ...baseState,
+            }
+            const synced = syncTodayShadowExpeditionState(tempState)
+            baseState.shadowExpeditions = synced.shadowExpeditions
+            baseState.activeShadowExpeditionId = synced.activeShadowExpeditionId
+            baseState.lastShadowExpeditionDate = synced.lastShadowExpeditionDate
+          }
+
           return applySecretProgressEvent(s, {
             context: 'expedition',
             outcome: resolved.result.outcome,
@@ -10142,36 +10318,49 @@ export const useGame = create<GameState>()(
       abandonShadowExpedition: (expeditionId) => set((s) => {
         const expedition = (s.shadowExpeditions ?? []).find(item => item.id === expeditionId)
         if (!expedition || expedition.status !== 'in_progress') return {}
+
+        const updatedExpeditions = (s.shadowExpeditions ?? []).map(item =>
+          item.id === expeditionId
+            ? {
+                ...item,
+                status: 'completed' as const,
+                result: {
+                  outcome: 'failure' as const,
+                  progress: item.progress,
+                  risk: item.risk,
+                  shadowXpGained: 0,
+                  essenceGained: 0,
+                  bonusRewards: ['중도 포기: 보상 없음'],
+                },
+                logs: [...item.logs, {
+                  id: uid(),
+                  turn: item.turn,
+                  type: 'system' as const,
+                  message: '지휘가 중단되었다. 원정은 실패 처리되며 보상은 없다.',
+                }],
+              }
+            : item
+        )
+
+        const tempState = {
+          ...s,
+          activeShadowExpeditionId: undefined,
+          shadowExpeditions: updatedExpeditions,
+        }
+        const synced = syncTodayShadowExpeditionState(tempState)
+
+        const baseState = {
+          activeShadowExpeditionId: synced.activeShadowExpeditionId,
+          shadowExpeditions: synced.shadowExpeditions,
+          lastShadowExpeditionDate: synced.lastShadowExpeditionDate,
+        }
+
         return applySecretProgressEvent(s, {
           context: 'expedition',
           outcome: 'failure',
           expeditionType: expedition.type,
           shadowIds: expedition.selectedShadowIds,
-        }, {
-          activeShadowExpeditionId: undefined,
-          shadowExpeditions: (s.shadowExpeditions ?? []).map(item =>
-            item.id === expeditionId
-              ? {
-                  ...item,
-                  status: 'completed' as const,
-                  result: {
-                    outcome: 'failure' as const,
-                    progress: item.progress,
-                    risk: item.risk,
-                    shadowXpGained: 0,
-                    essenceGained: 0,
-                    bonusRewards: ['중도 포기: 보상 없음'],
-                  },
-                  logs: [...item.logs, {
-                    id: uid(),
-                    turn: item.turn,
-                    type: 'system' as const,
-                    message: '지휘가 중단되었다. 원정은 실패 처리되며 보상은 없다.',
-                  }],
-                }
-              : item
-          ),
-        })
+        }, baseState)
       }),
 
       startTowerBattle: (floor) => {
@@ -11876,6 +12065,10 @@ export const useGame = create<GameState>()(
 
         // messages
         const newMessages: SystemMessage[] = []
+        let dailyTicketGained = 0
+        if (q.type === 'daily' && Math.random() < 0.25) {
+          dailyTicketGained = 1
+        }
         newMessages.push({
           id: uid(),
           kind: 'quest',
@@ -11885,6 +12078,7 @@ export const useGame = create<GameState>()(
             `+${xp} XP 획득${xp !== baseXp ? ` (기본 ${baseXp})` : ''}`,
             `직업 [${jobResult.activeJobName}] XP +${jobResult.jobXpGained}${jobResult.jobCategoryBonus > 0 ? ` (친화도 보너스 +${Math.round(jobResult.jobCategoryBonus * 100)}%)` : ''}`,
             ...(questGold ? [`Gold +${questGold}`] : []),
+            ...(dailyTicketGained > 0 ? [`원정 티켓 +${dailyTicketGained}장`] : []),
             ...Object.entries(statRewards).map(([k, v]) => `· ${k} ${formatStatReward(v ?? 0)}`),
           ],
           createdAt: todayISO(),
@@ -11948,6 +12142,7 @@ export const useGame = create<GameState>()(
           gold: (s.gold ?? 0) + questGold,
           quests: updatedQuests,
           items: [...s.items, ...drops],
+          expeditionTickets: (s.expeditionTickets ?? 0) + dailyTicketGained,
           messages: [...s.messages, ...newMessages],
           achievementStats: stats,
           activeConsumableEffects: updatedConsumableEffects,
@@ -13721,7 +13916,7 @@ export const useGame = create<GameState>()(
     }),
     {
       name: 'levelup-save',
-      version: 28,
+      version: 29,
       partialize: (state) => ({
         ...state,
         manualBattleSession: undefined,
@@ -14440,6 +14635,20 @@ export const useGame = create<GameState>()(
                 lw.regions['kr'].activeGateIds.push('node-kr-incheon')
               }
             }
+          }
+        }
+
+        // ── Expedition redesign Phase 1 (v29) 마이그레이션 ──
+        if (persistedState) {
+          if (!('expeditionTickets' in persistedState)) {
+            persistedState.expeditionTickets = 0
+          }
+          if (Array.isArray(persistedState.ownedShadows)) {
+            persistedState.ownedShadows = persistedState.ownedShadows.map((shadow: any) => ({
+              ...shadow,
+              expeditionLevel: shadow.expeditionLevel ?? 1,
+              expeditionMastery: shadow.expeditionMastery ?? 0,
+            }))
           }
         }
 

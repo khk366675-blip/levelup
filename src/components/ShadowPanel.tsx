@@ -352,6 +352,20 @@ function ShadowDetailPanel({
         </div>
       </div>
 
+      <div className="mt-2 rounded border border-amber-400/15 bg-amber-400/5 px-3 py-2">
+        <div className="mb-1 flex items-center justify-between text-[10px] text-amber-200/90 font-medium">
+          <span className="font-semibold flex items-center gap-1">⭐ 원정 숙련 Lv.{shadow.expeditionLevel ?? 1} / 10</span>
+          <span className="system-text">
+            {(shadow.expeditionLevel ?? 1) >= 10 
+              ? 'MAX (+27%)' 
+              : `${shadow.expeditionMastery ?? 0}/${100 + ((shadow.expeditionLevel ?? 1) - 1) * 50} XP (+${((shadow.expeditionLevel ?? 1) - 1) * 3}%)`}
+          </span>
+        </div>
+        <div className="h-2 overflow-hidden rounded-full bg-white/10">
+          <div className="h-full rounded-full bg-gradient-to-r from-yellow-400 via-orange-400 to-amber-500" style={{ width: `${(shadow.expeditionLevel ?? 1) >= 10 ? 100 : Math.min(100, Math.round(((shadow.expeditionMastery ?? 0) / (100 + ((shadow.expeditionLevel ?? 1) - 1) * 50)) * 100))}%` }} />
+        </div>
+      </div>
+
       <div className="mt-3 flex flex-wrap gap-1.5 text-[10px] system-text">
         <span className={`rounded border px-2 py-1 ${equipped ? 'border-cyan-300/35 bg-cyan-300/10 text-cyan-100' : 'border-white/10 bg-white/5 text-white/45'}`}>{equipped ? '출전 중' : '미출전'}</span>
         <span className={`rounded border px-2 py-1 ${shadow.isFavorite ? 'border-yellow-300/35 bg-yellow-300/10 text-yellow-100' : 'border-white/10 bg-white/5 text-white/45'}`}>{shadow.isFavorite ? '즐겨찾기' : '일반 표시'}</span>
@@ -622,6 +636,14 @@ function ShadowCard({
           <div className="h-full bg-cyan-400/60 rounded-full transition-all" style={{ width: `${xpPct}%` }} />
         </div>
         <span className="text-[10px] text-white/40">{level >= maxLevel ? 'MAX' : `${xp}/${xpNeeded}`}</span>
+      </div>
+
+      <div className="mt-1.5 flex items-center gap-2">
+        <span className="text-[10px] text-amber-200/90 font-medium">⭐ 숙련 {shadow.expeditionLevel ?? 1}/10</span>
+        <div className="flex-1 h-1 bg-white/10 rounded-full overflow-hidden">
+          <div className="h-full bg-gradient-to-r from-yellow-400 via-orange-400 to-amber-500 rounded-full transition-all" style={{ width: `${(shadow.expeditionLevel ?? 1) >= 10 ? 100 : Math.min(100, Math.round(((shadow.expeditionMastery ?? 0) / (100 + ((shadow.expeditionLevel ?? 1) - 1) * 50)) * 100))}%` }} />
+        </div>
+        <span className="text-[9px] text-amber-200/70 font-semibold">+{((shadow.expeditionLevel ?? 1) - 1) * 3}%</span>
       </div>
 
       {shadow.traits.length > 0 && (

@@ -38,6 +38,7 @@ export interface ShadowCombatProfile extends ShadowCombatPowerBreakdown {
     evolution: number
     named: number
     basePower: number
+    expedition?: number
   }
 }
 
@@ -335,7 +336,9 @@ export const getShadowCombatProfile = (
   const evolution = 1 + Math.min(0.4, (shadow.evolutionStage ?? 0) * 0.12)
   const named = getNamedModifier(shadow)
   const basePower = getBasePowerScale(definition)
-  const multiplier = rarity * innateGrade * level * enhancement * evolution * named * basePower
+  const expeditionLevel = shadow.expeditionLevel ?? 1
+  const expedition = 1 + Math.min(0.27, (expeditionLevel - 1) * 0.03)
+  const multiplier = rarity * innateGrade * level * enhancement * evolution * named * basePower * expedition
 
   // Advanced Stats Bonuses from 12-35B
   let hpBonus = 0
@@ -471,6 +474,7 @@ export const getShadowCombatProfile = (
       evolution,
       named,
       basePower,
+      expedition,
     },
   }
 }
