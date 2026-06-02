@@ -55,6 +55,9 @@ import {
   getEquippedItems,
   getPlayerCombatSkills,
   isShadowCombatLog,
+  getEquipmentCritBonus,
+  getEquipmentEvasionBonus,
+  getEquipmentAccuracyBonus,
   type GateRisk,
 } from '../lib/game'
 import {
@@ -1833,6 +1836,13 @@ export function GatePanel({ isWorldMapContext }: { isWorldMapContext?: boolean }
     jobId: hunter.jobId,
     skills: playerSkills,
   })
+  const equipmentCrit = getEquipmentCritBonus(equippedItems)
+  const equipmentEvasion = getEquipmentEvasionBonus(equippedItems)
+  const equipmentAccuracy = getEquipmentAccuracyBonus(equippedItems)
+
+  const actualCritRate = Math.max(0, Math.min(0.35, combatStats.critRate + equipmentCrit))
+  const actualEvasionRate = Math.max(0, Math.min(0.30, combatStats.evasionRate + equipmentEvasion))
+  const actualAccuracy = Math.max(0, Math.min(0.99, combatStats.accuracy + equipmentAccuracy))
   const combatPower = getHunterCombatPowerBreakdown({
     hunter,
     items,
@@ -2660,14 +2670,17 @@ export function GatePanel({ isWorldMapContext }: { isWorldMapContext?: boolean }
                 <Zap className="w-4 h-4 text-cyan-300" />
                 <div className="system-text text-[11px] text-cyan-300/80">COMBAT STATS</div>
               </div>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+              <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-7 gap-2">
                 <StatPill label="HP" value={Math.round(combatStats.maxHp)} />
                 <StatPill label="ATK" value={Math.round(combatStats.atk)} />
                 <StatPill label="DEF" value={Math.round(combatStats.def)} />
                 <StatPill label="SPD" value={Math.round(combatStats.speed)} />
+                <StatPill label="치명타" value={`${(actualCritRate * 100).toFixed(1)}%`} />
+                <StatPill label="회피" value={`${(actualEvasionRate * 100).toFixed(1)}%`} />
+                <StatPill label="명중" value={`${(actualAccuracy * 100).toFixed(1)}%`} />
               </div>
               <div className="text-[10px] text-white/40 system-text mt-3">
-                CRIT {formatPercent(combatStats.critRate)} · ACC {formatPercent(combatStats.accuracy)} · EVA {formatPercent(combatStats.evasionRate)}
+                CRIT {formatPercent(actualCritRate)} · ACC {formatPercent(actualAccuracy)} · EVA {formatPercent(actualEvasionRate)}
               </div>
               <div className="text-[10px] text-amber-200/70 system-text mt-2 leading-relaxed">
                 사용 가능 스킬: {playerSkills.map(skill => skill.name).join(', ')}

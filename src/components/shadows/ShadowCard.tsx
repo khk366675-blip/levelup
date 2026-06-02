@@ -13,6 +13,7 @@ import {
   getShadowXpForNextLevel,
 } from '../../lib/shadows'
 import { getShadowCombatProfile } from '../../lib/shadowStats'
+import { buildShadowBattleUnit } from '../../lib/battleUnits'
 import { getShadowCombatUnitProfile, getShadowSkillDisplayName } from '../../lib/shadowSkills'
 import type { OwnedShadow } from '../../lib/types'
 import { ShadowPortrait } from './ShadowPortrait'
@@ -83,6 +84,8 @@ export function ShadowCard({
   const restoreCost = shadow.restoreCost ?? 0
   const combatProfile = getShadowCombatProfile(shadow)
   const unitProfile = getShadowCombatUnitProfile(shadow)
+  const battleUnit = buildShadowBattleUnit(shadow)
+  const shadowStats = battleUnit.unit.stats
   const combatBadges = [
     getShadowSkillDisplayName(combatProfile.roleTag),
     getShadowSkillDisplayName(unitProfile.activeSkills[0]?.shortLabel || ''),
@@ -156,6 +159,9 @@ export function ShadowCard({
               <div className="mt-1 flex flex-wrap gap-1.5 text-[10px] system-text">
                 <span className="rounded border border-amber-300/25 bg-amber-300/10 px-1.5 py-0.5 text-amber-100">
                   전투력 {combatProfile.totalPower.toLocaleString()}
+                </span>
+                <span className="rounded border border-cyan-300/20 bg-cyan-300/8 px-1.5 py-0.5 text-cyan-200">
+                  크릿 {(shadowStats.crit * 100).toFixed(1)}% · 회피 {((shadowStats.evasionRate ?? 0) * 100).toFixed(1)}% · 명중 {((shadowStats.accuracy ?? 0) * 100).toFixed(1)}%
                 </span>
                 <span className="rounded border border-white/10 bg-ink-900/55 px-1.5 py-0.5 text-white/55">
                   {SHADOW_RANK_LABEL[shadow.rank]}

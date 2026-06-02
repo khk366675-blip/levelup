@@ -3,6 +3,7 @@ import { motion } from 'framer-motion'
 import clsx from 'clsx'
 import { Crown, Eclipse, Eye, Gem, Lock, Search, Shield, Sparkles, Star, Swords, Ticket, X, ChevronDown, ChevronUp, Dumbbell, FlaskConical } from 'lucide-react'
 import { useGame } from '../lib/store'
+import { buildShadowBattleUnit } from '../lib/battleUnits'
 import { ShadowCard as VisualShadowCard } from './shadows/ShadowCard'
 import { ShadowExpeditionPanel } from './shadows/ShadowExpeditionPanel'
 import { ShadowPortrait } from './shadows/ShadowPortrait'
@@ -261,10 +262,15 @@ function ShadowDetailPanel({
   const effects = getShadowEffects(shadow).map(formatShadowEffect)
   const combatProfile = getShadowCombatProfile(shadow)
   const unitProfile = getShadowCombatUnitProfile(shadow)
+  const battleUnit = buildShadowBattleUnit(shadow)
+  const shadowStats = battleUnit.unit.stats
   const summaryItems = [
     { label: 'SCP', value: combatProfile.totalPower.toLocaleString() },
     { label: 'Lv', value: `${level}/${maxLevel}` },
     { label: 'Role', value: SHADOW_ROLE_LABEL[shadow.role] },
+    { label: '치명타', value: `${(shadowStats.crit * 100).toFixed(1)}%` },
+    { label: '회피', value: `${((shadowStats.evasionRate ?? 0) * 100).toFixed(1)}%` },
+    { label: '명중', value: `${((shadowStats.accuracy ?? 0) * 100).toFixed(1)}%` },
   ]
   const breakdownItems = [
     { label: '지원', value: combatProfile.assistPower },
@@ -1490,6 +1496,8 @@ export function ShadowPanel() {
                   const equipped = equippedShadowIds.includes(shadow.instanceId)
                   const selected = selectedShadow?.instanceId === shadow.instanceId
                   const combatProfile = getShadowCombatProfile(shadow)
+                  const battleUnit = buildShadowBattleUnit(shadow)
+                  const shadowStats = battleUnit.unit.stats
                   return (
                     <button
                       key={shadow.instanceId}
@@ -1511,6 +1519,9 @@ export function ShadowPanel() {
                         <span className="text-amber-100">SCP {combatProfile.totalPower.toLocaleString()}</span>
                         <span>Lv {shadow.level ?? 1}</span>
                         <span>{SHADOW_ROLE_LABEL[shadow.role]}</span>
+                        <span className="text-cyan-200">C {(shadowStats.crit * 100).toFixed(0)}%</span>
+                        <span className="text-cyan-200">E {((shadowStats.evasionRate ?? 0) * 100).toFixed(0)}%</span>
+                        <span className="text-cyan-200">A {((shadowStats.accuracy ?? 0) * 100).toFixed(0)}%</span>
                         {combatProfile.topStats.slice(0, 2).map(stat => <span key={stat.key}>{stat.shortLabel}</span>)}
                         {(shadow.enhancementLevel ?? 0) > 0 && <span className="text-amber-200">+{shadow.enhancementLevel}</span>}
                       </div>
