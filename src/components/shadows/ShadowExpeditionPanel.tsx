@@ -7,6 +7,7 @@ import {
   Crosshair,
   Eye,
   FastForward,
+  RotateCcw,
   Search,
   Shield,
   Sparkles,
@@ -36,6 +37,7 @@ import { getSecretVisibleFragments } from '../../lib/secrets'
 import type { OwnedShadow, ShadowExpeditionCommand, ShadowExpeditionLog, ShadowExpeditionOutcome, ShadowExpeditionType, ShadowRole } from '../../lib/types'
 import { ShadowExpeditionBattlefield } from './ShadowExpeditionBattlefield'
 import { ShadowPortrait } from './ShadowPortrait'
+import { DirectBattlePreviewPanel } from '../DirectBattlePreviewPanel'
 
 const commandIcons: Record<ShadowExpeditionCommand, typeof Swords> = {
   attack: Swords,
@@ -475,6 +477,13 @@ export function ShadowExpeditionPanel() {
   const issueCommand = useGame(s => s.issueShadowExpeditionCommand)
   const abandonExpedition = useGame(s => s.abandonShadowExpedition)
   const resolveMidEvent = useGame(s => s.resolveShadowExpeditionMidEvent)
+  const resolveSpecialExpeditionBattle = useGame(s => s.resolveSpecialExpeditionBattle)
+  const retrySpecialExpedition = useGame(s => s.retrySpecialExpedition)
+  const hunter = useGame(s => s.hunter)
+  const items = useGame(s => s.items)
+  const equipment = useGame(s => s.equipment)
+  const activeConsumableEffects = useGame(s => s.activeConsumableEffects ?? [])
+
   const visibleTraces = useGame(s => getSecretVisibleFragments(s.secretProgress))
   const traceCount = visibleTraces.length
   const [expanded, setExpanded] = useState(false)
@@ -485,7 +494,27 @@ export function ShadowExpeditionPanel() {
   const previousExpeditionLogRef = useRef<{ expeditionId?: string; count: number }>({ count: 0 })
   const dateKey = todayKey()
   const dailyCount = getTodayDailyCompletedCount(achievementStats, dateKey)
-  const expedition = shadowExpeditions.find(item => item.date === dateKey) ?? shadowExpeditions[0]
+
+  const [activeTab, setActiveTab] = useState<'daily' | 'special'>('daily')
+
+  const specialExpeditions = useMemo(() => shadowExpeditions.filter(item => item.isSpecial), [shadowExpeditions])
+  const dailyExpeditions = useMemo(() => shadowExpeditions.filter(item => !item.isSpecial), [shadowExpeditions])
+
+  useEffect(() => {
+    if (activeTab === 'special' && specialExpeditions.length === 0) {
+      setActiveTab('daily')
+    }
+  }, [specialExpeditions, activeTab])
+
+  const expedition = useMemo(() => {
+    if (activeTab === 'special' && specialExpeditions.length > 0) {
+      return specialExpeditions.find(item => item.status === 'in_progress')
+        ?? specialExpeditions.find(item => item.status === 'available')
+        ?? specialExpeditions[0]
+    }
+    return dailyExpeditions.find(item => item.date === dateKey)
+      ?? dailyExpeditions[0]
+  }, [activeTab, specialExpeditions, dailyExpeditions, dateKey])
 
   const selectedShadows = useMemo(() => {
     if (!expedition) return []
@@ -493,6 +522,12 @@ export function ShadowExpeditionPanel() {
       .map(id => ownedShadows.find(shadow => shadow.instanceId === id))
       .filter((shadow): shadow is OwnedShadow => Boolean(shadow))
   }, [expedition, ownedShadows])
+
+  const issueVisualCommand = (command: ShadowExpeditionCommand) => {
+    if (expedition) {
+      issueCommand(expedition.id, command)
+    }
+  }
 
   useEffect(() => {
     if (!expedition) {
@@ -603,13 +638,71 @@ export function ShadowExpeditionPanel() {
     selectParty(expedition.id, nextIds)
   }
 
-  const issueVisualCommand = (command: ShadowExpeditionCommand) => {
-    issueCommand(expedition.id, command)
+  if (expedition && expedition.isSpecial && expedition.status === 'in_progress' && expedition.combatTriggered && !expedition.combatResolved) {
+    return (
+      <div className={clsx('panel corner-bracket relative overflow-hidden p-4 sm:p-5', theme.border, theme.panel)}>
+        <div className="br" />
+        <div className={clsx('pointer-events-none absolute inset-0 bg-gradient-to-br opacity-70', theme.wash)} />
+        <DirectBattlePreviewPanel
+          key={`special-battle-${expedition.id}`}
+          source="shadow_expedition"
+          title={`특별 결전: ${expedition.title}`}
+          note="플레이어 본체(헌터)는 참여하지 않으며, 원정에 출정한 그림자들만으로 전투가 개시됩니다."
+          hunter={hunter}
+          items={items}
+          equipment={equipment}
+          activeConsumableEffects={activeConsumableEffects}
+          equippedShadows={selectedShadows}
+          recommendedEncounterKey={expedition.enemyEncounterKey || 'mid_trio'}
+          enemyBaseLevel={expedition.enemyBaseLevel ?? 12}
+          customBattleId={`special-battle-${expedition.id}`}
+          battleThemeKey="monarch"
+          maxRoundsOverride={15}
+          autoStart
+          allowEncounterSelection={false}
+          startButtonLabel="결전 개시"
+          restartButtonLabel="다시 준비"
+          cancelButtonLabel="원정 중단"
+          shadowsOnly={true}
+          onBattleComplete={(payload) => {
+            resolveSpecialExpeditionBattle(expedition.id, payload.outcome === 'victory' ? 'victory' : 'defeat', payload.logs)
+          }}
+        />
+      </div>
+    )
   }
 
   return (
     <div className={clsx('panel corner-bracket relative overflow-hidden p-4 sm:p-5', theme.border, theme.panel)}>
       <div className="br" />
+
+      {specialExpeditions.length > 0 && (
+        <div className="relative z-10 flex border-b border-white/10 gap-1 mb-4">
+          <button
+            type="button"
+            onClick={() => setActiveTab('daily')}
+            className={`px-5 py-2.5 text-xs font-bold uppercase transition border-b-2 -mb-[2px] ${
+              activeTab === 'daily'
+                ? 'border-cyan-400 text-cyan-300 bg-cyan-500/5'
+                : 'border-transparent text-white/55 hover:text-white/80 hover:bg-white/5'
+            }`}
+          >
+            일상 원정
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab('special')}
+            className={`px-5 py-2.5 text-xs font-bold uppercase transition border-b-2 -mb-[2px] ${
+              activeTab === 'special'
+                ? 'border-purple-400 text-purple-300 bg-purple-500/5'
+                : 'border-transparent text-white/55 hover:text-white/80 hover:bg-white/5'
+            }`}
+          >
+            특별 원정 ({specialExpeditions.length})
+          </button>
+        </div>
+      )}
+
       {expeditionCinematicLogs.length > 0 && (
         <div className="absolute right-3 top-3 z-40">
           <button
@@ -632,12 +725,21 @@ export function ShadowExpeditionPanel() {
               <ThemeIcon className="h-3.5 w-3.5" />
               {theme.label}
             </span>
-            <span className="rounded border border-cyan-400/25 bg-cyan-400/10 px-2 py-0.5 text-[10px] system-text text-cyan-100">
-              오늘 Daily {dailyCount} / {SHADOW_EXPEDITION_UNLOCK_DAILY_COUNT}
-            </span>
-            <span className="rounded border border-yellow-400/25 bg-yellow-400/10 px-2 py-0.5 text-[10px] system-text text-yellow-100">
-              🎫 보유 원정 티켓: {expeditionTickets}장
-            </span>
+            {!expedition.isSpecial && (
+              <>
+                <span className="rounded border border-cyan-400/25 bg-cyan-400/10 px-2 py-0.5 text-[10px] system-text text-cyan-100">
+                  오늘 Daily {dailyCount} / {SHADOW_EXPEDITION_UNLOCK_DAILY_COUNT}
+                </span>
+                <span className="rounded border border-yellow-400/25 bg-yellow-400/10 px-2 py-0.5 text-[10px] system-text text-yellow-100">
+                  🎫 보유 원정 티켓: {expeditionTickets}장
+                </span>
+              </>
+            )}
+            {expedition.isSpecial && (
+              <span className="rounded border border-purple-400/25 bg-purple-400/10 px-2 py-0.5 text-[10px] system-text text-purple-100 animate-pulse">
+                ✨ 특별 원정 (티켓 불필요)
+              </span>
+            )}
             <span className={clsx(
               'rounded border px-2 py-0.5 text-[10px] system-text',
               completed ? 'border-emerald-400/30 bg-emerald-400/10 text-emerald-100' :
@@ -696,7 +798,15 @@ export function ShadowExpeditionPanel() {
 
       {compactCompleted && expedition.result && (
         <div className="relative mt-4">
-          <ReportPanel expeditionResult={expedition.result} activeShadowId={activeShadowId} selectedShadows={selectedShadows} ownedShadows={ownedShadows} compact />
+          <ReportPanel
+            expeditionResult={expedition.result}
+            activeShadowId={activeShadowId}
+            selectedShadows={selectedShadows}
+            ownedShadows={ownedShadows}
+            compact
+            isSpecial={expedition.isSpecial}
+            onRetry={() => retrySpecialExpedition(expedition.id)}
+          />
         </div>
       )}
 
@@ -803,7 +913,7 @@ export function ShadowExpeditionPanel() {
               <MidEventCard event={expedition.midEvent} onChoose={choiceId => resolveMidEvent(expedition.id, choiceId)} selectedShadows={selectedShadows} />
             )}
 
-            {inProgress && (
+            {inProgress && !expedition.isSpecial && (
               <div className="grid grid-cols-2 gap-2 lg:grid-cols-5">
                 {(Object.keys(SHADOW_EXPEDITION_COMMAND_LABEL) as ShadowExpeditionCommand[]).map(command => {
                   const Icon = commandIcons[command]
@@ -847,10 +957,10 @@ export function ShadowExpeditionPanel() {
                   <button
                     type="button"
                     onClick={() => startExpedition(expedition.id)}
-                    disabled={!expeditionLock.allowed || expeditionTickets < 1}
+                    disabled={!expeditionLock.allowed || (!expedition.isSpecial && expeditionTickets < 1)}
                     className={clsx(
                       "btn text-xs font-bold flex items-center gap-1.5 justify-center",
-                      (!expeditionLock.allowed || expeditionTickets < 1)
+                      (!expeditionLock.allowed || (!expedition.isSpecial && expeditionTickets < 1))
                         ? "border-red-500/40 text-red-400 bg-red-950/15 cursor-not-allowed opacity-60"
                         : "btn-primary"
                     )}
@@ -858,14 +968,16 @@ export function ShadowExpeditionPanel() {
                     <Zap className="h-3.5 w-3.5" />
                     {!expeditionLock.allowed
                       ? '원정 시작 잠김'
-                      : (expeditionTickets < 1 ? '티켓 부족 (원정 티켓 1장 소모)' : '원정 시작 (티켓 1장 소모)')}
+                      : expedition.isSpecial
+                        ? '특별 원정 시작 (티켓 소모 없음)'
+                        : (expeditionTickets < 1 ? '티켓 부족 (원정 티켓 1장 소모)' : '원정 시작 (티켓 1장 소모)')}
                   </button>
                   {!expeditionLock.allowed && (
                     <span className="text-[9px] text-red-400 font-semibold max-w-[280px] leading-tight">
                       ⚠️ {expeditionLock.reason}
                     </span>
                   )}
-                  {expeditionLock.allowed && expeditionTickets < 1 && (
+                  {expeditionLock.allowed && !expedition.isSpecial && expeditionTickets < 1 && (
                     <span className="text-[10px] text-red-400/90 font-medium max-w-[320px] leading-tight mt-1 bg-red-950/20 border border-red-500/10 rounded px-2 py-1">
                       💡 원정 티켓 획득처: 게이트 클리어, 일일 퀘스트 완료, 상점 구매(200 Gold), 보상 상자
                     </span>
@@ -953,7 +1065,14 @@ export function ShadowExpeditionPanel() {
             </div>
 
             {completed && expedition.result && (
-              <ReportPanel expeditionResult={expedition.result} activeShadowId={activeShadowId} selectedShadows={selectedShadows} ownedShadows={ownedShadows} />
+              <ReportPanel
+                expeditionResult={expedition.result}
+                activeShadowId={activeShadowId}
+                selectedShadows={selectedShadows}
+                ownedShadows={ownedShadows}
+                isSpecial={expedition.isSpecial}
+                onRetry={() => retrySpecialExpedition(expedition.id)}
+              />
             )}
           </aside>
         </div>
@@ -1046,12 +1165,16 @@ function ReportPanel({
   activeShadowId,
   ownedShadows,
   compact = false,
+  isSpecial = false,
+  onRetry,
 }: {
   expeditionResult: NonNullable<ReturnType<typeof useGame.getState>['shadowExpeditions'][number]['result']>
   selectedShadows: OwnedShadow[]
   ownedShadows: OwnedShadow[]
   activeShadowId?: string
   compact?: boolean
+  isSpecial?: boolean
+  onRetry?: () => void
 }) {
   const tone = outcomeTone[expeditionResult.outcome]
   const report = expeditionResult.report
@@ -1146,6 +1269,19 @@ function ReportPanel({
               <div className="system-text text-[8px] text-white/35">{SHADOW_ROLE_LABEL[shadow.role]}</div>
             </div>
           ))}
+        </div>
+      )}
+
+      {isSpecial && expeditionResult.outcome === 'failure' && onRetry && (
+        <div className="mt-4 flex justify-center">
+          <button
+            type="button"
+            onClick={onRetry}
+            className="btn font-bold text-xs py-2 px-6 flex items-center gap-1.5 justify-center border-purple-500 bg-purple-500/10 text-purple-100 hover:bg-purple-500/25"
+          >
+            <RotateCcw className="w-3.5 h-3.5" />
+            재진입 및 재도전
+          </button>
         </div>
       )}
     </div>

@@ -504,6 +504,90 @@ export const MID_EVENTS: ExpeditionMidEvent[] = [
       },
     ],
   },
+  {
+    id: 'special_rift_sanctuary_event_1',
+    type: 'special_sanctuary' as any,
+    phase: 'threshold',
+    title: '균열의 이상 공명',
+    description: '전당 하층의 균열이 붉은색 잔향을 내뿜으며 뒤틀리고 있습니다. 정밀 수색할지, 속도를 낼지 결정해야 합니다.',
+    choices: [
+      {
+        id: 'scout_quiet',
+        label: '우회 정찰',
+        description: '그림자 추적자를 앞세워 조심스럽게 우회 정찰합니다. (진행도 +15, 위험도 -5)',
+        progressDelta: 15,
+        riskDelta: -5,
+        preferredRoles: ['scout'],
+        log: '그림자 추적자가 안전한 우회 경로를 파악하여 아군 전열이 안정적으로 진입했습니다.',
+      },
+      {
+        id: 'charge_forward',
+        label: '정면 돌파',
+        description: '방패병을 앞세워 적들의 경계망을 정면 돌파합니다. (진행도 +35, 위험도 +15)',
+        progressDelta: 35,
+        riskDelta: 15,
+        preferredRoles: ['guard', 'assault'],
+        log: '방패병의 비호 아래 돌진대형으로 경계망을 격파하고 빠르게 중심부로 다가갑니다.',
+      },
+    ],
+  },
+  {
+    id: 'special_rift_sanctuary_event_2',
+    type: 'special_sanctuary' as any,
+    phase: 'threshold',
+    title: '수호병의 등장',
+    description: '균열 너머에서 이계의 성좌를 수호하는 고대 수호병이 나타났습니다. 그림자들을 지휘하여 최후의 일전을 준비해야 합니다.',
+    choices: [
+      {
+        id: 'engage_combat',
+        label: '결전 결행',
+        description: '전투를 결행합니다. 수호병을 처단하고 균열의 정수를 강제 회수합니다.',
+        log: '그림자들이 무기를 들어 올리며 수호병을 포위합니다. 전투가 시작됩니다.',
+      },
+    ],
+  },
+  {
+    id: 'special_abyss_resonance_event_1',
+    type: 'special_abyss' as any,
+    phase: 'threshold',
+    title: '심연의 부름',
+    description: '공동의 깊은 어둠 속에서 과거 누군가가 남긴 듯한 좌표 잔향이 흘러나옵니다. 신호를 추적하거나 어둠을 경계해야 합니다.',
+    choices: [
+      {
+        id: 'track_signal',
+        label: '신호 해독',
+        description: '분석가를 투입하여 기하학적 신호의 진동수를 해독합니다. (진행도 +20, 위험도 -10)',
+        progressDelta: 20,
+        riskDelta: -10,
+        preferredRoles: ['analyst'],
+        log: '분석가가 고대 신호를 해독하는 동안, 군단은 안전하고 명확한 좌표 방향을 획득했습니다.',
+      },
+      {
+        id: 'guard_area',
+        label: '경계 태세',
+        description: '정비 상태를 유지하며 어둠 속 습격을 방어합니다. (진행도 +10, 위험도 -20)',
+        progressDelta: 10,
+        riskDelta: -20,
+        preferredRoles: ['guard', 'support'],
+        log: '수호병들의 경계막 아래 전열을 재정비하고 안정적으로 심연 심도로 나아갑니다.',
+      },
+    ],
+  },
+  {
+    id: 'special_abyss_resonance_event_2',
+    type: 'special_abyss' as any,
+    phase: 'threshold',
+    title: '심연의 폭군',
+    description: '과거 세계의 멸망을 노래했던 심연의 폭군이 잠에서 깨어나 포효합니다. 전임자의 비극을 반복하지 않으려면 이 폭군을 쓰러뜨려야 합니다.',
+    choices: [
+      {
+        id: 'trigger_abyss_combat',
+        label: '결전 결행',
+        description: '폭군과의 결전을 선언합니다. 그림자들이 일제히 무기를 뽑아듭니다.',
+        log: '심연의 폭군이 울부짖고, 어둠의 군단이 폭군을 향해 돌격합니다. 전투가 시작됩니다.',
+      },
+    ],
+  },
 ]
 
 export function pickMidEvent(

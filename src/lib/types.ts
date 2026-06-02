@@ -871,6 +871,13 @@ export interface ShadowExpedition {
   eventTriggered?: boolean
   eventResolved?: boolean
   secretSignals?: Record<string, number>
+  isSpecial?: boolean
+  specialId?: string
+  combatTriggered?: boolean
+  combatResolved?: boolean
+  combatResult?: 'victory' | 'defeat'
+  enemyEncounterKey?: string
+  enemyBaseLevel?: number
 }
 
 // ── Equipment System ───────────────────────────────────────────────

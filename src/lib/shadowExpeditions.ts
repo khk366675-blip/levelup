@@ -14,6 +14,7 @@ import type {
   ShadowStatKey,
 } from './types'
 import { getShadowDefinition } from './shadows'
+import { rollValueReward } from './game'
 import {
   getShadowCombatUnitProfile,
   type ShadowCombatUnitProfile,
@@ -128,28 +129,28 @@ export const SHADOW_EXPEDITION_TEMPLATES: ExpeditionTemplate[] = [
 
 const REWARDS: Record<ShadowExpeditionType, Record<ShadowExpeditionOutcome, { xp: number; essence: number }>> = {
   training: {
-    great_success: { xp: 55, essence: 2 },
-    success: { xp: 40, essence: 1 },
-    partial: { xp: 18, essence: 0 },
-    failure: { xp: 6, essence: 0 },
+    great_success: { xp: 85, essence: 4 },
+    success: { xp: 60, essence: 2 },
+    partial: { xp: 28, essence: 1 },
+    failure: { xp: 10, essence: 0 },
   },
   essence: {
-    great_success: { xp: 28, essence: 12 },
-    success: { xp: 20, essence: 8 },
-    partial: { xp: 10, essence: 3 },
-    failure: { xp: 5, essence: 0 },
+    great_success: { xp: 45, essence: 18 },
+    success: { xp: 32, essence: 12 },
+    partial: { xp: 16, essence: 5 },
+    failure: { xp: 8, essence: 1 },
   },
   hunt: {
-    great_success: { xp: 42, essence: 8 },
-    success: { xp: 30, essence: 5 },
-    partial: { xp: 14, essence: 2 },
-    failure: { xp: 5, essence: 0 },
+    great_success: { xp: 65, essence: 12 },
+    success: { xp: 45, essence: 8 },
+    partial: { xp: 22, essence: 3 },
+    failure: { xp: 8, essence: 1 },
   },
   scout: {
-    great_success: { xp: 36, essence: 6 },
-    success: { xp: 24, essence: 4 },
-    partial: { xp: 12, essence: 1 },
-    failure: { xp: 4, essence: 0 },
+    great_success: { xp: 55, essence: 9 },
+    success: { xp: 38, essence: 6 },
+    partial: { xp: 18, essence: 2 },
+    failure: { xp: 6, essence: 1 },
   },
 }
 
@@ -521,18 +522,33 @@ export const getShadowExpeditionOutcome = (progress: number, risk: number): Shad
 export const getShadowExpeditionReward = (
   type: ShadowExpeditionType,
   outcome: ShadowExpeditionOutcome,
-  searchStacks = 0
+  searchStacks = 0,
+  rng = Math.random
 ): ShadowExpeditionResult => {
   const base = REWARDS[type][outcome]
   const searchBonus = outcome === 'failure' ? 0 : Math.min(3, Math.max(0, searchStacks))
-  const bonusRewards = searchBonus > 0 ? [`수색 보너스 그림자 정수 +${searchBonus}`] : undefined
+  
+  // 골드나 플레이어 XP는 없으므로 그림자 XP 및 에센스만 운 변동
+  const rolledXP = rollValueReward(base.xp, rng)
+  const rolledEssence = rollValueReward(base.essence, rng)
+
+  const isJackpot = rolledXP.isJackpot || rolledEssence.isJackpot
+  const bonusRewards: string[] = []
+
+  if (searchBonus > 0) {
+    bonusRewards.push(`수색 보너스 그림자 정수 +${searchBonus}`)
+  }
+  if (isJackpot) {
+    bonusRewards.push(`★원정 대박 잭팟 보너스 발동! (1.5 ~ 2.0배 폭증)★`)
+  }
+
   return {
     outcome,
     progress: 0,
     risk: 0,
-    shadowXpGained: base.xp,
-    essenceGained: base.essence + searchBonus,
-    bonusRewards,
+    shadowXpGained: rolledXP.amount,
+    essenceGained: rolledEssence.amount + searchBonus,
+    bonusRewards: bonusRewards.length > 0 ? bonusRewards : undefined,
   }
 }
 
@@ -718,7 +734,7 @@ export const resolveShadowExpeditionCommand = (
 
   const outcomeAdjustment = getOutcomeProfileAdjustment(profiles, expeditionAggregate)
   const outcome = getShadowExpeditionOutcome(nextProgress + outcomeAdjustment.progress, nextRisk - outcomeAdjustment.risk)
-  const reward = getShadowExpeditionReward(expedition.type, outcome, nextSearchStacks)
+  const reward = getShadowExpeditionReward(expedition.type, outcome, nextSearchStacks, rng)
 
   // Featured shadow for report
   const featured = actor ?? party[0]
@@ -780,11 +796,14 @@ export const resolveShadowExpeditionCommand = (
     featuredShadowIds: featured ? [featured.instanceId] : [],
   }
 
+  const hasJackpot = result.bonusRewards?.some(line => line.includes('★원정 대박 잭팟'))
+  const jackpotLogMsg = hasJackpot ? ' [★대박 잭팟!★]' : ''
+
   logs.push({
     id: idFactory(),
     turn: nextTurn,
     type: 'system',
-    message: `원정 ${SHADOW_EXPEDITION_OUTCOME_LABEL[outcome]}. 그림자들이 경험치 ${result.shadowXpGained}와 그림자 정수 ${result.essenceGained}을 회수했다.`,
+    message: `원정 ${SHADOW_EXPEDITION_OUTCOME_LABEL[outcome]}${jackpotLogMsg}. 그림자들이 경험치 ${result.shadowXpGained}와 그림자 정수 ${result.essenceGained}을 회수했다.`,
   })
 
   return {

@@ -140,6 +140,7 @@ export interface DirectBattlePreviewPanelProps {
   initialHunterStatusEffects?: BattleStatusEffect[]
   difficultyMod?: number // [NEW] 난이도 보정치 추가
   coopHunter?: any // [NEW] 협력 헌터 실제 참전 데이터
+  shadowsOnly?: boolean
 }
 
 const enemyTargetTypes = new Set<BattleTargetType>([
@@ -776,6 +777,7 @@ export function DirectBattlePreviewPanel({
   initialHunterStatusEffects,
   difficultyMod, // [NEW] 난이도 보정치 추가
   coopHunter, // [NEW] 협력 헌터
+  shadowsOnly,
 }: DirectBattlePreviewPanelProps) {
   const autoStartedRef = useRef(false)
   const completionSentRef = useRef(false)
@@ -936,7 +938,7 @@ export function DirectBattlePreviewPanel({
       ? { units: clonedEnemyUnits, warnings: [] as string[] }
       : buildDirectBattleEncounterParty(encounterKey, enemyBaseLevel, pressureSnapshot, isRedGate, difficultyMod)
     const units = [
-      hunterBuild.unit,
+      ...(shadowsOnly ? [] : [hunterBuild.unit]),
       ...(coopHunterUnit ? [coopHunterUnit] : []),
       ...shadowBuilds.map(build => build.unit),
       ...enemyBuild.units

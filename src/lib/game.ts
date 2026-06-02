@@ -93,6 +93,33 @@ export const getDateKey = (date = new Date()): string => {
 /** Alias for getDateKey() for backward compatibility. */
 export const todayKey = () => getDateKey()
 
+export interface RolledReward {
+  amount: number
+  isJackpot: boolean
+}
+
+/**
+ * Calculates a luck-based variation for a reward value.
+ * - 95% chance: Variation of 70% to 120% (average 95%).
+ * - 5% chance: Jackpot variation of 150% to 200% (average 175%).
+ * Mathematical expectation is (0.95 * 0.95) + (0.05 * 1.75) = 0.99 (retains overall balance).
+ */
+export const rollValueReward = (baseValue: number, rng = Math.random): RolledReward => {
+  if (baseValue <= 0) return { amount: 0, isJackpot: false }
+  const isJackpot = rng() < 0.05 // 5% jackpot chance
+  let multiplier = 1.0
+  if (isJackpot) {
+    multiplier = 1.5 + rng() * 0.5 // 150% to 200%
+  } else {
+    multiplier = 0.7 + rng() * 0.5 // 70% to 120%
+  }
+  return {
+    amount: Math.max(1, Math.round(baseValue * multiplier)),
+    isJackpot,
+  }
+}
+
+
 /** Add days to a date (handles DST and local date correctly). */
 export const addDays = (date: Date, days: number): Date => {
   const next = new Date(date)
