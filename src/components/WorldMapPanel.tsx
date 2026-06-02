@@ -689,15 +689,16 @@ export function WorldMapPanel() {
   }
 
   // 현재 노드의 활성 게이트가 켜져 있는지 여부 (기존 E/D/C 일반 게이트 및 동적 스폰/러브콜 게이트 포함)
+  const activeGateNodeId = activeGate?.gateId
   const isGateActive =
     activeGate &&
     activeGate.status === 'active' &&
-    activeRiftNodeId &&
+    activeGateNodeId &&
     (
-      RIFT_NODES.some((rn: any) => rn.id === activeRiftNodeId) || 
-      MONARCHS.some((m) => m.id === activeRiftNodeId) || 
-      activeRiftNodeId === 'angel' ||
-      Boolean(livingWorld?.riftNodes[activeRiftNodeId])
+      RIFT_NODES.some((rn: any) => rn.id === activeGateNodeId) || 
+      MONARCHS.some((m) => m.id === activeGateNodeId) || 
+      activeGateNodeId === 'angel' ||
+      Boolean(livingWorld?.riftNodes[activeGateNodeId])
     ) &&
     (!manualSession || manualSession.source !== 'world_map')
 
@@ -3005,7 +3006,7 @@ export function WorldMapPanel() {
           <div className="mb-4">
             <h3 className="text-lg font-black text-white flex items-center gap-2">
               <Swords className="h-5 w-5 text-purple-400" />
-              진입한 구역: {RIFT_NODES.find((rn: any) => rn.id === activeRiftNodeId)?.name ?? livingWorld?.riftNodes[activeRiftNodeId]?.name ?? activeGate.customGateDef?.name ?? '미지의 균열'}
+              진입한 구역: {RIFT_NODES.find((rn: any) => rn.id === activeGateNodeId)?.name ?? (activeGateNodeId ? livingWorld?.riftNodes[activeGateNodeId]?.name : undefined) ?? activeGate.customGateDef?.name ?? '미지의 균열'}
             </h3>
             <p className="text-xs text-white/45 mt-1">
               게이트를 클리어하면 해당 월드맵 노드의 정화도가 올라가고 후속 노드가 해제됩니다.

@@ -9143,6 +9143,25 @@ export const useGame = create<GameState>()(
           return
         }
 
+        const existingWorldGate = s.activeWorldGate
+        if (existingWorldGate?.status === 'active') {
+          if (existingWorldGate.gateId === nodeId) {
+            set({ activeRiftNodeId: nodeId })
+            return
+          }
+
+          set({
+            messages: appendMessageOnce(s.messages, {
+              id: uid(),
+              kind: 'info',
+              title: '진입 차단',
+              lines: ['이미 다른 월드맵 게이트가 활성화되어 있습니다. 현재 게이트를 완료하거나 포기한 뒤 다시 시도하십시오.'],
+              createdAt: todayISO(),
+            })
+          })
+          return
+        }
+
         // 1) nodeId로 동적 게이트 정의 구성 (한국 게이트 or 군주)
         let customGateDef
         let manualSession = undefined
@@ -9256,6 +9275,20 @@ export const useGame = create<GameState>()(
 
         // 2) get().spawnGate(dynamicGateId, 'worldmap', helperHunterIds, customGateDef)
         get().spawnGate(nodeId, 'worldmap', helperHunterIds, customGateDef)
+        const spawnedWorldGate = get().activeWorldGate
+        if (!spawnedWorldGate || spawnedWorldGate.status !== 'active' || spawnedWorldGate.gateId !== nodeId) {
+          set({
+            messages: appendMessageOnce(get().messages, {
+              id: uid(),
+              kind: 'info',
+              title: '진입 차단',
+              lines: ['월드맵 게이트 활성화에 실패했습니다. 이미 열린 게이트 상태를 확인한 뒤 다시 시도하십시오.'],
+              createdAt: todayISO(),
+            })
+          })
+          return
+        }
+
         if (isMonarchId && manualSession) {
           set({
             activeRiftNodeId: nodeId,
