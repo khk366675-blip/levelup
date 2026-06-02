@@ -14278,7 +14278,7 @@ export const useGame = create<GameState>()(
         const s = get()
         if (!isVictory) return
 
-        const activeGate = s.activeGate
+        const activeGate = s.activeGate?.gateId === gateId ? s.activeGate : undefined
         if (!activeGate) return
 
         const gate = GATE_DEFINITIONS.find(g => g.id === gateId)
@@ -14342,13 +14342,6 @@ export const useGame = create<GameState>()(
           }
 
           get().recalculateHunterGrade('게이트 공략 성공')
-          
-          const activeGate2 = get().activeWorldGate || get().activeGate
-          const riftNodeId = get().activeRiftNodeId
-          if (activeGate2?.source === 'worldmap' && riftNodeId) {
-            get().markRiftNodeCleared(riftNodeId)
-            set({ activeRiftNodeId: undefined })   // 반드시 리셋
-          }
         }
       },
 
