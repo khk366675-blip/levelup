@@ -13247,6 +13247,11 @@ export const useGame = create<GameState>()(
         secretProgress: undefined,
         aiCoachCoreContext: undefined,
         hardcoreState: createInitialHardcoreState(),
+        hunterGrade: createInitialHunterGradeState({
+          hunter: initialHunter,
+          focusSession: { history: [], totalFocusedMs: 0 },
+          achievementStats: createInitialAchievementStats(),
+        }),
         initialized: true,
       }),
 
@@ -13330,6 +13335,11 @@ export const useGame = create<GameState>()(
           }
         },
         hardcoreState: createInitialHardcoreState(),
+        hunterGrade: createInitialHunterGradeState({
+          hunter: initialHunter,
+          focusSession: { history: [], totalFocusedMs: 0 },
+          achievementStats: createInitialAchievementStats(),
+        }),
         initialized: true,
       }),
 
@@ -13448,6 +13458,11 @@ export const useGame = create<GameState>()(
             gateEchoes: [],
             worldThreat: 0,
           } : createInitialHardcoreState(),
+          hunterGrade: createInitialHunterGradeState({
+            hunter: initialHunter,
+            focusSession: s.focusSession,
+            achievementStats: createInitialAchievementStats(),
+          }),
           initialized: true,
         })
       },
