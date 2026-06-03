@@ -12,6 +12,7 @@ import {
   formatStatReward,
   formatTitleEffects,
   getEquippedTitleDefinition,
+  calculatePlayerCombatStats,
 } from '../lib/game'
 import {
   getCombatPowerTierHint,
@@ -230,6 +231,15 @@ export function HunterStatus({ currentTab, onTabChange }: HunterStatusProps) {
   // Get equipment stat bonuses
   const equippedItems = getEquippedItems(items, equipment)
   const equipmentBonuses = getEquipmentStatBonuses(equippedItems)
+  const combatStats = calculatePlayerCombatStats({
+    level: hunter.level,
+    stats: hunter.stats,
+    equippedItems,
+    activeConsumableEffects,
+    jobId: activeJobId,
+    skills: [],
+  })
+
   const combatPower = getHunterCombatPowerBreakdown({
     hunter,
     items,
@@ -281,12 +291,12 @@ export function HunterStatus({ currentTab, onTabChange }: HunterStatusProps) {
     if (bonus === 0) return null
     
     switch (key) {
-      case 'STR': return `+${bonus}% 운동 XP`
-      case 'VIT': return `+${bonus}% 운동 드롭`
-      case 'AGI': return `+${bonus}% 던전 부분보상`
-      case 'INT': return `+${bonus}% 학습 XP`
-      case 'PER': return `월 ${Math.floor(effectiveValue / 10)}회 streak 보호`
-      case 'SEN': return `+${bonus}% 레어리티`
+      case 'STR': return `운동 XP 획득 +${bonus}%`
+      case 'VIT': return `운동 템 드롭 +${bonus}%`
+      case 'AGI': return `게이트 우회 보상 +${bonus}%`
+      case 'INT': return `공부 XP 획득 +${bonus}%`
+      case 'PER': return `스트릭 보호 월 ${Math.floor(effectiveValue / 10)}회`
+      case 'SEN': return `희귀 보상 확률 +${bonus}%`
       default: return null
     }
   }
@@ -534,6 +544,46 @@ export function HunterStatus({ currentTab, onTabChange }: HunterStatusProps) {
                       </div>
                     )
                   })}
+
+                  {/* 추가 전투 능력치 */}
+                  <div className="bg-ink-900/40 border border-cyan-400/5 rounded p-2 flex items-center justify-between hover:border-cyan-400/20 transition">
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-sm">🎯</span>
+                      <div>
+                        <div className="text-[9px] text-cyan-300/40 system-text">ACCURACY</div>
+                        <div className="text-[10px] font-bold text-cyan-300">명중률</div>
+                      </div>
+                    </div>
+                    <div className="text-sm font-bold text-white pr-1">
+                      {Math.round(combatStats.accuracy * 100)}%
+                    </div>
+                  </div>
+
+                  <div className="bg-ink-900/40 border border-cyan-400/5 rounded p-2 flex items-center justify-between hover:border-cyan-400/20 transition">
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-sm">💨</span>
+                      <div>
+                        <div className="text-[9px] text-emerald-300/40 system-text">EVASION</div>
+                        <div className="text-[10px] font-bold text-emerald-300">회피율</div>
+                      </div>
+                    </div>
+                    <div className="text-sm font-bold text-white pr-1">
+                      {Math.round(combatStats.evasionRate * 100)}%
+                    </div>
+                  </div>
+
+                  <div className="bg-ink-900/40 border border-cyan-400/5 rounded p-2 flex items-center justify-between hover:border-cyan-400/20 transition">
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-sm">⚡</span>
+                      <div>
+                        <div className="text-[9px] text-amber-300/40 system-text">CRITICAL</div>
+                        <div className="text-[10px] font-bold text-amber-300">치명타율</div>
+                      </div>
+                    </div>
+                    <div className="text-sm font-bold text-white pr-1">
+                      {Math.round(combatStats.critRate * 100)}%
+                    </div>
+                  </div>
                 </div>
               </div>
 

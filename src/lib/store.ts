@@ -7420,18 +7420,101 @@ export const useGame = create<GameState>()(
         currentEncounter.status = 'cleared'
         run.clearedEncounterIds = [...run.clearedEncounterIds, currentEncounter.id]
 
-        if (choice.riskDelta) {
-          run.accumulatedRisk = Math.max(0, Math.min(100, run.accumulatedRisk + choice.riskDelta))
-        }
-        if (choice.rewardMultiplierDelta) {
-          run.rewardMultiplier = Math.max(0.1, run.rewardMultiplier + choice.rewardMultiplierDelta)
-        }
-        if (choice.extractionBonusDelta) {
-          run.extractionBonusPercent = (run.extractionBonusPercent ?? 0) + choice.extractionBonusDelta
+        const finalChoice = { ...choice }
+        let surpriseText = ''
+        const randVal = Math.random()
+
+        if (choiceId === 'choice_supply_open' || choiceId === 'choice_default_supply_open') {
+          if (randVal < 0.25) {
+            finalChoice.leadsTo = 'battle'
+            finalChoice.addEncounterType = 'battle'
+            if (finalChoice.immediateReward) {
+              finalChoice.immediateReward = {
+                ...finalChoice.immediateReward,
+                gold: Math.round((finalChoice.immediateReward.gold ?? 1000) / 2)
+              }
+            } else {
+              finalChoice.immediateReward = { gold: 500, essence: 0, xp: 0, items: [] }
+            }
+            surpriseText = '보급 상자를 열었으나 쇠 냄새가 섞인 기이한 침이 흐릅니다. 이계의 미믹이 이빨을 드러내며 튀어나와 덮쳐옵니다!'
+          }
+        } else if (choiceId === 'choice_lock_solve') {
+          if (randVal < 0.40) {
+            finalChoice.leadsTo = 'safe'
+            finalChoice.addEncounterType = undefined
+            finalChoice.immediateReward = {
+              ...(finalChoice.immediateReward ?? {}),
+              essence: 200,
+              xp: 0,
+              gold: 0,
+              items: []
+            }
+            surpriseText = '복잡하게 얽힌 고대 룬의 정렬 주파수를 완벽하게 해독했습니다. 붉은 보호막이 부드럽게 풀리며, 깊숙이 봉인되어 있던 정수 200이 방출됩니다.'
+          }
+        } else if (choiceId === 'choice_merchant_threaten') {
+          if (randVal < 0.40) {
+            finalChoice.leadsTo = 'battle'
+            finalChoice.addEncounterType = 'elite'
+            surpriseText = '검은 상인이 그림자 가면 뒤에서 잔인하게 미소를 지으며 미늘창을 고쳐 쥡니다. 강력한 호위 야수를 호출합니다!'
+          } else {
+            finalChoice.leadsTo = 'safe'
+            finalChoice.addEncounterType = undefined
+            finalChoice.immediateReward = { gold: 500, essence: 200, xp: 0, items: [] }
+            surpriseText = '칼날의 시퍼런 기세를 본 검은 상인이 덜덜 떨며 뒤로 물러섭니다. 그는 창고 문을 열고 귀중한 재화들을 순순히 내놓습니다.'
+          }
+        } else if (choiceId === 'choice_waterfall_push') {
+          if (randVal < 0.30) {
+            finalChoice.leadsTo = 'battle'
+            finalChoice.addEncounterType = 'elite'
+            surpriseText = '폭포 너머의 비밀 공간으로 뛰어들었으나, 그곳은 보물이 아니라 둥지를 지키는 강대한 야수 수호자가 매복해 있던 함정이었습니다!'
+          }
+        } else if (choiceId === 'choice_apothecary_drink') {
+          if (randVal < 0.40) {
+            finalChoice.healPercent = undefined
+            finalChoice.hpCostPercent = 10
+            finalChoice.immediateReward = {
+              ...(finalChoice.immediateReward ?? {}),
+              essence: 150,
+              xp: 0,
+              gold: 0,
+              items: []
+            }
+            surpriseText = '물약을 들이켜자 내장에서 타들어 가는 마력 발열 반응이 끓어오릅니다. 체력이 깎였지만 그 반동으로 차원 에센스를 정제해 냈습니다.'
+          }
+        } else if (choiceId === 'choice_incheon_cargo_open') {
+          if (randVal < 0.30) {
+            finalChoice.leadsTo = 'safe'
+            finalChoice.addEncounterType = undefined
+            finalChoice.immediateReward = { gold: 800, essence: 150, xp: 0, items: [] }
+            surpriseText = '철 컨테이너를 부수고 들어가자 괴물 대신 어마어마한 전술 금괴와 가득 쌓인 그림자 정수 결정만이 가득합니다! 안전하게 자원을 인계합니다.'
+          }
+        } else if (choiceId === 'choice_kr_busan_strike') {
+          if (randVal < 0.30) {
+            finalChoice.leadsTo = 'safe'
+            finalChoice.addEncounterType = undefined
+            finalChoice.immediateReward = { gold: 600, xp: 0, essence: 0, items: [] }
+            surpriseText = '어두운 괴수 둥지에 기습 난입했으나, 둥지는 이미 버려진 채 텅 비어 있습니다. 바닥에 잔류해 흩어져 있던 골드 주머니만 안전하게 획득합니다.'
+          }
         }
 
-        if (choice.immediateReward) {
-          const reward = choice.immediateReward
+        if (finalChoice.riskDelta) {
+          run.accumulatedRisk = Math.max(0, Math.min(100, run.accumulatedRisk + finalChoice.riskDelta))
+        }
+        if (finalChoice.rewardMultiplierDelta) {
+          run.rewardMultiplier = Math.max(0.1, run.rewardMultiplier + finalChoice.rewardMultiplierDelta)
+        }
+        if (finalChoice.extractionBonusDelta) {
+          run.extractionBonusPercent = (run.extractionBonusPercent ?? 0) + finalChoice.extractionBonusDelta
+        }
+
+        if (surpriseText) {
+          run.lastEventOutcomeText = run.lastEventOutcomeText
+            ? `${surpriseText}\n${run.lastEventOutcomeText}`
+            : surpriseText
+        }
+
+        if (finalChoice.immediateReward) {
+          const reward = finalChoice.immediateReward
           if (reward.gold) run.accumulatedRewards.gold += reward.gold
           if (reward.essence) run.accumulatedRewards.essence += reward.essence
           if (reward.xp) run.accumulatedRewards.xp += reward.xp
@@ -7439,7 +7522,7 @@ export const useGame = create<GameState>()(
 
         // Apply A-2 choices effects for worldmap nodes
         if (activeGate.source === 'worldmap') {
-          const effectType = getChoiceEffectType(choice)
+          const effectType = getChoiceEffectType(finalChoice)
           
           // Get rank scaling multiplier
           const gate = GATE_DEFINITIONS.find(g => g.id === run.gateId) || activeGate.customGateDef
@@ -7566,7 +7649,15 @@ export const useGame = create<GameState>()(
               break
             }
           }
-          run.lastEventOutcomeText = outcomeText
+          if (surpriseText) {
+            run.lastEventOutcomeText = surpriseText
+          } else {
+            run.lastEventOutcomeText = outcomeText
+          }
+        } else {
+          if (surpriseText) {
+            run.lastEventOutcomeText = surpriseText
+          }
         }
 
         // Red Gate Instability 롤링 연동
@@ -7597,11 +7688,11 @@ export const useGame = create<GameState>()(
         }
 
         // leadsTo 처리 (선택지에 전개 결과 연결 및 이후 단계 시퀀스 동적 조정)
-        const leadsTo = getChoiceLeadsTo(choice)
+        const leadsTo = getChoiceLeadsTo(finalChoice)
         if (leadsTo === 'battle') {
           const gate = GATE_DEFINITIONS.find(g => g.id === run.gateId) || activeGate.customGateDef
           const rank = gate?.rank ?? 'E'
-          const isElite = choice.addEncounterType === 'elite' || (Math.random() < 0.4 && rank !== 'E')
+          const isElite = finalChoice.addEncounterType === 'elite' || (Math.random() < 0.4 && rank !== 'E')
           const encType = isElite ? 'elite' : 'battle'
           
           const difficultyMod = isElite ? 1.35 : 1.0
@@ -7639,16 +7730,16 @@ export const useGame = create<GameState>()(
           run.encounters.splice(run.currentEncounterIndex + 1, 0, newEnc)
           run.rewardMultiplier = Math.max(0.1, Math.min(2.0, run.rewardMultiplier + 0.15))
 
-          if (choice.addEncounterType && choice.addEncounterType !== 'battle' && choice.addEncounterType !== 'elite') {
+          if (finalChoice.addEncounterType && finalChoice.addEncounterType !== 'battle' && finalChoice.addEncounterType !== 'elite') {
             const shiftIndex = run.currentEncounterIndex + 2
             if (shiftIndex < run.encounters.length) {
               const targetEnc = run.encounters[shiftIndex]
-              targetEnc.type = choice.addEncounterType
-              if (choice.addEncounterType === 'treasure') {
+              targetEnc.type = finalChoice.addEncounterType
+              if (finalChoice.addEncounterType === 'treasure') {
                 targetEnc.title = '이벤트로 발견된 보물 창고'
                 targetEnc.description = '막다른 벽을 허물어 고대 보물 상자가 숨겨진 다락방을 개방했습니다!'
                 targetEnc.treasureReward = { gold: 500, essence: 150 }
-              } else if (choice.addEncounterType === 'shadow_trace') {
+              } else if (finalChoice.addEncounterType === 'shadow_trace') {
                 targetEnc.title = '균열의 정제된 그림자 흔적'
                 targetEnc.description = '강제 개방된 균열 속에서 정교하게 정제된 그림자 흔적이 고동칩니다.'
               }
@@ -7673,8 +7764,8 @@ export const useGame = create<GameState>()(
           run.currentEncounterIndex = nextIndex
           run.encounters[nextIndex].status = 'available'
           
-          if (choice.nextEncounterModifier) {
-            run.encounters[nextIndex].specialRuleId = choice.nextEncounterModifier
+          if (finalChoice.nextEncounterModifier) {
+            run.encounters[nextIndex].specialRuleId = finalChoice.nextEncounterModifier
           }
         } else {
           run.completed = true
@@ -7701,11 +7792,11 @@ export const useGame = create<GameState>()(
           get().checkGateClearHooks(activeGate.gateId, true)
         }
 
-        if (leadsTo !== 'battle' && choice.addEncounterType && run.currentEncounterIndex < run.encounters.length - 1) {
+        if (leadsTo !== 'battle' && finalChoice.addEncounterType && run.currentEncounterIndex < run.encounters.length - 1) {
           const nextIndex = run.currentEncounterIndex
           const nextEnc = run.encounters[nextIndex]
-          nextEnc.type = choice.addEncounterType
-          if (choice.addEncounterType === 'elite') {
+          nextEnc.type = finalChoice.addEncounterType
+          if (finalChoice.addEncounterType === 'elite') {
             nextEnc.title = '이벤트로 유도된 엘리트 구역 [ELITE]'
             nextEnc.description = '이벤트의 여파로 한층 성난 정예 파수병이 매복해 있습니다!'
             nextEnc.isElite = true
@@ -7715,7 +7806,7 @@ export const useGame = create<GameState>()(
             const gate = GATE_DEFINITIONS.find(g => g.id === run.gateId)
             const gateMonsters = gate?.monsterIds ?? []
             nextEnc.monsterIds = [gateMonsters[Math.floor(Math.random() * gateMonsters.length)]]
-          } else if (choice.addEncounterType === 'treasure') {
+          } else if (finalChoice.addEncounterType === 'treasure') {
             nextEnc.title = '이벤트로 발견된 보물 창고'
             nextEnc.description = '막다른 벽을 허물어 고대 보물 상자가 숨겨진 다락방을 개방했습니다!'
             nextEnc.treasureReward = { gold: 500, essence: 150 }
@@ -7723,11 +7814,11 @@ export const useGame = create<GameState>()(
         }
 
         const lines = [
-          `선택: "${choice.label}"`,
-          stripGateChoiceOutcomeHint(choice.description),
+          `선택: "${finalChoice.label}"`,
+          stripGateChoiceOutcomeHint(finalChoice.description),
         ]
-        if (choice.immediateReward) {
-          const rew = choice.immediateReward
+        if (finalChoice.immediateReward) {
+          const rew = finalChoice.immediateReward
           if (rew.gold) lines.push(`골드 획득: +${rew.gold}`)
           if (rew.essence) lines.push(`그림자 정수 획득: +${rew.essence}`)
         }
