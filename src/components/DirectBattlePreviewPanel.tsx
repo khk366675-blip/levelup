@@ -943,6 +943,19 @@ export function DirectBattlePreviewPanel({
         }))
       : undefined
 
+    const isRealCombat = source && ['gate', 'red_gate', 'promotion_exam', 'world_map', 'gate_echo'].includes(source)
+    if (isRealCombat && !clonedEnemyUnits) {
+      console.error(`[DirectBattlePreviewPanel] Real combat source "${source}" requires customEnemyUnits. Fallback to mock is blocked.`)
+      setPreview({
+        encounterKey,
+        state: createDirectBattleState([], { battleId: activeBattleId }),
+        selections: {},
+        issues: [`실제 전투(${source})에는 적 유닛 데이터(customEnemyUnits)가 필요합니다.`],
+        logs: [],
+      })
+      return
+    }
+
     const enemyBuild = clonedEnemyUnits
       ? { units: clonedEnemyUnits, warnings: [] as string[] }
       : buildDirectBattleEncounterParty(encounterKey, enemyBaseLevel, pressureSnapshot, isRedGate, difficultyMod)

@@ -473,6 +473,18 @@ export const recalcHunterGradeState = (
   
   let pendingExam = prev.pendingExam
 
+  // 진행 중(in_progress)인 승급 심사가 있을 때, 실제 승급 게이트가 활성화되어 있는지 교차 검증
+  if (pendingExam && pendingExam.status === 'in_progress') {
+    const activeGate = fullState?.activeWorldGate ?? fullState?.activeGate
+    const isGateActive = activeGate && activeGate.status === 'active' && activeGate.runState?.isPromotionExam
+    if (!isGateActive) {
+      pendingExam = {
+        ...pendingExam,
+        status: 'available'
+      }
+    }
+  }
+
   // 진행 중(in_progress)인 승급 심사는 절대로 덮어씌우거나 상태를 갱신하지 않고 유지함
   if (pendingExam && pendingExam.status === 'in_progress') {
     // Keep it as is

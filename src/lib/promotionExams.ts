@@ -28,8 +28,8 @@ export const PROMOTION_EXAM_DEFINITIONS: Record<Exclude<HunterGradeTier, 'E'>, P
     recommendedPower: 120,
     riskLevel: '낮음',
     difficultyMod: 0.75,  // 승급심사 전용 하향: statBias×hpMultiplier 이중 증폭 보정
-    normalMultiplier: 0.80,
-    bossMultiplier: 0.65,
+    normalMultiplier: 1.50,
+    bossMultiplier: 2.00,
     encounterCount: 3,
     clearRequirement: '일반 전투 2회 및 하급 파수병 보스 토벌 성공',
     shadowUsageAdvised: false,
@@ -46,8 +46,8 @@ export const PROMOTION_EXAM_DEFINITIONS: Record<Exclude<HunterGradeTier, 'E'>, P
     recommendedPower: 350,
     riskLevel: '보통',
     difficultyMod: 0.90,  // 승급심사 전용 하향
-    normalMultiplier: 0.95,
-    bossMultiplier: 0.85,
+    normalMultiplier: 1.50,
+    bossMultiplier: 2.00,
     encounterCount: 4,
     clearRequirement: '이벤트/보물 구역 돌파 및 정예 몬스터(ELITE) 혹은 중급 보스 처치',
     shadowUsageAdvised: false,
@@ -64,8 +64,8 @@ export const PROMOTION_EXAM_DEFINITIONS: Record<Exclude<HunterGradeTier, 'E'>, P
     recommendedPower: 800,
     riskLevel: '높음',
     difficultyMod: 1.10,  // 승급심사 전용 하향
-    normalMultiplier: 1.10,
-    bossMultiplier: 1.10,
+    normalMultiplier: 1.50,
+    bossMultiplier: 2.00,
     encounterCount: 5,
     clearRequirement: '그림자 군단 소환 및 보스의 대형 Telegraph 예비 동작에 맞춰 즉각 대응 후 토벌',
     shadowUsageAdvised: true,
@@ -82,8 +82,8 @@ export const PROMOTION_EXAM_DEFINITIONS: Record<Exclude<HunterGradeTier, 'E'>, P
     recommendedPower: 1800,
     riskLevel: '매우 높음',
     difficultyMod: 1.40,  // 승급심사 전용 하향
-    normalMultiplier: 1.30,
-    bossMultiplier: 1.40,
+    normalMultiplier: 1.50,
+    bossMultiplier: 2.00,
     encounterCount: 6,
     clearRequirement: 'Reality Pressure 역압 속에서 연속 전투 및 최하층 헬하운드 보스 토벌 완수',
     shadowUsageAdvised: true,
@@ -101,7 +101,7 @@ export const PROMOTION_EXAM_DEFINITIONS: Record<Exclude<HunterGradeTier, 'E'>, P
     riskLevel: '극한',
     difficultyMod: 1.70,  // 승급심사 전용 하향
     normalMultiplier: 1.60,
-    bossMultiplier: 1.70,
+    bossMultiplier: 2.00,
     encounterCount: 6,
     clearRequirement: '협회 보증 S급 균열 파쇄 및 신마 보스 패턴 공략 성공',
     shadowUsageAdvised: true,

@@ -47,6 +47,7 @@ import { GATE_THEMES, GATE_MODIFIERS, hydrateGateRunEncounterChoices, stripGateC
 import { getWorldGateEventPack } from '../lib/livingWorldGateEvents'
 import { pickDirectGateRunEncounterKey } from '../lib/directBattleEncounters'
 import { MONARCHS, FINAL_ANGEL, buildMonarchBattleUnit } from '../lib/monarchs'
+import type { BattleUnit, BattleActionDefinition, BattleTargetType } from '../lib/directBattleTypes'
 import {
   calculatePlayerCombatStats,
   formatStatReward,
@@ -58,6 +59,7 @@ import {
   getEquipmentCritBonus,
   getEquipmentEvasionBonus,
   getEquipmentAccuracyBonus,
+  createMonsterBattleActor,
   type GateRisk,
 } from '../lib/game'
 import {
@@ -1762,6 +1764,149 @@ function ManualBattlePanelV2({
   )
 }
 
+function convertSkillToBattleAction(skill: SkillDefinition, unitId: string): BattleActionDefinition {
+  const isDebuff = skill.type === 'debuff'
+  const isBuff = skill.type === 'buff' || skill.type === 'defense'
+  const isHeal = skill.type === 'heal'
+  
+  let targetType: BattleTargetType = 'single_enemy'
+  if (isHeal) targetType = 'lowest_hp_ally'
+  else if (isBuff) targetType = 'lowest_hp_ally'
+  else if (skill.targetType) targetType = skill.targetType as BattleTargetType
+
+  let effectKind: BattleActionDefinition['effectKind'] = 'damage'
+  if (isHeal) effectKind = 'support'
+  else if (skill.type === 'defense') effectKind = 'guard'
+  else if (isBuff) effectKind = 'support'
+  else if (isDebuff) effectKind = 'control'
+  
+  return {
+    actionId: `${unitId}:skill:${skill.id}`,
+    label: skill.name,
+    description: skill.description,
+    actionType: skill.type === 'defense' ? 'guard' : skill.type === 'heal' || skill.type === 'buff' ? 'support' : 'skill',
+    targetType,
+    effectKind,
+    basePriority: skill.type === 'defense' ? 2 : 1,
+    cooldown: skill.cooldownTurns ?? skill.cooldown ?? 2,
+    sourceSkillId: skill.id,
+    actionCue: skill.id,
+    animationCue: skill.id,
+    effectColor: skill.type === 'defense' ? 'cyan' : skill.type === 'debuff' ? 'violet' : 'blue',
+    effects: skill.effects ?? (skill.effect ? [skill.effect] : []),
+  }
+}
+
+function buildDirectMonsterBattleUnits(
+  monsterIds: string[],
+  level: number,
+  pressureSnapshot: any,
+  isRedGate: boolean,
+  difficultyMod: number,
+  isPromotionExam: boolean,
+  targetGrade: any
+): BattleUnit[] {
+  return monsterIds.map((id, index) => {
+    const monsterDef = MONSTER_DEFINITIONS.find(m => m.id === id)
+    if (!monsterDef) return null
+    
+    const actor = createMonsterBattleActor(
+      monsterDef,
+      pressureSnapshot,
+      isRedGate,
+      difficultyMod,
+      isPromotionExam,
+      targetGrade
+    )
+
+    if (difficultyMod !== 1.0) {
+      actor.maxHp = Math.round(actor.maxHp * difficultyMod)
+      actor.hp = actor.maxHp
+      actor.atk = Math.round(actor.atk * difficultyMod)
+      actor.def = Math.round(actor.def * difficultyMod)
+    }
+
+    const unitId = `direct-gate-enemy-${id}-${index + 1}`
+
+    const actionList: BattleActionDefinition[] = [
+      {
+        actionId: `${unitId}:basic`,
+        label: '기본 공격',
+        description: '단일 적에게 ATK 기반 피해를 줍니다.',
+        actionType: 'basic',
+        targetType: 'single_enemy',
+        effectKind: 'basic',
+        basePriority: 0,
+        cooldown: 0,
+        actionCue: 'basic-attack',
+        animationCue: 'basic-attack',
+      },
+      {
+        actionId: `${unitId}:guard`,
+        label: '방어',
+        description: '방어 태세를 취해 받는 피해를 줄입니다.',
+        actionType: 'guard',
+        targetType: 'self',
+        effectKind: 'guard',
+        basePriority: 2,
+        cooldown: 0,
+        actionCue: 'guard',
+        animationCue: 'guard',
+      }
+    ]
+
+    monsterDef.skillIds.forEach(skillId => {
+      const skill = SKILL_DEFINITIONS.find(s => s.id === skillId)
+      if (skill) {
+        actionList.push(convertSkillToBattleAction(skill, unitId))
+      }
+    })
+
+    const isBoss = monsterDef.id.includes('boss') || monsterDef.name.includes('보스') || monsterDef.rank === 'S'
+    const isMinion = monsterDef.id.includes('minion') || monsterDef.name.includes('하수인') || monsterDef.id.includes('token') || monsterDef.id.includes('shard')
+    
+    const unit: BattleUnit = {
+      unitId,
+      sourceId: id,
+      unitType: isBoss ? 'boss' : isMinion ? 'minion' : 'monster',
+      displayName: actor.name,
+      role: isBoss ? 'boss' : isMinion ? 'minion' : 'normal',
+      team: 'enemy',
+      level,
+      stats: {
+        maxHp: actor.maxHp,
+        currentHp: actor.maxHp,
+        atk: actor.atk,
+        def: actor.def,
+        spd: actor.speed,
+        skillPower: actor.atk,
+        crit: actor.critRate,
+        accuracy: actor.accuracy,
+        evasionRate: actor.evasionRate,
+        controlPower: Math.round(actor.atk * 0.5),
+        supportPower: 0,
+        survivalPower: actor.def,
+        bossPower: isBoss ? actor.atk : 0,
+        synergyPower: 0,
+      },
+      statusEffects: [],
+      cooldowns: {},
+      actionList,
+      passiveList: [],
+      actionPriority: isBoss ? 2 : 1,
+      boardLane: isBoss ? 'boss' : 'front',
+      actionCue: 'basic-attack',
+      animationCue: 'monster-idle',
+      metadata: {
+        source: 'mock_monster',
+        definitionId: id,
+      }
+    }
+
+    return unit
+  }).filter((u): u is BattleUnit => u !== null)
+}
+
 export function GatePanel({ isWorldMapContext }: { isWorldMapContext?: boolean } = {}) {
   const [isBattleRevealing, setIsBattleRevealing] = useState(false)
   const [isDirectGateBattleOpen, setIsDirectGateBattleOpen] = useState(false)
@@ -2454,6 +2599,29 @@ export function GatePanel({ isWorldMapContext }: { isWorldMapContext?: boolean }
       ? 'red'
       : (gate.rank === 'S' || gate.rewardTableId?.includes('boss') ? 'boss' : undefined)
 
+    let computedDifficultyMod = (currentEnc?.difficultyMod ?? 1.0) * (activeGate?.runState?.difficultyMod ?? 1.0)
+    if (activeGate.runState && currentEnc && activeGate.source === 'worldmap') {
+      const isBoss = currentEnc.isBoss || currentEnc.type === 'boss'
+      if (isBoss) {
+        const bossDelta = Math.max(-0.10, Math.min(0.10, activeGate.runState.bossDifficultyDelta ?? 0))
+        computedDifficultyMod = computedDifficultyMod * (1 + bossDelta)
+      } else {
+        const combatDelta = Math.max(-0.15, Math.min(0.15, activeGate.runState.nextCombatDifficultyDelta ?? 0))
+        computedDifficultyMod = computedDifficultyMod * (1 + combatDelta)
+      }
+    }
+
+    const targetMonsterIds = currentEnc?.monsterIds ?? gate.monsterIds ?? []
+    const directCustomEnemyUnits = buildDirectMonsterBattleUnits(
+      targetMonsterIds,
+      getDirectGateEnemyBaseLevel(gate),
+      activeGate.runState?.pressureSnapshot,
+      isActiveRedGate,
+      computedDifficultyMod,
+      Boolean(activeGate.runState?.isPromotionExam),
+      activeGate.runState?.targetGrade
+    )
+
     return (
       <div className="space-y-4">
         {!isWorldMapContext && <GateStatusPanel />}
@@ -2475,6 +2643,7 @@ export function GatePanel({ isWorldMapContext }: { isWorldMapContext?: boolean }
             { label: '랭크', value: `${gate.rank}-RANK` },
             { label: '적 조합', value: directGateEncounterKey },
           ]}
+          customEnemyUnits={directCustomEnemyUnits}
           autoStart
           allowEncounterSelection={false}
           startButtonLabel="전투 시작"
@@ -2486,7 +2655,7 @@ export function GatePanel({ isWorldMapContext }: { isWorldMapContext?: boolean }
           battleThemeKey={battleThemeKey}
           initialHunterStatsModifier={statsModifier}
           initialHunterStatusEffects={statusEffects}
-          difficultyMod={(currentEnc?.difficultyMod ?? 1.0) * (activeGate?.runState?.difficultyMod ?? 1.0)}
+          difficultyMod={computedDifficultyMod}
           coopHunter={coopHunter} // [NEW] 협력 헌터 참전
         />
       </div>
