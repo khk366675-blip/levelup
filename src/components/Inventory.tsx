@@ -35,6 +35,12 @@ const comparisonTone: Record<ReturnType<typeof compareEquipmentForSlot>['verdict
   weaker: 'border-white/10 bg-white/5 text-white/50',
 }
 
+const formatPercentVal = (val: number): string => {
+  const percent = val * 100
+  const rounded = Math.round(percent * 10) / 10
+  return `${rounded}%`
+}
+
 function formatItemEffects(item: Item): string[] {
   const effects = getEnhancedItemEffects(item)
   if (effects.length === 0) return []
@@ -43,13 +49,19 @@ function formatItemEffects(item: Item): string[] {
     switch (effect.type) {
       case 'xp_bonus':
         const categoryLabel = effect.category ? CATEGORY_META[effect.category]?.label || effect.category : '전체'
-        return `${categoryLabel} XP +${Math.round(effect.value * 100)}%`
+        return `${categoryLabel} XP +${formatPercentVal(effect.value)}`
       case 'drop_bonus':
-        return `드롭률 +${Math.round(effect.value * 100)}%`
+        return `드롭률 +${formatPercentVal(effect.value)}`
       case 'rarity_bonus':
-        return `레어리티 +${Math.round(effect.value * 100)}%`
+        return `레어리티 +${formatPercentVal(effect.value)}`
       case 'stat_bonus':
         return `${effect.stat} ${formatStatReward(effect.value)}`
+      case 'crit_bonus':
+        return `크리티컬 +${formatPercentVal(effect.value)}`
+      case 'evasion_bonus':
+        return `회피율 +${formatPercentVal(effect.value)}`
+      case 'accuracy_bonus':
+        return `명중률 +${formatPercentVal(effect.value)}`
       default:
         return ''
     }
@@ -86,7 +98,12 @@ function formatConsumableEffects(item: Item): string[] {
 
 function formatCombatSkillNames(item: Item): string[] {
   return (item.combatSkillIds ?? [])
-    .map(id => SKILL_DEFINITIONS.find(skill => skill.id === id)?.name)
+    .map(id => {
+      const skill = SKILL_DEFINITIONS.find(s => s.id === id)
+      if (!skill) return undefined
+      const summary = skill.effectSummary ? ` (${skill.effectSummary})` : ''
+      return `${skill.name}${summary}`
+    })
     .filter((name): name is string => Boolean(name))
 }
 
@@ -314,7 +331,6 @@ export function Inventory() {
             const enhanceDisabledReason =
               isConsumable ? '소모품은 강화 불가' :
               !enhanceable ? '강화 불가' :
-              enhancementLevel >= MAX_ITEM_ENHANCEMENT_LEVEL ? '최대 강화' :
               enhanceMaterials.length === 0 ? '중복 장비 필요' :
               ''
             const handleEnhance = () => {
@@ -330,7 +346,6 @@ export function Inventory() {
             const goldEnhanceDisabledReason =
               isConsumable ? '소모품 강화 불가' :
               !enhanceable ? '강화 불가' :
-              enhancementLevel >= MAX_ITEM_ENHANCEMENT_LEVEL ? '최대 강화' :
               (gold ?? 0) < goldCost ? '골드 부족' :
               ''
             const handleGoldEnhance = () => {
@@ -338,6 +353,11 @@ export function Inventory() {
               const ok = window.confirm(`${goldCost.toLocaleString()} 골드를 소모해 ${successRatePct}% 확률로 +1 강화에 도전하시겠습니까?`)
               if (ok) enhanceItemWithGold(item.id)
             }
+
+            const nextLevelItem = (item.equippable && !item.consumable)
+              ? { ...item, enhancementLevel: enhancementLevel + 1 }
+              : null
+            const nextEffects = nextLevelItem ? formatItemEffects(nextLevelItem) : []
             
             return (
               <motion.div
@@ -350,13 +370,22 @@ export function Inventory() {
                   'relative bg-ink-800/60 border rounded-lg p-4 backdrop-blur-sm transition-all',
                   equipped ? 'border-amber-400/60 ring-2 ring-amber-400/40' : `border-white/10 ring-1 ${meta.ring}`,
                   item.equippable && !item.consumable ? `rarity-frame-${item.rarity}` : '',
+                  (item.equippable && !item.consumable && enhancementLevel >= 10) ? 'ring-4 ring-orange-500/80 border-orange-500 shadow-[0_0_25px_rgba(249,115,22,0.5)]' :
+                  (item.equippable && !item.consumable && enhancementLevel >= 5) ? 'ring-2 ring-yellow-400/50 border-yellow-400/70 shadow-[0_0_15px_rgba(245,158,11,0.25)]' :
+                  (item.equippable && !item.consumable && enhancementLevel >= 3) ? 'enhancement-glow' : '',
                   item.rarity === 'legendary' && 'boss-glow',
                 ].filter(Boolean).join(' ')}
               >
                 <div className="text-4xl text-center mb-2">{item.icon}</div>
                 <div className={`text-center text-sm font-semibold ${meta.color}`}>
                   {getItemDisplayName(item)}
-                  {enhancementLabel && <span className="ml-1 text-amber-300">{enhancementLabel}</span>}
+                  {enhancementLabel && (
+                    <span className={[
+                      'ml-1 font-bold',
+                      enhancementLevel >= 10 ? 'text-orange-400 font-black drop-shadow-[0_0_10px_rgba(249,115,22,0.9)] animate-pulse' :
+                      enhancementLevel >= 5 ? 'text-yellow-400 font-extrabold drop-shadow-[0_0_8px_rgba(245,158,11,0.8)] animate-pulse' : 'text-amber-300'
+                    ].filter(Boolean).join(' ')}>{enhancementLabel}</span>
+                  )}
                   {item.equippable && !item.consumable && <span className="ml-1 text-yellow-200">{formatEquipmentStars(item)}</span>}
                 </div>
                 <div className="text-center text-[10px] system-text mt-0.5 uppercase tracking-wider opacity-70">
@@ -428,9 +457,27 @@ export function Inventory() {
                 {enhanceable && (
                   <div className="mt-3 rounded-md border border-white/10 bg-white/5 p-2 text-left">
                     <div className="flex items-center justify-between gap-2 text-[10px] system-text border-b border-white/5 pb-1 mb-1.5">
-                      <span className="text-amber-200/70 font-semibold">장비 강화 (+{enhancementLevel}/{MAX_ITEM_ENHANCEMENT_LEVEL})</span>
+                      <span className="text-amber-200/70 font-semibold">장비 강화 (+{enhancementLevel})</span>
                       <span className="text-white/40">재료 {enhanceMaterials.length}개</span>
                     </div>
+
+                    {/* 강화 성공 시 스탯 변화 미리보기 */}
+                    {nextEffects.length > 0 && (
+                      <div className="mb-2.5 px-2 py-1.5 rounded bg-black/35 border border-white/5 text-[9px] system-text text-cyan-200/90">
+                        <div className="text-white/35 text-[8px] mb-1 text-center">강화 성공 시 스탯 변화</div>
+                        <div className="space-y-0.5">
+                          {effects.map((eff, idx) => {
+                            const nextEff = nextEffects[idx] || ''
+                            return (
+                              <div key={idx} className="flex justify-between items-center gap-2">
+                                <span className="text-white/60">{eff}</span>
+                                <span className="text-cyan-300 font-medium">→ {nextEff}</span>
+                              </div>
+                            )
+                          })}
+                        </div>
+                      </div>
+                    )}
                     
                     {/* 합성 강화 */}
                     <div className="space-y-1 mb-2.5">
@@ -446,7 +493,7 @@ export function Inventory() {
                         className="w-full text-[10px] py-1 rounded bg-amber-400/15 hover:bg-amber-400/25 text-amber-200 border border-amber-400/30 transition disabled:opacity-45 disabled:cursor-not-allowed disabled:hover:bg-amber-400/15"
                         title={canEnhance ? '중복 장비 1개를 소모해 +1 강화' : enhanceDisabledReason}
                       >
-                        {enhancementLevel >= MAX_ITEM_ENHANCEMENT_LEVEL ? '최대 강화' : canEnhance ? '합성 강화 (100% 성공)' : '재료 부족'}
+                        {canEnhance ? '합성 강화 (100% 성공)' : '재료 부족'}
                       </button>
                     </div>
 
@@ -464,7 +511,7 @@ export function Inventory() {
                         className="w-full text-[10px] py-1 rounded bg-yellow-500/15 hover:bg-yellow-500/25 text-yellow-200 border border-yellow-500/30 transition disabled:opacity-45 disabled:cursor-not-allowed disabled:hover:bg-yellow-500/15"
                         title={canGoldEnhance ? `${goldCost.toLocaleString()} 골드 소모해 ${successRatePct}% 확률로 강화 시도` : goldEnhanceDisabledReason}
                       >
-                        {enhancementLevel >= MAX_ITEM_ENHANCEMENT_LEVEL ? '최대 강화' : (gold ?? 0) < goldCost ? '골드 부족' : '골드 강화 시도'}
+                        {(gold ?? 0) < goldCost ? '골드 부족' : '골드 강화 시도'}
                       </button>
                     </div>
                   </div>

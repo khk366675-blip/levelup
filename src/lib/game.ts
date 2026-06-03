@@ -9,6 +9,7 @@ import type {
   HunterState,
   Item,
   ItemRarity,
+  ItemEffectType,
   JobId,
   MonsterDefinition,
   OwnedShadow,
@@ -439,11 +440,20 @@ export const formatEquipmentStars = (item: Pick<Item, 'equipmentStars'>): string
 export const getEnhancementLevel = (item: Pick<Item, 'enhancementLevel'>): number => {
   const raw = Math.floor(item.enhancementLevel ?? 0)
   if (!Number.isFinite(raw)) return 0
-  return Math.max(0, Math.min(MAX_ITEM_ENHANCEMENT_LEVEL, raw))
+  return Math.max(0, raw)
 }
 
 export const getEnhancementMultiplier = (item: Pick<Item, 'enhancementLevel'>): number => {
-  return 1 + getEnhancementLevel(item) * ITEM_ENHANCEMENT_EFFECT_STEP
+  const level = getEnhancementLevel(item)
+  const multipliers: Record<number, number> = {
+    0: 1.0,
+    1: 1.15,
+    2: 1.35,
+    3: 1.60,
+    4: 1.95,
+    5: 2.50,
+  }
+  return multipliers[level] ?? 1.0
 }
 
 export const formatEnhancementLabel = (item: Pick<Item, 'enhancementLevel'>): string => {
@@ -468,14 +478,92 @@ export const isSameEnhancementFamily = (
   return targetKey.length > 0 && targetKey === getItemEnhancementKey(candidate)
 }
 
+interface RarityScale {
+  flat: [number, number, number];
+  percent: [number, number, number];
+  crit: [number, number, number];
+}
+
+const ENHANCEMENT_TABLE: Record<ItemRarity, RarityScale> = {
+  common: {
+    flat: [1, 2, 3],
+    percent: [0.01, 0.02, 0.03],
+    crit: [0.002, 0.003, 0.004]
+  },
+  uncommon: {
+    flat: [1, 2, 3],
+    percent: [0.01, 0.02, 0.03],
+    crit: [0.002, 0.003, 0.004]
+  },
+  rare: {
+    flat: [2, 4, 6],
+    percent: [0.02, 0.03, 0.04],
+    crit: [0.003, 0.004, 0.005]
+  },
+  epic: {
+    flat: [2, 4, 6],
+    percent: [0.02, 0.03, 0.04],
+    crit: [0.003, 0.004, 0.005]
+  },
+  legendary: {
+    flat: [3, 6, 9],
+    percent: [0.03, 0.04, 0.05],
+    crit: [0.004, 0.005, 0.006]
+  }
+}
+
+export const getEnhancementBonus = (rarity: ItemRarity, type: ItemEffectType, level: number): number => {
+  if (level <= 0) return 0
+  const scales = ENHANCEMENT_TABLE[rarity] || ENHANCEMENT_TABLE.common
+  let rateArr: [number, number, number]
+  if (type === 'stat_bonus') {
+    rateArr = scales.flat
+  } else if (type === 'xp_bonus' || type === 'drop_bonus' || type === 'rarity_bonus') {
+    rateArr = scales.percent
+  } else if (type === 'crit_bonus' || type === 'evasion_bonus' || type === 'accuracy_bonus') {
+    rateArr = scales.crit
+  } else {
+    return 0
+  }
+
+  let totalBonus = 0
+  for (let i = 1; i <= level; i++) {
+    if (i <= 4) {
+      totalBonus += rateArr[0]
+    } else if (i <= 9) {
+      totalBonus += rateArr[1]
+    } else {
+      totalBonus += rateArr[2]
+    }
+  }
+  return totalBonus
+}
+
 export const getEnhancedItemEffects = (item: Item): NonNullable<Item['effects']> => {
-  const multiplier = getEquipmentStarMultiplier(item) * getEnhancementMultiplier(item)
-  return item.effects?.map(effect => ({
-    ...effect,
-    value: effect.type === 'stat_bonus' || effect.type === 'crit_bonus' || effect.type === 'evasion_bonus' || effect.type === 'accuracy_bonus'
-      ? roundStatValue(effect.value * multiplier)
-      : effect.value * multiplier,
-  })) ?? []
+  const starMultiplier = getEquipmentStarMultiplier(item)
+  const level = getEnhancementLevel(item)
+
+  return item.effects?.map(effect => {
+    const baseValue = effect.value
+    const bonus = getEnhancementBonus(item.rarity, effect.type, level)
+    let finalValue = baseValue * starMultiplier + bonus
+
+    // Apply caps if needed
+    if (effect.type === 'crit_bonus') {
+      finalValue = Math.min(finalValue, 0.35)
+    } else if (effect.type === 'evasion_bonus') {
+      finalValue = Math.min(finalValue, 0.30)
+    } else if (effect.type === 'accuracy_bonus') {
+      finalValue = Math.min(finalValue, 0.99)
+    }
+
+    const isRound = effect.type === 'stat_bonus' || effect.type === 'crit_bonus' || effect.type === 'evasion_bonus' || effect.type === 'accuracy_bonus'
+    
+    return {
+      ...effect,
+      value: isRound ? roundStatValue(finalValue) : roundStatValue(finalValue),
+    }
+  }) ?? []
 }
 
 export const getEnhanceMaterialCandidates = (
@@ -484,7 +572,6 @@ export const getEnhanceMaterialCandidates = (
   equippedItemIds: string[] | Set<string> = []
 ): Item[] => {
   if (!isEnhanceableEquipment(target)) return []
-  if (getEnhancementLevel(target) >= MAX_ITEM_ENHANCEMENT_LEVEL) return []
 
   const equippedIds = equippedItemIds instanceof Set ? equippedItemIds : new Set(equippedItemIds)
   return inventory
@@ -505,47 +592,29 @@ export const canEnhanceItem = (
 }
 
 export const getGoldEnhancementCost = (item: Item): number => {
-  const baseCost = 1000
-  const rarityMultipliers: Record<ItemRarity, number> = {
-    common: 1.0,
-    uncommon: 1.5,
-    rare: 2.5,
-    epic: 4.5,
-    legendary: 8.0,
+  const costs: Record<ItemRarity, number> = {
+    common: 200,
+    uncommon: 400,
+    rare: 600,
+    epic: 800,
+    legendary: 1000,
   }
-  const stageMultipliers: Record<number, number> = {
-    0: 1.0,
-    1: 1.5,
-    2: 2.2,
-    3: 3.2,
-    4: 5.0,
-  }
-  
-  const rarityMult = rarityMultipliers[item.rarity] || 1.0
-  const currentLevel = getEnhancementLevel(item)
-  const stageMult = stageMultipliers[currentLevel] || 1.0
-  
-  return Math.round(baseCost * rarityMult * stageMult)
+  return costs[item.rarity] || 200
 }
 
 export const getGoldEnhancementSuccessRate = (item: Item): number => {
   const currentLevel = getEnhancementLevel(item)
-  if (currentLevel >= MAX_ITEM_ENHANCEMENT_LEVEL) return 0
-  
-  const baseRates: Record<number, number> = {
-    0: 0.95,
-    1: 0.75,
-    2: 0.55,
-    3: 0.35,
-    4: 0.15,
-  }
-  
-  return baseRates[currentLevel] ?? 0
+  if (currentLevel === 0) return 0.90
+  if (currentLevel === 1) return 0.70
+  if (currentLevel === 2) return 0.60
+  if (currentLevel === 3) return 0.50
+  if (currentLevel === 4) return 0.40
+  if (currentLevel === 5) return 0.30
+  return 0.15
 }
 
 export const canEnhanceItemWithGold = (item: Item, playerGold: number): boolean => {
   if (!isEnhanceableEquipment(item)) return false
-  if (getEnhancementLevel(item) >= MAX_ITEM_ENHANCEMENT_LEVEL) return false
   const cost = getGoldEnhancementCost(item)
   return playerGold >= cost
 }
@@ -966,9 +1035,9 @@ export const calculatePlayerCombatStats = ({
     atk: 10 + effectiveStats.STR * 2 + safeLevel * 2,
     def: 5 + effectiveStats.PER * 1.25 + safeLevel,
     speed: 10 + effectiveStats.AGI * 1.5,
-    critRate: Math.min(0.35, effectiveStats.SEN * 0.006),
-    evasionRate: Math.min(0.35, effectiveStats.AGI * 0.004),
-    accuracy: Math.min(0.99, 0.94 + effectiveStats.SEN * 0.002),
+    critRate: Math.min(0.55, effectiveStats.SEN * 0.004),
+    evasionRate: Math.min(0.40, effectiveStats.AGI * 0.0025),
+    accuracy: Math.min(0.99, 0.78 + effectiveStats.SEN * 0.0015),
     skillTotalPower: calculateSkillTotalPower(skills),
   }
 }

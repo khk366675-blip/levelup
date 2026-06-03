@@ -39,7 +39,7 @@ import { calculatePlayerCombatStats, getEquippedItems, getPlayerCombatSkills, ge
 import { getShadowDefinition } from './shadows'
 import { getShadowCombatUnitProfile } from './shadowSkills'
 import { getValuePreview } from './shadowCombatRuntime'
-import { SKILL_DEFINITIONS } from './seed'
+import { SKILL_DEFINITIONS, MONSTER_DEFINITIONS } from './seed'
 import { buildMockMonsterEncounterDefinitions, getDirectBattleMockParty } from './directBattleMonsters'
 import { getSkillMastery, getSkillMasteryEffectBonus } from './skills'
 import { getAvailableUpgradesForSkill, getSkillCapstoneUpgrade } from './skillUpgrades'
@@ -127,13 +127,13 @@ const capProbability = (value: number, max = 0.99): number =>
   Math.round(clamp(value, 0, max) * 1000) / 1000
 
 const SHADOW_CRIT_RATE_CAP = 0.55
-const SHADOW_CRIT_STAT_SCALE = 0.003
-const SHADOW_FINISHER_CRIT_SCALE = 0.001
-const SHADOW_ACCURACY_BASE = 0.9
-const SHADOW_CONTROL_ACCURACY_SCALE = 0.0006
-const SHADOW_SUPPRESSION_ACCURACY_SCALE = 0.0004
-const SHADOW_SPEED_EVASION_SCALE = 0.002
-const SHADOW_SURVIVAL_EVASION_SCALE = 0.0005
+const SHADOW_CRIT_STAT_SCALE = 0.002
+const SHADOW_FINISHER_CRIT_SCALE = 0.0006
+const SHADOW_ACCURACY_BASE = 0.78
+const SHADOW_CONTROL_ACCURACY_SCALE = 0.00045
+const SHADOW_SUPPRESSION_ACCURACY_SCALE = 0.0003
+const SHADOW_SPEED_EVASION_SCALE = 0.00125
+const SHADOW_SURVIVAL_EVASION_SCALE = 0.0003
 
 const capShadowCritRate = (value: number): number =>
   capProbability(value, SHADOW_CRIT_RATE_CAP)
@@ -459,7 +459,7 @@ export const convertShadowProfileToBattleStats = (
     skillPower: round((7 + roleSkillStat(profile.role, stats)) * quality * SHADOW_BATTLE_LIFT * supportLift, 1),
     crit: capShadowCritRate(((stats.shadowCrit * SHADOW_CRIT_STAT_SCALE + stats.shadowFinisher * SHADOW_FINISHER_CRIT_SCALE) * grade) + legionCritBonus),
     accuracy: capProbability(SHADOW_ACCURACY_BASE + (stats.shadowControl * SHADOW_CONTROL_ACCURACY_SCALE + stats.shadowSuppression * SHADOW_SUPPRESSION_ACCURACY_SCALE) * grade + legionAccuracyBonus),
-    evasionRate: capProbability(((stats.shadowSpeed * SHADOW_SPEED_EVASION_SCALE + stats.shadowSurvival * SHADOW_SURVIVAL_EVASION_SCALE) * grade) + legionEvasionBonus, 0.38),
+    evasionRate: capProbability(((stats.shadowSpeed * SHADOW_SPEED_EVASION_SCALE + stats.shadowSurvival * SHADOW_SURVIVAL_EVASION_SCALE) * grade) + legionEvasionBonus, 0.40),
     controlPower: round((stats.shadowControl * 0.85 + stats.shadowSuppression * 0.5) * quality * SHADOW_BATTLE_LIFT * supportLift, 0),
     supportPower: round((stats.shadowSupport * 0.88 + stats.shadowSynergy * 0.34) * quality * SHADOW_BATTLE_LIFT * supportLift, 0),
     survivalPower: round((stats.shadowSurvival * 0.9 + stats.shadowDurability * 0.38) * quality * SHADOW_BATTLE_LIFT * guardLift, 0),
@@ -608,9 +608,9 @@ export const buildHunterBattleUnit = (
           equipmentSkill,
           1,
         ),
-        crit: capProbability(combatStats.critRate + equipmentCrit, 0.35),
+        crit: capProbability(combatStats.critRate + equipmentCrit, 0.55),
         accuracy: capProbability(combatStats.accuracy + equipmentAccuracy, 0.99),
-        evasionRate: capProbability(combatStats.evasionRate + equipmentEvasion, 0.30),
+        evasionRate: capProbability(combatStats.evasionRate + equipmentEvasion, 0.40),
         controlPower: round(stat(hunter.stats, 'INT') * 2.2 + stat(hunter.stats, 'SEN') * 1.4, 0),
         supportPower: round(stat(hunter.stats, 'INT') * 1.3 + stat(hunter.stats, 'SEN') * 1.9 + equipmentSupport, 0),
         survivalPower: round(stat(hunter.stats, 'VIT') * 3.5 + stat(hunter.stats, 'PER') * 2.5 + equipmentSurvival, 0),
@@ -729,7 +729,14 @@ export const buildMonsterBattleUnit = (
    const biasBoss = definition.statBias?.boss ?? (definition.unitType === 'boss' ? 1.4 : 0.35)
    const biasSynergy = definition.statBias?.synergy ?? 0.55
  
-   const maxHp = round((115 + level * 23.5) * biasHp * scale * threatScale * hpMultiplier * MONSTER_BATTLE_LIFT * pressure.hp * diffMod, 1)
+   const monsterSeedDef = MONSTER_DEFINITIONS.find(m => m.id === definition.id)
+   const rankKey = definition.rank || monsterSeedDef?.rank
+   const isLowRank = rankKey ? (rankKey === 'E' || rankKey === 'D' || rankKey === 'C') : (definition.levelBand === 'early' || level < 15)
+
+   const lowRankHpMultiplier = isLowRank ? 1.12 : 1.0
+   const lowRankAtkMultiplier = isLowRank ? 1.08 : 1.0
+ 
+   const maxHp = round((115 + level * 23.5) * biasHp * scale * threatScale * hpMultiplier * MONSTER_BATTLE_LIFT * pressure.hp * diffMod * lowRankHpMultiplier, 1)
    const unitId = `${options.unitIdPrefix ?? 'enemy'}-${definition.id}-${level}`
    
    const isBossName = definition.unitType === 'boss' || definition.isBoss
@@ -749,19 +756,21 @@ export const buildMonsterBattleUnit = (
          maxHp,
          currentHp: safeCurrentHp(options.currentHp, maxHp),
          // 몬스터 공격력/스킬위력 전체 15% 하향 (0.85 배율 적용)
-         atk: round((16 + level * 4.55) * biasAtk * scale * threatScale * atkMultiplier * MONSTER_BATTLE_LIFT * pressure.atk * diffMod * 0.85, 1),
+         atk: round((16 + level * 4.55) * biasAtk * scale * threatScale * atkMultiplier * MONSTER_BATTLE_LIFT * pressure.atk * diffMod * 0.85 * lowRankAtkMultiplier, 1),
          def: round((10 + level * 2.05) * biasDef * scale * (definition.isBoss ? 1.12 : 1) * defMultiplier * MONSTER_BATTLE_LIFT * pressure.def * diffMod, 1),
          spd: round((10 + level * 1.05) * biasSpd * (definition.role === 'assassin' ? 1.08 : 1) * 1.02, 1, 300),
-         skillPower: round((15 + level * 3.95) * biasSkill * scale * threatScale * atkMultiplier * MONSTER_BATTLE_LIFT * pressure.atk * diffMod * 0.85, 1),
-        crit: capRatio((0.04 + level * 0.003) * biasCrit),
-        accuracy: capProbability(0.93 + level * 0.0015 + (definition.role === 'caster' || definition.role === 'controller' ? 0.01 : 0)),
+         skillPower: round((15 + level * 3.95) * biasSkill * scale * threatScale * atkMultiplier * MONSTER_BATTLE_LIFT * pressure.atk * diffMod * 0.85 * lowRankAtkMultiplier, 1),
+        crit: capRatio((0.04 + level * 0.003) * biasCrit * (isLowRank ? 0.8 : 1.0)),
+        accuracy: capProbability((isLowRank ? 0.86 : 0.89) + level * 0.0015 + (definition.role === 'caster' || definition.role === 'controller' ? 0.01 : 0)),
         evasionRate: capProbability(
           (
-            definition.role === 'assassin' ? 0.055 :
-            definition.role === 'caster' ? 0.035 :
-            definition.role === 'minion' ? 0.025 :
-            0.018
-          ) * biasSpd + level * 0.0008,
+            (
+              definition.role === 'assassin' ? 0.055 :
+              definition.role === 'caster' ? 0.035 :
+              definition.role === 'minion' ? 0.025 :
+              0.018
+            ) * biasSpd + level * 0.0008
+          ) * (isLowRank ? 0.8 : 1.0),
           0.25,
         ),
         controlPower: round((5 + level * 1.7) * biasControl * scale * MONSTER_BATTLE_LIFT, 0),

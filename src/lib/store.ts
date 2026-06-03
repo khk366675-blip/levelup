@@ -5289,7 +5289,9 @@ export const useGame = create<GameState>()(
         const material = getEnhanceMaterialCandidates(target, s.items, equippedItemIds)[0]
         if (!material) return
 
-        const nextLevel = Math.min(MAX_ITEM_ENHANCEMENT_LEVEL, getEnhancementLevel(target) + 1)
+        const isGreatSuccess = Math.random() < 0.10
+        const levelIncrease = isGreatSuccess ? 2 : 1
+        const nextLevel = getEnhancementLevel(target) + levelIncrease
         const nextItems = s.items
           .filter(item => item.id !== material.id)
           .map(item => item.id === target.id ? { ...item, enhancementLevel: nextLevel } : item)
@@ -5298,9 +5300,13 @@ export const useGame = create<GameState>()(
           items: nextItems,
           messages: [...s.messages, {
             id: uid(),
-            kind: 'item',
-            title: '장비 강화',
-            lines: [
+            kind: isGreatSuccess ? 'levelup' : 'item',
+            title: isGreatSuccess ? '🔥 장비 합성 대성공! 🔥' : '장비 강화',
+            lines: isGreatSuccess ? [
+              `[${target.name}] 합성 대성공!! (한 번에 +2단계 상승)`,
+              `${target.name} +${nextLevel} 강화 달성!`,
+              `재료로 [${material.name}] 1개를 소모했습니다.`,
+            ] : [
               `[${target.name}] 강화 성공`,
               `${target.name} +${nextLevel}`,
               `재료로 [${material.name}] 1개를 소모했습니다.`,
@@ -5321,10 +5327,12 @@ export const useGame = create<GameState>()(
         const cost = getGoldEnhancementCost(target)
         const successRate = getGoldEnhancementSuccessRate(target)
         const isSuccess = Math.random() < successRate
+        const isGreatSuccess = isSuccess && (Math.random() < 0.10)
+        const levelIncrease = isGreatSuccess ? 2 : 1
 
         const nextGold = Math.max(0, playerGold - cost)
         const currentLevel = getEnhancementLevel(target)
-        const nextLevel = isSuccess ? Math.min(MAX_ITEM_ENHANCEMENT_LEVEL, currentLevel + 1) : currentLevel
+        const nextLevel = isSuccess ? currentLevel + levelIncrease : currentLevel
 
         const nextItems = isSuccess
           ? s.items.map(item => item.id === target.id ? { ...item, enhancementLevel: nextLevel } : item)
@@ -5332,7 +5340,17 @@ export const useGame = create<GameState>()(
 
         const ratePct = Math.round(successRate * 100)
 
-        const lines = isSuccess ? [
+        const title = isGreatSuccess
+          ? '🔥 장비 골드 대성공! 🔥'
+          : isSuccess
+            ? '장비 골드 강화 성공'
+            : '장비 골드 강화 실패'
+
+        const lines = isGreatSuccess ? [
+          `[${target.name}] 골드 강화 대성공!!! (한 번에 +2단계 상승) (${ratePct}% 확률)`,
+          `${target.name} +${nextLevel} 강화 달성!`,
+          `비용으로 ${cost.toLocaleString()} 골드를 소모했습니다.`,
+        ] : isSuccess ? [
           `[${target.name}] 골드 강화 성공 (${ratePct}% 확률)`,
           `${target.name} +${nextLevel} 강화 달성!`,
           `비용으로 ${cost.toLocaleString()} 골드를 소모했습니다.`,
@@ -5347,8 +5365,8 @@ export const useGame = create<GameState>()(
           items: nextItems,
           messages: [...s.messages, {
             id: uid(),
-            kind: 'item',
-            title: isSuccess ? '장비 골드 강화 성공' : '장비 골드 강화 실패',
+            kind: isGreatSuccess ? 'levelup' : 'item',
+            title,
             lines,
             createdAt: todayISO(),
           }],

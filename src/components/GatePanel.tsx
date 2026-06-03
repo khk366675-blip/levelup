@@ -1876,6 +1876,7 @@ function buildDirectMonsterBattleUnits(
     const directMonsterDef: DirectBattleMonsterDefinition = {
       id,
       name: monsterDef.name,
+      rank,
       role,
       unitType: isBoss ? 'boss' : isMinion ? 'minion' : 'monster',
       baseLevel: level,
@@ -2004,8 +2005,8 @@ export function GatePanel({ isWorldMapContext }: { isWorldMapContext?: boolean }
   const equipmentEvasion = getEquipmentEvasionBonus(equippedItems)
   const equipmentAccuracy = getEquipmentAccuracyBonus(equippedItems)
 
-  const actualCritRate = Math.max(0, Math.min(0.35, combatStats.critRate + equipmentCrit))
-  const actualEvasionRate = Math.max(0, Math.min(0.30, combatStats.evasionRate + equipmentEvasion))
+  const actualCritRate = Math.max(0, Math.min(0.55, combatStats.critRate + equipmentCrit))
+  const actualEvasionRate = Math.max(0, Math.min(0.40, combatStats.evasionRate + equipmentEvasion))
   const actualAccuracy = Math.max(0, Math.min(0.99, combatStats.accuracy + equipmentAccuracy))
   const combatPower = getHunterCombatPowerBreakdown({
     hunter,

@@ -43,15 +43,24 @@ function strongestItem(items: Item[]) {
   return [...items].sort((a, b) => getEquipmentPowerBreakdown(b).totalEquipmentValue - getEquipmentPowerBreakdown(a).totalEquipmentValue)[0]
 }
 
+const formatPercentVal = (val: number): string => {
+  const percent = val * 100
+  const rounded = Math.round(percent * 10) / 10
+  return `${rounded}%`
+}
+
 function formatEffects(item: Item): string[] {
   const statLines = getEnhancedItemEffects(item).map(effect => {
     if (effect.type === 'xp_bonus') {
       const category = effect.category ? CATEGORY_META[effect.category]?.label ?? effect.category : 'ALL'
-      return `${category} XP +${Math.round(effect.value * 100)}%`
+      return `${category} XP +${formatPercentVal(effect.value)}`
     }
-    if (effect.type === 'drop_bonus') return `DROP +${Math.round(effect.value * 100)}%`
-    if (effect.type === 'rarity_bonus') return `RARITY +${Math.round(effect.value * 100)}%`
+    if (effect.type === 'drop_bonus') return `DROP +${formatPercentVal(effect.value)}`
+    if (effect.type === 'rarity_bonus') return `RARITY +${formatPercentVal(effect.value)}`
     if (effect.type === 'stat_bonus') return `${effect.stat ?? 'STAT'} ${formatStatReward(effect.value)}`
+    if (effect.type === 'crit_bonus') return `CRIT +${formatPercentVal(effect.value)}`
+    if (effect.type === 'evasion_bonus') return `EVADE +${formatPercentVal(effect.value)}`
+    if (effect.type === 'accuracy_bonus') return `ACC +${formatPercentVal(effect.value)}`
     return ''
   }).filter(Boolean)
 

@@ -40,6 +40,7 @@ export interface DirectBattleMonsterDefinition {
   effectColor: string
   descriptionKo?: string
   flavor?: string
+  rank?: string
   actionList: BattleActionDefinition[]
 }
 
