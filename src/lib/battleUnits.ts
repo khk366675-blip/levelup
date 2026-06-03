@@ -733,10 +733,35 @@ export const buildMonsterBattleUnit = (
    const rankKey = definition.rank || monsterSeedDef?.rank
    const isLowRank = rankKey ? (rankKey === 'E' || rankKey === 'D' || rankKey === 'C') : (definition.levelBand === 'early' || level < 15)
 
-   const lowRankHpMultiplier = isLowRank ? 1.12 : 1.0
-   const lowRankAtkMultiplier = isLowRank ? 1.08 : 1.0
+   const finalRank = rankKey || (level >= 80 ? 'S' : level >= 60 ? 'S' : level >= 45 ? 'A' : level >= 30 ? 'B' : level >= 18 ? 'C' : level >= 8 ? 'D' : 'E')
+
+   let gradeHpMultiplier = 1.0
+   let gradeAtkMultiplier = 1.0
+
+   // 승급 심사와 군주전은 별도 배율 체계이므로 제외
+   if (!options.isPromotionExam) {
+     if (finalRank === 'E') {
+       gradeHpMultiplier = 1.6
+       gradeAtkMultiplier = 1.6
+     } else if (finalRank === 'D') {
+       gradeHpMultiplier = 1.45
+       gradeAtkMultiplier = 1.45
+     } else if (finalRank === 'C') {
+       gradeHpMultiplier = 1.3
+       gradeAtkMultiplier = 1.3
+     } else if (finalRank === 'B') {
+       gradeHpMultiplier = 1.18
+       gradeAtkMultiplier = 1.18
+     } else if (finalRank === 'A') {
+       gradeHpMultiplier = 1.1
+       gradeAtkMultiplier = 1.1
+     } else if (finalRank === 'S') {
+       gradeHpMultiplier = 1.03
+       gradeAtkMultiplier = 1.03
+     }
+   }
  
-   const maxHp = round((115 + level * 23.5) * biasHp * scale * threatScale * hpMultiplier * MONSTER_BATTLE_LIFT * pressure.hp * diffMod * lowRankHpMultiplier, 1)
+   const maxHp = round((115 + level * 23.5) * biasHp * scale * threatScale * hpMultiplier * MONSTER_BATTLE_LIFT * pressure.hp * diffMod * gradeHpMultiplier, 1)
    const unitId = `${options.unitIdPrefix ?? 'enemy'}-${definition.id}-${level}`
    
    const isBossName = definition.unitType === 'boss' || definition.isBoss
@@ -756,10 +781,10 @@ export const buildMonsterBattleUnit = (
          maxHp,
          currentHp: safeCurrentHp(options.currentHp, maxHp),
          // 몬스터 공격력/스킬위력 전체 15% 하향 (0.85 배율 적용)
-         atk: round((16 + level * 4.55) * biasAtk * scale * threatScale * atkMultiplier * MONSTER_BATTLE_LIFT * pressure.atk * diffMod * 0.85 * lowRankAtkMultiplier, 1),
+         atk: round((16 + level * 4.55) * biasAtk * scale * threatScale * atkMultiplier * MONSTER_BATTLE_LIFT * pressure.atk * diffMod * 0.85 * gradeAtkMultiplier, 1),
          def: round((10 + level * 2.05) * biasDef * scale * (definition.isBoss ? 1.12 : 1) * defMultiplier * MONSTER_BATTLE_LIFT * pressure.def * diffMod, 1),
          spd: round((10 + level * 1.05) * biasSpd * (definition.role === 'assassin' ? 1.08 : 1) * 1.02, 1, 300),
-         skillPower: round((15 + level * 3.95) * biasSkill * scale * threatScale * atkMultiplier * MONSTER_BATTLE_LIFT * pressure.atk * diffMod * 0.85 * lowRankAtkMultiplier, 1),
+         skillPower: round((15 + level * 3.95) * biasSkill * scale * threatScale * atkMultiplier * MONSTER_BATTLE_LIFT * pressure.atk * diffMod * 0.85 * gradeAtkMultiplier, 1),
         crit: capRatio((0.04 + level * 0.003) * biasCrit * (isLowRank ? 0.8 : 1.0)),
         accuracy: capProbability((isLowRank ? 0.86 : 0.89) + level * 0.0015 + (definition.role === 'caster' || definition.role === 'controller' ? 0.01 : 0)),
         evasionRate: capProbability(

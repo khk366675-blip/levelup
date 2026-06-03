@@ -1698,8 +1698,34 @@ export const createMonsterBattleActor = (
   const examDef = isPromotionExam && targetGrade && targetGrade !== 'E' ? PROMOTION_EXAM_DEFINITIONS[targetGrade] : undefined
   const displayName = (isBoss && examDef?.bossEmphasisName) ? examDef.bossEmphasisName : monster.name
 
-  const maxHp = Math.round(monster.stats.maxHp * scaling.hp)
-  const atk = Math.round(monster.stats.atk * scaling.atk)
+  const rank = monster.rank || 'E'
+  let gradeHpMultiplier = 1.0
+  let gradeAtkMultiplier = 1.0
+
+  if (!isPromotionExam) {
+    if (rank === 'E') {
+      gradeHpMultiplier = 1.6
+      gradeAtkMultiplier = 1.6
+    } else if (rank === 'D') {
+      gradeHpMultiplier = 1.45
+      gradeAtkMultiplier = 1.45
+    } else if (rank === 'C') {
+      gradeHpMultiplier = 1.3
+      gradeAtkMultiplier = 1.3
+    } else if (rank === 'B') {
+      gradeHpMultiplier = 1.18
+      gradeAtkMultiplier = 1.18
+    } else if (rank === 'A') {
+      gradeHpMultiplier = 1.1
+      gradeAtkMultiplier = 1.1
+    } else if (rank === 'S') {
+      gradeHpMultiplier = 1.03
+      gradeAtkMultiplier = 1.03
+    }
+  }
+
+  const maxHp = Math.round(monster.stats.maxHp * scaling.hp * gradeHpMultiplier)
+  const atk = Math.round(monster.stats.atk * scaling.atk * gradeAtkMultiplier)
   const def = Math.round(monster.stats.def * scaling.def)
 
   return {
