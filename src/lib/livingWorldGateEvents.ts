@@ -136,8 +136,8 @@ export const REGIONAL_EVENT_PACKS: Record<string, WorldGateEventPack> = {
         choices: [
           {
             id: 'choice_seoul_hunter_help',
-            label: '비상 치료 붕대와 식수 공급',
-            description: '아군의 고급 비상 치료 보급 상자를 소모하여 그의 마력 순환 복구를 돕고, 감사의 표시로 그가 건넨 차원의 마석 에센스를 넘겨받습니다.',
+            label: '350 골드를 지불하고 식수 및 붕대 공급',
+            description: '350 골드 가치의 비상 치료 보급 상자를 소모하여 그의 마력 순환 복구를 돕고, 감사 표시로 그가 건넨 차원의 마석 에센스를 넘겨받습니다.',
             immediateReward: { essence: 250, gold: -350, xp: 0, items: [] }
           },
           {
@@ -1058,8 +1058,8 @@ export const REGIONAL_EVENT_PACKS: Record<string, WorldGateEventPack> = {
         choices: [
           {
             id: 'choice_default_hunter_feed',
-            label: '비상 식량팩과 마석 물약 공급',
-            description: '아군의 전술 골드 소모성 배낭 팩과 치료 시약을 탈진한 대원에게 제공하고 차원 정보를 인계받습니다.',
+            label: '400 골드를 지불하고 보급품 및 물약 제공',
+            description: '400 골드 가치의 치료 보급 배낭 팩과 시약을 제공하고 차원 정보를 인계받습니다.',
             immediateReward: { essence: 300, gold: -400, xp: 0, items: [] }
           },
           {

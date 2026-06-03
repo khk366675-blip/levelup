@@ -416,8 +416,8 @@ export const GATE_RUN_EVENTS: GateRunEventTemplate[] = [
     choices: [
       {
         id: 'choice_merchant_buy',
-        label: '골드를 아낌없이 주고 물품 거래',
-        description: '묵직한 골드 주머니를 건네고 상인이 건네는 차원의 파편 꾸러미를 건네받습니다.',
+        label: '800 골드를 지불하고 거래 진행',
+        description: '800 골드를 지불하고 상인이 건네는 차원의 파편 꾸러미를 건네받습니다. 무엇을 얻을지는 열어봐야 압니다.',
         immediateReward: { gold: -800, essence: 400, xp: 0, items: [] },
       },
       {
@@ -555,8 +555,8 @@ export const GATE_RUN_EVENTS: GateRunEventTemplate[] = [
     choices: [
       {
         id: 'choice_wandering_hunter_help',
-        label: '경계를 풀고 비상 물약과 식량을 건넵니다.',
-        description: '소장 중이던 고급 비상 치료 보급 상자를 소모하여 그의 마력 순환 복구를 돕고, 감사 표시로 그가 건넨 차원의 마석 에센스를 넘겨받습니다.',
+        label: '400 골드를 지불하고 치료 물약과 식량 제공',
+        description: '400 골드를 지불하여 비상 구호품을 마련해 건네고 그가 감사의 표시로 건네는 마석 에센스를 넘겨받습니다.',
         immediateReward: { essence: 300, gold: -400, xp: 0, items: [] },
       },
       {
@@ -581,8 +581,8 @@ export const GATE_RUN_EVENTS: GateRunEventTemplate[] = [
       },
       {
         id: 'choice_apothecary_buy',
-        label: '금이 새겨진 붉은 병의 공명 제어 분말을 구매합니다.',
-        description: '금이 장식된 붉은 도자기 병을 사고 상인에게 수수료 골드를 지불합니다.',
+        label: '500 골드를 지불하고 공명 제어 분말 구매',
+        description: '500 골드를 지불하고 공명 제어 분말을 구매하여 공명 기류를 가다듬습니다.',
         immediateReward: { gold: -500, essence: 0, xp: 0, items: [] },
         nextEncounterModifier: 'player_speed_up_1t',
       },
@@ -637,8 +637,8 @@ export const GATE_RUN_EVENTS: GateRunEventTemplate[] = [
     choices: [
       {
         id: 'choice_blood_altar_feed',
-        label: '제단 표면에 손바닥을 밀착하고 생명력을 주입합니다.',
-        description: '차갑게 식은 돌단에 손바닥을 대고 끓어오르는 생명 기운의 일부를 제물로 건넵니다.',
+        label: '300 골드 가치의 마력을 제단에 주입합니다.',
+        description: '300 골드 가치의 마력 결정을 제단에 주입하여 그림자 공명 기류를 유도합니다.',
         immediateReward: { gold: -300, essence: 0, xp: 0, items: [] },
         riskDelta: 20,
         extractionBonusDelta: 15,
@@ -659,14 +659,14 @@ export const GATE_RUN_EVENTS: GateRunEventTemplate[] = [
     choices: [
       {
         id: 'choice_exchange_essence_to_gold',
-        label: '수집한 마석 정수를 융합 슬롯에 털어 넣습니다.',
-        description: '품에 지니고 있던 에센스 조각들을 장치 융합 구멍에 쏟아부어 전술 화폐를 뱉어내게 만듭니다.',
+        label: '그림자 정수 300을 소모하여 골드로 교환',
+        description: '그림자 정수 300을 소모하여 장치를 가동하고 변환된 전술 골드를 뱉어내게 만듭니다.',
         immediateReward: { gold: 1200, essence: -300, xp: 0, items: [] },
       },
       {
         id: 'choice_exchange_gold_to_essence',
-        label: '연소 필터 구멍에 다량의 골드를 투입합니다.',
-        description: '금화들을 가열 필터 구멍에 밀어 넣어 연소시키고, 피어오르는 맑은 마력 가스를 심호흡합니다.',
+        label: '800 골드를 소모하여 그림자 정수로 교환',
+        description: '800 골드를 소모하여 가열 장치를 연소시키고 정제된 그림자 정수 결정을 회수합니다.',
         immediateReward: { gold: -800, essence: 600, xp: 0, items: [] },
       },
     ],
@@ -937,6 +937,20 @@ export function generateGateRunState(gateId: string, seed: string, examGrade?: H
     } else if (theme.id === 'theme_specter') {
       weights[5] += 0.15 // shadow_trace
       weights[0] += 0.05
+    }
+
+    // rest/event 뒤에는 무조건 전투(battle/elite) 노드 배치 보장
+    if (prev === 'rest' || prev === 'event') {
+      weights[2] = 0 // event
+      weights[3] = 0 // rest
+      weights[4] = 0 // treasure
+      weights[5] = 0 // shadow_trace
+    }
+
+    // E/D 랭크에서 마지막 방(treasure) 바로 직전 방에는 rest/event 금지
+    if (index === encounterCount - 2 && (rank === 'E' || rank === 'D')) {
+      weights[2] = 0 // event
+      weights[3] = 0 // rest
     }
 
     // 가중치의 음수 방지 최종 가드
