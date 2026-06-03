@@ -1139,9 +1139,9 @@ export function generateGateRunState(gateId: string, seed: string, examGrade?: H
       }
     } else if (encType === 'rest') {
       const restTypes = [
-        { name: '안전한 모닥불', desc: '따뜻한 온기가 감도는 모닥불 주위에서 상처를 꿰맵니다. (HP 40% 회복)' },
-        { name: '마력의 푸른 온천', desc: '흘러넘치는 차원의 마력천에 몸을 담급니다. (HP 30% 회복 및 그림자 정수 획득)' },
-        { name: '그림자의 밀실', desc: '군주의 그림자 기운이 차분하게 헌터를 보호합니다. (HP 20% 회복 및 다음 추출 공명 보정 +5%)' }
+        { name: '안전한 모닥불', desc: '따뜻한 온기가 감도는 모닥불 주위에서 휴식을 취하며 다친 몸과 상처를 보살핍니다.' },
+        { name: '마력의 푸른 온천', desc: '흘러넘치는 차원의 맑은 마력 온천수에 깊이 몸을 담가 피로를 씻어내고 대지에 흐르는 잔류 마력을 흡수합니다.' },
+        { name: '그림자의 밀실', desc: '군주의 그림자 기운이 깃든 장벽이 사방을 안락하게 감싸며 헌터의 상처를 치유하고 추출 기류를 가다듬어 줍니다.' }
       ]
       const chosenRest = restTypes[Math.floor(rand() * restTypes.length)]
       title = examDef ? `[승급 심사] 정비 거점: ${chosenRest.name}` : `정비 거점: ${chosenRest.name}`
