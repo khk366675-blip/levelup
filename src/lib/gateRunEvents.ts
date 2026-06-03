@@ -852,8 +852,8 @@ export function generateGateRunState(gateId: string, seed: string, examGrade?: H
     let minEncounters = 3
     let maxEncounters = 4
     if (rank === 'E' || rank === 'D') {
-      minEncounters = 3
-      maxEncounters = 4
+      minEncounters = 4
+      maxEncounters = 5
     } else if (rank === 'C') {
       minEncounters = 3
       maxEncounters = 4
@@ -868,40 +868,7 @@ export function generateGateRunState(gateId: string, seed: string, examGrade?: H
       maxEncounters = 8
     }
     encounterCount = minEncounters + Math.floor(rand() * (maxEncounters - minEncounters + 1))
-
-    if (rank === 'E' || rank === 'D') {
-      if (encounterCount === 3) {
-        typesList = ['battle', 'event', 'treasure']
-      } else {
-        typesList = ['battle', 'event', 'battle', 'treasure']
-      }
-    } else if (rank === 'C') {
-      if (encounterCount === 3) {
-        typesList = ['battle', 'event', 'treasure']
-      } else {
-        typesList = ['battle', 'event', 'battle', 'treasure']
-      }
-    } else if (rank === 'B') {
-      if (encounterCount === 4) {
-        typesList = ['battle', 'event', 'battle', 'boss']
-      } else {
-        typesList = ['battle', 'event', 'rest', 'battle', 'boss']
-      }
-    } else if (rank === 'A') {
-      if (encounterCount === 5) {
-        typesList = ['battle', 'event', 'elite', 'rest', 'boss']
-      } else {
-        typesList = ['battle', 'event', 'elite', 'shadow_trace', 'rest', 'boss']
-      }
-    } else if (rank === 'S') {
-      if (encounterCount === 6) {
-        typesList = ['event', 'battle', 'event', 'elite', 'rest', 'boss']
-      } else if (encounterCount === 7) {
-        typesList = ['event', 'battle', 'event', 'elite', 'battle', 'rest', 'boss']
-      } else {
-        typesList = ['event', 'battle', 'event', 'elite', 'event', 'battle', 'rest', 'boss']
-      }
-    }
+    typesList = []
   }
 
   // 4. 인카운터 리스트 빌드
@@ -913,44 +880,81 @@ export function generateGateRunState(gateId: string, seed: string, examGrade?: H
   // 인카운터 타입 풀 가중치 빌드
   const getNextEncounterType = (index: number): GateRunEncounterType => {
     if (index === 0) {
-      // 첫 방은 안전하게 battle(70%) 혹은 event(30%)
-      return rand() < 0.7 ? 'battle' : 'event'
+      // 첫 방은 안전하게 battle(워밍업)
+      return 'battle'
     }
     if (index === encounterCount - 1) {
-      // 마지막 방은 보스 또는 엘리트 최종전
-      return isBossGate ? 'boss' : (rank === 'A' || rank === 'B') ? (rand() < 0.6 ? 'boss' : 'elite') : 'elite'
+      // 마지막 방은 보상(E/D) 또는 보스(C급 이상)
+      if (rank === 'E' || rank === 'D') {
+        return 'treasure'
+      }
+      return 'boss'
     }
 
-    // 중간 방 가중치
+    // 중간 방 가중치 풀 및 등급별 가중치 설정
     const types: GateRunEncounterType[] = ['battle', 'elite', 'event', 'rest', 'treasure', 'shadow_trace']
-    const weights = [0.35, 0.10, 0.20, 0.10, 0.15, 0.10] // E/D default
+    let weights = [0.25, 0.0, 0.40, 0.15, 0.10, 0.10] // E/D 기본 가중치 (elite 제외)
+
+    if (rank === 'C' || rank === 'B') {
+      weights = [0.22, 0.08, 0.40, 0.12, 0.08, 0.10]
+    } else if (rank === 'A' || rank === 'S') {
+      weights = [0.20, 0.15, 0.35, 0.12, 0.08, 0.10]
+    }
+
+    // 직전 방과의 관계에 따른 동적 가중치 조율 (연속성 완화 및 교차 유도)
+    const prev = encounters[index - 1]?.type
+    if (prev) {
+      if (prev === 'event') {
+        weights[0] += 0.20 // battle 가중치 대폭 상승
+        weights[1] += 0.05 // elite 가중치 소폭 상승
+        weights[2] -= 0.25 // event 연속 출현 방지
+      } else if (prev === 'battle' || prev === 'elite') {
+        weights[2] += 0.20 // event 가중치 대폭 상승
+        weights[0] -= 0.15 // battle 연속 출현 완화
+        weights[1] -= 0.05 // elite 연속 출현 완화
+      } else if (prev === 'rest' || prev === 'treasure') {
+        weights[3] = 0 // rest 중복 금지
+        weights[4] = 0 // treasure 중복 금지
+      }
+      
+      // 가중치의 음수 방지 가드
+      for (let k = 0; k < weights.length; k++) {
+        if (weights[k] < 0) weights[k] = 0
+      }
+    }
 
     // 테마별 가중치 보정
     if (theme.id === 'theme_supply') {
-      weights[3] += 0.20 // rest
-      weights[4] += 0.25 // treasure
-      weights[0] -= 0.15 // battle
+      weights[3] += 0.15 // rest
+      weights[4] += 0.20 // treasure
+      weights[0] -= 0.10 // battle
       weights[1] -= 0.05 // elite
     } else if (theme.id === 'theme_cursed') {
-      weights[2] += 0.25 // event
-      weights[1] += 0.15 // elite
+      weights[2] += 0.20 // event
+      weights[1] += 0.10 // elite
       weights[3] -= 0.05 // rest
       weights[4] -= 0.05 // treasure
     } else if (theme.id === 'theme_specter') {
-      weights[5] += 0.20 // shadow_trace
+      weights[5] += 0.15 // shadow_trace
       weights[0] += 0.05
+    }
+
+    // 가중치의 음수 방지 최종 가드
+    for (let k = 0; k < weights.length; k++) {
+      if (weights[k] < 0) weights[k] = 0
     }
 
     // 가중치 합계 정규화
     let sum = 0
     for (const w of weights) sum += w
+    if (sum <= 0) return 'battle' // 만약 가중치가 깨질 경우 대비 가드
+    
     let r = rand() * sum
     let accum = 0
     for (let i = 0; i < types.length; i++) {
       accum += weights[i]
       if (r <= accum) {
         // 안전장치: 직전 방이 rest/treasure인 경우 연속 출현 금지
-        const prev = encounters[index - 1]?.type
         if ((types[i] === 'rest' || types[i] === 'treasure') && (prev === 'rest' || prev === 'treasure')) {
           return 'battle'
         }
