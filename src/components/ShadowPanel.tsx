@@ -747,6 +747,8 @@ export function ShadowPanel() {
   const upgradeLegionNode = useGame(s => s.upgradeLegionNode)
   const craftHiddenEvolutionMaterial = useGame(s => s.craftHiddenEvolutionMaterial)
   const shadowLegionNodes = useGame(s => s.shadowLegionNodes ?? {})
+  const restoreShadowFromCollapse = useGame(s => s.restoreShadowFromCollapse)
+  const crystallizeCollapsedShadow = useGame(s => s.crystallizeCollapsedShadow)
   const [labOpen, setLabOpen] = useState(false)
 
   const handleReawaken = (shadowId: string) => {
@@ -2118,6 +2120,8 @@ export function ShadowPanel() {
                 onToggleLock={() => toggleShadowLock(shadow.instanceId)}
                 onToggleFavorite={() => toggleShadowFavorite(shadow.instanceId)}
                 onEvolve={() => evolveShadow(shadow.instanceId)}
+                onRestoreCollapsed={() => restoreShadowFromCollapse(shadow.instanceId)}
+                onCrystallize={() => crystallizeCollapsedShadow(shadow.instanceId)}
               />
             )
           })}

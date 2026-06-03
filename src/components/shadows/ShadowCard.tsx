@@ -31,6 +31,7 @@ type ShadowCardProps = {
   onEquip: () => void
   onUnequip: () => void
   onRestoreCollapsed?: () => void
+  onCrystallize?: () => void
   materialCount?: number
   onAbsorb?: () => void
   onDecompose?: () => void
@@ -79,6 +80,7 @@ export function ShadowCard({
   onEquip,
   onUnequip,
   onRestoreCollapsed,
+  onCrystallize,
   materialCount = 0,
   onAbsorb,
   onDecompose,
@@ -247,14 +249,36 @@ export function ShadowCard({
 
       <div className="mt-3">
         {collapsed ? (
-          <button
-            type="button"
-            onClick={(event) => { event.stopPropagation(); onRestoreCollapsed?.() }}
-            disabled={!onRestoreCollapsed || shadowEssence < restoreCost}
-            className="btn btn-primary w-full text-xs disabled:cursor-not-allowed disabled:opacity-40"
-          >
-            복원하기 (정수 {restoreCost} 소모)
-          </button>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={(event) => {
+                event.stopPropagation()
+                if (window.confirm(`[${shadow.name}] 그림자를 복원하시겠습니까?\n소모 그림자 정수: ${restoreCost}개`)) {
+                  onRestoreCollapsed?.()
+                }
+              }}
+              disabled={!onRestoreCollapsed || shadowEssence < restoreCost}
+              className="btn btn-primary flex-1 text-xs disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              복원 ({restoreCost})
+            </button>
+            {onCrystallize && (
+              <button
+                type="button"
+                onClick={(event) => {
+                  event.stopPropagation()
+                  const refund = Math.max(10, Math.floor(restoreCost * 0.25))
+                  if (window.confirm(`[${shadow.name}]을(를) 정수화하시겠습니까? 이 작업은 되돌릴 수 없으며, 기존 군단에서 제외되며 그림자 정수 ${refund}개를 환급받습니다.\n(※ 이 작업은 되돌릴 수 없습니다.)`)) {
+                    onCrystallize()
+                  }
+                }}
+                className="btn border-red-500/30 bg-red-950/20 text-red-400 hover:bg-red-900/30 text-xs px-3"
+              >
+                정수화
+              </button>
+            )}
+          </div>
         ) : equipped ? (
           <button type="button" onClick={(event) => { event.stopPropagation(); onUnequip() }} className="btn w-full border-rose-400/25 bg-rose-400/10 text-xs text-rose-100 hover:bg-rose-400/20">
             <X className="h-3 w-3" />
