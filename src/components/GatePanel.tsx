@@ -2486,7 +2486,7 @@ export function GatePanel({ isWorldMapContext }: { isWorldMapContext?: boolean }
           battleThemeKey={battleThemeKey}
           initialHunterStatsModifier={statsModifier}
           initialHunterStatusEffects={statusEffects}
-          difficultyMod={currentEnc?.difficultyMod}
+          difficultyMod={(currentEnc?.difficultyMod ?? 1.0) * (activeGate?.runState?.difficultyMod ?? 1.0)}
           coopHunter={coopHunter} // [NEW] 협력 헌터 참전
         />
       </div>
