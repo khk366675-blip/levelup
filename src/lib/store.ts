@@ -12145,9 +12145,13 @@ export const useGame = create<GameState>()(
         }
       }),
 
-      addQuest: (q) => set((s) => ({
-        quests: [...s.quests, { ...q, id: uid(), createdAt: todayISO() }],
-      })),
+      addQuest: (q) => set((s) => {
+        const nextQuests = [...s.quests, { ...q, id: uid(), createdAt: todayISO() }]
+        return {
+          quests: nextQuests,
+          dailyProgression: buildDailyProgression(nextQuests, s.achievementStats),
+        }
+      }),
 
       addAiCoachDailyQuest: (input) => set((s) => {
         const CATEGORY_STAT_SUGGESTIONS: Record<Category, [StatKey, StatKey]> = {
@@ -12218,9 +12222,11 @@ export const useGame = create<GameState>()(
           }
         }
 
+        const nextQuests = [...s.quests, newQuest]
         return {
-          quests: [...s.quests, newQuest],
-          aiCoachMemory: updatedMemory
+          quests: nextQuests,
+          aiCoachMemory: updatedMemory,
+          dailyProgression: buildDailyProgression(nextQuests, s.achievementStats)
         }
       }),
 
@@ -12399,6 +12405,7 @@ export const useGame = create<GameState>()(
 
         const nextQuests = [...remainingQuests, ...newQuests]
         const dailyRewardRoute = createDailyRewardRouteState(s, nextQuests, targetDate)
+        const nextDailyProgression = buildDailyProgression(nextQuests, s.achievementStats)
 
         return {
           quests: nextQuests,
@@ -12406,6 +12413,7 @@ export const useGame = create<GameState>()(
           hardcoreState: nextHardcoreState,
           livingWorld: nextLivingWorld,
           riftNodes: nextRiftNodes,
+          dailyProgression: nextDailyProgression,
           ...dailyRewardRoute,
         }
       }),
@@ -12718,7 +12726,13 @@ export const useGame = create<GameState>()(
         })
       })),
 
-      removeQuest: (id) => set((s) => ({ quests: s.quests.filter(q => q.id !== id) })),
+      removeQuest: (id) => set((s) => {
+        const nextQuests = s.quests.filter(q => q.id !== id)
+        return {
+          quests: nextQuests,
+          dailyProgression: buildDailyProgression(nextQuests, s.achievementStats)
+        }
+      }),
 
       completeQuest: (id) => {
         const s = get()
@@ -13048,9 +13062,13 @@ export const useGame = create<GameState>()(
         }, 0)
       },
 
-      uncompleteDaily: (id) => set((s) => ({
-        quests: s.quests.map(q => q.id === id ? { ...q, lastCompletedAt: undefined } : q),
-      })),
+      uncompleteDaily: (id) => set((s) => {
+        const nextQuests = s.quests.map(q => q.id === id ? { ...q, lastCompletedAt: undefined } : q)
+        return {
+          quests: nextQuests,
+          dailyProgression: buildDailyProgression(nextQuests, s.achievementStats)
+        }
+      }),
 
       progressDungeon: (id) => {
         const s = get()
@@ -13365,6 +13383,7 @@ export const useGame = create<GameState>()(
           messages: [...s.messages, ...protectionMessages],
           achievementStats: stats,
           aiCoachMemory: updatedMemory,
+          dailyProgression: buildDailyProgression(quests, stats),
           initialized: true,
         }
       }),
