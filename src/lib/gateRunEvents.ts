@@ -146,21 +146,21 @@ export const GATE_MODIFIERS: GateModifier[] = [
 export const GATE_RUN_EVENTS: GateRunEventTemplate[] = [
   {
     id: 'evt_rift_instability',
-    title: '불안정한 차원 균열',
-    description: '눈앞에서 차원의 틈새가 격렬히 일렁이며 보랏빛 불꽃을 뿜어냅니다. 방치하면 던전 전체가 뒤틀릴 것 같습니다.',
+    title: '요동치는 보랏빛 왜곡',
+    description: '눈앞에서 차원의 틈새가 격렬히 일렁이며 보랏빛 불꽃을 뿜어냅니다. 방치하면 이 구역의 지맥 전체가 붕괴할 것처럼 휘청거립니다.',
     choices: [
       {
         id: 'choice_rift_stabilize',
-        label: '차원 안정화 수행',
-        description: '마력 제어로 균열을 강제로 억누릅니다. (누적 위험도 -15, 그림자 정수 +100)',
+        label: '불안정한 파동 안정화',
+        description: '심호흡을 하고 마력의 흐름을 조율하여 틈새를 부드럽게 억누릅니다. (누적 위험도 -15, 그림자 정수 +100)',
         riskDelta: -15,
         leadsTo: 'safe',
         immediateReward: { essence: 100, xp: 0, gold: 0, items: [] },
       },
       {
         id: 'choice_rift_force_open',
-        label: '균열 강제 개방',
-        description: '더 큰 차원의 힘을 방출시킵니다. (누적 위험도 +20, 보상 배율 +0.20, 그림자 흔적방 추가)',
+        label: '심연의 기류 강제 주입',
+        description: '칼자루를 밀어 넣어 왜곡을 찢어 발깁니다. 더 거친 바람이 몰아칩니다. (누적 위험도 +20, 보상 배율 +0.20, 그림자 흔적방 추가)',
         riskDelta: 20,
         rewardMultiplierDelta: 0.20,
         addEncounterType: 'shadow_trace',
@@ -175,16 +175,16 @@ export const GATE_RUN_EVENTS: GateRunEventTemplate[] = [
     choices: [
       {
         id: 'choice_trace_follow',
-        label: '흔적을 심층 추적',
-        description: '위험을 무릅쓰고 흔적을 뒤쫓아 공명을 유도합니다. (추출 공명 보정 +8%, 다음 방 위험도 증가)',
+        label: '검은 그을음 흔적을 심층 추적',
+        description: '공명하는 기운을 쫓아 더 위험한 심층으로 추적을 개시합니다. (추출 공명 보정 +8%, 다음 방 위험도 증가)',
         extractionBonusDelta: 8,
         riskDelta: 15,
         leadsTo: 'battle',
       },
       {
         id: 'choice_trace_ignore',
-        label: '무시하고 안전 확보',
-        description: '불필요한 전투를 피해 조심스럽게 지나갑니다. (골드 +600)',
+        label: '안정적인 우회 경로 확보',
+        description: '불길한 진동에서 멀어져 잔해가 치워진 우회 통로로 선회합니다. (골드 +600)',
         leadsTo: 'safe',
         immediateReward: { gold: 600, xp: 0, essence: 0, items: [] },
       },
@@ -197,15 +197,15 @@ export const GATE_RUN_EVENTS: GateRunEventTemplate[] = [
     choices: [
       {
         id: 'choice_supply_open',
-        label: '보급상자 개봉',
-        description: '상자를 열어 유용한 물품들을 회수합니다. (대량 골드 +1000, 30% 확률로 명중 감소 디버프 유발)',
+        label: '보급상자 뚜껑을 거칠게 개봉',
+        description: '먼지 속에 방치된 상자의 틈을 강제로 젖혀 내용물을 확인합니다. (대량 골드 +1000, 30% 확률로 명중 감소 디버프 유발)',
         immediateReward: { gold: 1000, xp: 0, essence: 0, items: [] },
         nextEncounterModifier: 'debuff_accuracy',
       },
       {
         id: 'choice_supply_leave',
-        label: '그대로 두고 우회',
-        description: '만일의 위험에 대비해 보급품을 건드리지 않고 스쳐 갑니다. (부작용 없음)',
+        label: '상자를 우회하여 지나치기',
+        description: '만일의 위협이 우려되어 상자를 건드리지 않고 스쳐 지나갑니다. (부작용 없음)',
       },
     ],
   },
@@ -216,15 +216,15 @@ export const GATE_RUN_EVENTS: GateRunEventTemplate[] = [
     choices: [
       {
         id: 'choice_altar_pray',
-        label: '성스러운 기도 올리기',
-        description: '제단 앞에서 잠시 명상에 잠깁니다. (HP 35% 즉시 회복, 다음 전투 적 속도 +10%)',
+        label: '제단 앞에서 성스러운 명상',
+        description: '기운의 파동에 동화되어 정신을 맑게 다스립니다. (HP 35% 즉시 회복, 다음 전투 적 속도 +10%)',
         healPercent: 35,
         nextEncounterModifier: 'enemy_speed_up',
       },
       {
         id: 'choice_altar_shatter',
-        label: '제단을 파괴해 에너지 갈취',
-        description: '제단에 깃든 에너지를 무력으로 탈취합니다. (그림자 정수 +250, 누적 위험도 +10)',
+        label: '제단의 동력핵을 무력으로 박살',
+        description: '제단에 내재된 은빛 정수를 강제로 뜯어냅니다. (그림자 정수 +250, 누적 위험도 +10)',
         immediateReward: { essence: 250, xp: 0, gold: 0, items: [] },
         riskDelta: 10,
       },
@@ -237,15 +237,15 @@ export const GATE_RUN_EVENTS: GateRunEventTemplate[] = [
     choices: [
       {
         id: 'choice_footsteps_hunt',
-        label: '위협의 근원 사냥',
-        description: '숨어있는 강적을 기습하러 갑니다. (다음 전투가 엘리트 전투로 업그레이드되며 클리어 보상 증가)',
+        label: '붉은 자국을 따라 어두운 굴로 강습',
+        description: '마기의 격렬한 고동을 유도하며 기습 사냥을 개시합니다. (다음 전투가 엘리트 전투로 업그레이드되며 클리어 보상 증가)',
         addEncounterType: 'elite',
         rewardMultiplierDelta: 0.15,
       },
       {
         id: 'choice_footsteps_hide',
-        label: '조용히 숨을 가다듬음',
-        description: '적의 시선을 피해 안전 구역에서 한숨 돌립니다. (HP 20% 회복, 대신 보상 배율 -0.05)',
+        label: '바위 보강판 뒤에 숨어 숨 돌리기',
+        description: '기동을 차단하고 붕괴된 잔해 아래에서 기운을 수습합니다. (HP 20% 회복, 대신 보상 배율 -0.05)',
         healPercent: 20,
         rewardMultiplierDelta: -0.05,
       },
@@ -258,15 +258,15 @@ export const GATE_RUN_EVENTS: GateRunEventTemplate[] = [
     choices: [
       {
         id: 'choice_fog_break',
-        label: '안개를 뚫고 정면 돌파',
-        description: '감각을 곤두세우고 앞을 향해 달립니다. (다음 전투 아군 명중률 -10%, 대신 보상 배율 +0.18)',
+        label: '감각만 믿고 안개를 돌파',
+        description: '방패로 시야를 가린 안개막을 뚫고 정면으로 달립니다. (다음 전투 아군 명중률 -10%, 대신 보상 배율 +0.18)',
         rewardMultiplierDelta: 0.18,
         nextEncounterModifier: 'debuff_accuracy',
       },
       {
         id: 'choice_fog_bypass',
-        label: '안개를 피해 우회 경로 수색',
-        description: '안전하지만 훨씬 긴 경로로 돌아갑니다. (다음 일반 전투를 보물 방으로 긴급 우회 대체)',
+        label: '측면 갈라진 틈새로 회피 수색',
+        description: '안전하지만 더 멀리 꺾인 미지의 동공 방면으로 선회합니다. (다음 일반 전투를 보물 방으로 긴급 우회 대체)',
         addEncounterType: 'treasure',
         rewardMultiplierDelta: -0.08,
       },
@@ -279,15 +279,15 @@ export const GATE_RUN_EVENTS: GateRunEventTemplate[] = [
     choices: [
       {
         id: 'choice_lock_force',
-        label: '무력으로 돌파',
-        description: '문고리를 검으로 부숩니다. (HP -15% 소모, 대신 확정적 보물 획득)',
+        label: '무력으로 보물문 파쇄',
+        description: '마력 피드백을 몸으로 밀쳐내고 문고리를 검으로 격파합니다. (HP -15% 소모, 대신 확정적 보물 획득)',
         hpCostPercent: 15,
         addEncounterType: 'treasure',
       },
       {
         id: 'choice_lock_solve',
-        label: '고대 룬 문자 해석',
-        description: '룬의 배열을 해석합니다. (실패 시 차원 간섭으로 몬스터 전투 추가)',
+        label: '고대 룬 기하학 해석 시도',
+        description: '집중하여 차원 공명을 정렬하려 시도합니다. (실패 시 차원 간섭으로 몬스터 전투 추가)',
         addEncounterType: 'battle',
       },
     ],
@@ -299,15 +299,15 @@ export const GATE_RUN_EVENTS: GateRunEventTemplate[] = [
     choices: [
       {
         id: 'choice_mirror_gaze',
-        label: '보스의 약점 집중 연구',
-        description: '불안정함 속에서 보스의 기세를 미리 분석합니다. (보상 배율 +0.10, 누적 위험도 +10)',
+        label: '거울 속 보스의 기운 정밀 관찰',
+        description: '불안정함 속에서 보스의 파동을 미리 분석하여 파훼 전술을 세웁니다. (보상 배율 +0.10, 누적 위험도 +10)',
         rewardMultiplierDelta: 0.10,
         riskDelta: 10,
       },
       {
         id: 'choice_mirror_shatter',
-        label: '거울을 가차 없이 산산조각 냄',
-        description: '불길한 환영을 없애고 흩어진 마력을 흡수합니다. (그림자 정수 +300)',
+        label: '거울을 베어 차원 파편 회수',
+        description: '불길한 거울을 산산조각 내어 마력 결정만 회수합니다. (그림자 정수 +300)',
         immediateReward: { essence: 300, xp: 0, gold: 0, items: [] },
       },
     ],
@@ -319,15 +319,15 @@ export const GATE_RUN_EVENTS: GateRunEventTemplate[] = [
     choices: [
       {
         id: 'choice_contract_accept',
-        label: '그림자 제안 수락',
-        description: '심연의 마력을 흔쾌히 받아들입니다. (추출 공명 보정 +12%, 대신 다음 전투 적 공격력 +15%)',
+        label: '심연의 마력 서약 흔쾌히 서명',
+        description: '어둠의 잔향을 몸안에 융합시킵니다. (추출 공명 보정 +12%, 대신 다음 전투 적 공격력 +15%)',
         extractionBonusDelta: 12,
         nextEncounterModifier: 'enemy_atk_up',
       },
       {
         id: 'choice_contract_reject',
-        label: '단호히 거절하고 조각 강탈',
-        description: '어둠의 의지를 베어 물리치고 잔해를 수습합니다. (그림자 정수/조각 소량 보상)',
+        label: '어둠의 의지를 베어 파편 약탈',
+        description: '서약을 휘두르는 투명한 힘을 강타해 흩어진 마력을 탈취합니다. (그림자 정수/조각 소량 보상)',
         immediateReward: { essence: 150, xp: 0, gold: 300, items: [] },
       },
     ],
@@ -339,14 +339,14 @@ export const GATE_RUN_EVENTS: GateRunEventTemplate[] = [
     choices: [
       {
         id: 'choice_mark_follow',
-        label: '표식의 전략적 정보 반영',
-        description: '표식이 지시하는 사각지대를 공략합니다. (보상 배율 +0.05)',
+        label: '표식의 전략 정보 활용 전진',
+        description: '기록에 묘사된 매복 사각지대를 조준 공략합니다. (보상 배율 +0.05)',
         rewardMultiplierDelta: 0.05,
       },
       {
         id: 'choice_mark_ignore',
-        label: '자신만의 전술 유지',
-        description: '정직하게 길을 걸어 안정적으로 싸웁니다. (누적 위험도 -5)',
+        label: '표식을 지나쳐 자력 돌파 전술 유지',
+        description: '독자적인 궤적을 밟아 안정적인 사냥을 유도합니다. (누적 위험도 -5)',
         riskDelta: -5,
       },
     ],
@@ -358,15 +358,15 @@ export const GATE_RUN_EVENTS: GateRunEventTemplate[] = [
     choices: [
       {
         id: 'choice_warning_ignore',
-        label: '학살자의 숨통을 끊는다',
-        description: '경고를 코웃음 치며 정면으로 뚫고 들어갑니다. (다음 일반 전투가 엘리트 강력 전투로 변경, 최종 보상 크게 가산)',
+        label: '학살자가 머무는 방의 붉은 표식 격파',
+        description: '도전을 무시하고 사냥감의 핵심 초소로 난입합니다. (다음 일반 전투가 엘리트 강력 전투로 변경, 최종 보상 크게 가산)',
         addEncounterType: 'elite',
         rewardMultiplierDelta: 0.30,
       },
       {
         id: 'choice_warning_prepare',
-        label: '경계 태세 확보 및 후퇴로 정비',
-        description: '만약을 대비해 보급로와 대피로를 철저하게 구축합니다. (위험도 감소)',
+        label: '경고를 감안하여 후퇴로 정비 확보',
+        description: '만약을 대비해 보급선 주변에 마력 감지망을 구축합니다. (위험도 감소)',
         riskDelta: -10,
       },
     ],
@@ -378,14 +378,14 @@ export const GATE_RUN_EVENTS: GateRunEventTemplate[] = [
     choices: [
       {
         id: 'choice_whisper_accept',
-        label: '영적 전술 영감 수용',
-        description: '환영을 참아내고 전술 비법을 익힙니다. (다음 전투 시작 시 아군 속도 저하 디버프)',
+        label: '어지러운 파동 속 영감 수용',
+        description: '두통을 유발하는 마력 파편을 들이켜 신체 감각을 확장합니다. (다음 전투 시작 시 아군 속도 저하 디버프)',
         nextEncounterModifier: 'silence_player_1t',
       },
       {
         id: 'choice_whisper_refuse',
-        label: '정신을 단단히 고정하고 거부',
-        description: '정신 장벽을 굳건히 세워 파동을 밀어냅니다. (그림자 정수 +200 획득)',
+        label: '정신을 집중해 속삭임 차단',
+        description: '의지의 장벽을 세워 파동을 외부로 퉁겨냅니다. (그림자 정수 +200 획득)',
         immediateReward: { essence: 200, xp: 0, gold: 0, items: [] },
       },
     ],
@@ -397,14 +397,14 @@ export const GATE_RUN_EVENTS: GateRunEventTemplate[] = [
     choices: [
       {
         id: 'choice_reverb_absorb',
-        label: '스킬 정수 파편 흡수',
-        description: '무기 끝으로 마력 방울을 찔러 영혼을 보강합니다. (다음 전투 적 HP +15% 강화)',
+        label: '떠다니는 정수 마력 방울을 검끝으로 흡수',
+        description: '마력 공명을 들이마셔 영혼을 보강하되 지맥을 자극합니다. (다음 전투 적 HP +15% 강화)',
         nextEncounterModifier: 'enemy_hp_up',
       },
       {
         id: 'choice_reverb_dispel',
-        label: '잔향을 넓게 흩뜨려 소멸',
-        description: '불안정하게 날뛰는 마력을 안전하게 분산시킵니다. (누적 위험도 -8)',
+        label: '마력 불꽃을 넓게 흩뜨려 소멸 안정화',
+        description: '불안정하게 일렁이는 파동을 안전하게 분산 정화합니다. (누적 위험도 -8)',
         riskDelta: -8,
       },
     ],
@@ -416,14 +416,14 @@ export const GATE_RUN_EVENTS: GateRunEventTemplate[] = [
     choices: [
       {
         id: 'choice_merchant_buy',
-        label: '가치 있는 물품 암거래 수행',
-        description: '골드를 아낌없이 내주고 가치 높은 조각을 삽니다. (골드 -800 소모, 그림자 룬/조각 대량 +400 정수 획득)',
+        label: '골드를 아낌없이 주고 물품 거래',
+        description: '거래 물품 주머니를 열어 무거운 조각들을 챙깁니다. (골드 -800 소모, 그림자 룬/조각 대량 +400 정수 획득)',
         immediateReward: { gold: -800, essence: 400, xp: 0, items: [] },
       },
       {
         id: 'choice_merchant_threaten',
-        label: '상인의 창고를 강박적으로 겁박',
-        description: '칼자루를 쥐고 비열하게 협박합니다. (40% 확률로 엘리트 강적 출현, 아니면 무상 보물 획득)',
+        label: '무기에 마력을 싣고 무력 겁박',
+        description: '칼날을 겨누고 상인의 물품 창고를 억지로 약탈하려 합니다. (40% 확률로 엘리트 강적 출현, 아니면 무상 보물 획득)',
         addEncounterType: 'elite',
       },
     ],
@@ -435,15 +435,15 @@ export const GATE_RUN_EVENTS: GateRunEventTemplate[] = [
     choices: [
       {
         id: 'choice_shadow_bind',
-        label: '어둠의 사슬로 구속 포획',
-        description: '야수를 힘으로 묶어 그림자 수집품으로 병합합니다. (그림자 정수 +300, 추출 공명 보정 +5%)',
+        label: '그늘 사슬을 전개해 결속 포획',
+        description: '야수의 영혼을 구속하여 수집품으로 편입시킵니다. (그림자 정수 +300, 추출 공명 보정 +5%)',
         extractionBonusDelta: 5,
         immediateReward: { essence: 300, xp: 0, gold: 0, items: [] },
       },
       {
         id: 'choice_shadow_release',
-        label: '자유롭게 풀어주어 성불시킴',
-        description: '사슬을 풀어 넓은 통로로 안내합니다. (다음 전투 시작 시 아군 속도 버프 획득)',
+        label: '사슬을 끊어 공명 안정화',
+        description: '사슬의 속박을 해제하여 넓은 잔해 통로로 안내합니다. (다음 전투 시작 시 아군 속도 버프 획득)',
         nextEncounterModifier: 'player_speed_up_1t',
       },
     ],
@@ -455,15 +455,15 @@ export const GATE_RUN_EVENTS: GateRunEventTemplate[] = [
     choices: [
       {
         id: 'choice_storm_rush',
-        label: '폭풍을 정면으로 강하게 돌파',
-        description: '방패로 앞을 막고 거세게 내달립니다. (즉시 습격 전투 돌입, 최종 보상 가중치 +0.22)',
+        label: '폭풍 전막을 방패로 막고 정면 질주',
+        description: '폭발적인 돌풍의 중심을 가르며 단숨에 내달립니다. (즉시 습격 전투 돌입, 최종 보상 가중치 +0.22)',
         addEncounterType: 'battle',
         rewardMultiplierDelta: 0.22,
       },
       {
         id: 'choice_storm_wait',
-        label: '바위 틈새에 숨어 폭풍 모면',
-        description: '폭풍이 가라앉기를 기다리며 휴식을 취합니다. (HP 30% 회복, 대신 몬스터 강화)',
+        label: '바위 갈라진 틈에 웅크려 쉼표 확보',
+        description: '바람이 잦아들기를 기다리며 신체를 회복하되 적의 기습을 경계합니다. (HP 30% 회복, 대신 몬스터 강화)',
         healPercent: 30,
         nextEncounterModifier: 'enemy_surprise_atk',
       },
@@ -476,14 +476,14 @@ export const GATE_RUN_EVENTS: GateRunEventTemplate[] = [
     choices: [
       {
         id: 'choice_debris_scrap',
-        label: '철갑을 뜯어 재료로 분해',
-        description: '유용한 기계 잔해를 뜯어냅니다. (골드 +600)',
+        label: '철갑 파편을 분해해 금속 회수',
+        description: '유용한 기갑 기어 잔해를 수거 주머니에 넣습니다. (골드 +600)',
         immediateReward: { gold: 600, xp: 0, essence: 0, items: [] },
       },
       {
         id: 'choice_debris_wear',
-        label: '임시 보조 갑옷으로 장착',
-        description: '갑옷 조각을 몸에 덧대어 묶습니다. (다음 전투 아군 받는 피해 -20% 감소, 대신 아군 속도 저하)',
+        label: '갑옷 파편을 가죽 끈으로 엮어 덧댐',
+        description: '장갑을 추가 덧대어 수호하되 기동성의 손실을 감수합니다. (다음 전투 아군 받는 피해 -20% 감소, 대신 아군 속도 저하)',
         nextEncounterModifier: 'player_def_up_spd_down',
       },
     ],
@@ -495,14 +495,14 @@ export const GATE_RUN_EVENTS: GateRunEventTemplate[] = [
     choices: [
       {
         id: 'choice_omen_analyze',
-        label: '포효와 흔적 정밀 분석',
-        description: '보스의 숨결을 분석해 파훼 전술을 세웁니다. (보상 배율 +0.05)',
+        label: '포효 진동 주파수 정밀 해독',
+        description: '보스의 마력 기류 파동을 해독하여 약점을 도출합니다. (보상 배율 +0.05)',
         rewardMultiplierDelta: 0.05,
       },
       {
         id: 'choice_omen_taunt',
-        label: '허공에 거친 도발 발사',
-        description: '던전이 흔들리도록 도발을 외칩니다. (보스 공격력 상승 및 보스방 추출 공명 보정 대폭 +15% 증가)',
+        label: '어둠의 심부를 향해 거친 포효 전개',
+        description: '마기 분노를 자극하는 도발을 전개해 잔향의 보강을 노립니다. (보스 공격력 상승 및 보스방 추출 공명 보정 대폭 +15% 증가)',
         extractionBonusDelta: 15,
         nextEncounterModifier: 'boss_rage_up',
       },
@@ -515,15 +515,15 @@ export const GATE_RUN_EVENTS: GateRunEventTemplate[] = [
     choices: [
       {
         id: 'choice_curse_take',
-        label: '저주를 감수하고 보물 강탈',
-        description: '맨손으로 보물을 꺼냅니다. (대량 골드 +1500, 그림자 정수 +500, 단 던전 끝까지 적 강화)',
+        label: '저주 안개막으로 손을 밀어 넣어 보물 강탈',
+        description: '붉은 침식을 각오하고 상자 안 보석들을 우격다짐으로 탈취합니다. (대량 골드 +1500, 그림자 정수 +500, 단 던전 끝까지 적 강화)',
         immediateReward: { gold: 1500, essence: 500, xp: 0, items: [] },
         nextEncounterModifier: 'curse_damage_taken_up',
       },
       {
         id: 'choice_curse_purify',
-        label: '신성한 마력 정화 의식',
-        description: '마력을 모아 저주를 밀어냅니다. (안전하게 소량의 정제된 보물 획득: 골드 +500)',
+        label: '성스러운 기운 정화의 룬 주입',
+        description: '마력을 모아 붉은 저주막을 차분히 몰아내고 내용물을 정제합니다. (안전하게 소량의 정제된 보물 획득: 골드 +500)',
         immediateReward: { gold: 500, xp: 0, essence: 100, items: [] },
       },
     ],
@@ -535,15 +535,242 @@ export const GATE_RUN_EVENTS: GateRunEventTemplate[] = [
     choices: [
       {
         id: 'choice_passage_dash',
-        label: '민첩하게 전력 질주',
-        description: '순간적인 반사 신경으로 틈을 뚫습니다. (실패 시 아군 HP -20% 소모)',
+        label: '보호막을 켜고 전방 돌진',
+        description: '낙석 피해를 감수하며 순간 가속으로 벽을 치고 달립니다. (실패 시 아군 HP -20% 소모)',
         hpCostPercent: 20,
       },
       {
         id: 'choice_passage_bypass',
-        label: '안전한 대피 우회로 개척',
-        description: '붕괴지를 돌아서 안전하지만 미지의 구역으로 들어섭니다. (몬스터 일반 전투 인카운터 1개 추가 삽입)',
+        label: '안전한 대피 우회 굴 수색',
+        description: '낙석 구역에서 몸을 물려 완전히 우회된 미지의 동공으로 향합니다. (몬스터 일반 전투 인카운터 1개 추가 삽입)',
         addEncounterType: 'battle',
+      },
+    ],
+  },
+  {
+    id: 'evt_wandering_hunter',
+    title: '어둠 속의 부상당한 사냥꾼 [조우]',
+    description: '어두운 그늘 아래 피를 흘리며 주저앉아 있는 사냥꾼을 발견했습니다. 그는 떨리는 눈으로 무기를 쥔 채, 사방에서 흘러나오는 위협적인 기척에 극도로 신경을 곤두세우고 있습니다.',
+    choices: [
+      {
+        id: 'choice_wandering_hunter_help',
+        label: '경계를 풀고 비상 물약과 식량을 건넵니다.',
+        description: '상대의 안정을 유도하며 대화를 나누고 고유한 잔향을 나눕니다. (HP -15% 소모, 그림자 정수 +300)',
+        hpCostPercent: 15,
+        immediateReward: { essence: 300, xp: 0, gold: 0, items: [] },
+      },
+      {
+        id: 'choice_wandering_hunter_loot',
+        label: '그를 자극하지 않고 스쳐 지나치며, 구석의 낙은 보급품 가방을 가로챕니다.',
+        description: '비열하지만 현 상황에서 가장 확실하고 이득이 되는 물자를 취합니다. (골드 +600)',
+        immediateReward: { gold: 600, xp: 0, essence: 0, items: [] },
+      },
+    ],
+  },
+  {
+    id: 'evt_mysterious_rift_apothecary',
+    title: '기이한 가면을 쓴 차원 약제사 [조우]',
+    description: '보랏빛 로브와 기이한 나선 가면을 쓴 정체불명의 존재가 벽을 짚고 약병들을 배합하고 있습니다. 인기척을 느낀 그가 은밀하고 기괴한 목소리로 차원 침식의 잔해 물약을 권합니다.',
+    choices: [
+      {
+        id: 'choice_apothecary_drink',
+        label: '빛을 뿜어내는 정체불명의 푸른 약을 들이킵니다.',
+        description: '내장에서 강한 마력 반응이 끓어올라 신체를 재구성합니다. (HP 30% 즉시 회복, 누적 위험도 +10)',
+        healPercent: 30,
+        riskDelta: 10,
+      },
+      {
+        id: 'choice_apothecary_buy',
+        label: '금이 새겨진 붉은 병의 공명 제어 분말을 구매합니다.',
+        description: '골드를 대가로 단시간 마력 폭주를 차단하는 룬 약병을 거래합니다. (골드 -500 소모, 다음 방 버프/디버프: player_speed_up_1t)',
+        immediateReward: { gold: -500, essence: 0, xp: 0, items: [] },
+        nextEncounterModifier: 'player_speed_up_1t',
+      },
+    ],
+  },
+  {
+    id: 'evt_ancient_rune_trial',
+    title: '반짝이는 고대 룬의 석벽 [수수께끼/시험]',
+    description: '반투명한 검은 지맥 위에 알 수 없는 고대 룬 문자들이 눈이 시리도록 강렬한 보랏빛 파동을 새겨 넣고 있습니다. 문자는 당신에게 거대한 마력 저항 시험을 제안하는 듯 고동칩니다.',
+    choices: [
+      {
+        id: 'choice_rune_trial_accept',
+        label: '석판 중앙에 손을 얹고 정신력을 동화시킵니다.',
+        description: '강렬하게 요동치는 기류에 정신을 완전히 고정하여 균열을 안정화시킵니다. (누적 위험도 -15, 그림자 정수 +200)',
+        riskDelta: -15,
+        immediateReward: { essence: 200, xp: 0, gold: 0, items: [] },
+      },
+      {
+        id: 'choice_rune_trial_shatter',
+        label: '경고를 감안해 룬을 억지로 깨뜨려 붕괴시킵니다.',
+        description: '룬의 폭주로 마력이 파동을 치며 주위 몬스터들의 살기를 고양시킵니다. (누적 위험도 +20, 다음 방 버프/디버프: enemy_atk_up)',
+        riskDelta: 20,
+        nextEncounterModifier: 'enemy_atk_up',
+      },
+    ],
+  },
+  {
+    id: 'evt_greed_scale',
+    title: '황금빛 공중 천칭 [수수께끼/시험]',
+    description: '어두운 천장 아래 금빛 고대 저울이 허공에 정지해 춤을 추고 있습니다. 한쪽에는 차원 마석 결정이, 다른 한쪽에는 헌터 골드 상자가 아슬아슬하게 무게를 견디며 번뜩입니다.',
+    choices: [
+      {
+        id: 'choice_scale_break',
+        label: '저울의 연결고리를 발로 걷어차 양쪽 보상을 다 움켜쥡니다.',
+        description: '지맥의 축이 붕괴하며 주위 야수들을 극도로 자극합니다. (보상 배율 +0.18, 누적 위험도 +18)',
+        rewardMultiplierDelta: 0.18,
+        riskDelta: 18,
+      },
+      {
+        id: 'choice_scale_balance',
+        label: '균열의 기류를 불어넣어 저울의 수평을 유지합니다.',
+        description: '균형의 보강 작용으로 마기가 억제되고 소량의 에너지를 획득합니다. (누적 위험도 -12, 그림자 정수 +120)',
+        riskDelta: -12,
+        immediateReward: { essence: 120, xp: 0, gold: 0, items: [] },
+      },
+    ],
+  },
+  {
+    id: 'evt_blood_resonance_altar',
+    title: '피의 공명 제단 [자원 거래]',
+    description: '축축한 흙바닥에 피비린내를 짙게 풍기는 작은 석조 돌단이 놓여 있습니다. 깊은 수렁에서 몬스터들을 길렀던 심연의 잔향이 헌터의 뜨거운 생명력을 강렬하게 요구하고 있습니다.',
+    choices: [
+      {
+        id: 'choice_blood_altar_feed',
+        label: '제단 표면에 손바닥을 밀착하고 생명력을 주입합니다.',
+        description: '생명 에너지를 제단에 건네며 심연의 대량 공명 유도를 시도합니다. (HP -25% 소모, 추출 공명 보정 +15%)',
+        hpCostPercent: 25,
+        extractionBonusDelta: 15,
+      },
+      {
+        id: 'choice_blood_altar_scrape',
+        label: '마력 실드로 피막을 덮어버린 뒤, 제단의 보석만 긁어냅니다.',
+        description: '안전 장치로 충격을 억제하면서 제단 기운을 정제합니다. (누적 위험도 -10, 그림자 정수 +180)',
+        riskDelta: -10,
+        immediateReward: { essence: 180, xp: 0, gold: 0, items: [] },
+      },
+    ],
+  },
+  {
+    id: 'evt_essence_exchange',
+    title: '뒤틀린 마도 공명기 [자원 거래]',
+    description: '헌터들의 버려진 고장 난 전술 장치들과 차원의 기공이 융합되어 기괴한 화폐 변환 주파수를 내는 장치입니다. 골드와 마석 에너지를 상호 전환해 줍니다.',
+    choices: [
+      {
+        id: 'choice_exchange_essence_to_gold',
+        label: '수집한 마석 정수를 융합 슬롯에 털어 넣습니다.',
+        description: '정수가 장치 내에서 소멸하며 보급 금괴들을 뱉어냅니다. (그림자 정수 -300 소모, 골드 +1200)',
+        immediateReward: { gold: 1200, essence: -300, xp: 0, items: [] },
+      },
+      {
+        id: 'choice_exchange_gold_to_essence',
+        label: '연소 필터 구멍에 다량의 골드를 투입합니다.',
+        description: '골드가 연소되며 뿜어져 나오는 정밀한 마력 가스를 호흡합니다. (골드 -800 소모, 그림자 정수 +600)',
+        immediateReward: { gold: -800, essence: 600, xp: 0, items: [] },
+      },
+    ],
+  },
+  {
+    id: 'evt_collapsing_rift_ceiling',
+    title: '지반 붕괴와 폭발 낙석 [미니 위기]',
+    description: '찌지직거리는 굉음이 벽을 메아리치더니 천장의 견고하던 강철 지지대가 꺾여 거대한 흙더미와 낙석들이 엄청난 속도로 떨어지기 시작합니다!',
+    choices: [
+      {
+        id: 'choice_ceiling_dash',
+        label: '마력 방어막을 켜고 잔해를 몸으로 뚫고 돌진합니다.',
+        description: '충격 흔적이 신체에 쌓이지만 속도를 늦추지 않고 지형 압박을 피합니다. (HP -15% 소모, 누적 위험도 -10)',
+        hpCostPercent: 15,
+        riskDelta: -10,
+      },
+      {
+        id: 'choice_ceiling_back',
+        label: '낙하 궤적을 보고 뒤쪽 통로로 급히 몸을 날려 피합니다.',
+        description: '안전 구역으로 탈출하지만, 붕괴에 의해 몬스터들의 기밀 순찰선으로 돌아갑니다. (몬스터 추가)',
+        leadsTo: 'battle',
+      },
+    ],
+  },
+  {
+    id: 'evt_creeping_mana_void',
+    title: '침식된 마력 진공 폭풍 [미니 위기]',
+    description: '방 내부의 마력이 순식간에 중심부 소용돌이로 급격하게 소실되며 아군 신체의 마력 회로가 텅 비어갑니다. 숨소리조차 차갑게 제한되는 지옥 같은 진공 상태입니다.',
+    choices: [
+      {
+        id: 'choice_mana_void_burn',
+        label: '숨겨진 직업 에너지를 내열 연소하여 신체 장벽을 세웁니다.',
+        description: '과부하를 감내하면서 균열의 원동력을 교란하여 기습을 꾀합니다. (HP -10% 소모, 다음 방 버프/디버프: enemy_hp_down)',
+        hpCostPercent: 10,
+        nextEncounterModifier: 'enemy_hp_down',
+      },
+      {
+        id: 'choice_mana_void_wait',
+        label: '비교적 안개가 모인 암석 후방의 구멍을 향해 기어 들어갑니다.',
+        description: '호흡을 복구할 시간을 가집니다. 다만 지체된 시간만큼 차원압이 상승합니다. (누적 위험도 +12)',
+        riskDelta: 12,
+      },
+    ],
+  },
+  {
+    id: 'evt_secret_waterfall_cave',
+    title: '마력 전류 폭포의 틈새 [탐색/환경]',
+    description: '지하 동굴 천장을 가르며 푸른 전류가 격렬하게 흐르는 마력수 폭포가 흘러내립니다. 폭포의 배후 틈으로 아주 은근하게 강력한 보물 상자 고유의 은빛 진동이 감지됩니다.',
+    choices: [
+      {
+        id: 'choice_waterfall_push',
+        label: '전류의 폭포막을 검으로 가르며 강하게 안으로 돌진합니다.',
+        description: '마찰 피해를 입으며 은신처의 보석방 내부로 궤적을 꺾어 들어갑니다. (HP -10% 소모, 보물 방으로 우회 대체)',
+        hpCostPercent: 10,
+        addEncounterType: 'treasure',
+      },
+      {
+        id: 'choice_waterfall_pass',
+        label: '폭포에 근접하지 않고 정돈된 우회 레일을 걷습니다.',
+        description: '무모함을 피해 안정적으로 나아갑니다. (누적 위험도 -8)',
+        riskDelta: -8,
+      },
+    ],
+  },
+  {
+    id: 'evt_sealing_door_gate',
+    title: '어둠의 양갈래 갈림문 [탐색/환경]',
+    description: '구획 중앙에 기이한 고대 기호들이 새겨진 분기점이 나타납니다. 왼쪽은 묵직한 고철 대문으로 피비린내와 거친 짐승 소리가 새어 나오며, 오른쪽은 은은한 백색 빛이 길잡이를 하는 룬 문자 통로입니다.',
+    choices: [
+      {
+        id: 'choice_sealing_door_left',
+        label: '피 냄새가 진동하는 왼쪽 고철 철문을 부수고 진입합니다.',
+        description: '난폭하게 대문 빗장을 뚫고 야수의 심장으로 들어섭니다. (누적 위험도 +15, 엘리트 전투 추가)',
+        riskDelta: 15,
+        addEncounterType: 'elite',
+      },
+      {
+        id: 'choice_sealing_door_right',
+        label: '오른쪽의 은은한 백색 룬 통로를 따라 은밀하게 잠입합니다.',
+        description: '위협에 감지되지 않도록 마력을 억제하며 나아갑니다. (누적 위험도 -8)',
+        riskDelta: -8,
+      },
+    ],
+  },
+  {
+    id: 'evt_abyssal_forbidden_seal',
+    title: '🚨 금기의 심연 봉인문 [치명적 위험]',
+    description: '피와 마기가 거친 격풍처럼 폭발하는 칠흑의 대문이 가로막고 있습니다. 문 한가운데는 사냥꾼 협회의 고선명 위험 낙인이 이글이글 불타고 있습니다. "사망 예고: 이 방 너머의 중압감과 극독은 사냥꾼의 뼈까지 불사른다. 생명력이 취약하다면 진입하지 말라." **[🚨 경고: 이 너머로 진행하는 선택은 극도의 치명적인 생명력 손실을 유발하여 사망에 이를 수 있습니다.]**',
+    choices: [
+      {
+        id: 'choice_forbidden_seal_force',
+        label: '⚠️ 마력을 극한으로 방어 상태에 주입하고 붉은 봉인을 무력 파쇄합니다.',
+        description: '봉인의 폭발 반사 피해를 온몸으로 견디며 심원 최심부를 강제 돌파 기습합니다. **(⚠️ 치명적 위험: 현재 HP의 50%를 잃고 정예 전투 구역으로 이어집니다. 생명력이 부족하면 즉사할 수 있습니다.)**',
+        hpCostPercent: 50,
+        leadsTo: 'battle',
+        addEncounterType: 'elite',
+        rewardMultiplierDelta: 0.45,
+        riskDelta: 30,
+      },
+      {
+        id: 'choice_forbidden_seal_bypass',
+        label: '위험 신호를 수용해 봉인문에서 멀어져 안전한 붕괴 우회로를 찾습니다.',
+        description: '경고를 수용하고 먼 거리를 우회하는 좁은 환기 굴을 통해 기어가기로 결정합니다.',
+        leadsTo: 'safe',
+        riskDelta: -10,
       },
     ],
   },
@@ -710,15 +937,6 @@ export function generateGateRunState(gateId: string, seed: string, examGrade?: H
     } else if (theme.id === 'theme_specter') {
       weights[5] += 0.20 // shadow_trace
       weights[0] += 0.05
-    }
-
-    // 모디파이어 보정
-    if (modifierIds.includes('mod_rich_shadow')) {
-      weights[5] += 0.30 // shadow_trace 상향
-    }
-    if (modifierIds.includes('mod_dense_loot')) {
-      weights[4] += 0.20 // treasure
-      weights[1] += 0.10 // elite
     }
 
     // 가중치 합계 정규화
@@ -947,7 +1165,7 @@ export function generateGateRunState(gateId: string, seed: string, examGrade?: H
       treasureReward = { gold: goldAmt, essence: essAmt, xp: 0, items: [] }
     } else if (encType === 'shadow_trace') {
       title = examDef ? '[승급 심사] 짙게 얼룩진 그림자 흔적' : '짙게 얼룩진 그림자 흔적'
-      description = '강력한 고대 마력의 흔적이 은은하게 소용돌이칩니다. 다음 그림자 추출의 성공 가능성을 한층 높여줄 것입니다.'
+      description = '강력한 고대 마력의 흔적이 은은하게 소용돌이칩칩니다. 다음 그림자 추출의 성공 가능성을 한층 높여줄 것입니다.'
       if (rTitle && !examDef) {
         title = rTitle
         description = rDesc || description
@@ -1184,5 +1402,3 @@ export function getChoiceLeadsTo(choice: GateRunEventChoice): 'battle' | 'safe' 
 
   return 'safe'
 }
-
-

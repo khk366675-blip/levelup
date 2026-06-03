@@ -74,7 +74,7 @@ export const REGIONAL_EVENT_PACKS: Record<string, WorldGateEventPack> = {
           {
             id: 'choice_seoul_subway_save',
             label: '피난민 퇴로 즉시 확보',
-            description: '시민 대피를 최우선으로 엄호합니다. (위험도 -15, 경험치 +150)',
+            description: '무너진 잔해 아래 고립된 피난민들을 안전 구역으로 질서정연하게 피신시킵니다. (위험도 -15, 경험치 +150)',
             riskDelta: -15,
             leadsTo: 'safe',
             immediateReward: { xp: 150, gold: 0, essence: 0, items: [] }
@@ -82,7 +82,7 @@ export const REGIONAL_EVENT_PACKS: Record<string, WorldGateEventPack> = {
           {
             id: 'choice_seoul_subway_dash',
             label: '균열 깊은 중추 진격',
-            description: '위험을 감수하고 적의 지휘부를 선제 타격합니다. (위험도 +20, 보상 배율 +0.25)',
+            description: '어둠 속 깊숙이 일렁이는 붉은 눈빛의 적 지휘부를 찾아 단숨에 검을 겨눕니다. (위험도 +20, 보상 배율 +0.25)',
             riskDelta: 20,
             leadsTo: 'battle',
             rewardMultiplierDelta: 0.25
@@ -90,7 +90,7 @@ export const REGIONAL_EVENT_PACKS: Record<string, WorldGateEventPack> = {
           {
             id: 'choice_seoul_subway_coop',
             label: '협회 지원조 호출',
-            description: 'Named 헌터에게 대피선 관리를 일임하고 직진합니다. (위험도 -25, 골드 +500)',
+            description: 'Named 헌터에게 현장 인도를 엄호 사격으로 맡긴 채, 균열 내부로 조용히 발을 들여놓습니다. (위험도 -25, 골드 +500)',
             requiresCoop: true,
             conditionHint: '공조 중인 Named 헌터가 필요합니다.',
             leadsTo: 'safe',
@@ -107,25 +107,45 @@ export const REGIONAL_EVENT_PACKS: Record<string, WorldGateEventPack> = {
           {
             id: 'choice_seoul_building_analyze',
             label: '낙인 주파수 정밀 분석',
-            description: '폭주를 제어하여 보스의 약점을 미리 읽어냅니다. (위험도 -10, 추출 성공률 +6%)',
+            description: '주파수 분석 장치를 외벽 룬 표면에 부착하여 공명 흐름의 불균형을 안정화하고 약점을 수집합니다. (위험도 -10, 추출 성공률 +6%)',
             riskDelta: -10,
             extractionBonusDelta: 6
           },
           {
             id: 'choice_seoul_building_smash',
             label: '마력 핵의 물리적 분쇄',
-            description: '낙인을 억지로 깨부수어 이계 정수를 즉시 갈취합니다. (위험도 +15, 그림자 정수 +300)',
+            description: '외벽의 마력 핵에 물리 타격을 가해 산산조각 내어 뿜어져 나오는 정수를 포집합니다. (위험도 +15, 그림자 정수 +300)',
             riskDelta: 15,
             immediateReward: { essence: 300, xp: 0, gold: 0, items: [] }
           },
           {
             id: 'choice_seoul_building_solo',
             label: '단독 우회 돌파',
-            description: '지원 병력이 없다면 신속하게 측면을 통해 우회 전진합니다. (위험도 +5, 골드 +600)',
+            description: '단독 기동 상태인 만큼 엄호 없이 측면 비상계단을 타고 빠르게 전방 통로로 우회 돌파합니다. (위험도 +5, 골드 +600)',
             requiresSolo: true,
             conditionHint: '단독 원정 상태에서만 선택 가능합니다.',
             riskDelta: 5,
             immediateReward: { gold: 600, xp: 0, essence: 0, items: [] }
+          }
+        ]
+      },
+      {
+        id: 'evt_seoul_hunter_encounter',
+        title: '신사동 골목의 방랑 헌터 [조우]',
+        description: '무너진 콘크리트 잔해 뒤쪽에서 지맥 가스가 스며 나오는 가운데, 헬멧이 깨진 헌터가 기댄 채 칼자루를 짚고 신음하고 있습니다.',
+        choices: [
+          {
+            id: 'choice_seoul_hunter_help',
+            label: '비상 치료 붕대와 식수 공급',
+            description: '헌터의 마력 순환 회복을 돕고 협회 전술 노트를 교환합니다. (HP -10% 소모, 그림자 정수 +250)',
+            hpCostPercent: 10,
+            immediateReward: { essence: 250, xp: 0, gold: 0, items: [] }
+          },
+          {
+            id: 'choice_seoul_hunter_leave',
+            label: '길을 서둘러 가방만 획득 후 복귀',
+            description: '근처 수풀에 흘러내린 보급 봉투의 마력 잔해만 가로채며 돌파합니다. (골드 +500)',
+            immediateReward: { gold: 500, xp: 0, essence: 0, items: [] }
           }
         ]
       }
@@ -168,7 +188,7 @@ export const REGIONAL_EVENT_PACKS: Record<string, WorldGateEventPack> = {
           {
             id: 'choice_incheon_mist_rescue',
             label: '신호지로 즉시 돌입 수색',
-            description: '위험을 무릅쓰고 대원을 구출합니다. (위험도 +15, 골드 +700, 다음 전투 디버프 우려)',
+            description: '소리치는 좌표의 해수 늪으로 뛰어들어 경계를 지탱하고 대원을 구출합니다. (위험도 +15, 골드 +700, 다음 전투 디버프 우려)',
             riskDelta: 15,
             immediateReward: { gold: 700, xp: 0, essence: 0, items: [] },
             nextEncounterModifier: 'debuff_accuracy'
@@ -176,14 +196,14 @@ export const REGIONAL_EVENT_PACKS: Record<string, WorldGateEventPack> = {
           {
             id: 'choice_incheon_mist_bypass',
             label: '우회하여 안개 통과',
-            description: '소리를 무시하고 본래 목적인 침식 핵으로 직행합니다. (위험도 -5, 경험치 +100)',
+            description: '안개 낀 수로를 돌아 침식 핵 중심으로 조용히 기동합니다. (위험도 -5, 경험치 +100)',
             riskDelta: -5,
             immediateReward: { xp: 100, gold: 0, essence: 0, items: [] }
           },
           {
             id: 'choice_incheon_mist_scout',
             label: '협력 대원 정찰 정밀 지시',
-            description: 'Named 헌터의 통신망을 이용해 사각지대를 조율합니다. (위험도 -15, 그림자 정수 +200)',
+            description: 'Named 헌터의 레이더 좌표를 통해 우회 차단망을 구축합니다. (위험도 -15, 그림자 정수 +200)',
             requiresCoop: true,
             conditionHint: '협력 사냥꾼이 존재해야 지시가 가능합니다.',
             coopRiskDelta: -15,
@@ -199,14 +219,14 @@ export const REGIONAL_EVENT_PACKS: Record<string, WorldGateEventPack> = {
           {
             id: 'choice_incheon_cargo_open',
             label: '봉인 강제 해제 개봉',
-            description: '이계 잔해와 강력한 적을 동시에 깨웁니다. (위험도 +20, 보상 배율 +0.30)',
+            description: '컨테이너의 철문을 격파하여 강적의 살기와 보상을 동시에 찢어냅니다. (위험도 +20, 보상 배율 +0.30)',
             riskDelta: 20,
             rewardMultiplierDelta: 0.30
           },
           {
             id: 'choice_incheon_cargo_tag',
             label: '협회 귀속 태그 부착',
-            description: '컨테이너를 확보만 하고 안전하게 넘어갑니다. (위험도 -5, 골드 +400)',
+            description: '장치 봉인을 유지한 채 바코드를 태그하여 안정적인 인계를 확보합니다. (위험도 -5, 골드 +400)',
             riskDelta: -5,
             immediateReward: { gold: 400, xp: 0, essence: 0, items: [] }
           }
@@ -249,21 +269,21 @@ export const REGIONAL_EVENT_PACKS: Record<string, WorldGateEventPack> = {
           {
             id: 'choice_kr_busan_defend',
             label: '방벽 고수 및 시민 호송',
-            description: '방어벽을 끝까지 지탱합니다. (위험도 -15, 경험치 +200)',
+            description: '방어벽 틈새를 마력으로 지탱하고, 피난 구역을 안전하게 엄호 사수합니다. (위험도 -15, 경험치 +200)',
             riskDelta: -15,
             immediateReward: { xp: 200, gold: 0, essence: 0, items: [] }
           },
           {
             id: 'choice_kr_busan_strike',
             label: '괴수 둥지 선제 격파',
-            description: '둥지를 정면 타격해 군비 지원금을 확보합니다. (위험도 +20, 골드 +1000)',
+            description: '연안 동굴 아래의 괴수 둥지를 정면 타격해 위험을 해소하고 자금을 확보합니다. (위험도 +20, 골드 +1000)',
             riskDelta: 20,
             immediateReward: { gold: 1000, xp: 0, essence: 0, items: [] }
           },
           {
             id: 'choice_kr_busan_coop_def',
             label: '공조 병력 분산 방어',
-            description: '협력 헌터들을 측면 방벽으로 조 배치합니다. (위험도 -30, 그림자 정수 +100)',
+            description: ' Named 헌터 대원들과 신호를 맞춰 측면 방파제 벽을 굳건히 결계로 덮습니다. (위험도 -30, 그림자 정수 +100)',
             requiresCoop: true,
             conditionHint: '배치 가능한 Named 헌터가 부족합니다.',
             coopRiskDelta: -30,
@@ -279,14 +299,14 @@ export const REGIONAL_EVENT_PACKS: Record<string, WorldGateEventPack> = {
           {
             id: 'choice_busan_bw_repair',
             label: '임시 속성 방벽 봉인',
-            description: '마력을 방출해 틈새를 얼려 막습니다. (위험도 -10, 그림자 정수 +250)',
+            description: '마력 전류를 방출해 방파제 갈라진 틈을 안전하게 응축시켜 막습니다. (위험도 -10, 그림자 정수 +250)',
             riskDelta: -10,
             immediateReward: { essence: 250, xp: 0, gold: 0, items: [] }
           },
           {
             id: 'choice_busan_bw_charge',
             label: '변이 야수 무리 돌파',
-            description: '오염 지역을 강제로 돌파하며 적의 전리품을 낚아챕니다. (위험도 +15, 골드 +600)',
+            description: '변이가 극대화된 붉은 개체들을 밀치고 정면의 물통을 탈취해 길을 뚫습니다. (위험도 +15, 골드 +600)',
             riskDelta: 15,
             immediateReward: { gold: 600, xp: 0, essence: 0, items: [] }
           }
@@ -329,21 +349,21 @@ export const REGIONAL_EVENT_PACKS: Record<string, WorldGateEventPack> = {
           {
             id: 'choice_jeju_gate_decode',
             label: '고대 문양 해석 시도',
-            description: '차분하게 마력 공명을 시도하여 안전하게 개방합니다. (위험도 -15, 추출 성공률 +8%)',
+            description: '마력 결 정리에 부드럽게 감각을 정렬하여 충돌 없이 문을 엽니다. (위험도 -15, 추출 성공률 +8%)',
             riskDelta: -15,
             extractionBonusDelta: 8
           },
           {
             id: 'choice_jeju_gate_force',
             label: '봉인의 강제 물리 타격',
-            description: '무기로 타격해 억지로 부수고 진입합니다. (위험도 +20, 골드 +900)',
+            description: '문고리 뒤편의 마력 동력구를 무기 강타로 파쇄하고 안으로 나아갑니다. (위험도 +20, 골드 +900)',
             riskDelta: 20,
             immediateReward: { gold: 900, xp: 0, essence: 0, items: [] }
           },
           {
             id: 'choice_jeju_gate_bypass',
             label: '우회 절벽 우회로 탐색',
-            description: '소모적이지만 안전한 우회 절벽으로 진입합니다. (위험도 -5, 경험치 +100)',
+            description: '현무암 절벽의 돌출된 비탈길을 따라 천천히 우회 정밀 전진합니다. (위험도 -5, 경험치 +100)',
             riskDelta: -5,
             immediateReward: { xp: 100, gold: 0, essence: 0, items: [] }
           }
@@ -357,14 +377,14 @@ export const REGIONAL_EVENT_PACKS: Record<string, WorldGateEventPack> = {
           {
             id: 'choice_jeju_cave_meditate',
             label: '광석 틈에서 명상 정비',
-            description: '마력을 공명시켜 신체를 크게 치유합니다. (체력 40% 회복, 위험도 -5)',
+            description: '광석에서 발산되는 청아한 울림을 활용하여 몸의 지친 피로를 씻어냅니다. (체력 40% 회복, 위험도 -5)',
             healPercent: 40,
             riskDelta: -5
           },
           {
             id: 'choice_jeju_cave_crystals',
             label: '이계 마력 광석 집중 채굴',
-            description: '위험을 감수하고 광석 정수를 전부 캐냅니다. (위험도 +15, 그림자 정수 +350)',
+            description: '지맥 폭발의 여파를 뒤로하고, 제단 틈새의 오염된 정수를 조심히 갈아 채굴합니다. (위험도 +15, 그림자 정수 +350)',
             riskDelta: 15,
             immediateReward: { essence: 350, xp: 0, gold: 0, items: [] }
           }
@@ -386,6 +406,7 @@ export const REGIONAL_EVENT_PACKS: Record<string, WorldGateEventPack> = {
   'kr': {
     id: 'pack_kr_fallback',
     regionId: 'kr',
+    subRegionId: 'kr',
     localeName: '대한민국',
     timelineLabels: ['경계 임시 초소', '이상 마력 통로', '균열 전방 지대', '침식 고밀도 지역', '중심 핵 결전 구역'],
     introBriefings: [
@@ -406,14 +427,14 @@ export const REGIONAL_EVENT_PACKS: Record<string, WorldGateEventPack> = {
           {
             id: 'choice_kr_radar_fix',
             label: '주파수 수동 조율 복구',
-            description: '침착하게 기기를 조정해 안전 구역을 확보합니다. (위험도 -15, 골드 +300)',
+            description: '나침반 축을 정밀하게 보정하여 주위의 몬스터 매복망 좌표를 우회합니다. (위험도 -15, 골드 +300)',
             riskDelta: -15,
             immediateReward: { gold: 300, xp: 0, essence: 0, items: [] }
           },
           {
             id: 'choice_kr_radar_ignore',
             label: '기기 강제 분쇄 파괴',
-            description: '소음을 없애기 위해 부수고 직진합니다. (위험도 +10, 그림자 정수 +200)',
+            description: '소음을 내며 방전되는 장비를 밟아 부수고 잔류 축전지를 추출합니다. (위험도 +10, 그림자 정수 +200)',
             riskDelta: 10,
             immediateReward: { essence: 200, xp: 0, gold: 0, items: [] }
           }
@@ -427,14 +448,14 @@ export const REGIONAL_EVENT_PACKS: Record<string, WorldGateEventPack> = {
           {
             id: 'choice_kr_scout_save',
             label: '구조 후 대피 유도',
-            description: '그를 안전한 외곽으로 호송합니다. (위험도 -10, 경험치 +150)',
+            description: '정찰 대원의 부목을 대주고 후방 대피 보급선까지 동행하여 엄호합니다. (위험도 -10, 경험치 +150)',
             riskDelta: -10,
             immediateReward: { xp: 150, gold: 0, essence: 0, items: [] }
           },
           {
             id: 'choice_kr_scout_supplies',
             label: '정찰병의 예비 배낭 징수',
-            description: '그의 보급 상자만 넘겨받고 길을 서두릅니다. (위험도 +15, 골드 +500)',
+            description: '부상자의 배낭 속 미개봉 보급팩 상자를 신속히 수거하여 길을 재촉합니다. (위험도 +15, 골드 +500)',
             riskDelta: 15,
             immediateReward: { gold: 500, xp: 0, essence: 0, items: [] }
           }
@@ -478,21 +499,21 @@ export const REGIONAL_EVENT_PACKS: Record<string, WorldGateEventPack> = {
           {
             id: 'choice_us_highway_repair',
             label: '장갑 보급 바리케이드 사수',
-            description: '연방군 기갑 초소를 지탱해 사각지대를 방어합니다. (위험도 -15, 경험치 +200)',
+            description: '연방군 기갑 초소 철벽을 신속 복구하여 탄탄한 감시선을 확보합니다. (위험도 -15, 경험치 +200)',
             riskDelta: -15,
             immediateReward: { xp: 200, gold: 0, essence: 0, items: [] }
           },
           {
             id: 'choice_us_highway_dash',
             label: '붕괴 교각 아래로 강철 점프',
-            description: '적의 본진을 직접 뚫어 이계 보물을 획득합니다. (위험도 +20, 골드 +900)',
+            description: '고속도로 아래 깊은 균열 틈으로 바로 뛰어내려 보강 장치함을 낚아챕니다. (위험도 +20, 골드 +900)',
             riskDelta: 20,
             immediateReward: { gold: 900, xp: 0, essence: 0, items: [] }
           },
           {
             id: 'choice_us_highway_coop',
             label: '현지 S급 헌터 전열 인계',
-            description: '토마스 리드의 중장갑 돌파에 맞추어 공격을 가합니다. (위험도 -30, 그림자 정수 +150)',
+            description: '중장갑 헌터들의 방어 돌파선 후방을 보조하여 빠르게 왜곡을 가로지릅니다. (위험도 -30, 그림자 정수 +150)',
             requiresCoop: true,
             conditionHint: '미국 전선에 대기 중인 Named 헌터가 필요합니다.',
             coopRiskDelta: -30,
@@ -508,14 +529,14 @@ export const REGIONAL_EVENT_PACKS: Record<string, WorldGateEventPack> = {
           {
             id: 'choice_us_silent_search',
             label: '생존 금융 시민 수색구출',
-            description: '위험을 무릅쓰고 대피 벙커를 확보합니다. (위험도 +10, 골드 +700, 추가 보상)',
+            description: '지하 환기 게이트를 부수고 들어가 생존자들을 쉘터로 인계합니다. (위험도 +10, 골드 +700, 추가 보상)',
             riskDelta: 10,
             immediateReward: { gold: 700, xp: 100, essence: 0, items: [] }
           },
           {
             id: 'choice_us_silent_speed',
             label: '마력 신호 추적에 전념',
-            description: '지체 없이 중심 균열로 이동해 격돌을 앞당깁니다. (위험도 -10, 다음 방 버프)',
+            description: '신호를 무시하고 월가 빌딩 틈새의 보랏빛 기공을 향해 기어 돌입합니다. (위험도 -10, 다음 방 버프)',
             riskDelta: -10,
             nextEncounterModifier: 'buff_speed'
           }
@@ -531,8 +552,8 @@ export const REGIONAL_EVENT_PACKS: Record<string, WorldGateEventPack> = {
     soloWarnings: [
       '경고: 미국의 붕괴 압력은 한국의 4배입니다. 아군 지원이 없으면 뼈도 추리지 못할 것입니다.',
     ],
-    clearedLines: ['맨해튼 상공의 위상 균열이 성공적으로 격리되며 월가의 마력 흐름이 안정되었습니다.'],
-    failedLines: ['미국 동부 전선이 괴물들의 아성에 무너지며 국가 방어선에 붉은 경보가 발령되었습니다.']
+    clearedLines: ['맨해튼 상공의 위상 균열이 성공적으로 격리되었습니다.'],
+    failedLines: ['미국 동부 전선이 괴물들의 아성에 무너져 내렸습니다.']
   },
   'uk': {
     id: 'pack_uk',
@@ -557,21 +578,21 @@ export const REGIONAL_EVENT_PACKS: Record<string, WorldGateEventPack> = {
           {
             id: 'choice_uk_templar_track',
             label: '은빛 룬의 잔향 추적',
-            description: '고대 기사단의 지식과 보스 정보를 수집합니다. (위험도 -15, 추출 성공률 +6%)',
+            description: '돌벽에 기호를 새겨넣어 안개 지형의 기운을 다듬고 약점을 수집합니다. (위험도 -15, 추출 성공률 +6%)',
             riskDelta: -15,
             extractionBonusDelta: 6
           },
           {
             id: 'choice_uk_templar_shatter',
             label: '룬의 주술적 강제 봉인',
-            description: '강제로 룬을 깨뜨려 축적된 그림자 정수를 탈취합니다. (위험도 +15, 그림자 정수 +300)',
+            description: '벽면 룬 결정을 해머로 가격해 깨뜨려 뿜어져 나오는 정수를 포집합니다. (위험도 +15, 그림자 정수 +300)',
             riskDelta: 15,
             immediateReward: { essence: 300, xp: 0, gold: 0, items: [] }
           },
           {
             id: 'choice_uk_templar_coop',
             label: '현지 안개 탐색 마력 의존',
-            description: '엘리자 그레이의 룬 해독 마법을 결합하여 위험을 완전 차단합니다. (위험도 -30, 골드 +400)',
+            description: '결계 마법 헌터의 신호와 정렬하여 안개 장벽을 안정적으로 우회합니다. (위험도 -30, 골드 +400)',
             requiresCoop: true,
             conditionHint: '영국 작전공조 중인 Named 헌터가 필요합니다.',
             coopRiskDelta: -30,
@@ -587,14 +608,14 @@ export const REGIONAL_EVENT_PACKS: Record<string, WorldGateEventPack> = {
           {
             id: 'choice_uk_fog_fight',
             label: '안개 낀 플랫폼 정면 승부',
-            description: '숨어 있는 적들을 모조리 베어냅니다. (위험도 +20, 골드 +800)',
+            description: '안개 속에서 흘러나오는 금속 마찰음을 향해 무기를 겨누고 전력 돌진합니다. (위험도 +20, 골드 +800)',
             riskDelta: 20,
             immediateReward: { gold: 800, xp: 0, essence: 0, items: [] }
           },
           {
             id: 'choice_uk_fog_light',
             label: '빛의 마력탄 투사 정화',
-            description: '섬광탄을 쏘아 길을 밝히고 안전하게 우회합니다. (위험도 -10, 경험치 +100)',
+            description: '마력 섬광탄을 쏘아 플랫폼 어둠을 걷어내고 안전한 개찰구를 통해 우회합니다. (위험도 -10, 경험치 +100)',
             riskDelta: -10,
             immediateReward: { xp: 100, gold: 0, essence: 0, items: [] }
           }
@@ -636,21 +657,21 @@ export const REGIONAL_EVENT_PACKS: Record<string, WorldGateEventPack> = {
           {
             id: 'choice_ru_lab_data',
             label: '데이터 서버 정밀 해킹',
-            description: '소중한 무기 설계도와 이계 공명 지식을 탈취합니다. (위험도 -15, 골드 +700)',
+            description: '방한 장비의 주파수를 벙커 통제반에 맞춰 서버실의 전장 설계를 안전하게 징수합니다. (위험도 -15, 골드 +700)',
             riskDelta: -15,
             immediateReward: { gold: 700, xp: 0, essence: 0, items: [] }
           },
           {
             id: 'choice_ru_lab_charge',
             label: '연구소 비밀 금고 강제 개봉',
-            description: '경보 유발을 무시하고 정수 상자를 강취합니다. (위험도 +20, 그림자 정수 +350)',
+            description: '동결 보호막을 건드려 경보가 울리게 만드는 대가로 대량의 마석 결정을 강탈합니다. (위험도 +20, 그림자 정수 +350)',
             riskDelta: 20,
             immediateReward: { essence: 350, xp: 0, gold: 0, items: [] }
           },
           {
             id: 'choice_ru_lab_coop',
             label: '공조 헌터의 열원 차단 보조',
-            description: '카르포프의 화염 중화기 방열을 받아 안전하게 진입합니다. (위험도 -30, 경험치 +150)',
+            description: '화염 중화기 헌터의 열막을 활용하여 방벽 해빙 틈새를 밟아 지나갑니다. (위험도 -30, 경험치 +150)',
             requiresCoop: true,
             conditionHint: '러시아 공조 중인 Named 헌터가 필요합니다.',
             coopRiskDelta: -30,
@@ -666,14 +687,14 @@ export const REGIONAL_EVENT_PACKS: Record<string, WorldGateEventPack> = {
           {
             id: 'choice_ru_freeze_heater',
             label: '군용 예비 발전기 가동',
-            description: '열기를 확보해 장비 신뢰도를 높이고 진행합니다. (위험도 -10, 체력 25% 회복)',
+            description: '연료 레버를 당겨 발전 장치를 작동시키고 몸에 불을 쬐어 얼어붙은 근육을 풉니다. (위험도 -10, 체력 25% 회복)',
             healPercent: 25,
             riskDelta: -10
           },
           {
             id: 'choice_ru_freeze_rush',
             label: '추위를 뚫고 신속 전진',
-            description: '지체 없이 달립니다. (위험도 +10, 다음 방 스피드 증가)',
+            description: '발전기 수리를 포기하고 무기를 품에 안은 채 터널 눈보라 속으로 돌파 질주합니다. (위험도 +10, 다음 방 스피드 증가)',
             riskDelta: 10,
             nextEncounterModifier: 'buff_speed'
           }
@@ -715,21 +736,21 @@ export const REGIONAL_EVENT_PACKS: Record<string, WorldGateEventPack> = {
           {
             id: 'choice_cn_seal_fix',
             label: '고대 부적 마력 봉인 보강',
-            description: '폭주 주기를 연장해 던전을 조율합니다. (위험도 -15, 보상 배율 +0.10)',
+            description: '소지하고 있던 마석 파편들로 부적을 덧대어 균열의 폭주 주파수를 제어합니다. (위험도 -15, 보상 배율 +0.10)',
             riskDelta: -15,
             rewardMultiplierDelta: 0.10
           },
           {
             id: 'choice_cn_seal_shatter',
             label: '석주 주술 강제 분쇄',
-            description: '고대 마력 기운을 즉시 무기로 흡수합니다. (위험도 +20, 골드 +800)',
+            description: '석주를 격파하여 누출되는 이계의 마력을 검끝으로 집중 포집합니다. (위험도 +20, 골드 +800)',
             riskDelta: 20,
             immediateReward: { gold: 800, xp: 0, essence: 0, items: [] }
           },
           {
             id: 'choice_cn_seal_coop',
             label: '현지 무협 헌터 진법 결합',
-            description: '장웨이의 마력 장벽 지원을 받아 위험 요소를 안전 중화합니다. (위험도 -30, 그림자 정수 +150)',
+            description: 'Named 헌터 대원의 기 장막 결계를 이용해 진법을 강제로 안정 정렬합니다. (위험도 -30, 그림자 정수 +150)',
             requiresCoop: true,
             conditionHint: '중국 공조 Named 헌터가 필요합니다.',
             coopRiskDelta: -30,
@@ -745,7 +766,7 @@ export const REGIONAL_EVENT_PACKS: Record<string, WorldGateEventPack> = {
           {
             id: 'choice_cn_wall_loot',
             label: '보급 보석 옥벽 강취',
-            description: '마력 옥벽과 식량을 거둡니다. (위험도 +10, 골드 +500, 체력 20% 회복)',
+            description: '황사 속에 손을 넣어 반쯤 파손된 비전 보물 주머니를 강제로 수거합니다. (위험도 +10, 골드 +500, 체력 20% 회복)',
             riskDelta: 10,
             healPercent: 20,
             immediateReward: { gold: 500, xp: 0, essence: 0, items: [] }
@@ -753,7 +774,7 @@ export const REGIONAL_EVENT_PACKS: Record<string, WorldGateEventPack> = {
           {
             id: 'choice_cn_wall_pass',
             label: '은신을 지키며 통과',
-            description: '경계망을 흐트러뜨리지 않고 넘어갑니다. (위험도 -5, 경험치 +100)',
+            description: '보급함을 건드리지 않고, 황사 안개를 기막 삼아 성벽 바깥쪽으로 은밀히 잠입 전진합니다. (위험도 -5, 경험치 +100)',
             riskDelta: -5,
             immediateReward: { xp: 100, gold: 0, essence: 0, items: [] }
           }
@@ -764,7 +785,7 @@ export const REGIONAL_EVENT_PACKS: Record<string, WorldGateEventPack> = {
       '묘궁의 가장 지하 안쪽 전당, 마석 황실 옥좌 뒤에서 거대한 적마령 수호자가 깨어나고 있습니다.',
     ],
     coopLines: [
-      '장웨이: "내 도강 마력으로 길을 낼 테니, 대륙 유적의 힘을 너무 얕보지 마시오!"',
+      '장웨이: "장도강 마력으로 길을 낼 테니, 대륙 유적의 힘을 너무 얕보지 마시오!"',
     ],
     soloWarnings: [
       '경고: 고대 지진법이 얽힌 균열입니다. 단독 개입 헌터는 봉인 주술에 역으로 질식당하기 쉽습니다.',
@@ -795,21 +816,21 @@ export const REGIONAL_EVENT_PACKS: Record<string, WorldGateEventPack> = {
           {
             id: 'choice_jp_shrine_purify',
             label: '주술적 부적 결계 강화',
-            description: '마력을 중화해 안전한 휴식망을 형성합니다. (위험도 -15, 그림자 정수 +200)',
+            description: '신사 경계석에 정화 부적을 부착하여 일시적으로 마력 차단막 안전 구역을 형성합니다. (위험도 -15, 그림자 정수 +200)',
             riskDelta: -15,
             immediateReward: { essence: 200, xp: 0, gold: 0, items: [] }
           },
           {
             id: 'choice_jp_shrine_extract',
             label: '요괴의 그림자 정수 징수',
-            description: '영령을 강제로 베어 그림자 흔적 보정을 얻습니다. (위험도 +20, 추출 성공률 +6%)',
+            description: '일렁이는 영령의 핵을 도검으로 가차 없이 베어 흩어지는 그림자 마력을 갈취합니다. (위험도 +20, 추출 성공률 +6%)',
             riskDelta: 20,
             extractionBonusDelta: 6
           },
           {
             id: 'choice_jp_shrine_coop',
             label: '현지 헌터의 퇴마 검술 보완',
-            description: '켄지의 그림자 발도 공격을 엄호하여 퇴로를 청소합니다. (위험도 -30, 골드 +500)',
+            description: '켄지의 검격에 맞춰 마력을 투사하여 기류를 격리하고 안전한 활로를 엽니다. (위험도 -30, 골드 +500)',
             requiresCoop: true,
             conditionHint: '일본 공조 Named 헌터가 필요합니다.',
             coopRiskDelta: -30,
@@ -825,14 +846,14 @@ export const REGIONAL_EVENT_PACKS: Record<string, WorldGateEventPack> = {
           {
             id: 'choice_jp_subway_leap',
             label: '잔해를 딛고 전방 도약',
-            description: '위험하지만 빠르게 돌파합니다. (위험도 +10, 보상 배율 +0.15)',
+            description: '낙석 궤적의 틈을 타고 무모하지만 빠르게 측면 철근 위로 뛰어오릅니다. (위험도 +10, 보상 배율 +0.15)',
             riskDelta: 10,
             rewardMultiplierDelta: 0.15
           },
           {
             id: 'choice_jp_subway_clear',
             label: '경로 주변 파편 조심 제거',
-            description: '안전하게 파편을 밀어내며 정진합니다. (위험도 -10, 경험치 +100)',
+            description: '안전 보강용 방패를 들어 올려 낙석을 튕겨내며 한 걸음씩 안정적으로 나아갑니다. (위험도 -10, 경험치 +100)',
             riskDelta: -10,
             immediateReward: { xp: 100, gold: 0, essence: 0, items: [] }
           }
@@ -874,21 +895,21 @@ export const REGIONAL_EVENT_PACKS: Record<string, WorldGateEventPack> = {
           {
             id: 'choice_de_core_override',
             label: '코어 강제 냉각 셧다운',
-            description: '기계 조율을 통해 코어를 차단시킵니다. (위험도 -15, 골드 +500)',
+            description: '장치의 조작반 수동 기어를 회전시켜 마력 배출용 셧다운 장치를 가동합니다. (위험도 -15, 골드 +500)',
             riskDelta: -15,
             immediateReward: { gold: 500, xp: 0, essence: 0, items: [] }
           },
           {
             id: 'choice_de_core_charge',
             label: '코어 과부하 마력 임시 흡수',
-            description: '마력을 체내에 우겨넣어 아군 무기를 코팅합니다. (위험도 +20, 다음 전투 보너스)',
+            description: '뿜어져 나오는 고출력 전류 유도체를 무기 수납관에 억지로 우겨넣어 에너지를 입힙니다. (위험도 +20, 다음 전투 보너스)',
             riskDelta: 20,
             nextEncounterModifier: 'buff_atk_def'
           },
           {
             id: 'choice_de_core_coop',
             label: '현지 헌터의 공학 지원',
-            description: '디터의 보조 마력 절연 방패를 주입해 위험 없이 코어를 처리합니다. (위험도 -30, 그림자 정수 +150)',
+            description: 'Named 헌터 대원의 마력 방열 실드로 전류 파장을 억누르며 돌파선을 확보합니다. (위험도 -30, 그림자 정수 +150)',
             requiresCoop: true,
             conditionHint: '독일 공조 Named 헌터가 필요합니다.',
             coopRiskDelta: -30,
@@ -904,14 +925,14 @@ export const REGIONAL_EVENT_PACKS: Record<string, WorldGateEventPack> = {
           {
             id: 'choice_de_industry_slay',
             label: '삼림 벌목종 격퇴 사냥',
-            description: '적을 토막 내어 이계 원액을 회수합니다. (위험도 +10, 그림자 정수 +300)',
+            description: '검을 고쳐 쥐고 성난 삼림종의 측면 기어 목을 강하게 가격해 진압을 시도합니다. (위험도 +10, 그림자 정수 +300)',
             riskDelta: 10,
             immediateReward: { essence: 300, xp: 0, gold: 0, items: [] }
           },
           {
             id: 'choice_de_industry_avoid',
             label: '공장 환기구 우회 통과',
-            description: '조용히 우회하여 전선을 앞당깁니다. (위험도 -10, 경험치 +100)',
+            description: '적의 시선을 피해 공장 옆에 열린 좁은 비상 환기 배출구로 은밀하게 기어 지나갑니다. (위험도 -10, 경험치 +100)',
             riskDelta: -10,
             immediateReward: { xp: 100, gold: 0, essence: 0, items: [] }
           }
@@ -927,8 +948,8 @@ export const REGIONAL_EVENT_PACKS: Record<string, WorldGateEventPack> = {
     soloWarnings: [
       '경고: 억제 시설의 전자기 폭주는 나홀로 헌터의 전열 인프라를 한방에 증발시킬 것입니다.',
     ],
-    clearedLines: ['흑림의 마력 핵 폭주가 성공적으로 진압되어 국경선 삼림 안보가 확보되었습니다.'],
-    failedLines: ['독일 국경 실험실이 붕괴하고 지맥이 침식되어 전자기 문명이 마비되었습니다.']
+    clearedLines: ['흑림의 마력 핵 폭주가 성공적으로 진압되었습니다.'],
+    failedLines: ['독일 국경 실험실이 붕괴하고 지맥이 침식되었습니다.']
   },
 
   // === 3. 공통 Fallback ===
@@ -955,14 +976,14 @@ export const REGIONAL_EVENT_PACKS: Record<string, WorldGateEventPack> = {
           {
             id: 'choice_default_rift_stabilize',
             label: '차원 주파수 안정화 수행',
-            description: '마력 제어로 균열을 억제합니다. (위험도 -15, 그림자 정수 +100)',
+            description: '마력 제어로 균열의 파동을 서서히 억제합니다. (위험도 -15, 그림자 정수 +100)',
             riskDelta: -15,
             immediateReward: { essence: 100, xp: 0, gold: 0, items: [] }
           },
           {
             id: 'choice_default_rift_force_open',
             label: '균열 강제 확장 개방',
-            description: '더 큰 마력을 방출시킵니다. (위험도 +20, 보상 배율 +0.20, 흔적 유도)',
+            description: '대문을 향해 무기를 밀어 넣어 왜곡을 찢어 발깁니다. 더 거친 심연이 열립니다. (위험도 +20, 보상 배율 +0.20, 흔적 유도)',
             riskDelta: 20,
             rewardMultiplierDelta: 0.20,
             addEncounterType: 'shadow_trace'
@@ -977,14 +998,14 @@ export const REGIONAL_EVENT_PACKS: Record<string, WorldGateEventPack> = {
           {
             id: 'choice_default_trace_follow',
             label: '마력 흔적 심층 추적',
-            description: '위험을 무릅쓰고 흔적을 따라갑니다. (추출 성공률 +8%, 위험도 +15)',
+            description: '공명하는 고요한 기류를 따라 한 단계 더 깊고 어두운 굴로 향합니다. (추출 성공률 +8%, 위험도 +15)',
             riskDelta: 15,
             extractionBonusDelta: 8
           },
           {
             id: 'choice_default_trace_ignore',
             label: '안전 우회 및 자원 회수',
-            description: '안전을 챙겨 조심스레 떠납니다. (골드 +500)',
+            description: '안전 확보를 우선시하여, 잔해가 청소된 넓은 우회로로 진출합니다. (골드 +500)',
             riskDelta: -5,
             immediateReward: { gold: 500, xp: 0, essence: 0, items: [] }
           }
@@ -998,7 +1019,7 @@ export const REGIONAL_EVENT_PACKS: Record<string, WorldGateEventPack> = {
           {
             id: 'choice_default_supply_open',
             label: '보급함 강제 개봉 탈취',
-            description: '함정을 신경 쓰지 않고 개봉합니다. (골드 +900, 30% 확률로 명중 페널티)',
+            description: '안전핀을 걷어차고 뚜껑 틈새를 쇠지렛대로 젖혀 내용물을 확인합니다. (골드 +900, 30% 확률로 명중 페널티)',
             riskDelta: 10,
             immediateReward: { gold: 900, xp: 0, essence: 0, items: [] },
             nextEncounterModifier: 'debuff_accuracy'
@@ -1006,7 +1027,7 @@ export const REGIONAL_EVENT_PACKS: Record<string, WorldGateEventPack> = {
           {
             id: 'choice_default_supply_leave',
             label: '상자를 우회하여 통과',
-            description: '불안정 신호를 무시하고 갈 길을 갑니다. (위험도 -5)',
+            description: '함정을 우려하여 보급함을 그대로 방치한 채 우회하여 지나칩니다. (위험도 -5)',
             riskDelta: -5
           }
         ]
@@ -1019,22 +1040,63 @@ export const REGIONAL_EVENT_PACKS: Record<string, WorldGateEventPack> = {
           {
             id: 'choice_default_altar_pray',
             label: '제단 앞에서 헌신의 기도',
-            description: '상처를 치유하지만 정신 오염을 받습니다. (체력 35% 회복, 다음 적 속도 증가)',
+            description: '제단의 진동에 신체를 동조시켜 상처를 차분히 복구합니다. (체력 35% 회복, 다음 적 속도 증가)',
             healPercent: 35,
             nextEncounterModifier: 'enemy_speed_up'
           },
           {
             id: 'choice_default_altar_shatter',
             label: '제단 마석 추출 파괴',
-            description: '마석 제단을 강제로 깨뜨려 정수를 탈취합니다. (위험도 +15, 그림자 정수 +250)',
+            description: '제단 제어핵에 충격을 주어 붉게 타는 정수 결정을 강제로 뜯어냅니다. (위험도 +15, 그림자 정수 +250)',
             riskDelta: 15,
             immediateReward: { essence: 250, xp: 0, gold: 0, items: [] }
+          }
+        ]
+      },
+      {
+        id: 'evt_default_hunter_encounter',
+        title: '동토 틈새의 방랑 헌터 [조우]',
+        description: '지맥 깊은 골짜기 아래, 보급품을 잃어버리고 떨고 있는 이국인 헌터 한 명이 당신에게 손을 내밀고 있습니다.',
+        choices: [
+          {
+            id: 'choice_default_hunter_feed',
+            label: '비상 식량팩과 마석 물약 공급',
+            description: '그의 신체 안정을 돕고 심연의 공명 주파수를 나눕니다. (HP -12% 소모, 그림자 정수 +300)',
+            hpCostPercent: 12,
+            immediateReward: { essence: 300, xp: 0, gold: 0, items: [] }
+          },
+          {
+            id: 'choice_default_hunter_pass',
+            label: '상황을 주시하며 대원의 보급함을 수거하여 통과',
+            description: '대신 보급품 보석들만 거머쥐고 길을 서두릅니다. (골드 +600)',
+            immediateReward: { gold: 600, xp: 0, essence: 0, items: [] }
+          }
+        ]
+      },
+      {
+        id: 'evt_default_riddle_trial',
+        title: '심연의 속삭이는 룬 비석 [수수께끼/시험]',
+        description: '공중에 어렴풋이 일렁이는 룬 문자들이 헌터의 마력 한도를 검증하듯 차가운 전자기 기류를 발산합니다.',
+        choices: [
+          {
+            id: 'choice_default_riddle_solve',
+            label: '비석 문양 주파수에 동조합니다.',
+            description: '정신을 굳게 세워 비석 파동을 안정적으로 억제합니다. (누적 위험도 -15, 그림자 정수 +220)',
+            riskDelta: -15,
+            immediateReward: { essence: 220, xp: 0, gold: 0, items: [] }
+          },
+          {
+            id: 'choice_default_riddle_smash',
+            label: '도검을 휘둘러 비석을 억지로 깨부수어 소멸시킵니다.',
+            description: '비석의 잔해가 사방으로 튕기며 주변 적들을 폭주 상태로 고양시킵니다. (누적 위험도 +20, 다음 방 버프: enemy_atk_up)',
+            riskDelta: 20,
+            nextEncounterModifier: 'enemy_atk_up'
           }
         ]
       }
     ],
     bossForeshadowings: [
-      '던전 깊은 곳에 균열의 지배자가 시뻘건 마력 안광을 번뜩이며 침입자를 노려보고 있습니다.',
+      '던전 깊은 곳에 균열의 지배자가 시빨건 마력 안광을 번뜩이며 침입자를 노려보고 있습니다.',
     ],
     coopLines: [
       '공조 사냥꾼: "지원 병력이 전열을 갖추었습니다. 작전에 즉시 협조하십시오!"',
