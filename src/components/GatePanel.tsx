@@ -48,6 +48,8 @@ import { getWorldGateEventPack } from '../lib/livingWorldGateEvents'
 import { pickDirectGateRunEncounterKey } from '../lib/directBattleEncounters'
 import { MONARCHS, FINAL_ANGEL, buildMonarchBattleUnit } from '../lib/monarchs'
 import type { BattleUnit, BattleActionDefinition, BattleTargetType } from '../lib/directBattleTypes'
+import { buildMonsterBattleUnit } from '../lib/battleUnits'
+import type { DirectBattleMonsterDefinition, DirectBattleMonsterRole } from '../lib/directBattleMonsters'
 import {
   calculatePlayerCombatStats,
   formatStatReward,
@@ -1809,25 +1811,27 @@ function buildDirectMonsterBattleUnits(
   return monsterIds.map((id, index) => {
     const monsterDef = MONSTER_DEFINITIONS.find(m => m.id === id)
     if (!monsterDef) return null
-    
-    const actor = createMonsterBattleActor(
-      monsterDef,
-      pressureSnapshot,
-      isRedGate,
-      difficultyMod,
-      isPromotionExam,
-      targetGrade
-    )
 
-    if (difficultyMod !== 1.0) {
-      actor.maxHp = Math.round(actor.maxHp * difficultyMod)
-      actor.hp = actor.maxHp
-      actor.atk = Math.round(actor.atk * difficultyMod)
-      actor.def = Math.round(actor.def * difficultyMod)
+    const isBoss = monsterDef.id.includes('boss') || monsterDef.name.includes('보스') || monsterDef.rank === 'S'
+    const isMinion = monsterDef.id.includes('minion') || monsterDef.name.includes('하수인') || monsterDef.id.includes('token') || monsterDef.id.includes('shard')
+
+    // Determine the role for the 2.5D formula
+    let role: DirectBattleMonsterRole = 'bruiser'
+    if (monsterDef.description?.includes('탱커') || monsterDef.name?.includes('완력병')) {
+      role = 'tank'
+    } else if (monsterDef.description?.includes('후위') || monsterDef.description?.includes('마도') || monsterDef.name?.includes('주술사') || monsterDef.name?.includes('투척수')) {
+      role = 'caster'
+    } else if (monsterDef.description?.includes('암살자') || monsterDef.name?.includes('자객')) {
+      role = 'assassin'
+    } else if (isBoss) {
+      role = 'boss'
+    } else if (isMinion) {
+      role = 'minion'
     }
 
     const unitId = `direct-gate-enemy-${id}-${index + 1}`
 
+    // Build the actionList for the monster
     const actionList: BattleActionDefinition[] = [
       {
         actionId: `${unitId}:basic`,
@@ -1862,46 +1866,61 @@ function buildDirectMonsterBattleUnits(
       }
     })
 
-    const isBoss = monsterDef.id.includes('boss') || monsterDef.name.includes('보스') || monsterDef.rank === 'S'
-    const isMinion = monsterDef.id.includes('minion') || monsterDef.name.includes('하수인') || monsterDef.id.includes('token') || monsterDef.id.includes('shard')
-    
-    const unit: BattleUnit = {
-      unitId,
-      sourceId: id,
+    const rank = monsterDef.rank || 'E'
+    const biasHp = Math.max(0.7, Math.min(2.5, monsterDef.stats.maxHp / (rank === 'E' ? 150 : rank === 'D' ? 300 : rank === 'C' ? 1000 : rank === 'B' ? 3000 : rank === 'A' ? 8000 : 20000)))
+    const biasAtk = Math.max(0.7, Math.min(2.0, monsterDef.stats.atk / (rank === 'E' ? 15 : rank === 'D' ? 60 : rank === 'C' ? 150 : rank === 'B' ? 450 : rank === 'A' ? 1000 : 2500)))
+    const biasDef = Math.max(0.7, Math.min(2.0, monsterDef.stats.def / (rank === 'E' ? 10 : rank === 'D' ? 25 : rank === 'C' ? 60 : rank === 'B' ? 180 : rank === 'A' ? 400 : 1000)))
+    const biasSpd = Math.max(0.7, Math.min(2.0, monsterDef.stats.speed / 12))
+
+    // Construct a DirectBattleMonsterDefinition for buildMonsterBattleUnit
+    const directMonsterDef: DirectBattleMonsterDefinition = {
+      id,
+      name: monsterDef.name,
+      role,
       unitType: isBoss ? 'boss' : isMinion ? 'minion' : 'monster',
-      displayName: actor.name,
-      role: isBoss ? 'boss' : isMinion ? 'minion' : 'normal',
-      team: 'enemy',
-      level,
-      stats: {
-        maxHp: actor.maxHp,
-        currentHp: actor.maxHp,
-        atk: actor.atk,
-        def: actor.def,
-        spd: actor.speed,
-        skillPower: actor.atk,
-        crit: actor.critRate,
-        accuracy: actor.accuracy,
-        evasionRate: actor.evasionRate,
-        controlPower: Math.round(actor.atk * 0.5),
-        supportPower: 0,
-        survivalPower: actor.def,
-        bossPower: isBoss ? actor.atk : 0,
-        synergyPower: 0,
+      baseLevel: level,
+      levelBand: isBoss ? 'boss' : level >= 50 ? 'late' : level >= 25 ? 'mid' : 'early',
+      statBias: {
+        hp: biasHp,
+        atk: biasAtk,
+        def: biasDef,
+        spd: biasSpd,
+        skill: biasAtk,
       },
-      statusEffects: [],
-      cooldowns: {},
-      actionList,
-      passiveList: [],
-      actionPriority: isBoss ? 2 : 1,
+      intentCandidates: ['attack'],
+      targetPriority: 'frontline',
+      isBoss,
+      isMinion,
       boardLane: isBoss ? 'boss' : 'front',
       actionCue: 'basic-attack',
       animationCue: 'monster-idle',
-      metadata: {
-        source: 'mock_monster',
-        definitionId: id,
-      }
+      effectColor: isBoss ? 'red' : 'zinc',
+      actionList,
     }
+
+    const buildResult = buildMonsterBattleUnit(directMonsterDef, {
+      unitIdPrefix: `direct-gate-enemy-${id}`,
+      level,
+      pressureSnapshot,
+      isRedGate,
+      difficultyMod,
+      isPromotionExam,
+      targetGrade,
+    })
+
+    const unit = buildResult.unit
+    // Override the unitId and actions to match our indexing for uniqueness
+    unit.unitId = unitId
+    unit.actionList = unit.actionList.map(action => {
+      const parts = action.actionId.split(':')
+      if (parts.length > 1) {
+        return {
+          ...action,
+          actionId: `${unitId}:${parts.slice(1).join(':')}`
+        }
+      }
+      return action
+    })
 
     return unit
   }).filter((u): u is BattleUnit => u !== null)
