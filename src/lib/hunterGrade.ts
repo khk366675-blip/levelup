@@ -31,12 +31,12 @@ export const HUNTER_TITLE_DEFINITIONS: HunterTitleDefinition[] = [
 
 export const GRADE_CUTS: Record<HunterGradeTier, number> = {
   E: 0,
-  D: 100,
-  C: 300,
-  B: 700,
-  A: 1400,
-  S: 2500,
-  NATIONAL: 4000
+  D: 200,
+  C: 500,
+  B: 1000,
+  A: 2000,
+  S: 3500,
+  NATIONAL: 5500
 }
 
 export const GRADE_LABELS: Record<HunterGradeTier, string> = {
