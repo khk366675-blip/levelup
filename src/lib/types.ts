@@ -805,6 +805,9 @@ export interface ExpeditionMidEventChoice {
   searchStackDelta?: number
   log: string
   preferredRoles?: ShadowRole[]
+  triggerCombat?: boolean
+  enemyEncounterKey?: string
+  enemyBaseLevel?: number
 }
 
 export interface ExpeditionMidEvent {

@@ -645,7 +645,7 @@ export function ShadowExpeditionPanel() {
     selectParty(expedition.id, nextIds)
   }
 
-  if (expedition && expedition.isSpecial && expedition.status === 'in_progress' && expedition.combatTriggered && !expedition.combatResolved) {
+  if (expedition && expedition.status === 'in_progress' && expedition.combatTriggered && !expedition.combatResolved) {
     return (
       <div className={clsx('panel corner-bracket relative overflow-hidden p-4 sm:p-5', theme.border, theme.panel)}>
         <div className="br" />
@@ -653,7 +653,7 @@ export function ShadowExpeditionPanel() {
         <DirectBattlePreviewPanel
           key={`special-battle-${expedition.id}`}
           source="shadow_expedition"
-          title={`특별 결전: ${expedition.title}`}
+          title={expedition.isSpecial ? `특별 결전: ${expedition.title}` : `돌발 결전: ${expedition.title}`}
           note="플레이어 본체(헌터)는 참여하지 않으며, 원정에 출정한 그림자들만으로 전투가 개시됩니다."
           hunter={hunter}
           items={items}
@@ -986,7 +986,7 @@ export function ShadowExpeditionPanel() {
                   )}
                   {expeditionLock.allowed && !expedition.isSpecial && expeditionTickets < 1 && (
                     <span className="text-[10px] text-red-400/90 font-medium max-w-[320px] leading-tight mt-1 bg-red-950/20 border border-red-500/10 rounded px-2 py-1">
-                      💡 원정 티켓 획득처: 게이트 클리어, 일일 퀘스트 완료, 상점 구매(200 Gold), 보상 상자
+                      💡 원정 티켓 획득처: 게이트 클리어, 일일 퀘스트 완료, 상점 구매(350 Gold), 보상 상자
                     </span>
                   )}
                 </div>

@@ -130,28 +130,28 @@ export const SHADOW_EXPEDITION_TEMPLATES: ExpeditionTemplate[] = [
 
 const REWARDS: Record<ShadowExpeditionType, Record<ShadowExpeditionOutcome, { xp: number; essence: number }>> = {
   training: {
-    great_success: { xp: 85, essence: 4 },
-    success: { xp: 60, essence: 2 },
-    partial: { xp: 28, essence: 1 },
-    failure: { xp: 10, essence: 0 },
+    great_success: { xp: 36, essence: 4 },
+    success: { xp: 22, essence: 2 },
+    partial: { xp: 10, essence: 1 },
+    failure: { xp: 4, essence: 0 },
   },
   essence: {
-    great_success: { xp: 45, essence: 18 },
-    success: { xp: 32, essence: 12 },
-    partial: { xp: 16, essence: 5 },
-    failure: { xp: 8, essence: 1 },
+    great_success: { xp: 18, essence: 14 },
+    success: { xp: 10, essence: 8 },
+    partial: { xp: 5, essence: 3 },
+    failure: { xp: 2, essence: 1 },
   },
   hunt: {
-    great_success: { xp: 65, essence: 12 },
-    success: { xp: 45, essence: 8 },
-    partial: { xp: 22, essence: 3 },
-    failure: { xp: 8, essence: 1 },
+    great_success: { xp: 28, essence: 10 },
+    success: { xp: 16, essence: 6 },
+    partial: { xp: 8, essence: 2 },
+    failure: { xp: 2, essence: 1 },
   },
   scout: {
-    great_success: { xp: 55, essence: 9 },
-    success: { xp: 38, essence: 6 },
-    partial: { xp: 18, essence: 2 },
-    failure: { xp: 6, essence: 1 },
+    great_success: { xp: 24, essence: 8 },
+    success: { xp: 14, essence: 5 },
+    partial: { xp: 6, essence: 1 },
+    failure: { xp: 2, essence: 1 },
   },
 }
 
@@ -216,11 +216,11 @@ const PASSIVE_QUALITY_WEIGHT: Record<ShadowPassiveDefinition['qualityTier'], num
 }
 
 const COMMAND_BASE: Record<ShadowExpeditionCommand, { progress: [number, number]; risk: [number, number] }> = {
-  attack: { progress: [22, 32], risk: [8, 14] },
-  defend: { progress: [8, 14], risk: [-25, -15] },
-  scout: { progress: [10, 18], risk: [-18, -8] },
-  analyze: { progress: [14, 22], risk: [0, 8] },
-  search: { progress: [10, 18], risk: [10, 18] },
+  attack: { progress: [16, 24], risk: [12, 18] },
+  defend: { progress: [6, 12], risk: [-18, -12] },
+  scout: { progress: [8, 14], risk: [-12, -6] },
+  analyze: { progress: [10, 18], risk: [2, 8] },
+  search: { progress: [8, 14], risk: [14, 22] },
 }
 
 const clamp = (value: number, min: number, max: number): number => Math.max(min, Math.min(max, value))
@@ -580,9 +580,9 @@ const actorLine = (command: ShadowExpeditionCommand, phase: ExpeditionPhase, act
 
 export const getShadowExpeditionOutcome = (progress: number, risk: number): ShadowExpeditionOutcome => {
   if (risk >= 100) return 'failure'
-  if (progress >= 120 && risk < 70) return 'great_success'
-  if (progress >= 100) return 'success'
-  if (progress >= 60) return 'partial'
+  if (progress >= 125 && risk < 35) return 'great_success'
+  if (progress >= 100 && risk < 75) return 'success'
+  if (progress >= 70) return 'partial'
   return 'failure'
 }
 
@@ -650,10 +650,14 @@ export const resolveShadowExpeditionCommand = (
   let progressDelta = range(rng, base.progress[0], base.progress[1])
   let riskDelta = range(rng, base.risk[0], base.risk[1])
 
-  progressDelta += clamp(Math.round((powerRatio - 1) * 18), -16, 18)
-  riskDelta += powerRatio < 0.65 ? 10 : powerRatio < 0.85 ? 6 : powerRatio > 1.25 ? -4 : 0
-  if (powerRatio < 0.65) progressDelta -= 4
-  if (powerRatio < 0.45) { progressDelta -= 3; riskDelta += 4 }
+  if (powerRatio < 1.0) {
+    const powerDeficit = 1.0 - powerRatio
+    riskDelta += Math.round(powerDeficit * 25)
+    progressDelta -= Math.round(powerDeficit * 8)
+  } else {
+    riskDelta -= Math.round(Math.min(6, (powerRatio - 1) * 4))
+    progressDelta += clamp(Math.round((powerRatio - 1) * 12), -15, 12)
+  }
   progressDelta += roleMatches * 4 + Math.min(4, recommendedMatches * 2) + namedActorBonus + levelBonus + enhancementBonus
 
   if (command === 'defend') {
@@ -748,13 +752,14 @@ export const resolveShadowExpeditionCommand = (
     })
   }
 
-  // Mid-event trigger: threshold phase, max 1 per expedition, ~40% chance
+  // Mid-event trigger: threshold phase, max 1 per expedition, 95% chance
   let midEvent: ExpeditionMidEvent | undefined = expedition.midEvent
   let eventTriggered = expedition.eventTriggered ?? false
   if (
-    nextPhase === 'threshold' &&
+    (nextProgress >= 55 || nextPhase === 'threshold') &&
+    nextProgress < 100 &&
     !eventTriggered &&
-    rng() < 0.42
+    rng() < 0.95
   ) {
     const recentIds = (expedition.phaseHistory ?? [])
       .filter(e => e.message?.startsWith('[EVENT]'))

@@ -221,7 +221,7 @@ export const SHOP_PRODUCTS: ShopProduct[] = [
     name: '원정 티켓',
     description: '그림자의 일상 원정을 시작하기 위해 필요한 티켓입니다.',
     category: 'premium',
-    priceGold: 200,
+    priceGold: 350,
     reward: { kind: 'expedition_ticket', quantity: 1 },
     rewardSummary: '원정 티켓 x1',
   },

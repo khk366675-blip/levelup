@@ -45,6 +45,7 @@ import type {
   ShadowExtractResult,
   ShadowExpedition,
   ShadowExpeditionCommand,
+  ShadowExpeditionOutcome,
   ShadowSummonTicket,
   ShadowSummonShardType,
   AchievementTicketGrade,
@@ -250,6 +251,8 @@ import {
   refreshShadowExpeditionLock,
   resolveShadowExpeditionCommand,
   resolveExpeditionMidEventChoice,
+  getShadowExpeditionOutcome,
+  getShadowExpeditionReward,
 } from './shadowExpeditions'
 import { MID_EVENTS, buildExpeditionReport } from './expeditionLore'
 import {
@@ -2201,12 +2204,12 @@ export const shadowRestoreCost = (shadow: OwnedShadow): number => {
 const getGateClearExpeditionTickets = (gateRank: string, rng = Math.random): number => {
   const roll = rng()
   switch (gateRank) {
-    case 'E': return roll < 0.20 ? 1 : 0
-    case 'D': return roll < 0.40 ? 1 : 0
-    case 'C': return roll < 0.80 ? 1 : 0
-    case 'B': return roll < 0.20 ? 2 : 1
-    case 'A': return roll < 0.50 ? 2 : 1
-    case 'S': return 2
+    case 'E': return roll < 0.05 ? 1 : 0
+    case 'D': return roll < 0.10 ? 1 : 0
+    case 'C': return roll < 0.25 ? 1 : 0
+    case 'B': return roll < 0.50 ? 1 : 0
+    case 'A': return roll < 0.80 ? 1 : 0
+    case 'S': return roll < 0.20 ? 2 : 1
     default: return 0
   }
 }
@@ -2876,6 +2879,142 @@ const syncTodayShadowExpeditionState = (s: GameState): Pick<GameState, 'shadowEx
     shadowExpeditions.unshift(specExp)
   }
 
+  // 백화의 제단 수색
+  const whiteflameUnlocked = echoAffinity >= 8 && hasAGradeShadow && worldDay >= 8
+  const whiteflameAlreadyActiveOrCompleted = shadowExpeditions.some(e => e.specialId === 'special_whiteflame') || completedIds.includes('special_whiteflame')
+
+  if (whiteflameUnlocked && !whiteflameAlreadyActiveOrCompleted) {
+    const specExp: ShadowExpedition = {
+      id: `special-expedition-whiteflame-${Date.now()}`,
+      date: 'special',
+      type: 'scout',
+      title: '특별 원정: 백화의 제단 수색',
+      description: '그림자 군단의 마력이 백색의 불꽃을 피워내는 고대 제단과 공명하기 시작했습니다. 제단 깊은 곳의 수호병들을 정찰하고 처단하십시오.',
+      requiredPower: 160,
+      recommendedRoles: ['scout', 'support', 'hunter'],
+      selectedShadowIds: [],
+      status: 'available',
+      progress: 0,
+      risk: 15,
+      turn: 0,
+      maxTurns: 4,
+      expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+      logs: [{
+        id: `log-special-whiteflame-created`,
+        turn: 0,
+        type: 'system',
+        message: '백화의 제단 신호가 감지되었습니다. 고대 제단의 위협을 제거해야 합니다. (티켓 소모 없음)',
+      }],
+      isSpecial: true,
+      specialId: 'special_whiteflame',
+      enemyEncounterKey: 'controller_bruiser',
+      enemyBaseLevel: 16,
+    }
+    shadowExpeditions.unshift(specExp)
+  }
+
+  // 심연의 묘지기 각성
+  const graveGuardUnlocked = (s.ownedShadows?.filter(sh => !sh.collapsed).length ?? 0) >= 6 && worldDay >= 12 && echoAffinity >= 12
+  const graveGuardAlreadyActiveOrCompleted = shadowExpeditions.some(e => e.specialId === 'special_grave_guard') || completedIds.includes('special_grave_guard')
+
+  if (graveGuardUnlocked && !graveGuardAlreadyActiveOrCompleted) {
+    const specExp: ShadowExpedition = {
+      id: `special-expedition-grave-${Date.now()}`,
+      date: 'special',
+      type: 'hunt',
+      title: '특별 원정: 심연의 묘지기 각성',
+      description: '그림자 군단 규모가 팽창하자 심연 하부의 고대 묘지기가 위협을 느끼고 깨어났습니다. 군단의 수호 능력을 증명해야 합니다.',
+      requiredPower: 200,
+      recommendedRoles: ['guard', 'assault', 'analyst'],
+      selectedShadowIds: [],
+      status: 'available',
+      progress: 0,
+      risk: 20,
+      turn: 0,
+      maxTurns: 4,
+      expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+      logs: [{
+        id: `log-special-grave-created`,
+        turn: 0,
+        type: 'system',
+        message: '심연 묘지기의 공명이 강해집니다. 군단의 전면 돌파가 필요합니다. (티켓 소모 없음)',
+      }],
+      isSpecial: true,
+      specialId: 'special_grave_guard',
+      enemyEncounterKey: 'iron_wall_court',
+      enemyBaseLevel: 20,
+    }
+    shadowExpeditions.unshift(specExp)
+  }
+
+  // 위상 붕괴 좌표 정찰
+  const coordinateCollapseUnlocked = (s.ownedShadows?.filter(sh => (sh.rarity === 'rare' || sh.rarity === 'epic' || sh.rarity === 'legendary') && !sh.collapsed).length ?? 0) >= 3 && worldDay >= 10 && echoAffinity >= 10
+  const coordinateCollapseAlreadyActiveOrCompleted = shadowExpeditions.some(e => e.specialId === 'special_coordinate_collapse') || completedIds.includes('special_coordinate_collapse')
+
+  if (coordinateCollapseUnlocked && !coordinateCollapseAlreadyActiveOrCompleted) {
+    const specExp: ShadowExpedition = {
+      id: `special-expedition-coordinate-${Date.now()}`,
+      date: 'special',
+      type: 'scout',
+      title: '특별 원정: 위상 붕괴 좌표 정찰',
+      description: '기존 지도에 기록되지 않은 왜곡 좌표가 발견되었습니다. 정찰조를 진입시켜 붕괴하는 균열의 핵을 격파해야 합니다.',
+      requiredPower: 180,
+      recommendedRoles: ['scout', 'analyst', 'support'],
+      selectedShadowIds: [],
+      status: 'available',
+      progress: 0,
+      risk: 18,
+      turn: 0,
+      maxTurns: 4,
+      expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+      logs: [{
+        id: `log-special-coordinate-created`,
+        turn: 0,
+        type: 'system',
+        message: '위상 왜곡 신호가 정찰 조각으로 반향됩니다. 균열 중심부를 격퇴하십시오. (티켓 소모 없음)',
+      }],
+      isSpecial: true,
+      specialId: 'special_coordinate_collapse',
+      enemyEncounterKey: 'oblivion_watch',
+      enemyBaseLevel: 18,
+    }
+    shadowExpeditions.unshift(specExp)
+  }
+
+  // 군주의 깊은 잔영
+  const monarchGazeUnlocked = (s.ownedShadows?.filter(sh => !sh.collapsed).length ?? 0) >= 8 && worldDay >= 20 && echoAffinity >= 25
+  const monarchGazeAlreadyActiveOrCompleted = shadowExpeditions.some(e => e.specialId === 'special_monarch_gaze') || completedIds.includes('special_monarch_gaze')
+
+  if (monarchGazeUnlocked && !monarchGazeAlreadyActiveOrCompleted) {
+    const specExp: ShadowExpedition = {
+      id: `special-expedition-monarch-${Date.now()}`,
+      date: 'special',
+      type: 'hunt',
+      title: '특별 원정: 군주의 깊은 잔영',
+      description: '그림자 세계의 극심도에서 찬란하고 어두운 그림자 군주의 반향이 감지되었습니다. 군단의 정점에 도전하여 군주의 잔영을 격파하십시오.',
+      requiredPower: 260,
+      recommendedRoles: ['hunter', 'assault', 'guard'],
+      selectedShadowIds: [],
+      status: 'available',
+      progress: 0,
+      risk: 25,
+      turn: 0,
+      maxTurns: 4,
+      expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+      logs: [{
+        id: `log-special-monarch-created`,
+        turn: 0,
+        type: 'system',
+        message: '군주의 그림자가 심도를 뒤덮습니다. 군단 최강자들을 선별하여 도전하십시오. (티켓 소모 없음)',
+      }],
+      isSpecial: true,
+      specialId: 'special_monarch_gaze',
+      enemyEncounterKey: 'boss_double_minion',
+      enemyBaseLevel: 28,
+    }
+    shadowExpeditions.unshift(specExp)
+  }
+
   const activeShadowExpeditionId = shadowExpeditions.some(
     expedition => expedition.id === s.activeShadowExpeditionId && expedition.status === 'in_progress'
   )
@@ -3520,7 +3659,7 @@ const rollBoxReward = (s: GameState, box: RewardBox): BoxReward => {
       const equipment = getItemFromPool(item => item.equippable === true && item.consumable !== true, dailyMaxRarity, qualitySource)
       if (equipment) reward.items?.push(equipment)
     }
-    if (Math.random() < 0.40 * mult) {
+    if (Math.random() < 0.15 * mult) {
       reward.expeditionTickets = 1
     }
     reward.message = '오늘의 루틴에 작은 추진력이 더해졌습니다.'
@@ -3535,7 +3674,9 @@ const rollBoxReward = (s: GameState, box: RewardBox): BoxReward => {
       const equipment = getItemFromPool(item => item.equippable === true && item.consumable !== true, 'rare', qualitySource)
       if (equipment) reward.items?.push(equipment)
     }
-    reward.expeditionTickets = 1 + (Math.random() < 0.30 ? 1 : 0)
+    if (Math.random() < 0.50) {
+      reward.expeditionTickets = 1
+    }
     reward.message = '이번 주의 선택과 완료가 묶여 보상으로 돌아왔습니다.'
   } else {
     const rewardFloor = box.floor ?? 5
@@ -3550,7 +3691,7 @@ const rollBoxReward = (s: GameState, box: RewardBox): BoxReward => {
       const equipment = getItemFromPool(item => item.equippable === true && item.consumable !== true, box.tier === 'epic' ? 'epic' : 'rare', qualitySource)
       if (equipment) reward.items?.push(equipment)
     }
-    if (Math.random() < 0.50 * mult) {
+    if (Math.random() < 0.20 * mult) {
       reward.expeditionTickets = 1
     }
     reward.message = '상위 보스 전리품의 잔향이 담겨 있습니다.'
@@ -10608,6 +10749,8 @@ export const useGame = create<GameState>()(
       resolveShadowExpeditionMidEvent: (expeditionId, choiceId) => set((s) => {
         const expedition = (s.shadowExpeditions ?? []).find(item => item.id === expeditionId)
         if (!expedition || !expedition.midEvent || expedition.eventResolved) return {}
+        const choice = expedition.midEvent.choices.find(c => c.id === choiceId)
+        if (!choice) return {}
         const party = expedition.selectedShadowIds
           .map(id => (s.ownedShadows ?? []).find(shadow => shadow.instanceId === id))
           .filter((shadow): shadow is OwnedShadow => Boolean(shadow))
@@ -10635,7 +10778,7 @@ export const useGame = create<GameState>()(
               }
             }
           } else if (resolved.midEvent && resolved.midEvent.id.endsWith('_event_2')) {
-            if (choiceId === 'engage_combat' || choiceId === 'trigger_abyss_combat') {
+            if (choice.triggerCombat || choiceId === 'engage_combat' || choiceId === 'trigger_abyss_combat') {
               resolved = {
                 ...resolved,
                 combatTriggered: true,
@@ -10651,6 +10794,27 @@ export const useGame = create<GameState>()(
                   }
                 ]
               }
+            }
+          }
+        } else {
+          // ticket expedition combat trigger check
+          if (choice.triggerCombat) {
+            resolved = {
+              ...resolved,
+              combatTriggered: true,
+              combatResolved: false,
+              enemyEncounterKey: choice.enemyEncounterKey || 'small_duo',
+              enemyBaseLevel: choice.enemyBaseLevel || (resolved.requiredPower ? Math.floor(resolved.requiredPower / 8) : 10),
+              turn: resolved.turn + 1,
+              logs: [
+                ...resolved.logs,
+                {
+                  id: uid(),
+                  turn: resolved.turn + 1,
+                  type: 'system' as const,
+                  message: '그림자들이 돌발 위협을 포착하고 결전을 시작합니다.',
+                }
+              ]
             }
           }
         }
@@ -10686,8 +10850,8 @@ export const useGame = create<GameState>()(
           turn: expedition.turn + 1,
           type: 'system',
           message: outcome === 'victory'
-            ? '특별 전투 승리! 균열에 서린 강력한 존재를 격퇴했습니다.'
-            : '특별 전투 패배. 그림자 군단이 퇴각을 결정했습니다.',
+            ? '전투 승리! 균열의 위협을 격퇴했습니다.'
+            : '전투 패배. 그림자 군단이 퇴각을 결정했습니다.',
         })
 
         let nextOwnedShadows = s.ownedShadows ?? []
@@ -10698,11 +10862,148 @@ export const useGame = create<GameState>()(
         const messages = [...s.messages]
         const nextHiddenAffinity = { ...(s.secretProgress?.hiddenAffinity ?? {}) }
 
+        if (!expedition.isSpecial) {
+          // 일상 티켓 원정의 전투 정산
+          const resolvedOutcome: ShadowExpeditionOutcome = outcome === 'victory'
+            ? (expedition.progress >= 75 ? 'great_success' : 'success')
+            : (expedition.progress >= 60 ? 'partial' : 'failure')
+          
+          const reward = getShadowExpeditionReward(expedition.type, resolvedOutcome, expedition.searchStacks ?? 0, Math.random)
+          
+          essenceGained = reward.essenceGained
+          xpGained = reward.shadowXpGained
+          
+          // Distribute XP to party shadows
+          nextOwnedShadows = nextOwnedShadows.map(sh => {
+            if (partyShadowIds.includes(sh.instanceId)) {
+              const res = addShadowXp(sh, xpGained)
+              if (res.leveledUp) {
+                messages.push({
+                  id: uid(),
+                  kind: 'shadow' as const,
+                  title: '그림자 레벨업',
+                  lines: [`${sh.name}의 레벨이 올랐습니다! Lv.${res.newLevel}`],
+                  createdAt: todayISO(),
+                })
+              }
+              return res.shadow
+            }
+            return sh
+          })
+
+          if (outcome !== 'victory') {
+            // Defeat - collapse party shadows
+            nextOwnedShadows = nextOwnedShadows.map(shadow => {
+              if (partyShadowIds.includes(shadow.instanceId)) {
+                return {
+                  ...shadow,
+                  collapsed: true,
+                  status: 'collapsed' as const,
+                  collapsedAt: Date.now(),
+                  collapseReason: 'special_battle',
+                  restoreCost: shadowRestoreCost(shadow),
+                }
+              }
+              return shadow
+            })
+          }
+
+          messages.push({
+            id: uid(),
+            kind: 'shadow' as const,
+            title: `그림자 원정 완료 (${SHADOW_EXPEDITION_OUTCOME_LABEL[resolvedOutcome]})`,
+            lines: [
+              `[${expedition.title}] 돌발 전투를 거쳐 원정을 마쳤습니다!`,
+              `결과: ${SHADOW_EXPEDITION_OUTCOME_LABEL[resolvedOutcome]}`,
+              `그림자 정수 획득: +${essenceGained}`,
+              `참가 그림자 경험치 획득: +${xpGained}`,
+            ],
+            createdAt: todayISO(),
+          })
+          
+          const result = {
+            outcome: resolvedOutcome,
+            progress: expedition.progress,
+            risk: expedition.risk,
+            shadowXpGained: xpGained,
+            essenceGained: essenceGained,
+            bonusRewards: reward.bonusRewards,
+            report: buildExpeditionReport(resolvedOutcome, partyShadows[0]?.name ?? '군단'),
+            featuredShadowIds: partyShadows[0] ? [partyShadows[0].instanceId] : [],
+          }
+          
+          const nextExpeditions = (s.shadowExpeditions ?? []).map(item => {
+            if (item.id === expeditionId) {
+              return {
+                ...item,
+                status: 'completed' as const,
+                combatResolved: true,
+                combatResult: outcome,
+                result,
+                logs,
+              }
+            }
+            return item
+          })
+          
+          const activeShadowExpeditionId = s.activeShadowExpeditionId === expeditionId ? undefined : s.activeShadowExpeditionId
+          
+          const tempState = {
+            ...s,
+            activeShadowExpeditionId,
+            shadowExpeditions: nextExpeditions,
+            ownedShadows: nextOwnedShadows,
+            shadowEssence: (s.shadowEssence ?? 0) + essenceGained,
+            messages,
+          }
+          
+          const syncedFinal = syncTodayShadowExpeditionState(tempState)
+          
+          const baseState = {
+            activeShadowExpeditionId: syncedFinal.activeShadowExpeditionId,
+            shadowExpeditions: syncedFinal.shadowExpeditions,
+            lastShadowExpeditionDate: syncedFinal.lastShadowExpeditionDate,
+            ownedShadows: nextOwnedShadows,
+            shadowEssence: (s.shadowEssence ?? 0) + essenceGained,
+            messages,
+          }
+          
+          return applySecretProgressEvent(s, {
+            context: 'expedition',
+            outcome: resolvedOutcome,
+            expeditionType: expedition.type,
+            shadowIds: partyShadowIds,
+          }, baseState)
+        }
+
+        // 특별 원정의 전투 정산
         if (outcome === 'victory') {
           const isSanctuary = expedition.specialId === 'special_rift_sanctuary'
-          essenceGained = isSanctuary ? 25 : 50
-          xpGained = isSanctuary ? 100 : 250
-          const affinityDelta = isSanctuary ? 5 : 8
+          const isWhiteflame = expedition.specialId === 'special_whiteflame'
+          const isGraveGuard = expedition.specialId === 'special_grave_guard'
+          const isCoordinate = expedition.specialId === 'special_coordinate_collapse'
+          const isMonarch = expedition.specialId === 'special_monarch_gaze'
+          
+          essenceGained = isSanctuary ? 25
+            : isWhiteflame ? 35
+            : isGraveGuard ? 45
+            : isCoordinate ? 40
+            : isMonarch ? 60
+            : 50 // default fallback
+            
+          xpGained = isSanctuary ? 100
+            : isWhiteflame ? 150
+            : isGraveGuard ? 200
+            : isCoordinate ? 180
+            : isMonarch ? 300
+            : 250 // default fallback
+            
+          const affinityDelta = isSanctuary ? 5
+            : isWhiteflame ? 6
+            : isGraveGuard ? 7
+            : isCoordinate ? 6
+            : isMonarch ? 10
+            : 8 // default fallback
 
           if (expedition.specialId && !nextCompletedSpecialExpeditionIds.includes(expedition.specialId)) {
             nextCompletedSpecialExpeditionIds = [...nextCompletedSpecialExpeditionIds, expedition.specialId]
@@ -10711,7 +11012,7 @@ export const useGame = create<GameState>()(
           const ticket: ShadowSummonTicket = {
             id: `special-reward-${expedition.specialId}-${Date.now()}`,
             ticketType: 'rare_shadow',
-            label: isSanctuary ? '특별 원정 보상: 고급 그림자 소환권 (A-S급)' : '심연의 메아리 보상: 고급 그림자 소환권 (A-S급)',
+            label: `특별 원정 보상: 고급 그림자 소환권 (${expedition.title})`,
             createdAt: todayISO(),
             source: 'achievement',
             grade: 's_rank',
@@ -12638,7 +12939,7 @@ export const useGame = create<GameState>()(
         // messages
         const newMessages: SystemMessage[] = []
         let dailyTicketGained = 0
-        if (q.type === 'daily' && Math.random() < 0.25) {
+        if (q.type === 'daily' && Math.random() < 0.10) {
           dailyTicketGained = 1
         }
         newMessages.push({
