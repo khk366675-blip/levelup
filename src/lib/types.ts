@@ -1023,6 +1023,7 @@ export interface GateRunEventChoice {
   healPercent?: number
   addEncounterType?: GateRunEncounterType
   leadsTo?: 'battle' | 'safe'
+  nextCombatDifficultyDelta?: number
   // [NEW] Conditions for regional events
   requiresCoop?: boolean
   requiresSolo?: boolean

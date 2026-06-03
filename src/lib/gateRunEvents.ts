@@ -217,8 +217,8 @@ export const GATE_RUN_EVENTS: GateRunEventTemplate[] = [
       {
         id: 'choice_altar_pray',
         label: '제단 앞에서 성스러운 명상',
-        description: '은빛 기운의 파동에 동화되어 정신과 신체를 맑고 건강하게 정비합니다.',
-        healPercent: 35,
+        description: '은빛 기운의 파동과 공명하여 내면의 차원 마력을 맑게 정화하고 숨겨진 에센스를 끌어냅니다.',
+        immediateReward: { essence: 150, xp: 0, gold: 0, items: [] },
         nextEncounterModifier: 'enemy_speed_up',
       },
       {
@@ -245,8 +245,8 @@ export const GATE_RUN_EVENTS: GateRunEventTemplate[] = [
       {
         id: 'choice_footsteps_hide',
         label: '바위 보강판 뒤에 숨어 숨 돌리기',
-        description: '기척을 숨기고 무너진 잔해 아래에서 지친 숨을 몰아쉬며 신체를 추스릅니다.',
-        healPercent: 20,
+        description: '잔해 아래에 기척을 숨긴 채, 틈새에 유실되어 있던 사냥꾼 협회의 유실물 상자를 발견해 내용물을 챙깁니다.',
+        immediateReward: { gold: 300, essence: 0, xp: 0, items: [] },
         rewardMultiplierDelta: -0.05,
       },
     ],
@@ -281,7 +281,7 @@ export const GATE_RUN_EVENTS: GateRunEventTemplate[] = [
         id: 'choice_lock_force',
         label: '무력으로 보물문 파쇄',
         description: '방출되는 강렬한 마력 반동을 견뎌내며 자물쇠 장치를 무기로 강하게 파괴합니다.',
-        hpCostPercent: 15,
+        riskDelta: 15,
         addEncounterType: 'treasure',
       },
       {
@@ -463,8 +463,8 @@ export const GATE_RUN_EVENTS: GateRunEventTemplate[] = [
       {
         id: 'choice_storm_wait',
         label: '바위 갈라진 틈에 웅크려 쉼표 확보',
-        description: '거친 바람이 잦아들 때까지 단단한 암석 틈새에 몸을 숨겨 체력을 보전합니다.',
-        healPercent: 30,
+        description: '폭풍이 불어오는 동안 기류를 분석하고 암석 뒤에 침전된 잔류 마력 결정을 수집합니다.',
+        immediateReward: { essence: 120, xp: 0, gold: 0, items: [] },
         nextEncounterModifier: 'enemy_surprise_atk',
       },
     ],
@@ -537,7 +537,8 @@ export const GATE_RUN_EVENTS: GateRunEventTemplate[] = [
         id: 'choice_passage_dash',
         label: '보호막을 켜고 전방 돌진',
         description: '쏟아져 내리는 낙석 파편들을 피하기 위해 신체에 즉석 차단막을 두르고 가속하여 정면 돌파합니다.',
-        hpCostPercent: 20,
+        nextEncounterModifier: 'player_def_down_1t',
+        riskDelta: 10,
       },
       {
         id: 'choice_passage_bypass',
@@ -555,9 +556,8 @@ export const GATE_RUN_EVENTS: GateRunEventTemplate[] = [
       {
         id: 'choice_wandering_hunter_help',
         label: '경계를 풀고 비상 물약과 식량을 건넵니다.',
-        description: '그의 앞에 조심스럽게 다가가 비상용 치료 붕대와 정제된 에센스를 지급하여 전열을 정비시킵니다.',
-        hpCostPercent: 15,
-        immediateReward: { essence: 300, xp: 0, gold: 0, items: [] },
+        description: '소장 중이던 고급 비상 치료 보급 상자를 소모하여 그의 마력 순환 복구를 돕고, 감사 표시로 그가 건넨 차원의 마석 에센스를 넘겨받습니다.',
+        immediateReward: { essence: 300, gold: -400, xp: 0, items: [] },
       },
       {
         id: 'choice_wandering_hunter_loot',
@@ -575,8 +575,8 @@ export const GATE_RUN_EVENTS: GateRunEventTemplate[] = [
       {
         id: 'choice_apothecary_drink',
         label: '빛을 뿜어내는 정체불명의 푸른 약을 들이킵니다.',
-        description: '나선 무늬 약병에 담긴 푸른색 자극성 액체를 단숨에 들이켜 신체 세포를 일시 정렬합니다.',
-        healPercent: 30,
+        description: '나선 무늬 약병에 담긴 푸른색 액체를 들이키자 차가운 기운이 혈관을 타고 돌며 맑은 마력이 응축됩니다.',
+        immediateReward: { essence: 120, xp: 0, gold: 0, items: [] },
         riskDelta: 10,
       },
       {
@@ -639,7 +639,8 @@ export const GATE_RUN_EVENTS: GateRunEventTemplate[] = [
         id: 'choice_blood_altar_feed',
         label: '제단 표면에 손바닥을 밀착하고 생명력을 주입합니다.',
         description: '차갑게 식은 돌단에 손바닥을 대고 끓어오르는 생명 기운의 일부를 제물로 건넵니다.',
-        hpCostPercent: 25,
+        immediateReward: { gold: -300, essence: 0, xp: 0, items: [] },
+        riskDelta: 20,
         extractionBonusDelta: 15,
       },
       {
@@ -679,7 +680,7 @@ export const GATE_RUN_EVENTS: GateRunEventTemplate[] = [
         id: 'choice_ceiling_dash',
         label: '마력 방어막을 켜고 잔해를 몸으로 뚫고 돌진합니다.',
         description: '머리 위로 쏟아지는 자갈และ 낙석을 방패로 비껴내며 순간적인 마력 대쉬로 구간을 통과합니다.',
-        hpCostPercent: 15,
+        nextEncounterModifier: 'player_def_down_1t',
         riskDelta: -10,
       },
       {
@@ -699,7 +700,7 @@ export const GATE_RUN_EVENTS: GateRunEventTemplate[] = [
         id: 'choice_mana_void_burn',
         label: '숨겨진 직업 에너지를 내열 연소하여 신체 장벽을 세웁니다.',
         description: '가슴 깊숙이 품어둔 직업의 잠재력을 불태워 신체 마력 순환선을 임시로 활성화합니다.',
-        hpCostPercent: 10,
+        riskDelta: 10,
         nextEncounterModifier: 'enemy_hp_down',
       },
       {
@@ -719,7 +720,7 @@ export const GATE_RUN_EVENTS: GateRunEventTemplate[] = [
         id: 'choice_waterfall_push',
         label: '전류의 폭포막을 검으로 가르며 강하게 안으로 돌진합니다.',
         description: '짜릿한 전류 자극의 통증을 견디며 마력 폭포 장벽의 갈라진 틈새 안쪽으로 거침없이 파고듭니다.',
-        hpCostPercent: 10,
+        riskDelta: 10,
         addEncounterType: 'treasure',
       },
       {
@@ -758,12 +759,13 @@ export const GATE_RUN_EVENTS: GateRunEventTemplate[] = [
       {
         id: 'choice_forbidden_seal_force',
         label: '⚠️ 마력을 극한으로 방어 상태에 주입하고 붉은 봉인을 무력 파쇄합니다.',
-        description: '봉인의 폭발 반사 피해를 온몸으로 견디며 심원 최심부를 강제 돌파 기습합니다. **(⚠️ 치명적 위험: 현재 HP의 50%를 잃고 정예 전투 구역으로 이어집니다. 생명력이 부족하면 즉사할 수 있습니다.)**',
-        hpCostPercent: 50,
+        description: '봉인의 폭발 반사 피해를 온몸으로 견디며 심원 최심부를 강제 돌파 기습합니다. **(⚠️ 치명적 위험: 봉인의 저주로 다음 전투 시 아군 방어력이 반감되고 구역 위험이 최대 증가하여 즉사 위험에 처할 수 있습니다.)**',
         leadsTo: 'battle',
         addEncounterType: 'elite',
         rewardMultiplierDelta: 0.45,
         riskDelta: 30,
+        nextCombatDifficultyDelta: 0.15,
+        nextEncounterModifier: 'player_def_down_half',
       },
       {
         id: 'choice_forbidden_seal_bypass',

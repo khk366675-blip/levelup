@@ -137,9 +137,8 @@ export const REGIONAL_EVENT_PACKS: Record<string, WorldGateEventPack> = {
           {
             id: 'choice_seoul_hunter_help',
             label: '비상 치료 붕대와 식수 공급',
-            description: '헌터의 마력 순환 회복을 돕고 협회 전술 노트를 교환하여 치료를 보조합니다.',
-            hpCostPercent: 10,
-            immediateReward: { essence: 250, xp: 0, gold: 0, items: [] }
+            description: '아군의 고급 비상 치료 보급 상자를 소모하여 그의 마력 순환 복구를 돕고, 감사의 표시로 그가 건넨 차원의 마석 에센스를 넘겨받습니다.',
+            immediateReward: { essence: 250, gold: -350, xp: 0, items: [] }
           },
           {
             id: 'choice_seoul_hunter_leave',
@@ -377,8 +376,8 @@ export const REGIONAL_EVENT_PACKS: Record<string, WorldGateEventPack> = {
           {
             id: 'choice_jeju_cave_meditate',
             label: '광석 틈에서 명상 정비',
-            description: '광석에서 맑게 퍼지는 차분한 공명을 호흡하여 신체 피로를 씻어냅니다.',
-            healPercent: 40,
+            description: '광석에서 맑게 퍼지는 차분한 마력 공명을 심호흡하여 정신을 정비하고 주변에 침전된 소량의 정수를 모읍니다.',
+            immediateReward: { essence: 180, xp: 0, gold: 0, items: [] },
             riskDelta: -5
           },
           {
@@ -687,8 +686,8 @@ export const REGIONAL_EVENT_PACKS: Record<string, WorldGateEventPack> = {
           {
             id: 'choice_ru_freeze_heater',
             label: '군용 예비 발전기 가동',
-            description: '비상 열원 장치의 수동 작동 레버를 강하게 당겨 가동하고 얼어붙은 몸을 쬐어 몸을 추스릅니다.',
-            healPercent: 25,
+            description: '비상 열원 장치의 수동 작동 레버를 강하게 당겨 가동하여 혹한의 냉기를 밀어내고, 발전기 내장 배터리에서 동력 에센스를 정제합니다.',
+            immediateReward: { essence: 150, xp: 0, gold: 0, items: [] },
             riskDelta: -10
           },
           {
@@ -766,10 +765,9 @@ export const REGIONAL_EVENT_PACKS: Record<string, WorldGateEventPack> = {
           {
             id: 'choice_cn_wall_loot',
             label: '보급 보석 옥벽 강취',
-            description: '바람에 흔들리는 성벽 기단부 틈새에 숨겨진 황실 보급용 옥 장갑을 꺼내어 소지합니다.',
+            description: '바람에 흔들리는 성벽 기단부 틈새에 숨겨진 황실 보급용 옥 장갑과 부수적인 마석 에센스를 획득합니다.',
             riskDelta: 10,
-            healPercent: 20,
-            immediateReward: { gold: 500, xp: 0, essence: 0, items: [] }
+            immediateReward: { gold: 500, essence: 100, xp: 0, items: [] }
           },
           {
             id: 'choice_cn_wall_pass',
@@ -1040,8 +1038,8 @@ export const REGIONAL_EVENT_PACKS: Record<string, WorldGateEventPack> = {
           {
             id: 'choice_default_altar_pray',
             label: '제단 앞에서 헌신의 기도',
-            description: '제단에서 흐르는 백색 마력 결에 아군의 파동을 정렬하여 신체 상처를 수선합니다.',
-            healPercent: 35,
+            description: '제단에서 흐르는 백색 마력 결에 아군의 파동을 조화롭게 일치시켜 차원 에센스를 공명 추출합니다.',
+            immediateReward: { essence: 150, xp: 0, gold: 0, items: [] },
             nextEncounterModifier: 'enemy_speed_up'
           },
           {
@@ -1061,9 +1059,8 @@ export const REGIONAL_EVENT_PACKS: Record<string, WorldGateEventPack> = {
           {
             id: 'choice_default_hunter_feed',
             label: '비상 식량팩과 마석 물약 공급',
-            description: '비상 식량 팩과 치료 물약을 탈진한 대원에게 양보하고 차원 정보를 갱신받습니다.',
-            hpCostPercent: 12,
-            immediateReward: { essence: 300, xp: 0, gold: 0, items: [] }
+            description: '아군의 전술 골드 소모성 배낭 팩과 치료 시약을 탈진한 대원에게 제공하고 차원 정보를 인계받습니다.',
+            immediateReward: { essence: 300, gold: -400, xp: 0, items: [] }
           },
           {
             id: 'choice_default_hunter_pass',

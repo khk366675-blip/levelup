@@ -6953,7 +6953,7 @@ export const useGame = create<GameState>()(
         let runStateMod = activeGate.runState ? { ...activeGate.runState } : undefined
         let computedDifficultyMod = activeGate.runState?.difficultyMod ?? 1.0
 
-        if (runStateMod && activeEncounter && activeGate.source === 'worldmap') {
+        if (runStateMod && activeEncounter) {
           const isBoss = activeEncounter.isBoss || activeEncounter.type === 'boss'
           if (isBoss) {
             const bossDelta = Math.max(-0.10, Math.min(0.10, runStateMod.bossDifficultyDelta ?? 0))
@@ -7471,7 +7471,9 @@ export const useGame = create<GameState>()(
         } else if (choiceId === 'choice_apothecary_drink') {
           if (randVal < 0.40) {
             finalChoice.healPercent = undefined
-            finalChoice.hpCostPercent = 10
+            finalChoice.hpCostPercent = 0
+            finalChoice.riskDelta = (finalChoice.riskDelta ?? 0) + 15
+            finalChoice.nextEncounterModifier = 'player_def_down_1t'
             finalChoice.immediateReward = {
               ...(finalChoice.immediateReward ?? {}),
               essence: 150,
@@ -7479,7 +7481,7 @@ export const useGame = create<GameState>()(
               gold: 0,
               items: []
             }
-            surpriseText = '물약을 들이켜자 내장에서 타들어 가는 마력 발열 반응이 끓어오릅니다. 체력이 깎였지만 그 반동으로 차원 에센스를 정제해 냈습니다.'
+            surpriseText = '물약을 들이켜자 내장에서 타들어 가는 마력 발열 반응이 끓어오릅니다. 다음 구역 진입 시 방어막이 교란되고 균열 위험도가 상승했지만, 그 반동으로 차원 에센스를 정제해 냈습니다.'
           }
         } else if (choiceId === 'choice_incheon_cargo_open') {
           if (randVal < 0.30) {
@@ -7505,6 +7507,9 @@ export const useGame = create<GameState>()(
         }
         if (finalChoice.extractionBonusDelta) {
           run.extractionBonusPercent = (run.extractionBonusPercent ?? 0) + finalChoice.extractionBonusDelta
+        }
+        if (finalChoice.nextCombatDifficultyDelta) {
+          run.nextCombatDifficultyDelta = Math.max(-0.15, Math.min(0.15, (run.nextCombatDifficultyDelta ?? 0) + finalChoice.nextCombatDifficultyDelta))
         }
 
         if (surpriseText) {
