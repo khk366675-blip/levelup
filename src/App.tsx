@@ -30,6 +30,7 @@ import { GatePanel } from './components/GatePanel'
 import { HunterGradePanel } from './components/HunterGradePanel'
 import { ShadowPanel } from './components/ShadowPanel'
 import { BackupControls } from './components/BackupControls'
+import { ClueRecordsModal } from './components/ClueRecordsModal'
 import { RewardBoxPanel } from './components/RewardBoxPanel'
 import { ChallengeCardsPanel } from './components/ChallengeCardsPanel'
 import { ShopPanel } from './components/ShopPanel'
@@ -66,6 +67,7 @@ const MOBILE_TABS: { key: Tab; label: string; icon: typeof Calendar }[] = [
 export default function App() {
   const [showTitle, setShowTitle] = useState(true)
   const [tab, setTab] = useState<Tab>('rewards')
+  const [clueOpen, setClueOpen] = useState(false)
   const [addOpen, setAddOpen] = useState(false)
   const [showRoutineLibrary, setShowRoutineLibrary] = useState(false)
   const [showTomorrowPlanPreview, setShowTomorrowPlanPreview] = useState(false)
@@ -262,6 +264,13 @@ export default function App() {
           </div>
           <div className="flex items-center gap-1.5 flex-wrap justify-end">
             <BackupControls />
+            <button
+              onClick={() => setClueOpen(true)}
+              className="btn btn-ghost text-xs text-purple-200/85 hover:text-purple-100 border border-purple-500/20 hover:border-purple-500/40 bg-purple-500/5 hover:bg-purple-500/10 shadow-[0_0_8px_rgba(168,85,247,0.05)]"
+              title="지금까지 수집된 차원 관측 단서를 확인합니다"
+            >
+              📡 관측 기록
+            </button>
             <button 
               onClick={handleReset} 
               className="btn btn-ghost text-xs text-red-300/70 hover:text-red-200" 
@@ -515,6 +524,7 @@ export default function App() {
       </main>
 
       <AddQuestModal open={addOpen} onClose={() => setAddOpen(false)} type={tab === 'main' ? 'main' : 'daily'} />
+      <ClueRecordsModal open={clueOpen} onClose={() => setClueOpen(false)} />
       
       {/* Mobile Bottom Quick Nav */}
       {!isOverlayActive && (
