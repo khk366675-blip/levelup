@@ -55,6 +55,98 @@ export const MYSTERY_VARIANTS: MysteryVariant[] = [
     rewardTitle: '🔑 비밀 미스터리 해제 완료',
     rewardLines: ['지식을 탐하던 그림자가 껍질을 깨고 진화하자, 망각되었던 인장이 빛을 뿜습니다. 군단 기록에 숨겨진 보상이 지급됩니다.'],
     rewardBonus: 150
+  },
+  {
+    id: 'mystery_v3',
+    clues: [
+      'mystery_v3_clue1', 'mystery_v3_clue2', 'mystery_v3_clue3', 'mystery_v3_clue4',
+      'mystery_v3_clue5', 'mystery_v3_clue6', 'mystery_v3_clue7', 'mystery_v3_clue8'
+    ],
+    checkTrigger: (event, snapshot) => {
+      if (event.context !== 'expedition') return false
+      if (event.outcome !== 'success' && event.outcome !== 'great_success') return false
+      if (event.expeditionType !== 'training') return false
+      if (!event.shadowIds) return false
+      
+      const supports = (snapshot.ownedShadows ?? []).filter(s => event.shadowIds?.includes(s.instanceId) && s.role === 'support')
+      return supports.length >= 3
+    },
+    rewardTitle: '🔑 비밀 미스터리 해제 완료',
+    rewardLines: ['세 명의 보조자들이 훈련 임무 완수의 인장을 완성했습니다. 군단 기록에 숨겨진 보상이 지급됩니다.'],
+    rewardBonus: 150
+  },
+  {
+    id: 'mystery_v4',
+    clues: [
+      'mystery_v4_clue1', 'mystery_v4_clue2', 'mystery_v4_clue3', 'mystery_v4_clue4',
+      'mystery_v4_clue5', 'mystery_v4_clue6', 'mystery_v4_clue7', 'mystery_v4_clue8'
+    ],
+    checkTrigger: (event, snapshot) => {
+      if (event.context !== 'expedition') return false
+      if (event.outcome !== 'success' && event.outcome !== 'great_success') return false
+      if (event.expeditionType !== 'hunt') return false
+      if (!event.shadowIds || event.shadowIds.length !== 2) return false
+      
+      const shadows = (snapshot.ownedShadows ?? []).filter(s => event.shadowIds?.includes(s.instanceId))
+      return shadows.length === 2 && shadows.some(s => s.role === 'guard') && shadows.some(s => s.role === 'assault')
+    },
+    rewardTitle: '🔑 비밀 미스터리 해제 완료',
+    rewardLines: ['단둘이 사냥을 정복한 검과 방패의 공조가 인정을 받았습니다. 군단 기록에 숨겨진 보상이 지급됩니다.'],
+    rewardBonus: 150
+  },
+  {
+    id: 'mystery_v5',
+    clues: [
+      'mystery_v5_clue1', 'mystery_v5_clue2', 'mystery_v5_clue3', 'mystery_v5_clue4',
+      'mystery_v5_clue5', 'mystery_v5_clue6', 'mystery_v5_clue7', 'mystery_v5_clue8'
+    ],
+    checkTrigger: (event, snapshot) => {
+      if (event.context !== 'tower') return false
+      if (event.outcome !== 'victory') return false
+      if (!event.boss) return false
+      
+      const equippedShadowIds = (snapshot as any).equippedShadowIds ?? []
+      return !equippedShadowIds || equippedShadowIds.length === 0
+    },
+    rewardTitle: '🔑 비밀 미스터리 해제 완료',
+    rewardLines: ['그림자의 지배를 거두고 헌터 단독의 힘으로 탑의 정상을 정복했습니다. 군단 기록에 숨겨진 보상이 지급됩니다.'],
+    rewardBonus: 150
+  },
+  {
+    id: 'mystery_v6',
+    clues: [
+      'mystery_v6_clue1', 'mystery_v6_clue2', 'mystery_v6_clue3', 'mystery_v6_clue4',
+      'mystery_v6_clue5', 'mystery_v6_clue6', 'mystery_v6_clue7', 'mystery_v6_clue8'
+    ],
+    checkTrigger: (event, snapshot) => {
+      if (event.context !== 'gate') return false
+      if (event.outcome !== 'victory') return false
+      
+      const equippedTitleId = (snapshot as any).hunter?.equippedTitleId
+      return equippedTitleId === 'greeting-the-system'
+    },
+    rewardTitle: '🔑 비밀 미스터리 해제 완료',
+    rewardLines: ['최초의 서약을 이행하고 게이트를 통과한 초심의 영예가 도달했습니다. 군단 기록에 숨겨진 보상이 지급됩니다.'],
+    rewardBonus: 150
+  },
+  {
+    id: 'mystery_v7',
+    clues: [
+      'mystery_v7_clue1', 'mystery_v7_clue2', 'mystery_v7_clue3', 'mystery_v7_clue4',
+      'mystery_v7_clue5', 'mystery_v7_clue6', 'mystery_v7_clue7', 'mystery_v7_clue8'
+    ],
+    checkTrigger: (event, snapshot) => {
+      if (event.context !== 'expedition') return false
+      if (event.outcome !== 'success' && event.outcome !== 'great_success') return false
+      if (event.expeditionType !== 'scout') return false
+      if (!event.shadowIds || event.shadowIds.length !== 3) return false
+      
+      const rats = (snapshot.ownedShadows ?? []).filter(s => event.shadowIds?.includes(s.instanceId) && s.definitionId === 'shadow-rat')
+      return rats.length === 3
+    },
+    rewardTitle: '🔑 비밀 미스터리 해제 완료',
+    rewardLines: ['미미한 쥐들의 대열이 숨겨진 정찰의 빈틈을 파헤쳐 좌표를 복구했습니다. 군단 기록에 숨겨진 보상이 지급됩니다.'],
+    rewardBonus: 150
   }
 ]
 
