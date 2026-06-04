@@ -620,6 +620,7 @@ export interface GameState {
 
   // metadata sync
   syncDefaultQuestMetadata: () => void
+  syncDefaultEquipmentStats: () => void
   ensureMainQuestMilestonesBackfilled: () => void
 
   // ai coach memory
@@ -13589,6 +13590,42 @@ export const useGame = create<GameState>()(
         return { quests: [...mergedQuests, ...addedQuests] }
       }),
 
+      syncDefaultEquipmentStats: () => set((s) => {
+        let changed = false
+        const updatedItems = s.items.map(item => {
+          if (item.equippable !== true) return item
+          const template = ITEM_POOL.find(p => p.name === item.name && p.equippable === true)
+          if (!template) return item
+
+          const newEffectsJson = JSON.stringify(template.effects ?? [])
+          const oldEffectsJson = JSON.stringify(item.effects ?? [])
+
+          if (
+            item.icon !== template.icon ||
+            item.rarity !== template.rarity ||
+            item.description !== template.description ||
+            item.slot !== template.slot ||
+            newEffectsJson !== oldEffectsJson ||
+            JSON.stringify(item.combatSkillIds ?? []) !== JSON.stringify(template.combatSkillIds ?? [])
+          ) {
+            changed = true
+            return {
+              ...item,
+              icon: template.icon,
+              rarity: template.rarity,
+              description: template.description,
+              slot: template.slot,
+              effects: template.effects ?? [],
+              combatSkillIds: template.combatSkillIds ?? []
+            }
+          }
+          return item
+        })
+
+        if (!changed) return {}
+        return { items: updatedItems }
+      }),
+
       ensureMainQuestMilestonesBackfilled: () => set((s) => {
         let changed = false
         const updatedQuests = s.quests.map(quest => {
@@ -14942,6 +14979,7 @@ export const useGame = create<GameState>()(
         setTimeout(() => {
           try {
             useGame.getState().syncDefaultQuestMetadata()
+            useGame.getState().syncDefaultEquipmentStats()
           } catch {
             // ignore if store not ready
           }

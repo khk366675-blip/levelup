@@ -1113,6 +1113,7 @@ export const ITEM_POOL: Omit<Item, 'id' | 'acquiredAt'>[] = [
     consumable: false,
     slot: 'accessory',
     effects: [
+      { type: 'stat_bonus', stat: 'PER', value: 1 },
       { type: 'drop_bonus', value: 0.01 },
       { type: 'accuracy_bonus', value: 0.01 },
     ],
@@ -1174,7 +1175,10 @@ export const ITEM_POOL: Omit<Item, 'id' | 'acquiredAt'>[] = [
     equippable: true,
     consumable: false,
     slot: 'accessory',
-    effects: [{ type: 'evasion_bonus', value: 0.02 }],
+    effects: [
+      { type: 'stat_bonus', stat: 'AGI', value: 3 },
+      { type: 'evasion_bonus', value: 0.02 },
+    ],
   },
   {
     name: '중량 벨트',
@@ -1244,7 +1248,10 @@ export const ITEM_POOL: Omit<Item, 'id' | 'acquiredAt'>[] = [
     equippable: true,
     consumable: false,
     slot: 'accessory',
-    effects: [{ type: 'rarity_bonus', value: 0.01 }],
+    effects: [
+      { type: 'stat_bonus', stat: 'SEN', value: 5 },
+      { type: 'rarity_bonus', value: 0.03 },
+    ],
   },
   {
     name: '금안의 렌즈',
@@ -1318,8 +1325,8 @@ export const ITEM_POOL: Omit<Item, 'id' | 'acquiredAt'>[] = [
     consumable: false,
     slot: 'artifact',
     effects: [
+      { type: 'stat_bonus', stat: 'PER', value: 5 },
       { type: 'evasion_bonus', value: 0.03 },
-      { type: 'stat_bonus', stat: 'PER', value: 3 },
     ],
   },
   {
@@ -1330,7 +1337,10 @@ export const ITEM_POOL: Omit<Item, 'id' | 'acquiredAt'>[] = [
     equippable: true,
     consumable: false,
     slot: 'armor',
-    effects: [{ type: 'drop_bonus', value: 0.03 }],
+    effects: [
+      { type: 'stat_bonus', stat: 'VIT', value: 4 },
+      { type: 'drop_bonus', value: 0.03 },
+    ],
   },
   {
     name: '사냥꾼의 단검',
@@ -1382,7 +1392,10 @@ export const ITEM_POOL: Omit<Item, 'id' | 'acquiredAt'>[] = [
     equippable: true,
     consumable: false,
     slot: 'artifact',
-    effects: [{ type: 'stat_bonus', stat: 'PER', value: 10 }],
+    effects: [
+      { type: 'stat_bonus', stat: 'PER', value: 10 },
+      { type: 'drop_bonus', value: 0.03 },
+    ],
   },
   {
     name: '금서의 책갈피',
@@ -1447,10 +1460,10 @@ export const ITEM_POOL: Omit<Item, 'id' | 'acquiredAt'>[] = [
     consumable: false,
     slot: 'artifact',
     effects: [
-      { type: 'stat_bonus', stat: 'STR', value: 4 },
-      { type: 'stat_bonus', stat: 'VIT', value: 4 },
-      { type: 'stat_bonus', stat: 'AGI', value: 4 },
-      { type: 'stat_bonus', stat: 'INT', value: 4 },
+      { type: 'stat_bonus', stat: 'STR', value: 5 },
+      { type: 'stat_bonus', stat: 'VIT', value: 5 },
+      { type: 'stat_bonus', stat: 'AGI', value: 5 },
+      { type: 'stat_bonus', stat: 'INT', value: 5 },
     ],
   },
 
@@ -1479,8 +1492,14 @@ export const ITEM_POOL: Omit<Item, 'id' | 'acquiredAt'>[] = [
     consumable: false,
     slot: 'artifact',
     effects: [
-      { type: 'rarity_bonus', value: 0.02 },
-      { type: 'drop_bonus', value: 0.03 },
+      { type: 'stat_bonus', stat: 'STR', value: 3 },
+      { type: 'stat_bonus', stat: 'VIT', value: 3 },
+      { type: 'stat_bonus', stat: 'AGI', value: 3 },
+      { type: 'stat_bonus', stat: 'INT', value: 3 },
+      { type: 'stat_bonus', stat: 'PER', value: 3 },
+      { type: 'stat_bonus', stat: 'SEN', value: 3 },
+      { type: 'rarity_bonus', value: 0.04 },
+      { type: 'drop_bonus', value: 0.04 },
       { type: 'crit_bonus', value: 0.05 },
       { type: 'evasion_bonus', value: 0.05 },
       { type: 'accuracy_bonus', value: 0.05 },
@@ -1553,8 +1572,9 @@ export const ITEM_POOL: Omit<Item, 'id' | 'acquiredAt'>[] = [
     consumable: false,
     slot: 'accessory',
     effects: [
-      { type: 'drop_bonus', value: 0.015 },
-      { type: 'rarity_bonus', value: 0.006 },
+      { type: 'stat_bonus', stat: 'SEN', value: 5 },
+      { type: 'drop_bonus', value: 0.04 },
+      { type: 'rarity_bonus', value: 0.02 },
     ],
   },
   {
@@ -1606,8 +1626,9 @@ export const ITEM_POOL: Omit<Item, 'id' | 'acquiredAt'>[] = [
     consumable: false,
     slot: 'artifact',
     effects: [
-      { type: 'rarity_bonus', value: 0.018 },
-      { type: 'drop_bonus', value: 0.025 },
+      { type: 'stat_bonus', stat: 'SEN', value: 15 },
+      { type: 'rarity_bonus', value: 0.05 },
+      { type: 'drop_bonus', value: 0.06 },
     ],
   },
   {
@@ -1658,7 +1679,10 @@ export const ITEM_POOL: Omit<Item, 'id' | 'acquiredAt'>[] = [
     equippable: true,
     consumable: false,
     slot: 'accessory',
-    effects: [{ type: 'rarity_bonus', value: 0.002 }],
+    effects: [
+      { type: 'stat_bonus', stat: 'SEN', value: 1 },
+      { type: 'rarity_bonus', value: 0.01 },
+    ],
   },
   {
     name: '도전 입문 배지',
@@ -1678,7 +1702,10 @@ export const ITEM_POOL: Omit<Item, 'id' | 'acquiredAt'>[] = [
     equippable: true,
     consumable: false,
     slot: 'accessory',
-    effects: [{ type: 'evasion_bonus', value: 0.015 }],
+    effects: [
+      { type: 'stat_bonus', stat: 'PER', value: 1 },
+      { type: 'evasion_bonus', value: 0.02 },
+    ],
   },
   {
     name: '가벼운 전투화',
@@ -1703,7 +1730,7 @@ export const ITEM_POOL: Omit<Item, 'id' | 'acquiredAt'>[] = [
     slot: 'accessory',
     effects: [
       { type: 'stat_bonus', stat: 'SEN', value: 3 },
-      { type: 'rarity_bonus', value: 0.004 },
+      { type: 'rarity_bonus', value: 0.02 },
     ],
   },
   {
@@ -1727,7 +1754,10 @@ export const ITEM_POOL: Omit<Item, 'id' | 'acquiredAt'>[] = [
     equippable: true,
     consumable: false,
     slot: 'artifact',
-    effects: [{ type: 'drop_bonus', value: 0.012 }],
+    effects: [
+      { type: 'stat_bonus', stat: 'SEN', value: 2 },
+      { type: 'drop_bonus', value: 0.03 },
+    ],
   },
   {
     name: '정수 보관병',
@@ -1738,8 +1768,9 @@ export const ITEM_POOL: Omit<Item, 'id' | 'acquiredAt'>[] = [
     consumable: false,
     slot: 'accessory',
     effects: [
-      { type: 'drop_bonus', value: 0.006 },
-      { type: 'rarity_bonus', value: 0.003 },
+      { type: 'stat_bonus', stat: 'SEN', value: 3 },
+      { type: 'drop_bonus', value: 0.02 },
+      { type: 'rarity_bonus', value: 0.01 },
     ],
   },
   {
@@ -1751,7 +1782,7 @@ export const ITEM_POOL: Omit<Item, 'id' | 'acquiredAt'>[] = [
     consumable: false,
     slot: 'armor',
     effects: [
-      { type: 'stat_bonus', stat: 'VIT', value: 5 },
+      { type: 'stat_bonus', stat: 'VIT', value: 4 },
     ],
   },
   {
@@ -1803,7 +1834,7 @@ export const ITEM_POOL: Omit<Item, 'id' | 'acquiredAt'>[] = [
     slot: 'armor',
     effects: [
       { type: 'stat_bonus', stat: 'VIT', value: 5 },
-      { type: 'drop_bonus', value: 0.012 },
+      { type: 'drop_bonus', value: 0.03 },
     ],
   },
   {
@@ -1815,7 +1846,7 @@ export const ITEM_POOL: Omit<Item, 'id' | 'acquiredAt'>[] = [
     consumable: false,
     slot: 'artifact',
     effects: [
-      { type: 'rarity_bonus', value: 0.008 },
+      { type: 'rarity_bonus', value: 0.02 },
       { type: 'stat_bonus', stat: 'SEN', value: 4 },
     ],
   },
@@ -1843,7 +1874,7 @@ export const ITEM_POOL: Omit<Item, 'id' | 'acquiredAt'>[] = [
     slot: 'accessory',
     effects: [
       { type: 'stat_bonus', stat: 'SEN', value: 6 },
-      { type: 'drop_bonus', value: 0.01 },
+      { type: 'drop_bonus', value: 0.03 },
     ],
   },
   {
@@ -1869,7 +1900,7 @@ export const ITEM_POOL: Omit<Item, 'id' | 'acquiredAt'>[] = [
     slot: 'artifact',
     effects: [
       { type: 'stat_bonus', stat: 'INT', value: 5 },
-      { type: 'accuracy_bonus', value: 0.025 },
+      { type: 'accuracy_bonus', value: 0.03 },
     ],
   },
   {
@@ -1894,9 +1925,9 @@ export const ITEM_POOL: Omit<Item, 'id' | 'acquiredAt'>[] = [
     consumable: false,
     slot: 'accessory',
     effects: [
-      { type: 'drop_bonus', value: 0.02 },
-      { type: 'rarity_bonus', value: 0.012 },
       { type: 'stat_bonus', stat: 'SEN', value: 7 },
+      { type: 'drop_bonus', value: 0.05 },
+      { type: 'rarity_bonus', value: 0.03 },
     ],
   },
   {
@@ -1951,8 +1982,8 @@ export const ITEM_POOL: Omit<Item, 'id' | 'acquiredAt'>[] = [
     consumable: false,
     slot: 'artifact',
     effects: [
-      { type: 'rarity_bonus', value: 0.02 },
-      { type: 'drop_bonus', value: 0.02 },
+      { type: 'rarity_bonus', value: 0.05 },
+      { type: 'drop_bonus', value: 0.05 },
       { type: 'stat_bonus', stat: 'SEN', value: 12 },
     ],
     combatSkillIds: ['equip-system-pulse'],
