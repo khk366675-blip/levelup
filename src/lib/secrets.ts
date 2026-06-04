@@ -871,7 +871,8 @@ export const recordSecretEvent = (
   }
 
   if (!mysteryTriggered && activeVariant) {
-    const clueThresholds = [2, 4, 6, 8, 10, 12, 14, 16]
+    // 핫픽스: 단서 노출 속도가 지나치게 빠르지 않도록 누적 행동 조건 임계값을 대폭 상향 및 점진 벌림 조정
+    const clueThresholds = [15, 35, 60, 90, 125, 165, 210, 260]
     for (let i = 0; i < clueThresholds.length; i++) {
       if (mysteryActionCount >= clueThresholds[i]) {
         const clueId = activeVariant.clues[i]
