@@ -1058,23 +1058,7 @@ const applySecretProgressEvent = (
     nextState.ownedShadows = result.ownedShadows ?? baseState.ownedShadows
   }
 
-  // 비밀 서사 단서 발생 시 월드맵 뉴스피드(eventLogs)에 은은하게 연동 기록
-  if (s.livingWorld && secretMessages.length > 0) {
-    const worldLogs = baseState.livingWorld?.eventLogs
-      ? [...baseState.livingWorld.eventLogs]
-      : [...s.livingWorld.eventLogs]
 
-    secretMessages.forEach(msg => {
-      if (msg.kind === 'secret') {
-        const cleanBody = msg.lines?.[0] ?? ''
-        worldLogs.push(`[Day ${s.livingWorld?.day ?? 0}] 📡 [이상 징후] ${msg.title}: ${cleanBody}`)
-      }
-    })
-
-    nextState.livingWorld = baseState.livingWorld
-      ? { ...baseState.livingWorld, eventLogs: worldLogs }
-      : { ...s.livingWorld, eventLogs: worldLogs }
-  }
 
   return nextState
 }
