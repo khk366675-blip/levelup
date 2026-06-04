@@ -447,14 +447,18 @@ export function AiCoachPanel() {
       setDailyPlanQuests(sanitizedQuests)
       setDailyPlanData(plan)
 
-      // ── 즉시 자동 적용 (현재 날짜 기준) ──
-      try {
-        const todayStr = getDateKey()
-        replaceAiCoachDailyPlan(sanitizedQuests, todayStr)
-      } catch (err) {
-        console.error('AI Daily Plan 자동 적용 실패:', err)
-        alert('AI Daily Plan의 자동 스토어 적용 중 에러가 발생했습니다.')
-      }
+      // INP 이슈 방지: 무거운 스토어 변경 연산을 setTimeout으로 양보하여 브라우저가 먼저 화면을 갱신하도록 합니다.
+      setTimeout(() => {
+        try {
+          const todayStr = getDateKey()
+          replaceAiCoachDailyPlan(sanitizedQuests, todayStr)
+        } catch (err) {
+          console.error('AI Daily Plan 자동 적용 실패:', err)
+          setTimeout(() => {
+            alert('AI Daily Plan의 자동 스토어 적용 중 에러가 발생했습니다.')
+          }, 50)
+        }
+      }, 50)
 
       if (res.domainCoaches.length > 0) {
         setSelectedDomain(res.domainCoaches[0].domain)
@@ -563,15 +567,17 @@ export function AiCoachPanel() {
       setDailyPlanData(plan)
       setApiResult({ ok: true, response: validatedResponse, rawText: fallbackJsonText })
 
-      try {
-        const todayStr = getDateKey()
-        replaceAiCoachDailyPlan(sanitizedQuests, todayStr)
-        alert('수동 JSON 분석 결과가 현재 일일퀘스트로 정상 적용되었습니다!')
-        setShowJsonPaste(false)
-      } catch (err) {
-        console.error('AI Daily Plan 자동 적용 실패:', err)
-        alert('스토어 적용 중 에러가 발생했습니다.')
-      }
+      // INP 이슈 방지: 블로킹을 유발하는 alert() 대신 이미 화면에 렌더링되는 성공 배너(apiResult.ok)로 처리를 완료하고 패널을 닫습니다.
+      setTimeout(() => {
+        try {
+          const todayStr = getDateKey()
+          replaceAiCoachDailyPlan(sanitizedQuests, todayStr)
+          setShowJsonPaste(false)
+        } catch (err) {
+          console.error('AI Daily Plan 자동 적용 실패:', err)
+          alert('스토어 적용 중 에러가 발생했습니다.')
+        }
+      }, 50)
 
     } catch (e: any) {
       alert(`JSON 파싱 실패: ${e?.message || e}`)
