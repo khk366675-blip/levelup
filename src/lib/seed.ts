@@ -1067,7 +1067,7 @@ export const ITEM_POOL: Omit<Item, 'id' | 'acquiredAt'>[] = [
     consumable: false,
     slot: 'weapon',
     effects: [
-      { type: 'xp_bonus', category: 'habit', value: 0.01 },
+      { type: 'stat_bonus', stat: 'AGI', value: 1 },
       { type: 'crit_bonus', value: 0.01 },
     ],
   },
@@ -1079,7 +1079,7 @@ export const ITEM_POOL: Omit<Item, 'id' | 'acquiredAt'>[] = [
     equippable: true,
     consumable: false,
     slot: 'weapon',
-    effects: [{ type: 'xp_bonus', category: 'workout', value: 0.01 }],
+    effects: [{ type: 'stat_bonus', stat: 'STR', value: 2 }],
   },
   {
     name: '초심자의 노트',
@@ -1090,7 +1090,7 @@ export const ITEM_POOL: Omit<Item, 'id' | 'acquiredAt'>[] = [
     consumable: false,
     slot: 'artifact',
     effects: [
-      { type: 'xp_bonus', category: 'study', value: 0.01 },
+      { type: 'stat_bonus', stat: 'INT', value: 1 },
       { type: 'accuracy_bonus', value: 0.01 },
     ],
   },
@@ -1102,7 +1102,7 @@ export const ITEM_POOL: Omit<Item, 'id' | 'acquiredAt'>[] = [
     equippable: true,
     consumable: false,
     slot: 'armor',
-    effects: [{ type: 'xp_bonus', category: 'health', value: 0.01 }],
+    effects: [{ type: 'stat_bonus', stat: 'VIT', value: 2 }],
   },
   {
     name: '작은 행운석',
@@ -1128,7 +1128,7 @@ export const ITEM_POOL: Omit<Item, 'id' | 'acquiredAt'>[] = [
     equippable: true,
     consumable: false,
     slot: 'artifact',
-    effects: [{ type: 'xp_bonus', category: 'study', value: 0.03 }],
+    effects: [{ type: 'stat_bonus', stat: 'INT', value: 4 }],
   },
   {
     name: '의지의 룬',
@@ -1151,7 +1151,7 @@ export const ITEM_POOL: Omit<Item, 'id' | 'acquiredAt'>[] = [
     equippable: true,
     consumable: false,
     slot: 'artifact',
-    effects: [{ type: 'xp_bonus', category: 'finance', value: 0.03 }],
+    effects: [{ type: 'stat_bonus', stat: 'PER', value: 4 }],
   },
   {
     name: '집중의 반지',
@@ -1174,7 +1174,7 @@ export const ITEM_POOL: Omit<Item, 'id' | 'acquiredAt'>[] = [
     equippable: true,
     consumable: false,
     slot: 'accessory',
-    effects: [{ type: 'xp_bonus', category: 'habit', value: 0.03 }],
+    effects: [{ type: 'evasion_bonus', value: 0.02 }],
   },
   {
     name: '중량 벨트',
@@ -1184,7 +1184,7 @@ export const ITEM_POOL: Omit<Item, 'id' | 'acquiredAt'>[] = [
     equippable: true,
     consumable: false,
     slot: 'armor',
-    effects: [{ type: 'xp_bonus', category: 'workout', value: 0.03 }],
+    effects: [{ type: 'stat_bonus', stat: 'STR', value: 4 }],
   },
   {
     name: '정돈된 코트',
@@ -1195,8 +1195,8 @@ export const ITEM_POOL: Omit<Item, 'id' | 'acquiredAt'>[] = [
     consumable: false,
     slot: 'armor',
     effects: [
-      { type: 'xp_bonus', category: 'career', value: 0.02 },
-      { type: 'xp_bonus', category: 'habit', value: 0.01 },
+      { type: 'stat_bonus', stat: 'SEN', value: 2 },
+      { type: 'evasion_bonus', value: 0.01 },
     ],
   },
   {
@@ -1207,7 +1207,7 @@ export const ITEM_POOL: Omit<Item, 'id' | 'acquiredAt'>[] = [
     equippable: true,
     consumable: false,
     slot: 'accessory',
-    effects: [{ type: 'xp_bonus', category: 'mind', value: 0.03 }],
+    effects: [{ type: 'stat_bonus', stat: 'PER', value: 4 }],
   },
   {
     name: '견습 헌터 배지',
@@ -1218,9 +1218,9 @@ export const ITEM_POOL: Omit<Item, 'id' | 'acquiredAt'>[] = [
     consumable: false,
     slot: 'artifact',
     effects: [
-      { type: 'xp_bonus', category: 'career', value: 0.01 },
-      { type: 'xp_bonus', category: 'study', value: 0.01 },
-      { type: 'xp_bonus', category: 'workout', value: 0.01 },
+      { type: 'stat_bonus', stat: 'SEN', value: 1 },
+      { type: 'stat_bonus', stat: 'INT', value: 1 },
+      { type: 'stat_bonus', stat: 'STR', value: 1 },
       { type: 'crit_bonus', value: 0.02 },
     ],
   },
@@ -1234,7 +1234,7 @@ export const ITEM_POOL: Omit<Item, 'id' | 'acquiredAt'>[] = [
     equippable: true,
     consumable: false,
     slot: 'armor',
-    effects: [{ type: 'xp_bonus', category: 'workout', value: 0.04 }],
+    effects: [{ type: 'stat_bonus', stat: 'AGI', value: 6 }],
   },
   {
     name: '각성자의 목걸이',
@@ -1254,7 +1254,7 @@ export const ITEM_POOL: Omit<Item, 'id' | 'acquiredAt'>[] = [
     equippable: true,
     consumable: false,
     slot: 'accessory',
-    effects: [{ type: 'xp_bonus', category: 'finance', value: 0.05 }],
+    effects: [{ type: 'stat_bonus', stat: 'PER', value: 6 }],
   },
   {
     name: '서고의 열쇠',
@@ -1265,8 +1265,8 @@ export const ITEM_POOL: Omit<Item, 'id' | 'acquiredAt'>[] = [
     consumable: false,
     slot: 'artifact',
     effects: [
-      { type: 'xp_bonus', category: 'study', value: 0.04 },
-      { type: 'xp_bonus', category: 'career', value: 0.02 },
+      { type: 'stat_bonus', stat: 'INT', value: 5 },
+      { type: 'stat_bonus', stat: 'SEN', value: 3 },
     ],
   },
   {
@@ -1278,8 +1278,8 @@ export const ITEM_POOL: Omit<Item, 'id' | 'acquiredAt'>[] = [
     consumable: false,
     slot: 'artifact',
     effects: [
-      { type: 'xp_bonus', category: 'career', value: 0.04 },
-      { type: 'xp_bonus', category: 'finance', value: 0.02 },
+      { type: 'stat_bonus', stat: 'SEN', value: 5 },
+      { type: 'stat_bonus', stat: 'PER', value: 3 },
     ],
   },
   {
@@ -1292,7 +1292,7 @@ export const ITEM_POOL: Omit<Item, 'id' | 'acquiredAt'>[] = [
     slot: 'armor',
     effects: [
       { type: 'stat_bonus', stat: 'STR', value: 6 },
-      { type: 'xp_bonus', category: 'workout', value: 0.03 },
+      { type: 'stat_bonus', stat: 'VIT', value: 4 },
     ],
   },
   {
@@ -1304,7 +1304,7 @@ export const ITEM_POOL: Omit<Item, 'id' | 'acquiredAt'>[] = [
     consumable: false,
     slot: 'accessory',
     effects: [
-      { type: 'xp_bonus', category: 'mind', value: 0.04 },
+      { type: 'stat_bonus', stat: 'INT', value: 4 },
       { type: 'stat_bonus', stat: 'PER', value: 4 },
       { type: 'evasion_bonus', value: 0.03 },
     ],
@@ -1318,8 +1318,8 @@ export const ITEM_POOL: Omit<Item, 'id' | 'acquiredAt'>[] = [
     consumable: false,
     slot: 'artifact',
     effects: [
-      { type: 'xp_bonus', category: 'habit', value: 0.04 },
-      { type: 'xp_bonus', category: 'mind', value: 0.02 },
+      { type: 'evasion_bonus', value: 0.03 },
+      { type: 'stat_bonus', stat: 'PER', value: 3 },
     ],
   },
   {
@@ -1341,8 +1341,8 @@ export const ITEM_POOL: Omit<Item, 'id' | 'acquiredAt'>[] = [
     consumable: false,
     slot: 'weapon',
     effects: [
-      { type: 'xp_bonus', category: 'career', value: 0.03 },
-      { type: 'xp_bonus', category: 'habit', value: 0.03 },
+      { type: 'stat_bonus', stat: 'SEN', value: 4 },
+      { type: 'stat_bonus', stat: 'AGI', value: 4 },
       { type: 'crit_bonus', value: 0.03 },
     ],
   },
@@ -1356,7 +1356,7 @@ export const ITEM_POOL: Omit<Item, 'id' | 'acquiredAt'>[] = [
     equippable: true,
     consumable: false,
     slot: 'armor',
-    effects: [{ type: 'xp_bonus', category: 'career', value: 0.06 }],
+    effects: [{ type: 'stat_bonus', stat: 'SEN', value: 9 }],
     combatSkillIds: ['equip-black-suit-guard'],
   },
   {
@@ -1368,8 +1368,8 @@ export const ITEM_POOL: Omit<Item, 'id' | 'acquiredAt'>[] = [
     consumable: false,
     slot: 'weapon',
     effects: [
-      { type: 'xp_bonus', category: 'habit', value: 0.06 },
-      { type: 'xp_bonus', category: 'mind', value: 0.02 },
+      { type: 'stat_bonus', stat: 'AGI', value: 8 },
+      { type: 'stat_bonus', stat: 'INT', value: 4 },
       { type: 'crit_bonus', value: 0.05 },
     ],
     combatSkillIds: ['equip-shadow-slash'],
@@ -1382,7 +1382,7 @@ export const ITEM_POOL: Omit<Item, 'id' | 'acquiredAt'>[] = [
     equippable: true,
     consumable: false,
     slot: 'artifact',
-    effects: [{ type: 'xp_bonus', category: 'finance', value: 0.07 }],
+    effects: [{ type: 'stat_bonus', stat: 'PER', value: 10 }],
   },
   {
     name: '금서의 책갈피',
@@ -1393,7 +1393,7 @@ export const ITEM_POOL: Omit<Item, 'id' | 'acquiredAt'>[] = [
     consumable: false,
     slot: 'artifact',
     effects: [
-      { type: 'xp_bonus', category: 'study', value: 0.06 },
+      { type: 'accuracy_bonus', value: 0.05 },
       { type: 'stat_bonus', stat: 'INT', value: 9 },
     ],
   },
@@ -1406,7 +1406,7 @@ export const ITEM_POOL: Omit<Item, 'id' | 'acquiredAt'>[] = [
     consumable: false,
     slot: 'armor',
     effects: [
-      { type: 'xp_bonus', category: 'habit', value: 0.06 },
+      { type: 'evasion_bonus', value: 0.05 },
       { type: 'stat_bonus', stat: 'PER', value: 9 },
     ],
   },
@@ -1419,7 +1419,7 @@ export const ITEM_POOL: Omit<Item, 'id' | 'acquiredAt'>[] = [
     consumable: false,
     slot: 'weapon',
     effects: [
-      { type: 'xp_bonus', category: 'workout', value: 0.06 },
+      { type: 'crit_bonus', value: 0.05 },
       { type: 'stat_bonus', stat: 'STR', value: 9 },
     ],
   },
@@ -1432,8 +1432,8 @@ export const ITEM_POOL: Omit<Item, 'id' | 'acquiredAt'>[] = [
     consumable: false,
     slot: 'accessory',
     effects: [
-      { type: 'xp_bonus', category: 'health', value: 0.05 },
-      { type: 'xp_bonus', category: 'mind', value: 0.03 },
+      { type: 'stat_bonus', stat: 'VIT', value: 7 },
+      { type: 'stat_bonus', stat: 'INT', value: 5 },
       { type: 'evasion_bonus', value: 0.04 },
       { type: 'accuracy_bonus', value: 0.04 },
     ],
@@ -1447,10 +1447,10 @@ export const ITEM_POOL: Omit<Item, 'id' | 'acquiredAt'>[] = [
     consumable: false,
     slot: 'artifact',
     effects: [
-      { type: 'xp_bonus', category: 'career', value: 0.03 },
-      { type: 'xp_bonus', category: 'study', value: 0.03 },
-      { type: 'xp_bonus', category: 'workout', value: 0.03 },
-      { type: 'xp_bonus', category: 'habit', value: 0.03 },
+      { type: 'stat_bonus', stat: 'STR', value: 4 },
+      { type: 'stat_bonus', stat: 'VIT', value: 4 },
+      { type: 'stat_bonus', stat: 'AGI', value: 4 },
+      { type: 'stat_bonus', stat: 'INT', value: 4 },
     ],
   },
 
@@ -1464,8 +1464,8 @@ export const ITEM_POOL: Omit<Item, 'id' | 'acquiredAt'>[] = [
     consumable: false,
     slot: 'weapon',
     effects: [
-      { type: 'xp_bonus', category: 'career', value: 0.08 },
-      { type: 'xp_bonus', category: 'workout', value: 0.05 },
+      { type: 'stat_bonus', stat: 'SEN', value: 12 },
+      { type: 'stat_bonus', stat: 'STR', value: 8 },
       { type: 'crit_bonus', value: 0.08 },
     ],
     combatSkillIds: ['equip-kings-command'],
@@ -1495,7 +1495,7 @@ export const ITEM_POOL: Omit<Item, 'id' | 'acquiredAt'>[] = [
     equippable: true,
     consumable: false,
     slot: 'artifact',
-    effects: [{ type: 'xp_bonus', category: 'finance', value: 0.1 }],
+    effects: [{ type: 'stat_bonus', stat: 'PER', value: 15 }],
   },
   {
     name: '심연의 기록서',
@@ -1506,8 +1506,8 @@ export const ITEM_POOL: Omit<Item, 'id' | 'acquiredAt'>[] = [
     consumable: false,
     slot: 'artifact',
     effects: [
-      { type: 'xp_bonus', category: 'study', value: 0.08 },
-      { type: 'xp_bonus', category: 'career', value: 0.05 },
+      { type: 'stat_bonus', stat: 'INT', value: 12 },
+      { type: 'stat_bonus', stat: 'SEN', value: 8 },
     ],
   },
   {
@@ -1519,8 +1519,8 @@ export const ITEM_POOL: Omit<Item, 'id' | 'acquiredAt'>[] = [
     consumable: false,
     slot: 'accessory',
     effects: [
-      { type: 'xp_bonus', category: 'habit', value: 0.08 },
-      { type: 'xp_bonus', category: 'mind', value: 0.05 },
+      { type: 'stat_bonus', stat: 'AGI', value: 10 },
+      { type: 'stat_bonus', stat: 'INT', value: 8 },
       { type: 'stat_bonus', stat: 'PER', value: 14 },
       { type: 'evasion_bonus', value: 0.06 },
       { type: 'accuracy_bonus', value: 0.06 },
@@ -1535,10 +1535,10 @@ export const ITEM_POOL: Omit<Item, 'id' | 'acquiredAt'>[] = [
     consumable: false,
     slot: 'armor',
     effects: [
-      { type: 'xp_bonus', category: 'career', value: 0.04 },
-      { type: 'xp_bonus', category: 'study', value: 0.04 },
-      { type: 'xp_bonus', category: 'workout', value: 0.04 },
-      { type: 'xp_bonus', category: 'habit', value: 0.04 },
+      { type: 'stat_bonus', stat: 'SEN', value: 6 },
+      { type: 'stat_bonus', stat: 'INT', value: 6 },
+      { type: 'stat_bonus', stat: 'STR', value: 6 },
+      { type: 'stat_bonus', stat: 'AGI', value: 6 },
       { type: 'drop_bonus', value: 0.02 },
     ],
   },
@@ -1567,7 +1567,7 @@ export const ITEM_POOL: Omit<Item, 'id' | 'acquiredAt'>[] = [
     slot: 'armor',
     effects: [
       { type: 'stat_bonus', stat: 'VIT', value: 5 },
-      { type: 'xp_bonus', category: 'challenge', value: 0.025 },
+      { type: 'stat_bonus', stat: 'PER', value: 4 },
     ],
   },
   {
@@ -1580,7 +1580,7 @@ export const ITEM_POOL: Omit<Item, 'id' | 'acquiredAt'>[] = [
     slot: 'artifact',
     effects: [
       { type: 'stat_bonus', stat: 'SEN', value: 9 },
-      { type: 'xp_bonus', category: 'challenge', value: 0.04 },
+      { type: 'stat_bonus', stat: 'INT', value: 6 },
     ],
   },
   {
@@ -1668,7 +1668,7 @@ export const ITEM_POOL: Omit<Item, 'id' | 'acquiredAt'>[] = [
     equippable: true,
     consumable: false,
     slot: 'artifact',
-    effects: [{ type: 'xp_bonus', category: 'challenge', value: 0.012 }],
+    effects: [{ type: 'stat_bonus', stat: 'STR', value: 2 }],
   },
   {
     name: '원정용 손전등',
@@ -1678,7 +1678,7 @@ export const ITEM_POOL: Omit<Item, 'id' | 'acquiredAt'>[] = [
     equippable: true,
     consumable: false,
     slot: 'accessory',
-    effects: [{ type: 'xp_bonus', category: 'habit', value: 0.012 }],
+    effects: [{ type: 'evasion_bonus', value: 0.015 }],
   },
   {
     name: '가벼운 전투화',
@@ -1690,7 +1690,7 @@ export const ITEM_POOL: Omit<Item, 'id' | 'acquiredAt'>[] = [
     slot: 'armor',
     effects: [
       { type: 'stat_bonus', stat: 'AGI', value: 3 },
-      { type: 'xp_bonus', category: 'workout', value: 0.015 },
+      { type: 'stat_bonus', stat: 'STR', value: 2 },
     ],
   },
   {
@@ -1715,8 +1715,8 @@ export const ITEM_POOL: Omit<Item, 'id' | 'acquiredAt'>[] = [
     consumable: false,
     slot: 'artifact',
     effects: [
-      { type: 'xp_bonus', category: 'study', value: 0.018 },
-      { type: 'xp_bonus', category: 'challenge', value: 0.01 },
+      { type: 'stat_bonus', stat: 'INT', value: 3 },
+      { type: 'stat_bonus', stat: 'SEN', value: 2 },
     ],
   },
   {
@@ -1751,8 +1751,7 @@ export const ITEM_POOL: Omit<Item, 'id' | 'acquiredAt'>[] = [
     consumable: false,
     slot: 'armor',
     effects: [
-      { type: 'stat_bonus', stat: 'VIT', value: 3 },
-      { type: 'xp_bonus', category: 'health', value: 0.012 },
+      { type: 'stat_bonus', stat: 'VIT', value: 5 },
     ],
   },
   {
@@ -1765,7 +1764,7 @@ export const ITEM_POOL: Omit<Item, 'id' | 'acquiredAt'>[] = [
     slot: 'weapon',
     effects: [
       { type: 'stat_bonus', stat: 'STR', value: 2 },
-      { type: 'xp_bonus', category: 'habit', value: 0.018 },
+      { type: 'stat_bonus', stat: 'AGI', value: 3 },
     ],
   },
   {
@@ -1778,7 +1777,7 @@ export const ITEM_POOL: Omit<Item, 'id' | 'acquiredAt'>[] = [
     slot: 'accessory',
     effects: [
       { type: 'stat_bonus', stat: 'PER', value: 3 },
-      { type: 'xp_bonus', category: 'mind', value: 0.014 },
+      { type: 'stat_bonus', stat: 'INT', value: 2 },
     ],
   },
   {
@@ -1790,7 +1789,7 @@ export const ITEM_POOL: Omit<Item, 'id' | 'acquiredAt'>[] = [
     consumable: false,
     slot: 'artifact',
     effects: [
-      { type: 'xp_bonus', category: 'challenge', value: 0.018 },
+      { type: 'stat_bonus', stat: 'STR', value: 3 },
       { type: 'stat_bonus', stat: 'SEN', value: 2 },
     ],
   },
@@ -1817,7 +1816,7 @@ export const ITEM_POOL: Omit<Item, 'id' | 'acquiredAt'>[] = [
     slot: 'artifact',
     effects: [
       { type: 'rarity_bonus', value: 0.008 },
-      { type: 'xp_bonus', category: 'challenge', value: 0.02 },
+      { type: 'stat_bonus', stat: 'SEN', value: 4 },
     ],
   },
   {
@@ -1856,7 +1855,7 @@ export const ITEM_POOL: Omit<Item, 'id' | 'acquiredAt'>[] = [
     consumable: false,
     slot: 'weapon',
     effects: [
-      { type: 'xp_bonus', category: 'challenge', value: 0.035 },
+      { type: 'crit_bonus', value: 0.03 },
       { type: 'stat_bonus', stat: 'PER', value: 4 },
     ],
   },
@@ -1870,7 +1869,7 @@ export const ITEM_POOL: Omit<Item, 'id' | 'acquiredAt'>[] = [
     slot: 'artifact',
     effects: [
       { type: 'stat_bonus', stat: 'INT', value: 5 },
-      { type: 'xp_bonus', category: 'study', value: 0.025 },
+      { type: 'accuracy_bonus', value: 0.025 },
     ],
   },
   {
@@ -1911,7 +1910,7 @@ export const ITEM_POOL: Omit<Item, 'id' | 'acquiredAt'>[] = [
     effects: [
       { type: 'stat_bonus', stat: 'VIT', value: 9 },
       { type: 'stat_bonus', stat: 'PER', value: 7 },
-      { type: 'xp_bonus', category: 'challenge', value: 0.03 },
+      { type: 'evasion_bonus', value: 0.03 },
     ],
     combatSkillIds: ['equip-black-suit-guard'],
   },
@@ -1926,7 +1925,7 @@ export const ITEM_POOL: Omit<Item, 'id' | 'acquiredAt'>[] = [
     effects: [
       { type: 'stat_bonus', stat: 'INT', value: 9 },
       { type: 'stat_bonus', stat: 'SEN', value: 7 },
-      { type: 'xp_bonus', category: 'challenge', value: 0.035 },
+      { type: 'accuracy_bonus', value: 0.03 },
     ],
   },
   {
@@ -1969,7 +1968,7 @@ export const ITEM_POOL: Omit<Item, 'id' | 'acquiredAt'>[] = [
     effects: [
       { type: 'stat_bonus', stat: 'VIT', value: 12 },
       { type: 'stat_bonus', stat: 'STR', value: 12 },
-      { type: 'xp_bonus', category: 'challenge', value: 0.045 },
+      { type: 'evasion_bonus', value: 0.04 },
     ],
   },
 ]
