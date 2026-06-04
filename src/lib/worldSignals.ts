@@ -409,7 +409,7 @@ export const WORLD_SIGNAL_TEMPLATES = {
     source: 'echo' as const,
     tier: 'severe' as const,
     title: '📡 이상 징후: 지원의 결말',
-    body: '훈련의 영역에 보조자 셋이 함께 당도해 성공의 깃발을 꽂을 때 진실이 드러납니다.',
+    body: '성장의 도정에 대열을 돌보는 세 온기가 함께 머무르며 결실을 맺을 때, 마침내 감춰진 길이 열립니다.',
     spoilerLevel: 2,
   },
   mystery_v3_clue8: {
@@ -417,7 +417,7 @@ export const WORLD_SIGNAL_TEMPLATES = {
     source: 'echo' as const,
     tier: 'severe' as const,
     title: '📡 이상 징후: 조율된 연무',
-    body: '세 마리의 보조 그림자가 오직 훈련 원정의 성과를 가지고 복귀할 때, 숨겨진 인장이 개방됩니다.',
+    body: '오직 다른 이를 북돋우는 세 줄기 그림자만이 스스로를 담금질하는 긴 여정에서 살아 돌아올 때, 봉인된 조각이 맞춰집니다.',
     spoilerLevel: 2,
   },
   mystery_v4_clue1: {
@@ -473,7 +473,7 @@ export const WORLD_SIGNAL_TEMPLATES = {
     source: 'echo' as const,
     tier: 'severe' as const,
     title: '📡 이상 징후: 대칭의 성과',
-    body: '검 하나와 방패 하나가 사냥의 숲을 단둘이 정복하고 성공을 알릴 때 위상이 겹칩니다.',
+    body: '공격과 수호의 완벽한 짝이 포식의 영지에서 온전히 둘만의 숨결을 증명할 때, 위상의 궤적이 겹치기 시작합니다.',
     spoilerLevel: 2,
   },
   mystery_v4_clue8: {
@@ -481,7 +481,7 @@ export const WORLD_SIGNAL_TEMPLATES = {
     source: 'echo' as const,
     tier: 'severe' as const,
     title: '📡 이상 징후: 공수의 종막',
-    body: '다른 조력자 없이 단 두 마리의 공수 그림자가 사냥 원정을 완수할 때, 공간의 공명이 마침내 응답합니다.',
+    body: '그 어떤 도움도 없이, 서로를 등진 두 개의 대칭된 빛만이 차가운 사슬을 끊어내고 복귀할 때 봉인이 풀려납니다.',
     spoilerLevel: 2,
   },
   mystery_v5_clue1: {
@@ -537,7 +537,7 @@ export const WORLD_SIGNAL_TEMPLATES = {
     source: 'echo' as const,
     tier: 'severe' as const,
     title: '📡 이상 징후: 고독의 제패',
-    body: '그림자들을 동행하지 않은 채로 탑의 우두머리를 헌터 단독의 힘으로 격파할 때 인장이 부서집니다.',
+    body: '거느리던 어둠을 완전히 잠재운 채, 홀로 하늘을 찌르는 관문의 지배자와 마주하여 승리할 때 봉인의 빗장이 풀립니다.',
     spoilerLevel: 2,
   },
   mystery_v5_clue8: {
@@ -545,7 +545,7 @@ export const WORLD_SIGNAL_TEMPLATES = {
     source: 'echo' as const,
     tier: 'severe' as const,
     title: '📡 이상 징후: 독보의 전장',
-    body: '장착된 그림자가 하나도 없는 고독한 무력으로 탑의 보스 층을 제패할 때, 숨겨져 있던 종착지가 열립니다.',
+    body: '그림자의 장막을 모두 걷어낸 완전한 고독 속에서, 가장 높은 심판의 대좌를 홀로 딛고 일어설 때 숨겨진 통로가 개방됩니다.',
     spoilerLevel: 2,
   },
   mystery_v6_clue1: {
@@ -601,7 +601,7 @@ export const WORLD_SIGNAL_TEMPLATES = {
     source: 'echo' as const,
     tier: 'severe' as const,
     title: '📡 이상 징후: 초심의 게이트',
-    body: '시스템에 처음 인사했던 명예를 갖추고 게이트의 정화를 완료할 때 통로가 이어집니다.',
+    body: '시작의 영광을 머리에 얹고 차원의 장벽을 정화하여 흔적을 지울 때, 끊어졌던 연결 통로가 드러납니다.',
     spoilerLevel: 2,
   },
   mystery_v6_clue8: {
@@ -609,7 +609,7 @@ export const WORLD_SIGNAL_TEMPLATES = {
     source: 'echo' as const,
     tier: 'severe' as const,
     title: '📡 이상 징후: 기원의 복원',
-    body: '최초의 칭호를 머리에 인 채로 게이트 전투에서 승리를 거둘 때, 봉인된 흔적이 복원됩니다.',
+    body: '시스템에 처음 발을 들여놓던 날의 오래된 서약을 머리에 이고 붉은 문 너머를 정복할 때, 봉인된 기억이 깨어납니다.',
     spoilerLevel: 2,
   },
   mystery_v7_clue1: {
@@ -665,7 +665,7 @@ export const WORLD_SIGNAL_TEMPLATES = {
     source: 'echo' as const,
     tier: 'severe' as const,
     title: '📡 이상 징후: 쥐 떼의 정찰',
-    body: '그림자 쥐 3마리로 채워진 대열이 정찰 원정에서 승전보를 가져올 때 위상이 봉합됩니다.',
+    body: '가장 천대받던 작은 존재들의 삼중주가 경계를 탐색하고 돌아와 발걸음을 맞출 때 위상의 공명이 봉합됩니다.',
     spoilerLevel: 2,
   },
   mystery_v7_clue8: {
@@ -673,7 +673,7 @@ export const WORLD_SIGNAL_TEMPLATES = {
     source: 'echo' as const,
     tier: 'severe' as const,
     title: '📡 이상 징후: 작은 군단의 비상',
-    body: '다른 강력한 수하 없이 오직 쥐 3마리만으로 정찰 탐험 성공을 기록할 때, 숨겨진 비장이 마침내 실체화됩니다.',
+    body: '다른 무장 없이 오직 세 개의 아주 미약한 그림자들만이 어둠의 길을 살펴 무사히 귀환할 때, 감춰졌던 심연의 보물이 모습을 드러냅니다.',
     spoilerLevel: 2,
   },
 }
