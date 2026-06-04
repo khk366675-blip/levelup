@@ -521,7 +521,8 @@ export function advanceWorldDay(state: LivingWorldState, rng: RngFn, options: Ad
       const adjustedMinRequiredWinChance = Math.max(0.1, Math.min(0.9, minRequiredWinChance / avgRiskMod))
 
       // 점령된 상태에서는 NPC 헌터 게이트 도전이 불가 (자력 방어 수단 완전 상실)
-      const isChallenging = winChance >= adjustedMinRequiredWinChance && !isOccupied
+      // 핫픽스: Day 0일 때 시작점인 '서울 동대문 균열'(node-kr-seoul)은 NPC 헌터들이 첫날 정화하지 못하도록 차단하여 플레이어에게 남겨둡니다.
+      const isChallenging = winChance >= adjustedMinRequiredWinChance && !isOccupied && !(state.day === 0 && gate.id === 'node-kr-seoul')
 
       if (isChallenging) {
         const isSuccess = rng() < winChance
