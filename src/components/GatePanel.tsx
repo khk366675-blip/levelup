@@ -2658,6 +2658,9 @@ export function GatePanel({ isWorldMapContext }: { isWorldMapContext?: boolean }
           equippedShadows={equippedShadows}
           recommendedEncounterKey={directGateEncounterKey}
           enemyBaseLevel={getDirectGateEnemyBaseLevel(gate)}
+          customBattleId={activeGate.runState
+            ? `direct-manual-preview-${activeGate.instanceId}-enc${activeGate.runState.currentEncounterIndex}`
+            : `direct-manual-preview-${activeGate.instanceId}`}
           contextStats={[
             { label: '게이트', value: gate.name },
             { label: '랭크', value: `${gate.rank}-RANK` },
