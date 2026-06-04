@@ -20,7 +20,10 @@ export interface MysteryVariant {
 export const MYSTERY_VARIANTS: MysteryVariant[] = [
   {
     id: 'mystery_v1',
-    clues: ['mystery_v1_clue1', 'mystery_v1_clue2', 'mystery_v1_clue3', 'mystery_v1_clue4'],
+    clues: [
+      'mystery_v1_clue1', 'mystery_v1_clue2', 'mystery_v1_clue3', 'mystery_v1_clue4',
+      'mystery_v1_clue5', 'mystery_v1_clue6', 'mystery_v1_clue7', 'mystery_v1_clue8'
+    ],
     checkTrigger: (event, snapshot) => {
       if (event.context !== 'expedition') return false
       if (event.outcome !== 'success' && event.outcome !== 'great_success') return false
@@ -37,7 +40,10 @@ export const MYSTERY_VARIANTS: MysteryVariant[] = [
   },
   {
     id: 'mystery_v2',
-    clues: ['mystery_v2_clue1', 'mystery_v2_clue2', 'mystery_v2_clue3', 'mystery_v2_clue4'],
+    clues: [
+      'mystery_v2_clue1', 'mystery_v2_clue2', 'mystery_v2_clue3', 'mystery_v2_clue4',
+      'mystery_v2_clue5', 'mystery_v2_clue6', 'mystery_v2_clue7', 'mystery_v2_clue8'
+    ],
     checkTrigger: (event, snapshot) => {
       if (event.context !== 'shadow') return false
       if (event.action !== 'evolve') return false
@@ -773,7 +779,7 @@ export const recordSecretEvent = (
   }
 
   if (!mysteryTriggered && activeVariant) {
-    const clueThresholds = [3, 6, 10, 14]
+    const clueThresholds = [2, 4, 6, 8, 10, 12, 14, 16]
     for (let i = 0; i < clueThresholds.length; i++) {
       if (mysteryActionCount >= clueThresholds[i]) {
         const clueId = activeVariant.clues[i]
