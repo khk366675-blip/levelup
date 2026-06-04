@@ -512,8 +512,8 @@ export interface GameState {
   // equipment
   equipItem: (itemId: string) => void
   unequipItem: (slot: EquipmentSlot) => void
-  enhanceItem: (itemId: string) => void
-  enhanceItemWithGold: (itemId: string) => void
+  enhanceItem: (itemId: string) => { success: boolean; greatSuccess: boolean; prevLevel: number; nextLevel: number } | undefined
+  enhanceItemWithGold: (itemId: string) => { success: boolean; greatSuccess: boolean; prevLevel: number; nextLevel: number; cost: number } | undefined
 
   // consumables
   useConsumable: (itemId: string) => void
@@ -2145,40 +2145,6 @@ const buildAchievementShadowTicketGrants = (
   return { tickets, messages, claims: claimed }
 }
 
-const buildMainQuestCompletionBonus = (
-  quest: Quest
-): { tickets: ShadowSummonTicket[]; shards: Partial<Record<ShadowSummonShardType, number>>; messages: SystemMessage[] } => {
-  const tickets: ShadowSummonTicket[] = []
-  const shards: Partial<Record<ShadowSummonShardType, number>> = {}
-  const messages: SystemMessage[] = []
-  const d = quest.difficulty
-  if (d === 'boss' || d === 'apex') {
-    tickets.push(createShadowSummonTicket({ ticketType: 'rare_shadow', source: 'achievement', label: `${quest.title} 달성 — 고급 소환권` }))
-    tickets.push(createShadowSummonTicket({ ticketType: 'rare_shadow', source: 'achievement', label: `${quest.title} 달성 — 고급 소환권` }))
-    shards.rare = (shards.rare ?? 0) + 2
-    shards.normal = (shards.normal ?? 0) + 3
-  } else if (d === 'elite') {
-    tickets.push(createShadowSummonTicket({ ticketType: 'rare_shadow', source: 'achievement', label: `${quest.title} 달성 — 고급 소환권` }))
-    tickets.push(createShadowSummonTicket({ ticketType: 'rare_shadow', source: 'achievement', label: `${quest.title} 달성 — 고급 소환권` }))
-    shards.normal = (shards.normal ?? 0) + 3
-  } else {
-    tickets.push(createShadowSummonTicket({ ticketType: 'normal_shadow', source: 'achievement', label: `${quest.title} 달성 — 소환권` }))
-    shards.normal = (shards.normal ?? 0) + 2
-  }
-  const rewardLines: string[] = []
-  for (const t of tickets) rewardLines.push(t.label ?? '소환권 획득')
-  if (shards.rare) rewardLines.push(`고급 소환 조각 +${shards.rare}`)
-  if (shards.normal) rewardLines.push(`소환 조각 +${shards.normal}`)
-  messages.push({
-    id: uid(),
-    kind: 'shadow' as const,
-    title: '메인 퀘스트 달성 보상',
-    lines: ['성취 기록에 새겨졌습니다.', ...rewardLines],
-    createdAt: todayISO(),
-  })
-  return { tickets, shards, messages }
-}
-
 export const shadowRestoreCost = (shadow: OwnedShadow): number => {
   const baseByRarity: Record<string, number> = {
     Common: 50,
@@ -3357,10 +3323,7 @@ const getQuestGoldReward = (quest: Quest): number => {
     return byDifficulty[quest.difficulty] ?? 18
   }
   if (quest.type === 'main') {
-    const byDifficulty: Record<Difficulty, number> = {
-      easy: 120, normal: 160, hard: 220, elite: 320, apex: 480, boss: 650,
-    }
-    return byDifficulty[quest.difficulty] ?? 120
+    return 0 // 메인 퀘스트 최종 완료 시 대량의 골드(10,000G)를 받으므로 기본 골드는 제거
   }
   return 0
 }
@@ -5282,17 +5245,18 @@ export const useGame = create<GameState>()(
       enhanceItem: (itemId) => {
         const s = get()
         const target = s.items.find(i => i.id === itemId)
-        if (!target) return
+        if (!target) return undefined
 
         const equippedItemIds = new Set(Object.values(s.equipment).filter((id): id is string => Boolean(id)))
-        if (!canEnhanceItem(target, s.items, equippedItemIds)) return
+        if (!canEnhanceItem(target, s.items, equippedItemIds)) return undefined
 
         const material = getEnhanceMaterialCandidates(target, s.items, equippedItemIds)[0]
-        if (!material) return
+        if (!material) return undefined
 
         const isGreatSuccess = Math.random() < 0.10
         const levelIncrease = isGreatSuccess ? 2 : 1
-        const nextLevel = getEnhancementLevel(target) + levelIncrease
+        const currentLevel = getEnhancementLevel(target)
+        const nextLevel = currentLevel + levelIncrease
         const nextItems = s.items
           .filter(item => item.id !== material.id)
           .map(item => item.id === target.id ? { ...item, enhancementLevel: nextLevel } : item)
@@ -5315,15 +5279,16 @@ export const useGame = create<GameState>()(
             createdAt: todayISO(),
           }],
         })
+        return { success: true, greatSuccess: isGreatSuccess, prevLevel: currentLevel, nextLevel }
       },
 
       enhanceItemWithGold: (itemId) => {
         const s = get()
         const target = s.items.find(i => i.id === itemId)
-        if (!target) return
+        if (!target) return undefined
 
         const playerGold = s.gold ?? 0
-        if (!canEnhanceItemWithGold(target, playerGold)) return
+        if (!canEnhanceItemWithGold(target, playerGold)) return undefined
 
         const cost = getGoldEnhancementCost(target)
         const successRate = getGoldEnhancementSuccessRate(target)
@@ -5372,6 +5337,7 @@ export const useGame = create<GameState>()(
             createdAt: todayISO(),
           }],
         })
+        return { success: isSuccess, greatSuccess: isGreatSuccess, prevLevel: currentLevel, nextLevel, cost }
       },
 
       // ── Consumable System ──────────────────────────────────────────
@@ -9850,11 +9816,61 @@ export const useGame = create<GameState>()(
       }),
 
       applyMainQuestCompletionBonus: (quest) => set((s) => {
-        const bonus = buildMainQuestCompletionBonus(quest)
+        // 1. Roll a random unowned Legendary Shadow
+        const legendaryDefs = SHADOW_DEFINITIONS.filter(def => def.rarity === 'legendary')
+        const ownedIds = new Set((s.ownedShadows ?? []).map(x => x.definitionId))
+        const unownedDefs = legendaryDefs.filter(def => !ownedIds.has(def.id))
+        
+        let newShadow: OwnedShadow | undefined = undefined
+        let additionalShards: Partial<Record<ShadowSummonShardType, number>> = {}
+        let shadowMessage = ''
+
+        if (unownedDefs.length > 0) {
+          const chosen = unownedDefs[Math.floor(Math.random() * unownedDefs.length)]
+          newShadow = createOwnedShadow(chosen, Math.random)
+          shadowMessage = `· 그림자 군단 합류: [LEGENDARY] ${newShadow.name}`
+        } else {
+          // If all legendary shadows are owned, give named shards as compensation
+          additionalShards = { named: 10 }
+          shadowMessage = `· 그림자 보상: [네임드 소환 조각 +10] (모든 전설 그림자 보유 중)`
+        }
+
+        // 2. Roll random Epic or Legendary equipment item from ITEM_POOL
+        const highTierPool = ITEM_POOL.filter(item => item.rarity === 'epic' || item.rarity === 'legendary')
+        const pickedTemplate = highTierPool[Math.floor(Math.random() * highTierPool.length)] ?? ITEM_POOL[0]
+        const newEquipment = instantiateItem(pickedTemplate, 'high_boss')
+        const equipmentMessage = `· 장비 획득: [${newEquipment.rarity.toUpperCase()}] ${newEquipment.icon} ${newEquipment.name} (${newEquipment.equipmentStars}성)`
+
+        // 3. Substantial Currency
+        const goldReward = 10000
+        const essenceReward = 1500
+
+        // 4. Build consolidated celebration message
+        const rewardLines = [
+          shadowMessage,
+          equipmentMessage,
+          `· Gold +${goldReward}`,
+          `· 그림자 정수 +${essenceReward}`,
+        ]
+
+        const mainCompleteMessage: SystemMessage = {
+          id: uid(),
+          kind: 'shadow' as const,
+          title: `🏆 메인 퀘스트 최종 완료 기념 보상`,
+          lines: [
+            `"${quest.title}" 완수를 기념하여 전설적인 전리품이 지급되었습니다.`,
+            ...rewardLines
+          ],
+          createdAt: todayISO(),
+        }
+
         return {
-          shadowSummonTickets: [...(s.shadowSummonTickets ?? []), ...bonus.tickets],
-          shadowSummonShards: addShadowSummonShards(s.shadowSummonShards, bonus.shards),
-          messages: [...s.messages, ...bonus.messages],
+          gold: (s.gold ?? 0) + goldReward,
+          shadowEssence: (s.shadowEssence ?? 0) + essenceReward,
+          ownedShadows: newShadow ? [...(s.ownedShadows ?? []), newShadow] : s.ownedShadows,
+          items: [...s.items, newEquipment],
+          shadowSummonShards: addShadowSummonShards(s.shadowSummonShards, additionalShards),
+          messages: [...s.messages, mainCompleteMessage],
         }
       }),
 
@@ -12625,25 +12641,11 @@ export const useGame = create<GameState>()(
         const milestone = currentMilestones[milestoneIndex]
         if (milestone.status === 'completed') return // 중복 지급/완료 방지
 
-        // 중요: milestone.reward가 있거나 importance에 따른 내부 규칙 보상 생성
-        const importance = milestone.importance || 'normal'
-        let xpReward = 40
-        let goldReward = 30
+        // 중요: 마일스톤 완료 시의 개별 보상(XP/Gold/스탯/전리품 상자)은 모두 제거하고 진행도만 기록 (최종 완료 보상에 집중)
+        let xpReward = 0
+        let goldReward = 0
         let statRewards: Partial<Record<StatKey, number>> = {}
         let boxTypeReward: 'epic' | 'superior' | 'normal' | undefined = undefined
-
-        if (importance === 'minor') {
-          xpReward = 15
-          goldReward = 10
-        } else if (importance === 'normal') {
-          xpReward = 40
-          goldReward = 30
-          statRewards = { PER: 1 }
-        } else if (importance === 'major') {
-          xpReward = 120
-          goldReward = 80
-          boxTypeReward = 'epic'
-        }
 
         // 보상 처리
         // 1. XP 및 레벨업 계산
@@ -12677,8 +12679,8 @@ export const useGame = create<GameState>()(
           lines: [
             `[${quest.title}]`,
             `중간 목표 "${milestone.title}" 완료`,
-            `+${xpReward} XP 획득`,
-            `Gold +${goldReward}`,
+            ...(xpReward > 0 ? [`+${xpReward} XP 획득`] : []),
+            ...(goldReward > 0 ? [`Gold +${goldReward}`] : []),
             ...Object.entries(statRewards).map(([k, v]) => `· ${k} +${v}`),
             ...(boxTypeReward ? ['전리품 상자 획득'] : [])
           ],
@@ -12739,6 +12741,13 @@ export const useGame = create<GameState>()(
         // 모든 milestone 완료 시 전체 Main 퀘스트도 완료 처리
         const allCompleted = totalCount > 0 && completedCount === totalCount
 
+        if (allCompleted) {
+          const mainQuestStatRewards = getBalancedQuestStatRewards(quest)
+          for (const [k, v] of Object.entries(mainQuestStatRewards)) {
+            newStats[k as StatKey] = roundStatValue(newStats[k as StatKey] + (v ?? 0))
+          }
+        }
+
         set({
           hunter: { ...newHunter, stats: newStats },
           gold: nextGold,
@@ -12761,6 +12770,10 @@ export const useGame = create<GameState>()(
         setTimeout(() => {
           get().checkTitleUnlocks()
           get().checkJobAwakening()
+          if (allCompleted) {
+            get().applyMainQuestCompletionBonus(quest)
+            get().rollGateSpawn('main_completion')
+          }
         }, 0)
       },
 
@@ -12828,18 +12841,38 @@ export const useGame = create<GameState>()(
         })
       },
 
-      completeMainQuest: (mainQuestId) => set((s) => ({
-        quests: s.quests.map(q => {
-          if (q.id !== mainQuestId || q.type !== 'main') return q
-          return {
-            ...q,
-            completed: true,
-            completedAt: todayISO(),
-            status: 'completed' as const,
-            progressPercent: 100
-          }
+      completeMainQuest: (mainQuestId) => {
+        const s = get()
+        const quest = s.quests.find(q => q.id === mainQuestId)
+        if (!quest || quest.type !== 'main' || quest.completed) return
+
+        const mainQuestStatRewards = getBalancedQuestStatRewards(quest)
+        const newStats = { ...s.hunter.stats }
+        for (const [k, v] of Object.entries(mainQuestStatRewards)) {
+          newStats[k as StatKey] = roundStatValue(newStats[k as StatKey] + (v ?? 0))
+        }
+
+        set({
+          hunter: { ...s.hunter, stats: newStats },
+          quests: s.quests.map(q => {
+            if (q.id !== mainQuestId || q.type !== 'main') return q
+            return {
+              ...q,
+              completed: true,
+              completedAt: todayISO(),
+              status: 'completed' as const,
+              progressPercent: 100
+            }
+          })
         })
-      })),
+
+        setTimeout(() => {
+          get().checkTitleUnlocks()
+          get().checkJobAwakening()
+          get().applyMainQuestCompletionBonus(quest)
+          get().rollGateSpawn('main_completion')
+        }, 0)
+      },
 
       removeQuest: (id) => set((s) => {
         const nextQuests = s.quests.filter(q => q.id !== id)

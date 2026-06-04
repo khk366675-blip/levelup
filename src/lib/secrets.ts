@@ -8,6 +8,56 @@ import type {
 import { SECRET_HINTS, SECRET_MESSAGES } from './secretLore'
 import { ensureWorldSignalState, createInitialWorldSignalState, emitWorldSignal } from './worldSignals'
 
+export interface MysteryVariant {
+  id: string
+  clues: string[]
+  checkTrigger: (event: SecretEvent, snapshot: SecretSnapshot) => boolean
+  rewardTitle: string
+  rewardLines: string[]
+  rewardBonus: number
+}
+
+export const MYSTERY_VARIANTS: MysteryVariant[] = [
+  {
+    id: 'mystery_v1',
+    clues: ['mystery_v1_clue1', 'mystery_v1_clue2', 'mystery_v1_clue3', 'mystery_v1_clue4'],
+    checkTrigger: (event, snapshot) => {
+      if (event.context !== 'expedition') return false
+      if (event.outcome !== 'success' && event.outcome !== 'great_success') return false
+      if (event.expeditionType !== 'scout') return false
+      if (!event.shadowIds || event.shadowIds.length !== 1) return false
+      
+      const singleId = event.shadowIds[0]
+      const shadow = (snapshot.ownedShadows ?? []).find(s => s.instanceId === singleId)
+      return shadow?.role === 'scout'
+    },
+    rewardTitle: '🔑 비밀 미스터리 해제 완료',
+    rewardLines: ['왜곡되어 있던 고독한 좌표가 마침내 올바르게 공명하기 시작했습니다. 군단 기록에 숨겨진 보상이 지급됩니다.'],
+    rewardBonus: 150
+  },
+  {
+    id: 'mystery_v2',
+    clues: ['mystery_v2_clue1', 'mystery_v2_clue2', 'mystery_v2_clue3', 'mystery_v2_clue4'],
+    checkTrigger: (event, snapshot) => {
+      if (event.context !== 'shadow') return false
+      if (event.action !== 'evolve') return false
+      if (!event.shadowInstanceId) return false
+      
+      const shadow = (snapshot.ownedShadows ?? []).find(s => s.instanceId === event.shadowInstanceId)
+      return shadow?.role === 'analyst'
+    },
+    rewardTitle: '🔑 비밀 미스터리 해제 완료',
+    rewardLines: ['지식을 탐하던 그림자가 껍질을 깨고 진화하자, 망각되었던 인장이 빛을 뿜습니다. 군단 기록에 숨겨진 보상이 지급됩니다.'],
+    rewardBonus: 150
+  }
+]
+
+export const pickRandomMysteryVariantId = (excludeId?: string): string => {
+  const pool = MYSTERY_VARIANTS.filter(v => v.id !== excludeId)
+  const selected = pool.length > 0 ? pool[Math.floor(Math.random() * pool.length)] : MYSTERY_VARIANTS[0]
+  return selected.id
+}
+
 type SecretSnapshot = {
   infiniteTower?: {
     highestClearedFloor: number
@@ -187,6 +237,13 @@ export const ensureSecretProgress = (
     .filter(([, value]) => value)
     .map(([key]) => `flag.${key}`))
   const sealed = mergeSealedRecords(progress)
+
+  // 미스터리 진행도 추출 및 배정
+  const prevMysteryVariantId = progress.prevMysteryVariantId
+  const mysteryVariantId = progress.mysteryVariantId || pickRandomMysteryVariantId(prevMysteryVariantId)
+  const mysteryTriggered = progress.mysteryTriggered ?? false
+  const mysteryActionCount = progress.mysteryActionCount ?? 0
+
   return {
     meta: {
       initializedAt,
@@ -208,6 +265,10 @@ export const ensureSecretProgress = (
     hiddenAffinity: progress.hiddenAffinity ?? {},
     sealedRewards: Object.fromEntries(Object.entries(sealed).map(([key]) => [key, true])),
     worldSignals: ensureWorldSignalState(progress.worldSignals),
+    mysteryVariantId,
+    prevMysteryVariantId,
+    mysteryTriggered,
+    mysteryActionCount,
   }
 }
 
@@ -684,7 +745,58 @@ export const recordSecretEvent = (
     unlockSecretOnce(updatedProgress, 'echo-trace-b')
   }
 
-  return { progress: updatedProgress, messages, shadowEssenceBonus, ownedShadows }
+  // -------------------------------------------------------------
+  // 미스터리 진행도 및 트리거 평가
+  // -------------------------------------------------------------
+  let mysteryTriggered = updatedProgress.mysteryTriggered ?? false
+  let mysteryActionCount = updatedProgress.mysteryActionCount ?? 0
+  const activeVariantId = updatedProgress.mysteryVariantId
+  const activeVariant = MYSTERY_VARIANTS.find(v => v.id === activeVariantId)
+
+  let bonusEssence = 0
+  let finalProgress = updatedProgress
+
+  if (!mysteryTriggered && activeVariant) {
+    if (activeVariant.checkTrigger(event, snapshot)) {
+      mysteryTriggered = true
+      bonusEssence += activeVariant.rewardBonus
+      messages.push({
+        kind: 'secret',
+        title: activeVariant.rewardTitle,
+        lines: activeVariant.rewardLines
+      })
+    } else {
+      if (event.context !== 'echo') {
+        mysteryActionCount += 1
+      }
+    }
+  }
+
+  if (!mysteryTriggered && activeVariant) {
+    const clueThresholds = [3, 6, 10, 14]
+    for (let i = 0; i < clueThresholds.length; i++) {
+      if (mysteryActionCount >= clueThresholds[i]) {
+        const clueId = activeVariant.clues[i]
+        if (clueId && (!finalProgress.worldSignals?.discoveredSignalIds.includes(clueId))) {
+          const emitRes = emitWorldSignal(finalProgress, clueId as any)
+          finalProgress = emitRes.progress
+          if (emitRes.signal) {
+            messages.push({
+              kind: 'secret',
+              title: emitRes.signal.title,
+              lines: [emitRes.signal.body]
+            })
+          }
+        }
+      }
+    }
+  }
+
+  finalProgress.mysteryTriggered = mysteryTriggered
+  finalProgress.mysteryActionCount = mysteryActionCount
+  finalProgress.mysteryVariantId = activeVariantId
+
+  return { progress: finalProgress, messages, shadowEssenceBonus: shadowEssenceBonus + bonusEssence, ownedShadows }
 }
 
 export const getSecretVisibleFragments = (progress: SecretProgressState | undefined): string[] =>
@@ -725,5 +837,13 @@ export const resetSecretProgressOnLoop = (
     surfaceEndingReached: prevFlags.surfaceEndingReached ? 1 : 0,
     loopEndingReached: prevFlags.loopEndingReached ? 1 : 0,
   }
+
+  // 회귀 시 직전 배정 변형 제외하고 새 변형 배정
+  const lastVariantId = currentProgress?.mysteryVariantId
+  next.prevMysteryVariantId = lastVariantId
+  next.mysteryVariantId = pickRandomMysteryVariantId(lastVariantId)
+  next.mysteryTriggered = false
+  next.mysteryActionCount = 0
+
   return next
 }

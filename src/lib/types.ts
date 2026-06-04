@@ -1898,6 +1898,10 @@ export interface SecretProgressState {
   hiddenAffinity?: Record<string, number>
   sealedRewards?: Record<string, boolean>
   worldSignals?: WorldSignalState
+  mysteryVariantId?: string
+  prevMysteryVariantId?: string
+  mysteryTriggered?: boolean
+  mysteryActionCount?: number
 }
 
 export type BoxType = 'daily' | 'weekly' | 'boss'

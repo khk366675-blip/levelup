@@ -187,12 +187,12 @@ export const BALANCED_XP_BY_TYPE: Record<QuestRewardType, Record<Difficulty, num
     boss: 320,
   },
   main: {
-    easy: 1800,
-    normal: 3400,
-    hard: 6800,
-    elite: 11800,
-    apex: 20500,
-    boss: 35000,
+    easy: 500,
+    normal: 1000,
+    hard: 2000,
+    elite: 4000,
+    apex: 8000,
+    boss: 12000,
   },
   dungeon: {
     easy: 650,
@@ -283,6 +283,16 @@ export const getBalancedQuestDropChance = (type: QuestRewardType, difficulty: Di
 }
 
 export const getBalancedQuestStatRewards = (q: Pick<Quest, 'type' | 'difficulty' | 'category' | 'statRewards' | 'rewardStatWeights'>): Partial<Record<StatKey, number>> => {
+  if (q.type === 'main') {
+    const rewards: Partial<Record<StatKey, number>> = {}
+    for (const [key, value] of Object.entries(q.statRewards) as Array<[StatKey, number]>) {
+      rewards[key] = roundStatValue(value ?? 0)
+    }
+    if (Object.keys(rewards).length === 0) {
+      rewards[CATEGORY_TO_STAT[q.category]] = 1
+    }
+    return rewards
+  }
   const multiplier = STAT_REWARD_MULTIPLIER_BY_TYPE[q.type][q.difficulty]
   const rewards: Partial<Record<StatKey, number>> = {}
   const weights = Object.entries(q.rewardStatWeights ?? {}) as Array<[StatKey, number]>
@@ -599,7 +609,10 @@ export const getGoldEnhancementCost = (item: Item): number => {
     epic: 800,
     legendary: 1000,
   }
-  return costs[item.rarity] || 200
+  const baseCost = costs[item.rarity] || 200
+  const currentLevel = getEnhancementLevel(item)
+  const multiplier = 1.0 + Math.floor(currentLevel / 5) * 0.25
+  return Math.round(baseCost * multiplier)
 }
 
 export const getGoldEnhancementSuccessRate = (item: Item): number => {

@@ -893,12 +893,12 @@ export function generateGateRunState(gateId: string, seed: string, examGrade?: H
 
     // 중간 방 가중치 풀 및 등급별 가중치 설정
     const types: GateRunEncounterType[] = ['battle', 'elite', 'event', 'rest', 'treasure', 'shadow_trace']
-    let weights = [0.25, 0.0, 0.40, 0.15, 0.10, 0.10] // E/D 기본 가중치 (elite 제외)
+    let weights = [0.32, 0.0, 0.44, 0.10, 0.04, 0.10] // E/D 기본 가중치 (elite 제외)
 
     if (rank === 'C' || rank === 'B') {
-      weights = [0.22, 0.08, 0.40, 0.12, 0.08, 0.10]
+      weights = [0.27, 0.08, 0.43, 0.09, 0.03, 0.10]
     } else if (rank === 'A' || rank === 'S') {
-      weights = [0.20, 0.15, 0.35, 0.12, 0.08, 0.10]
+      weights = [0.25, 0.15, 0.38, 0.09, 0.03, 0.10]
     }
 
     // 직전 방과의 관계에 따른 동적 가중치 조율 (연속성 완화 및 교차 유도)
@@ -1069,7 +1069,9 @@ export function generateGateRunState(gateId: string, seed: string, examGrade?: H
         }
 
         // 몬스터 조합 생성
-        const numMonsters = isElite ? (rank === 'E' ? 1 : 2) : (rank === 'E' ? 1 : rand() < 0.6 ? 2 : 3)
+        const numMonsters = isElite
+          ? (rank === 'E' ? 2 : (rand() < 0.5 ? 2 : 3))
+          : (rank === 'E' ? (rand() < 0.5 ? 1 : 2) : (rand() < 0.5 ? 2 : 3))
         monsterIds = []
         for (let j = 0; j < numMonsters; j++) {
           if (gateMonsters.length > 0) {

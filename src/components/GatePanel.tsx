@@ -2647,7 +2647,7 @@ export function GatePanel({ isWorldMapContext }: { isWorldMapContext?: boolean }
         {!isWorldMapContext && <GateStatusPanel />}
         {!isWorldMapContext && <ArchiveTraceChip count={traceCount} />}
         <DirectBattlePreviewPanel
-          key={`direct-gate-${activeGate.instanceId}`}
+          key={`direct-gate-${activeGate.instanceId}-enc${activeGate.runState?.currentEncounterIndex ?? 0}`}
           source={activeGate?.runState?.isPromotionExam ? 'promotion_exam' : (isActiveRedGate ? 'red_gate' : 'gate')}
           title="직접 조작 게이트 전투"
           note="실제 게이트 전투 후보입니다. 승리/패배 결과는 기존 게이트 보상/패널티 처리로 한 번만 연결됩니다."
