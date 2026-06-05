@@ -1,8 +1,9 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import clsx from 'clsx'
 import { Crown, Eclipse, Eye, Gem, Lock, Search, Shield, Sparkles, Star, Swords, Ticket, X, ChevronDown, ChevronUp, Dumbbell, FlaskConical } from 'lucide-react'
 import { useGame } from '../lib/store'
+import { getShadowRuneSlotsCount, getRuneDescription, getRuneValue } from '../lib/runes'
 import { buildShadowBattleUnit } from '../lib/battleUnits'
 import { ShadowCard as VisualShadowCard } from './shadows/ShadowCard'
 import { ShadowExpeditionPanel } from './shadows/ShadowExpeditionPanel'
@@ -240,6 +241,10 @@ function ShadowDetailPanel({
   shadowEssence: number
 }) {
   const [detailsOpen, setDetailsOpen] = useState(false)
+  const runes = useGame(s => s.runes ?? [])
+  const equipRune = useGame(s => s.equipRune)
+  const unequipRune = useGame(s => s.unequipRune)
+  const [equipSelectorSlot, setEquipSelectorSlot] = useState<number | null>(null)
 
   if (!shadow) {
     return (
@@ -280,6 +285,9 @@ function ShadowDetailPanel({
     { label: '원정 전투', value: combatProfile.expeditionPower },
   ]
 
+  const maxRuneSlots = getShadowRuneSlotsCount(shadow)
+  const shadowRunes = runes.filter(r => r.type === 'shadow')
+
   return (
     <div className={`panel corner-bracket overflow-hidden p-4 border ${rarityStyle[shadow.rarity]} bg-ink-950/78`}>
       <div className="br" />
@@ -314,6 +322,150 @@ function ShadowDetailPanel({
         </span>
         {(shadow.enhancementLevel ?? 0) > 0 && (
           <span className="rounded border border-amber-300/35 bg-amber-300/10 px-2 py-1 text-amber-100">+{shadow.enhancementLevel}</span>
+        )}
+      </div>
+
+      <div className="mt-4 rounded-lg border border-cyan-500/20 bg-cyan-950/10 p-3">
+        <div className="mb-2 flex items-center justify-between">
+          <div className="flex items-center gap-1.5">
+            <Gem className="h-3.5 w-3.5 text-cyan-300 animate-pulse" />
+            <span className="text-xs font-bold text-white/95">그림자 룬 장착</span>
+          </div>
+          <span className="text-[10px] text-white/45 font-bold">
+            ({shadow.runeSlots?.filter(Boolean).length ?? 0} / {maxRuneSlots} 장착)
+          </span>
+        </div>
+        <div className="grid grid-cols-3 gap-2">
+          {Array.from({ length: maxRuneSlots }).map((_, idx) => {
+            const equippedRune = shadow.runeSlots?.[idx]
+            
+            if (equippedRune) {
+              const gradeBorderColor = 
+                equippedRune.grade === 'legendary' ? 'border-amber-400/40 bg-amber-400/5' :
+                equippedRune.grade === 'epic' ? 'border-purple-400/40 bg-purple-400/5' :
+                equippedRune.grade === 'rare' ? 'border-cyan-400/40 bg-cyan-400/5' :
+                equippedRune.grade === 'uncommon' ? 'border-emerald-400/40 bg-emerald-400/5' :
+                'border-zinc-500/30 bg-zinc-500/5'
+
+              const gradeTextColor = 
+                equippedRune.grade === 'legendary' ? 'text-amber-300' :
+                equippedRune.grade === 'epic' ? 'text-purple-300' :
+                equippedRune.grade === 'rare' ? 'text-cyan-300' :
+                equippedRune.grade === 'uncommon' ? 'text-emerald-300' :
+                'text-zinc-300'
+
+              return (
+                <div 
+                  key={idx} 
+                  className={clsx(
+                    "relative rounded border p-2 flex flex-col justify-between items-center text-center min-h-[82px] cursor-pointer group hover:bg-white/5", 
+                    gradeBorderColor
+                  )}
+                  onClick={() => {
+                    if (window.confirm(`[${equippedRune.name}]을 해제하시겠습니까?`)) {
+                      unequipRune(shadow.instanceId, 'shadow', idx)
+                    }
+                  }}
+                >
+                  <div className="text-lg">{equippedRune.icon}</div>
+                  <div className="min-w-0 w-full">
+                    <div className={clsx("truncate text-[9px] font-bold leading-tight", gradeTextColor)}>
+                      {equippedRune.name}
+                    </div>
+                    <div className="text-[8px] text-white/50 truncate mt-0.5">
+                      +{equippedRune.enhancementLevel} 강
+                    </div>
+                  </div>
+                  <div className="absolute inset-0 bg-rose-500/20 opacity-0 group-hover:opacity-100 flex items-center justify-center transition rounded">
+                    <span className="text-[9px] font-bold text-rose-300">해제</span>
+                  </div>
+                </div>
+              )
+            } else {
+              return (
+                <button
+                  key={idx}
+                  type="button"
+                  onClick={() => setEquipSelectorSlot(idx)}
+                  className="rounded border border-dashed border-white/10 hover:border-cyan-400/30 bg-black/40 hover:bg-cyan-950/10 p-2 flex flex-col justify-center items-center gap-1 min-h-[82px] text-center text-white/30 hover:text-cyan-200 transition"
+                >
+                  <span className="text-sm">+</span>
+                  <span className="text-[9px] font-bold">장착</span>
+                </button>
+              )
+            }
+          })}
+        </div>
+
+        {/* 룬 장착 선택 셀렉터 */}
+        {equipSelectorSlot !== null && (
+          <div className="mt-3 border-t border-white/10 pt-3 space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-bold text-cyan-300">{equipSelectorSlot + 1}번 슬롯에 장착할 룬 선택</span>
+              <button 
+                type="button" 
+                onClick={() => setEquipSelectorSlot(null)}
+                className="text-[9px] text-white/45 hover:text-white/80"
+              >
+                닫기
+              </button>
+            </div>
+            
+            {shadowRunes.length > 0 ? (
+              <div className="max-h-40 overflow-y-auto space-y-1.5 pr-1">
+                {shadowRunes.map(rune => {
+                  const val = getRuneValue(rune)
+                  const isPercent = rune.effectType && rune.effectType !== 'stat_bonus'
+                  const valStr = isPercent ? `${(val * 100).toFixed(1)}%` : val.toString()
+                  const desc = rune.description.replace('{val}', valStr)
+                  
+                  const gradeBg = 
+                    rune.grade === 'legendary' ? 'bg-amber-400/10 border-amber-400/35 hover:bg-amber-400/20' :
+                    rune.grade === 'epic' ? 'bg-purple-400/10 border-purple-400/35 hover:bg-purple-400/20' :
+                    rune.grade === 'rare' ? 'bg-cyan-400/10 border-cyan-400/35 hover:bg-cyan-400/20' :
+                    rune.grade === 'uncommon' ? 'bg-emerald-400/10 border-emerald-400/35 hover:bg-emerald-400/20' :
+                    'bg-zinc-500/10 border-zinc-500/35 hover:bg-zinc-500/20'
+
+                  const gradeText = 
+                    rune.grade === 'legendary' ? 'text-amber-300' :
+                    rune.grade === 'epic' ? 'text-purple-300' :
+                    rune.grade === 'rare' ? 'text-cyan-300' :
+                    rune.grade === 'uncommon' ? 'text-emerald-300' :
+                    'text-zinc-300'
+
+                  return (
+                    <div 
+                      key={rune.id}
+                      onClick={() => {
+                        equipRune(rune.id, shadow.instanceId, 'shadow', equipSelectorSlot)
+                        setEquipSelectorSlot(null)
+                      }}
+                      className={clsx(
+                        "rounded border p-2 flex items-center justify-between gap-2 cursor-pointer transition text-[10px] text-left",
+                        gradeBg
+                      )}
+                    >
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className="text-base shrink-0">{rune.icon}</span>
+                        <div className="min-w-0">
+                          <div className={clsx("font-bold truncate", gradeText)}>
+                            {rune.name} <span className="text-[9px] text-white/50">+{rune.enhancementLevel}</span>
+                          </div>
+                          <div className="text-[9px] text-white/60 truncate">{desc}</div>
+                        </div>
+                      </div>
+                      <span className="text-[9px] font-bold text-cyan-300 shrink-0">장착</span>
+                    </div>
+                  )
+                })}
+              </div>
+            ) : (
+              <div className="text-[10px] text-white/35 py-3 text-center border border-dashed border-white/5 bg-black/20 rounded">
+                장착 가능한 그림자 전용 룬이 없습니다.<br />
+                <span className="text-[9px] text-white/25">(전투나 상점에서 룬 상자를 획득하세요)</span>
+              </div>
+            )}
+          </div>
         )}
       </div>
 
@@ -623,18 +775,10 @@ function CodexCard({
             <div className={`text-[10px] system-text mt-0.5 tracking-wider ${hidden ? 'text-white/50' : lockedSourceType === 'named_gate' ? 'text-amber-100/75' : 'text-cyan-100/75'}`}>
               {hidden && '봉인된 기록'}
               <span className={hidden ? 'hidden' : ''}>
-              {lockedSourceType === 'named_gate' ? '봉인된 네임드 그림자' : '미획득 성취 그림자'}
+              {lockedSourceType === 'named_gate' ? '봉인된 네임드' : '미획득 성취'}
               </span>
             </div>
           )}
-          {hidden && (
-            <div className="text-[11px] text-white/55 mt-1">
-              계급/역할: 봉인 해제 후 공개
-            </div>
-          )}
-          <div className={`text-[11px] text-white/55 mt-1 ${hidden ? 'hidden' : ''}`}>
-            계급: {SHADOW_RANK_LABEL[definition.rank]} · 역할: {SHADOW_ROLE_LABEL[definition.role]}
-          </div>
         </div>
         <div className="flex flex-col items-end gap-1">
           {owned ? <Eclipse className="w-4 h-4 text-cyan-200" /> : <Lock className={`w-4 h-4 ${hidden ? 'text-white/35' : isLockedNamed ? (lockedSourceType === 'named_gate' ? 'text-amber-300/75' : 'text-cyan-200/75') : 'text-white/35'}`} />}
@@ -645,35 +789,17 @@ function CodexCard({
           )}
         </div>
       </div>
-      {hidden && (
-        <div className="mt-3 text-[11px] text-white/55 leading-relaxed">
-          균열 너머에서 존재감만 감지된다.
-        </div>
-      )}
-      <div className={`mt-3 text-[11px] text-white/55 leading-relaxed ${hidden ? 'hidden' : ''}`}>
-        {hidden ? '균열 너머에서 존재감만 감지된다.' : definition.description}
-      </div>
-      {hidden && (
-        <div className="mt-2 text-[11px] text-cyan-100/70 leading-relaxed">
-          효과: 봉인 해제 후 공개
-        </div>
-      )}
-      <div className={`mt-2 text-[11px] text-cyan-100/70 leading-relaxed ${hidden ? 'hidden' : ''}`}>
-        {hidden ? '효과: 봉인 해제 후 공개' : effects.join(' · ')}
-      </div>
-      <div className="mt-2 text-[10px] text-white/40 system-text">
-        조건: {unlockConditionLabel}
-      </div>
+      
       {fragmentCount !== undefined && fragmentCount > 0 && (
-        <div className="mt-2 flex items-center justify-between text-[11px] text-cyan-200/90 bg-cyan-950/45 px-2 py-1 rounded border border-cyan-800/35">
-          <span>그림자 잔향 조각</span>
-          <span>{fragmentCount}개 보유 {!owned && `(소환 필요: ${SHADOW_FRAGMENT_SUMMON_COST[definition.rarity] ?? 20}개)`}</span>
+        <div className="mt-2 flex items-center justify-between text-[10px] text-cyan-200/90 bg-cyan-950/45 px-2 py-1 rounded border border-cyan-800/35">
+          <span>조각 {fragmentCount}개</span>
+          {!owned && <span>소환: {SHADOW_FRAGMENT_SUMMON_COST[definition.rarity] ?? 20}개 필요</span>}
         </div>
       )}
       {failCount !== undefined && failCount > 0 && !owned && (
         <div className="mt-1 flex items-center justify-between text-[10px] text-amber-200/80 bg-amber-950/40 px-2 py-0.5 rounded border border-amber-800/30">
-          <span>실패 공명 누적</span>
-          <span>{failCount}회 (+{failCount * 5}% 보정)</span>
+          <span>공명 누적</span>
+          <span>{failCount}회 (+{failCount * 5}%)</span>
         </div>
       )}
     </motion.div>
@@ -696,6 +822,11 @@ export function ShadowPanel() {
   const [view, setView] = useState<'owned' | 'codex'>('owned')
   const [query, setQuery] = useState('')
   const [selectedShadowId, setSelectedShadowId] = useState<string | undefined>()
+  const [isExpanded, setIsExpanded] = useState(false)
+
+  useEffect(() => {
+    setIsExpanded(false)
+  }, [view])
   const [shadowReveal, setShadowReveal] = useState<ShadowRevealPayload | undefined>()
 
   // Premium Grow / Reveal Upgrade Results States
@@ -1374,185 +1505,277 @@ export function ShadowPanel() {
       <ShadowRevealModal reveal={shadowReveal} onClose={() => setShadowReveal(undefined)} />
       <div className="panel corner-bracket overflow-hidden p-5 border-purple-400/25 bg-[radial-gradient(circle_at_50%_0%,rgba(124,58,237,0.2),transparent_36%),linear-gradient(135deg,rgba(15,23,42,0.75),rgba(2,6,23,0.94))]">
         <div className="br" />
-        <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 mb-5 border-b border-purple-500/15 pb-4">
-          <div className="flex items-center gap-2.5">
-            <Eclipse className="w-6 h-6 text-cyan-300 animate-pulse" />
-            <div>
-              <div className="system-text text-[11px] text-cyan-300/80 font-bold tracking-wider">SHADOW LEGION HQ</div>
-              <div className="text-sm font-black text-white/95">그림자 군단 사령부</div>
+        {/* 1. DEPLOYED LEGION (출전 군단) - 맨 상단 배치 */}
+        <div className="mb-5">
+          <div className="rounded-lg border border-purple-500/25 bg-purple-950/10 p-4 shadow-[inset_0_0_20px_rgba(168,85,247,0.05)]">
+            <div className="mb-3 flex items-center gap-2">
+              <Eclipse className="h-4 w-4 text-cyan-300 animate-pulse" />
+              <div className="system-text text-[11px] text-cyan-300 font-bold tracking-wider">LEGION DEPLOYMENT</div>
+              <span className="text-[10px] text-white/45 font-bold">
+                ({equippedShadows.length} / {slotCount} 출전)
+              </span>
+              {equippedShadowIds.length > slotCount && (
+                <span className="text-[9px] text-rose-300 border border-rose-500/30 bg-rose-500/10 rounded px-1.5 py-0.5 animate-pulse ml-2">
+                  슬롯 초과 감지! 앞 {slotCount}명만 출전합니다.
+                </span>
+              )}
+              <div className="h-px flex-1 bg-gradient-to-r from-cyan-300/20 to-transparent" />
             </div>
-          </div>
-          
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 w-full lg:w-auto lg:min-w-[720px] text-xs">
-            <div className="rounded-md border border-cyan-400/20 bg-cyan-400/8 px-3 py-1.5 shadow-sm">
-              <div className="system-text text-[8px] text-cyan-200/50 uppercase tracking-wider font-bold">그림자 정수</div>
-              <div className="text-sm font-black text-cyan-100 tabular-nums">{shadowEssence.toLocaleString()}</div>
-            </div>
-            <div className="rounded-md border border-purple-400/20 bg-purple-400/8 px-3 py-1.5 shadow-sm">
-              <div className="system-text text-[8px] text-purple-200/50 uppercase tracking-wider font-bold">Legion Size</div>
-              <div className="text-sm font-black text-purple-100 tabular-nums">{ownedShadows.length}</div>
-            </div>
-            <div className="rounded-md border border-amber-400/20 bg-amber-400/8 px-3 py-1.5 shadow-sm">
-              <div className="system-text text-[8px] text-amber-200/50 uppercase tracking-wider font-bold">Deployed</div>
-              <div className="text-sm font-black text-amber-100 tabular-nums">{equippedShadows.length}/{slotCount}</div>
-            </div>
-            <div className="rounded-md border border-indigo-400/20 bg-indigo-400/8 px-3 py-1.5 shadow-sm">
-              <div className="system-text text-[8px] text-indigo-200/50 uppercase tracking-wider font-bold">Named Heroes</div>
-              <div className="text-sm font-black text-indigo-100 tabular-nums">{namedCount}</div>
-            </div>
-            <div className="rounded-md border border-yellow-400/20 bg-yellow-400/8 px-3 py-1.5 shadow-sm">
-              <div className="system-text text-[8px] text-yellow-200/50 uppercase tracking-wider font-bold">S / A Grade</div>
-              <div className="text-sm font-black text-yellow-100 tabular-nums">{sGradeCount}S / {aGradeCount}A</div>
-            </div>
-            <div className="rounded-md border border-emerald-400/20 bg-emerald-400/8 px-3 py-1.5 shadow-sm col-span-2 sm:col-span-1">
-              <div className="system-text text-[8px] text-emerald-200/50 uppercase tracking-wider font-bold">Legion Power</div>
-              <div className="text-sm font-black text-emerald-100 tabular-nums" title={`Max SCP: ${maxScp}`}>{legionPower.toLocaleString()}</div>
-            </div>
-          </div>
 
-          {equippedShadowIds.length > slotCount && (
-            <div className="text-[10px] text-rose-300 border border-rose-500/30 bg-rose-500/10 rounded px-2.5 py-1 animate-pulse">
-              슬롯 초과 감지! 앞 {slotCount}명만 출전합니다.
+            <div className="grid gap-4 grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
+              {Array.from({ length: slotCount }).map((_, idx) => {
+                const shadow = equippedShadows[idx]
+                if (!shadow) {
+                  return (
+                    <motion.div
+                      key={`empty-slot-${idx}`}
+                      whileHover={{ scale: 1.02 }}
+                      className="border border-dashed border-white/10 hover:border-purple-400/30 bg-black/45 hover:bg-purple-950/5 rounded-xl p-4 flex flex-col items-center justify-center min-h-[170px] text-center transition duration-300"
+                    >
+                      <Lock className="w-5 h-5 text-white/20 mb-2 animate-pulse" />
+                      <div className="text-[10px] system-text text-white/30 font-black tracking-wider">SLOT {idx + 1}</div>
+                      <div className="text-xs text-white/35 font-semibold mt-1">배치 대기 중</div>
+                    </motion.div>
+                  )
+                }
+
+                const selected = selectedShadow?.instanceId === shadow.instanceId
+                const combatProfile = getShadowCombatProfile(shadow)
+                const isNamed = shadow && Boolean(shadow.isNamed || shadow.isGateNamed || shadow.isAchievementNamed)
+                
+                return (
+                  <motion.div
+                    key={shadow.instanceId}
+                    onClick={() => setSelectedShadowId(shadow.instanceId)}
+                    whileHover={{ y: -6, scale: 1.04 }}
+                    transition={{ duration: 0.2, ease: 'easeOut' }}
+                    className={clsx(
+                      "group relative min-w-0 overflow-hidden rounded-xl border p-4 text-center cursor-pointer flex flex-col justify-between min-h-[170px] transition duration-300",
+                      selected
+                        ? 'border-cyan-400 bg-cyan-950/20 ring-2 ring-cyan-400/60 shadow-[0_0_20px_rgba(34,211,238,0.3)]'
+                        : 'border-purple-500/20 bg-ink-900/55 hover:border-cyan-400/40 hover:bg-cyan-950/5 hover:shadow-[0_0_15px_rgba(34,211,238,0.1)]'
+                    )}
+                  >
+                    <div>
+                      <div className="flex items-center justify-between gap-1 text-[9px] system-text text-white/45 mb-2.5">
+                        <span className="text-cyan-300 font-black tracking-wider">SLOT {idx + 1}</span>
+                        <span className="opacity-80">{SHADOW_RARITY_LABEL[shadow.rarity]}</span>
+                      </div>
+                      
+                      <div className="flex flex-col items-center gap-2">
+                        <ShadowPortrait shadow={shadow} size="lg" active={true} highlighted={isNamed} innateGrade={shadow.innateGrade} />
+                        <div className="min-w-0 w-full">
+                          <div className="truncate text-sm font-extrabold text-white leading-tight">{shadow.name}</div>
+                          <div className="text-[10px] system-text text-white/40 mt-1 font-semibold">Lv.{shadow.level ?? 1} · {SHADOW_ROLE_LABEL[shadow.role]}</div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="mt-3 flex items-center justify-between gap-2 pt-2 border-t border-white/5">
+                      <span className="text-[10px] font-black system-text text-amber-300 truncate">SCP {combatProfile.totalPower.toLocaleString()}</span>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          unequipShadow(shadow.instanceId)
+                        }}
+                        className="px-2 py-1 border border-rose-500/30 hover:border-rose-500/60 bg-rose-500/5 hover:bg-rose-500/20 text-[9px] font-bold text-rose-300 rounded transition duration-200"
+                      >
+                        해제
+                      </button>
+                    </div>
+                  </motion.div>
+                )
+              })}
             </div>
-          )}
+          </div>
         </div>
 
-        <div className="mb-5 grid gap-3 xl:grid-cols-[minmax(0,1fr)_340px]">
-          <div className="rounded-lg border border-white/10 bg-ink-950/45 p-3">
-            <div className="mb-3 flex items-center gap-2">
-              <Crown className="h-4 w-4 text-amber-200" />
-              <div className="system-text text-[11px] text-amber-100/75">COMMAND GALLERY</div>
-              <div className="h-px flex-1 bg-gradient-to-r from-amber-300/25 to-transparent" />
+        {/* 2. 도감/보유 목록 컨트롤 패널 (필터/검색) */}
+        <div className="panel corner-bracket p-3 border-white/10 bg-ink-950/60 mb-3">
+          <div className="br" />
+          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-[auto_auto_minmax(180px,1fr)]">
+            <div className="grid grid-cols-2 gap-2">
+              <button type="button" onClick={() => setView('owned')} className={`min-h-10 rounded-md border px-3 py-2 text-xs font-bold ${view === 'owned' ? 'border-cyan-400/50 bg-cyan-400/15 text-cyan-100 shadow-[0_0_10px_rgba(34,211,238,0.1)]' : 'border-white/10 bg-ink-900/45 text-white/50 hover:text-white/80'}`}>보유</button>
+              <button type="button" onClick={() => setView('codex')} className={`min-h-10 rounded-md border px-3 py-2 text-xs font-bold ${view === 'codex' ? 'border-cyan-400/50 bg-cyan-400/15 text-cyan-100 shadow-[0_0_10px_rgba(34,211,238,0.1)]' : 'border-white/10 bg-ink-900/45 text-white/50 hover:text-white/80'}`}>도감</button>
             </div>
-            {featuredShadows.length > 0 ? (
-              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                {featuredShadows.map((shadow, index) => {
-                  const equipped = equippedShadowIds.includes(shadow.instanceId)
-                  const selected = selectedShadow?.instanceId === shadow.instanceId
-                  const combatProfile = getShadowCombatProfile(shadow)
-                  const battleUnit = buildShadowBattleUnit(shadow)
-                  const shadowStats = battleUnit.unit.stats
-                  return (
+            <select
+              value={ownershipFilter}
+              onChange={event => {
+                const next = event.target.value as OwnershipFilterKey
+                setOwnershipFilter(next)
+                if (next === 'unowned') setView('codex')
+              }}
+              className="min-h-10 w-full min-w-0 rounded-md border border-white/10 bg-ink-900/80 px-3 py-2 text-xs text-white/70"
+            >
+              {ownershipFilters.map(item => <option key={item.key} value={item.key}>{item.label}</option>)}
+            </select>
+            <label className="relative block min-w-0">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-white/35" />
+              <input
+                value={query}
+                onChange={event => setQuery(event.target.value)}
+                placeholder="그림자 검색"
+                className="min-h-10 w-full rounded-md border border-white/10 bg-ink-900/80 py-2 pl-9 pr-3 text-xs text-white/75 outline-none placeholder:text-white/30 focus:border-cyan-300/45"
+              />
+            </label>
+          </div>
+          <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-7">
+            <select value={sourceFilter} onChange={event => setSourceFilter(event.target.value as SourceFilterKey)} className="min-h-10 min-w-0 rounded-md border border-white/10 bg-ink-900/80 px-2 py-2 text-xs text-white/70">
+              {sourceFilters.map(item => <option key={item.key} value={item.key}>{item.label}</option>)}
+            </select>
+            <select value={roleFilter} onChange={event => setRoleFilter(event.target.value as RoleFilterKey)} className="min-h-10 min-w-0 rounded-md border border-white/10 bg-ink-900/80 px-2 py-2 text-xs text-white/70">
+              {roleFilters.map(item => <option key={item.key} value={item.key}>{item.label}</option>)}
+            </select>
+            <select value={statusFilter} onChange={event => setStatusFilter(event.target.value as StatusFilterKey)} className="min-h-10 min-w-0 rounded-md border border-white/10 bg-ink-900/80 px-2 py-2 text-xs text-white/70">
+              {statusFilters.map(item => <option key={item.key} value={item.key}>{item.label}</option>)}
+            </select>
+            <select value={rarityFilter} onChange={event => setRarityFilter(event.target.value as RarityFilterKey)} className="min-h-10 min-w-0 rounded-md border border-white/10 bg-ink-900/80 px-2 py-2 text-xs text-white/70">
+              {rarityFilters.map(item => <option key={item.key} value={item.key}>{item.label}</option>)}
+            </select>
+            <select value={gradeFilter} onChange={event => setGradeFilter(event.target.value as GradeFilterKey)} className="min-h-10 min-w-0 rounded-md border border-white/10 bg-ink-900/80 px-2 py-2 text-xs text-white/70">
+              {gradeFilters.map(item => <option key={item.key} value={item.key}>{item.label}</option>)}
+            </select>
+            <select value={sort} onChange={event => setSort(event.target.value as SortKey)} className="min-h-10 min-w-0 rounded-md border border-white/10 bg-ink-900/80 px-2 py-2 text-xs text-white/70 sm:col-span-2 xl:col-span-2">
+              <option value="obtained">기본순 (출전·즐겨찾기·잠금)</option>
+              <option value="rarity">희귀도순</option>
+              <option value="innateGrade">태생 등급순</option>
+              <option value="level">레벨순</option>
+              <option value="enhancement">강화순</option>
+              <option value="evolution">진화 가능순</option>
+              <option value="rank">계급순</option>
+              <option value="name">이름순</option>
+              <option value="favorite">즐겨찾기순</option>
+              <option value="locked">잠금순</option>
+            </select>
+          </div>
+        </div>
+
+        {/* 3. 메인 그리드 영역 (도감/보유 목록 + 우측 상세 정보 패널) */}
+        <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_340px] items-start mb-5">
+          <div className="space-y-3">
+            {view === 'owned' ? (
+              <div className="relative pb-6">
+                <div className="grid gap-3 sm:grid-cols-2 2xl:grid-cols-3">
+                  {(isExpanded ? filteredOwned : filteredOwned.slice(0, 3)).map(shadow => {
+                    const equipped = equippedShadowIds.includes(shadow.instanceId)
+                    const materialCount = getShadowAbsorbMaterialCount(shadow, ownedShadows, equippedShadowIds)
+                    return (
+                      <VisualShadowCard
+                        key={shadow.instanceId}
+                        shadow={shadow}
+                        equipped={equipped}
+                        selected={selectedShadow?.instanceId === shadow.instanceId}
+                        onSelect={() => setSelectedShadowId(shadow.instanceId)}
+                        canEquip={equipped || equippedShadowIds.length < slotCount}
+                        onEquip={() => equipShadow(shadow.instanceId)}
+                        onUnequip={() => unequipShadow(shadow.instanceId)}
+                        shadowEssence={shadowEssence}
+                        materialCount={materialCount}
+                        onAbsorb={() => absorbShadow(shadow.instanceId)}
+                        onDecompose={() => decomposeShadow(shadow.instanceId)}
+                        onToggleLock={() => toggleShadowLock(shadow.instanceId)}
+                        onToggleFavorite={() => toggleShadowFavorite(shadow.instanceId)}
+                        onEvolve={() => evolveShadow(shadow.instanceId)}
+                        onRestoreCollapsed={() => restoreShadowFromCollapse(shadow.instanceId)}
+                        onCrystallize={() => crystallizeCollapsedShadow(shadow.instanceId)}
+                      />
+                    )
+                  })}
+                  {filteredOwned.length === 0 && (
+                    <div className="panel corner-bracket p-10 text-center text-sm text-white/45 sm:col-span-2 2xl:col-span-3">
+                      <div className="br" />
+                      조건에 맞는 보유 그림자가 없습니다.
+                    </div>
+                  )}
+                </div>
+
+                {!isExpanded && filteredOwned.length > 3 && (
+                  <div className="absolute bottom-12 left-0 right-0 h-28 bg-gradient-to-t from-ink-950 via-ink-950/85 to-transparent pointer-events-none z-10" />
+                )}
+
+                {filteredOwned.length > 3 && (
+                  <div className="mt-4 flex justify-center relative z-20">
                     <button
-                      key={shadow.instanceId}
                       type="button"
-                      onClick={() => setSelectedShadowId(shadow.instanceId)}
-                      className={`group relative min-w-0 overflow-hidden rounded-lg border p-2 text-left transition ${
-                        selected
-                          ? 'border-amber-200/65 bg-amber-300/10 shadow-glow-lg'
-                          : 'border-white/10 bg-ink-900/55 hover:border-cyan-200/45 hover:bg-cyan-400/10'
-                      }`}
+                      onClick={() => setIsExpanded(!isExpanded)}
+                      className="flex items-center gap-1.5 px-6 py-2 rounded-full border border-cyan-400/25 bg-cyan-400/5 hover:bg-cyan-400/10 text-xs font-bold text-cyan-200/95 transition-all shadow-[0_0_15px_rgba(34,211,238,0.08)] hover:shadow-[0_0_20px_rgba(34,211,238,0.15)] group animate-pulse"
                     >
-                      <div className="mb-2 flex items-center justify-between gap-2 text-[9px] system-text text-white/40">
-                        <span>{index === 0 ? 'VANGUARD' : equipped ? 'DEPLOYED' : shadow.isFavorite ? 'FAVORITE' : 'ELITE'}</span>
-                        <span>{SHADOW_RARITY_LABEL[shadow.rarity]}</span>
-                      </div>
-                      <ShadowPortrait shadow={shadow} size="lg" active={equipped} highlighted={Boolean(shadow.isNamed || shadow.isGateNamed || shadow.isAchievementNamed)} innateGrade={shadow.innateGrade} evolutionReady={canEvolveShadow(shadow, shadowEssence).canEvolve} />
-                      <div className="mt-2 truncate text-sm font-bold text-white/90">{shadow.name}</div>
-                      <div className="mt-1 flex flex-wrap gap-1 text-[9px] system-text text-white/45">
-                        <span className="text-amber-100">SCP {combatProfile.totalPower.toLocaleString()}</span>
-                        <span>Lv {shadow.level ?? 1}</span>
-                        <span>{SHADOW_ROLE_LABEL[shadow.role]}</span>
-                        <span className="text-cyan-200">C {(shadowStats.crit * 100).toFixed(0)}%</span>
-                        <span className="text-cyan-200">E {((shadowStats.evasionRate ?? 0) * 100).toFixed(0)}%</span>
-                        <span className="text-cyan-200">A {((shadowStats.accuracy ?? 0) * 100).toFixed(0)}%</span>
-                        {combatProfile.topStats.slice(0, 2).map(stat => <span key={stat.key}>{stat.shortLabel}</span>)}
-                        {(shadow.enhancementLevel ?? 0) > 0 && <span className="text-amber-200">+{shadow.enhancementLevel}</span>}
-                        {shadow.mutation && shadow.mutation.mutationStage > 0 && <span className="text-purple-300">🧬{shadow.mutation.mutationStage}</span>}
-                      </div>
+                      {isExpanded ? (
+                        <>
+                          <span>접기</span>
+                          <ChevronUp className="w-4 h-4 transition-transform group-hover:-translate-y-0.5" />
+                        </>
+                      ) : (
+                        <>
+                          <span>더 보기 ({filteredOwned.length - 3}개 더 있음)</span>
+                          <ChevronDown className="w-4 h-4 transition-transform group-hover:translate-y-0.5" />
+                        </>
+                      )}
                     </button>
-                  )
-                })}
+                  </div>
+                )}
               </div>
             ) : (
-              <div className="rounded-md border border-white/10 bg-ink-900/40 p-5 text-center text-xs text-white/40">
-                군단에 합류한 그림자가 아직 없습니다.
+              <div className="relative pb-6">
+                <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-3">
+                  {(isExpanded ? codexDefs : codexDefs.slice(0, 3)).map(def => {
+                    const instances = ownedShadows.filter(s => s.definitionId === def.id)
+                    const maxEnh = Math.max(0, ...instances.map(s => s.enhancementLevel ?? 0))
+                    const isEquipped = instances.some(s => equippedShadowIds.includes(s.instanceId))
+                    return (
+                      <CodexCard
+                        key={def.id}
+                        definition={def}
+                        owned={ownedDefinitionIds.has(def.id)}
+                        ownedCount={instances.length}
+                        maxEnhancement={maxEnh}
+                        isEquipped={isEquipped}
+                        fragmentCount={shadowFragments[def.id] ?? 0}
+                        failCount={shadowExtractFailCount[def.sourceGateId ?? ''] ?? 0}
+                      />
+                    )
+                  })}
+                </div>
+
+                {!isExpanded && codexDefs.length > 3 && (
+                  <div className="absolute bottom-12 left-0 right-0 h-28 bg-gradient-to-t from-ink-950 via-ink-950/85 to-transparent pointer-events-none z-10" />
+                )}
+
+                {codexDefs.length > 3 && (
+                  <div className="mt-4 flex justify-center relative z-20">
+                    <button
+                      type="button"
+                      onClick={() => setIsExpanded(!isExpanded)}
+                      className="flex items-center gap-1.5 px-6 py-2 rounded-full border border-cyan-400/25 bg-cyan-400/5 hover:bg-cyan-400/10 text-xs font-bold text-cyan-200/95 transition-all shadow-[0_0_15px_rgba(34,211,238,0.08)] hover:shadow-[0_0_20px_rgba(34,211,238,0.15)] group animate-pulse"
+                    >
+                      {isExpanded ? (
+                        <>
+                          <span>접기</span>
+                          <ChevronUp className="w-4 h-4 transition-transform group-hover:-translate-y-0.5" />
+                        </>
+                      ) : (
+                        <>
+                          <span>더 보기 ({codexDefs.length - 3}개 더 있음)</span>
+                          <ChevronDown className="w-4 h-4 transition-transform group-hover:translate-y-0.5" />
+                        </>
+                      )}
+                    </button>
+                  </div>
+                )}
               </div>
             )}
           </div>
-          <ShadowDetailPanel
-            key={selectedShadow?.instanceId ?? 'empty-shadow-detail'}
-            shadow={selectedShadow}
-            equipped={selectedShadow ? equippedShadowIds.includes(selectedShadow.instanceId) : false}
-            shadowEssence={shadowEssence}
-          />
-        </div>
 
-        <div className="mb-3 flex items-center gap-3">
-          <div className="system-text text-[11px] text-purple-200/80">DEPLOYED LEGION</div>
-          <div className="h-px flex-1 bg-gradient-to-r from-purple-300/30 to-transparent" />
-        </div>
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5">
-          {Array.from({ length: Math.max(1, slotCount) }).map((_, index) => {
-            const shadow = equippedShadows[index]
-            const isNamed = shadow && Boolean(shadow.isNamed || shadow.isGateNamed || shadow.isAchievementNamed)
-            const isLegendary = shadow?.rarity === 'legendary'
-            const isEpic = shadow?.rarity === 'epic'
-            const isSGrade = shadow?.innateGrade === 'S'
-            const isAGrade = shadow?.innateGrade === 'A'
-            const isEvolved = shadow && (shadow.evolutionStage ?? 0) > 0
-            return (
-              <motion.div
-                key={index}
-                role={shadow ? 'button' : undefined}
-                tabIndex={shadow ? 0 : undefined}
-                onClick={() => shadow && setSelectedShadowId(shadow.instanceId)}
-                onKeyDown={(event) => {
-                  if (shadow && (event.key === 'Enter' || event.key === ' ')) {
-                    event.preventDefault()
-                    setSelectedShadowId(shadow.instanceId)
-                  }
-                }}
-                whileHover={shadow ? { y: -4, scale: 1.02 } : undefined}
-                transition={{ duration: 0.22, ease: 'easeOut' }}
-                className={[
-                  'relative overflow-hidden rounded-lg border p-3 min-h-[300px] transition-all card-premium-shine group',
-                  shadow
-                    ? [
-                        isNamed ? 'named-pulse' : '',
-                        isSGrade ? 'grade-aura-s' : isAGrade ? 'grade-aura-a' : '',
-                        isEvolved ? 'shadow-evolved-card' : '',
-                        isLegendary ? 'rarity-frame-legendary border-amber-400/40' : isEpic ? 'rarity-frame-epic border-purple-400/30' : 'rarity-frame-rare border-cyan-400/30',
-                        'shadow-deployed-glow ring-2 ring-cyan-300/40'
-                      ].filter(Boolean).join(' ')
-                    : 'border-white/5 bg-ink-950/60 border-dashed opacity-45',
-                  shadow ? 'cursor-pointer' : '',
-                  selectedShadow?.instanceId === shadow?.instanceId ? 'ring-2 ring-amber-300/80 shadow-glow-lg' : '',
-                ].join(' ')}
-              >
-                {shadow && (
-                  <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,rgba(34,211,238,0.1),transparent_55%)]" />
-                )}
-                <div className="relative z-10 flex items-center gap-1.5 text-[10px] system-text text-cyan-300/55 mb-2">
-                  {shadow?.role === 'guard' ? <Shield className="w-3 h-3" /> : <Swords className="w-3 h-3" />}
-                  SLOT {index + 1}
-                  {shadow && <span className="ml-auto text-[9px] text-white/30">{SHADOW_ROLE_LABEL[shadow.role]}</span>}
-                </div>
-                {shadow ? (
-                  <div className="relative z-10 space-y-2">
-                    <ShadowPortrait shadow={shadow} size="lg" active highlighted={isNamed} innateGrade={shadow.innateGrade} />
-                    <div className="space-y-0.5">
-                      <div className={`text-xs font-semibold truncate ${rarityStyle[shadow.rarity].split(' ')[0]}`}>
-                        {shadow.name}
-                        {(shadow.enhancementLevel ?? 0) > 0 && <span className="ml-1 text-amber-200/70">+{shadow.enhancementLevel}</span>}
-                      </div>
-                      <div className="text-[9px] text-white/40 system-text">{SHADOW_RANK_LABEL[shadow.rank]}</div>
-                      {isNamed && (
-                        <div className="text-[9px] rounded border border-amber-300/30 bg-amber-300/10 px-1 py-px text-amber-100 inline-block">
-                          {shadow.isAchievementNamed ? 'ACHIEVEMENT' : 'NAMED'}
-                        </div>
-                      )}
-                    </div>
-                    <button type="button" onClick={(event) => { event.stopPropagation(); unequipShadow(shadow.instanceId) }} className="mt-1 w-full text-[10px] text-rose-200/70 border border-rose-400/20 rounded px-2 py-1 hover:bg-rose-400/10 transition-colors">
-                      해제
-                    </button>
-                  </div>
-                ) : (
-                  <div className="flex h-full items-center justify-center py-10 text-xs text-white/20 system-text">EMPTY</div>
-                )}
-              </motion.div>
-            )
-          })}
+          {/* 우측 sticky 상세 정보 패널 */}
+          <div className="xl:sticky xl:top-4">
+            <ShadowDetailPanel
+              key={selectedShadow?.instanceId ?? 'empty-shadow-detail'}
+              shadow={selectedShadow}
+              equipped={selectedShadow ? equippedShadowIds.includes(selectedShadow.instanceId) : false}
+              shadowEssence={shadowEssence}
+            />
+          </div>
         </div>
       </div>
 
@@ -2258,120 +2481,7 @@ export function ShadowPanel() {
 
       <ShadowExpeditionPanel />
 
-      <div className="panel corner-bracket p-3 border-white/10 bg-ink-950/60">
-        <div className="br" />
-        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-[auto_auto_minmax(180px,1fr)]">
-          <div className="grid grid-cols-2 gap-2">
-            <button type="button" onClick={() => setView('owned')} className={`min-h-10 rounded-md border px-3 py-2 text-xs ${view === 'owned' ? 'border-cyan-400/50 bg-cyan-400/15 text-cyan-100' : 'border-white/10 bg-ink-900/45 text-white/50'}`}>보유</button>
-            <button type="button" onClick={() => setView('codex')} className={`min-h-10 rounded-md border px-3 py-2 text-xs ${view === 'codex' ? 'border-cyan-400/50 bg-cyan-400/15 text-cyan-100' : 'border-white/10 bg-ink-900/45 text-white/50'}`}>도감</button>
-          </div>
-          <select
-            value={ownershipFilter}
-            onChange={event => {
-              const next = event.target.value as OwnershipFilterKey
-              setOwnershipFilter(next)
-              if (next === 'unowned') setView('codex')
-            }}
-            className="min-h-10 w-full min-w-0 rounded-md border border-white/10 bg-ink-900/80 px-3 py-2 text-xs text-white/70"
-          >
-            {ownershipFilters.map(item => <option key={item.key} value={item.key}>{item.label}</option>)}
-          </select>
-          <label className="relative block min-w-0">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-white/35" />
-            <input
-              value={query}
-              onChange={event => setQuery(event.target.value)}
-              placeholder="그림자 검색"
-              className="min-h-10 w-full rounded-md border border-white/10 bg-ink-900/80 py-2 pl-9 pr-3 text-xs text-white/75 outline-none placeholder:text-white/30 focus:border-cyan-300/45"
-            />
-          </label>
-        </div>
-        <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-7">
-          <select value={sourceFilter} onChange={event => setSourceFilter(event.target.value as SourceFilterKey)} className="min-h-10 min-w-0 rounded-md border border-white/10 bg-ink-900/80 px-2 py-2 text-xs text-white/70">
-            {sourceFilters.map(item => <option key={item.key} value={item.key}>{item.label}</option>)}
-          </select>
-          <select value={roleFilter} onChange={event => setRoleFilter(event.target.value as RoleFilterKey)} className="min-h-10 min-w-0 rounded-md border border-white/10 bg-ink-900/80 px-2 py-2 text-xs text-white/70">
-            {roleFilters.map(item => <option key={item.key} value={item.key}>{item.label}</option>)}
-          </select>
-          <select value={statusFilter} onChange={event => setStatusFilter(event.target.value as StatusFilterKey)} className="min-h-10 min-w-0 rounded-md border border-white/10 bg-ink-900/80 px-2 py-2 text-xs text-white/70">
-            {statusFilters.map(item => <option key={item.key} value={item.key}>{item.label}</option>)}
-          </select>
-          <select value={rarityFilter} onChange={event => setRarityFilter(event.target.value as RarityFilterKey)} className="min-h-10 min-w-0 rounded-md border border-white/10 bg-ink-900/80 px-2 py-2 text-xs text-white/70">
-            {rarityFilters.map(item => <option key={item.key} value={item.key}>{item.label}</option>)}
-          </select>
-          <select value={gradeFilter} onChange={event => setGradeFilter(event.target.value as GradeFilterKey)} className="min-h-10 min-w-0 rounded-md border border-white/10 bg-ink-900/80 px-2 py-2 text-xs text-white/70">
-            {gradeFilters.map(item => <option key={item.key} value={item.key}>{item.label}</option>)}
-          </select>
-          <select value={sort} onChange={event => setSort(event.target.value as SortKey)} className="min-h-10 min-w-0 rounded-md border border-white/10 bg-ink-900/80 px-2 py-2 text-xs text-white/70 sm:col-span-2 xl:col-span-2">
-            <option value="obtained">기본순 (출전·즐겨찾기·잠금)</option>
-            <option value="rarity">희귀도순</option>
-            <option value="innateGrade">태생 등급순</option>
-            <option value="level">레벨순</option>
-            <option value="enhancement">강화순</option>
-            <option value="evolution">진화 가능순</option>
-            <option value="rank">계급순</option>
-            <option value="name">이름순</option>
-            <option value="favorite">즐겨찾기순</option>
-            <option value="locked">잠금순</option>
-          </select>
-        </div>
-      </div>
 
-      {view === 'owned' ? (
-        <div className="grid gap-3 sm:grid-cols-2 2xl:grid-cols-3">
-          {filteredOwned.map(shadow => {
-            const equipped = equippedShadowIds.includes(shadow.instanceId)
-            const materialCount = getShadowAbsorbMaterialCount(shadow, ownedShadows, equippedShadowIds)
-            return (
-              <VisualShadowCard
-                key={shadow.instanceId}
-                shadow={shadow}
-                equipped={equipped}
-                selected={selectedShadow?.instanceId === shadow.instanceId}
-                onSelect={() => setSelectedShadowId(shadow.instanceId)}
-                canEquip={equipped || equippedShadowIds.length < slotCount}
-                onEquip={() => equipShadow(shadow.instanceId)}
-                onUnequip={() => unequipShadow(shadow.instanceId)}
-                shadowEssence={shadowEssence}
-                materialCount={materialCount}
-                onAbsorb={() => absorbShadow(shadow.instanceId)}
-                onDecompose={() => decomposeShadow(shadow.instanceId)}
-                onToggleLock={() => toggleShadowLock(shadow.instanceId)}
-                onToggleFavorite={() => toggleShadowFavorite(shadow.instanceId)}
-                onEvolve={() => evolveShadow(shadow.instanceId)}
-                onRestoreCollapsed={() => restoreShadowFromCollapse(shadow.instanceId)}
-                onCrystallize={() => crystallizeCollapsedShadow(shadow.instanceId)}
-              />
-            )
-          })}
-          {filteredOwned.length === 0 && (
-            <div className="panel corner-bracket p-10 text-center text-sm text-white/45 sm:col-span-2 2xl:col-span-3">
-              <div className="br" />
-              조건에 맞는 보유 그림자가 없습니다.
-            </div>
-          )}
-        </div>
-      ) : (
-        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-3">
-          {codexDefs.map(def => {
-            const instances = ownedShadows.filter(s => s.definitionId === def.id)
-            const maxEnh = Math.max(0, ...instances.map(s => s.enhancementLevel ?? 0))
-            const isEquipped = instances.some(s => equippedShadowIds.includes(s.instanceId))
-            return (
-              <CodexCard
-                key={def.id}
-                definition={def}
-                owned={ownedDefinitionIds.has(def.id)}
-                ownedCount={instances.length}
-                maxEnhancement={maxEnh}
-                isEquipped={isEquipped}
-                fragmentCount={shadowFragments[def.id] ?? 0}
-                failCount={shadowExtractFailCount[def.sourceGateId ?? ''] ?? 0}
-              />
-            )
-          })}
-        </div>
-      )}
     </div>
   )
 }
