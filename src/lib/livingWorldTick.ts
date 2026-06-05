@@ -606,8 +606,8 @@ export function advanceWorldDay(state: LivingWorldState, rng: RngFn, options: Ad
                     const regName = RIFT_REGIONS.find(r => r.id === regionId)?.name ?? regionId.toUpperCase()
                     const awakenBops = [
                       `✨ [각성 발동] [${regName}]의 [${hunter.name}] 헌터가 전투 중 극적인 각성을 거치며 등급이 [${oldRank}] $\\to$ [${newRank}]급으로 도약했습니다! 스탯이 대폭 강화되어 새로운 전력이 되었습니다.`,
-                      `⚡ [한계 돌파] [${regName}]의 [${hunter.name}] 헌터가 사투 끝에 잠재 마력을 폭발시키며 [${oldRank}] $\\to$ [${newRank}]급으로 전율적인 한계 돌파에 성공했습니다!`,
-                      `🌟 [영웅 탄생] [${regName}]의 수호자 [${hunter.name}] 헌터가 마력 공명을 통해 극적으로 각성하며 등급이 [${oldRank}] $\\to$ [${newRank}]급으로 급상승했습니다!`
+                      `⚡ [한계 돌파 각성] [${regName}]의 [${hunter.name}] 헌터가 사투 끝에 잠재 마력을 폭발시키며 [${oldRank}] $\\to$ [${newRank}]급으로 전율적인 한계 돌파에 성공했습니다!`,
+                      `🌟 [영웅 각성 탄생] [${regName}]의 수호자 [${hunter.name}] 헌터가 마력 공명을 통해 극적으로 각성하며 등급이 [${oldRank}] $\\to$ [${newRank}]급으로 급상승했습니다!`
                     ]
                     const chosenAwaken = awakenBops[Math.floor(rng() * awakenBops.length)]
                     addLog(chosenAwaken)

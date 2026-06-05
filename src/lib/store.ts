@@ -5604,7 +5604,7 @@ export const useGame = create<GameState>()(
             const rName = RIFT_REGIONS.find((r) => r.id === regionId)?.name ?? regionId.toUpperCase()
             const eventLogs = [
               ...nextLivingWorld.eventLogs,
-              `[Day ${nextLivingWorld.day}] 🛡️ 헌터(플레이어)가 [${node.name}] 정화에 성공했습니다! 지역 오염도 -${cleanse}%${relief > 0 ? ` (정화 증폭 효과 +${Math.round(relief / 5)}% 반영)` : ''}`,
+              `[Day ${nextLivingWorld.day}] ⚡ [플레이어 정화] 인류의 구원자 헌터(플레이어)가 [${rName}]의 [${node.name}] 정화에 성공했습니다! 오염의 파동이 걷히며 지역 오염도 -${cleanse}%${relief > 0 ? ` (정화 증폭 효과 +${Math.round(relief / 5)}% 반영)` : ''}`,
             ].slice(-60)
 
             nextLivingWorld = {
@@ -5617,7 +5617,7 @@ export const useGame = create<GameState>()(
             // regionState가 없는 군주/Angel의 경우에도 riftNodes 상태 반영
             const eventLogs = [
               ...nextLivingWorld.eventLogs,
-              `[Day ${nextLivingWorld.day}] 🌟 헌터(플레이어)가 [${node.name}] 토벌에 성공했습니다! 차원의 왜곡이 안전하게 소멸되었습니다.`,
+              `[Day ${nextLivingWorld.day}] 👑 [군주 토벌] 인류의 수호신 헌터(플레이어)가 차원의 왜곡을 이끌던 위협적인 군주 [${node.name}] 토벌에 마침내 성공했습니다! 대지가 안정을 되찾고 어둠의 통로가 봉인되었습니다.`,
             ].slice(-60)
             
             nextLivingWorld = {
@@ -5627,6 +5627,7 @@ export const useGame = create<GameState>()(
             }
           }
 
+          const rName = RIFT_REGIONS.find((r) => r.id === regionId)?.name ?? regionId.toUpperCase()
           // [NEW] 플레이어 공략 완료 구조화 이벤트 생성 및 수렴
           const newEvent: WorldEvent = isMonarchId
             ? {
@@ -5636,21 +5637,25 @@ export const useGame = create<GameState>()(
                 severity: 'critical',
                 title: nodeId === 'angel' ? '최종 결전 승리' : '군주 격퇴',
                 body: nodeId === 'angel'
-                  ? '지고의 심판자가 쓰러지고 결전의 빛이 정지했습니다.'
-                  : `플레이어가 군주 [${node.name}] 토벌에 성공했습니다!`,
+                  ? '지고의 심판자가 마침내 플레이어 앞에 무릎을 꿇었습니다. 세계선에 정지되었던 거대한 운명의 수레바퀴가 소리 없이 굴러갑니다.'
+                  : `인류의 위대한 전설 플레이어가 군주 [${node.name}]을(를) 격퇴하며 참극의 굴레를 끊었습니다!`,
                 regionId: node.regionId || 'kr',
                 monarchId: nodeId,
-                cinematic: true
+                cinematic: true,
+                quote: nodeId === 'angel' ? '"내 빛이 다하는구나. 너는 다른 길을 볼 수 있을 것인가..."' : `"${node.name}의 봉인 해제... 격퇴 성공."`,
+                subtitle: nodeId === 'angel' ? 'ULTIMATE JUDGEMENT CLEARED' : 'MONARCH DEFEATED BY PLAYER'
               }
             : {
                 id: `evt-player-clear-${nextLivingWorld.day}-${nodeId}-${Math.floor(Math.random() * 100000)}`,
                 day: nextLivingWorld.day,
-                type: 'gate_open',
+                type: 'defeated',
                 severity: 'minor',
                 title: '균열 정화',
-                body: `플레이어가 [${node.name}] 정화에 성공했습니다.`,
+                body: `플레이어가 [${rName}]의 [${node.name}] 게이트 깊숙이 침투하여 정화 코어를 성공적으로 봉인했습니다.`,
                 regionId: node.regionId || 'kr',
-                cinematic: false
+                cinematic: false,
+                quote: `"${node.name} 정화 완료. 잔존 오염 수준 안정화."`,
+                subtitle: 'PLAYER REGIONAL SEPARATION'
               }
 
           const currentEvents = nextLivingWorld.recentEvents ? [...nextLivingWorld.recentEvents] : []

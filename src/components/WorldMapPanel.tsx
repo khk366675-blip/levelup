@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import {
   Globe,
   Lock,
@@ -233,6 +233,142 @@ function classifyEventLog(log: string) {
   if (!log || typeof log !== 'string') {
     return {
       badge: '📢 SYSTEM',
+      badgeClass: 'bg-zinc-800/80 border-zinc-700/30 text-zinc-400',
+      textClass: 'text-zinc-500 italic',
+      icon: '📢',
+      theme: 'system',
+      isCritical: false
+    }
+  }
+
+  // 플레이어 활약 판정 최우선
+  const isPlayer = log.includes('플레이어') || log.includes('헌터(플레이어)')
+  const isAngel = log.includes('Angel') || log.includes('천사') || log.includes('지고의')
+  const isMonarch = log.includes('군주') || log.includes('침공') || log.includes('거점')
+  const isDeath = log.includes('전사') || log.includes('비보') || log.includes('지다') || log.includes('잠들다') || log.includes('영면') || log.includes('공멸') || log.includes('🥀') || log.includes('🪦') || log.includes('💀')
+  const isCollapse = log.includes('폭주') || log.includes('붕괴') || log.includes('대재앙') || log.includes('격벽 파손') || log.includes('피침식')
+  const isLoveCall = log.includes('러브콜') || log.includes('지원 요청') || log.includes('용병')
+  const isLoot = log.includes('드랍') || log.includes('유물') || log.includes('보구') || log.includes('노획') || log.includes('명검') || log.includes('발굴') || log.includes('🍀') || log.includes('💎') || log.includes('📦')
+  const isAwakening = log.includes('각성') || log.includes('한계 돌파') || log.includes('완치') || log.includes('복귀') || log.includes('치료') || log.includes('회복') || log.includes('🏥') || log.includes('✨')
+  const isCleared = log.includes('격퇴') || log.includes('정화') || log.includes('성공') || log.includes('봉쇄') || log.includes('클리어')
+  const isAlliance = log.includes('헌터') || log.includes('부상') || log.includes('퇴각') || log.includes('동맹') || log.includes('요양') || log.includes('🩹')
+
+  if (isAngel) {
+    return {
+      badge: '🏆 ULTIMATE',
+      badgeClass: 'bg-amber-500/10 border-amber-500/30 text-amber-300 shadow-[0_0_12px_rgba(245,158,11,0.2)] scale-95 origin-left shrink-0',
+      textClass: 'text-amber-200 font-extrabold',
+      icon: '🌟',
+      theme: 'ultimate',
+      isCritical: true
+    }
+  }
+  if (isMonarch) {
+    return {
+      badge: '🚨 CRITICAL',
+      badgeClass: 'bg-red-500/20 border-red-500/40 text-red-300 animate-pulse font-black scale-95 origin-left shrink-0',
+      textClass: 'text-red-400 font-black',
+      icon: '👑',
+      theme: 'monarch',
+      isCritical: true
+    }
+  }
+  if (isDeath) {
+    return {
+      badge: '💀 DEATH',
+      badgeClass: 'bg-rose-950/40 border-rose-500/50 text-rose-400 font-extrabold scale-95 origin-left shrink-0',
+      textClass: 'text-rose-300 font-bold',
+      icon: '💀',
+      theme: 'death',
+      isCritical: true
+    }
+  }
+  if (isCollapse) {
+    return {
+      badge: '💥 COLLAPSE',
+      badgeClass: 'bg-orange-500/10 border-orange-500/30 text-orange-400 scale-95 origin-left shrink-0',
+      textClass: 'text-orange-400 font-bold',
+      icon: '💥',
+      theme: 'crisis',
+      isCritical: true
+    }
+  }
+  if (isPlayer) {
+    return {
+      badge: '⚡ HEROIC ACT',
+      badgeClass: 'bg-cyan-500/20 border-cyan-500/40 text-cyan-300 font-black scale-95 origin-left shrink-0',
+      textClass: 'text-cyan-200 font-bold',
+      icon: '⚡',
+      theme: 'player',
+      isCritical: isCleared && log.includes('군주')
+    }
+  }
+  if (isLoot) {
+    return {
+      badge: '💎 TREASURE',
+      badgeClass: 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400 scale-95 origin-left shrink-0',
+      textClass: 'text-emerald-300 font-medium',
+      icon: '🍀',
+      theme: 'loot',
+      isCritical: false
+    }
+  }
+  if (isAwakening) {
+    return {
+      badge: '✨ AWAKENING',
+      badgeClass: 'bg-purple-500/10 border-purple-500/20 text-purple-400 scale-95 origin-left shrink-0',
+      textClass: 'text-purple-300 font-semibold',
+      icon: '✨',
+      theme: 'awakening',
+      isCritical: false
+    }
+  }
+  if (isLoveCall) {
+    return {
+      badge: '📞 LOVE CALL',
+      badgeClass: 'bg-yellow-500/10 border-yellow-500/20 text-yellow-300 scale-95 origin-left shrink-0',
+      textClass: 'text-yellow-300',
+      icon: '📢',
+      theme: 'lovecall',
+      isCritical: false
+    }
+  }
+  if (isCleared) {
+    return {
+      badge: '🛡️ CLEARED',
+      badgeClass: 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400 scale-95 origin-left shrink-0',
+      textClass: 'text-emerald-400 font-bold',
+      icon: '🏆',
+      theme: 'cleared',
+      isCritical: false
+    }
+  }
+  if (isAlliance) {
+    return {
+      badge: '🤝 ALLIANCE',
+      badgeClass: 'bg-cyan-500/10 border-cyan-500/20 text-cyan-400 scale-95 origin-left shrink-0',
+      textClass: 'text-cyan-300/90 font-medium',
+      icon: '🩹',
+      theme: 'alliance',
+      isCritical: false
+    }
+  }
+
+  return {
+    badge: '📡 SIGNAL',
+    badgeClass: 'bg-zinc-800/20 border-zinc-700/20 text-zinc-400 scale-95 origin-left shrink-0',
+    textClass: 'text-zinc-400/90',
+    icon: '📡',
+    theme: 'signal',
+    isCritical: false
+  }
+}
+
+/*
+function classifyEventLog(log: string) {
+  if (!log || typeof log !== 'string') {
+    return {
+      badge: '📢 SYSTEM',
       badgeClass: 'bg-zinc-800/80 text-zinc-400',
       textClass: 'text-zinc-500 italic'
     }
@@ -292,6 +428,7 @@ function classifyEventLog(log: string) {
     textClass: 'text-zinc-400/90'
   }
 }
+*/
 
 export function WorldMapPanel() {
   const riftNodesState = useGame((s) => s.riftNodes ?? {})
@@ -1381,50 +1518,40 @@ export function WorldMapPanel() {
                     <div className="space-y-1.5 max-h-[110px] overflow-y-auto pr-1 scrollbar-thin scrollbar-thumb-cyan-500/20">
                       {displayedEvents.map((evt) => {
                         const isLatest = evt.day === livingWorld.day
-                        let borderClass = 'border-white/5 bg-white/5'
-                        let badgeClass = 'bg-zinc-500/10 border-zinc-500/20 text-zinc-400'
-                        let textClass = 'text-white/70'
-                        let icon = '📡'
-
-                        if (evt.severity === 'critical') {
-                          borderClass = isLatest ? 'border-red-500/40 bg-red-950/20 shadow-[0_0_10px_rgba(239,68,68,0.15)]' : 'border-red-500/25 bg-red-950/10'
-                          badgeClass = 'bg-red-500/20 border-red-500/30 text-red-400 font-black animate-pulse'
-                          textClass = 'text-red-300 font-bold'
-                          icon = '🚨'
-                        } else if (evt.severity === 'major') {
-                          borderClass = isLatest ? 'border-orange-500/40 bg-orange-950/20 shadow-[0_0_10px_rgba(249,115,22,0.1)]' : 'border-orange-500/25 bg-orange-950/10'
-                          badgeClass = 'bg-orange-500/10 border-orange-500/20 text-orange-400'
-                          textClass = 'text-orange-300 font-semibold'
-                          icon = '⚠️'
-                        } else {
-                          borderClass = 'border-white/5 bg-white/2 hover:border-white/10'
-                          badgeClass = 'bg-zinc-800/30 border-zinc-700/30 text-zinc-400'
-                          textClass = 'text-white/60 font-medium'
-                          icon = '📡'
+                        const style = classifyEventLog(evt.body)
+                        
+                        let cardStyle = 'border-white/5 bg-white/2 hover:border-white/10'
+                        if (style.theme === 'ultimate') {
+                          cardStyle = 'border-amber-500/30 bg-amber-950/10 shadow-[inset_0_0_8px_rgba(245,158,11,0.05)]'
+                        } else if (style.theme === 'monarch' || style.isCritical) {
+                          cardStyle = 'border-red-500/30 bg-red-950/10 shadow-[inset_0_0_8px_rgba(239,68,68,0.05)] animate-pulse'
+                        } else if (style.theme === 'death') {
+                          cardStyle = 'border-rose-500/20 bg-rose-950/5'
+                        } else if (style.theme === 'crisis') {
+                          cardStyle = 'border-orange-500/20 bg-orange-950/5'
+                        } else if (style.theme === 'player') {
+                          cardStyle = 'border-cyan-500/30 bg-cyan-950/10 shadow-[inset_0_0_8px_rgba(6,182,212,0.05)]'
+                        } else if (style.theme === 'loot') {
+                          cardStyle = 'border-emerald-500/20 bg-emerald-950/5'
+                        } else if (style.theme === 'awakening') {
+                          cardStyle = 'border-purple-500/20 bg-purple-950/5'
                         }
-
-                        if (evt.type === 'awakening') icon = '✨'
-                        if (evt.type === 'defeated') icon = '⚔️'
-                        if (evt.type === 'occupied') icon = '💀'
-                        if (evt.type === 'gate_surge') icon = '💥'
-                        if (evt.type === 'sgrade_gate') icon = '👾'
-                        if (evt.type === 'home_reached') icon = '🔥'
 
                         return (
                           <div 
                             key={evt.id} 
-                            className={`flex items-center gap-2 text-xs border rounded p-1.5 leading-normal transition-all hover:bg-white/5 ${borderClass} ${
+                            className={`flex items-center gap-2 text-xs border rounded p-1.5 leading-normal transition-all hover:bg-white/5 ${cardStyle} ${
                               isLatest ? 'border-l-2' : ''
                             }`}
                             style={{ 
-                              borderLeftColor: isLatest ? (evt.severity === 'critical' ? '#ef4444' : evt.severity === 'major' ? '#f97316' : '#3b82f6') : undefined
+                              borderLeftColor: isLatest ? (style.isCritical || style.theme === 'monarch' ? '#ef4444' : style.theme === 'player' ? '#06b6d4' : '#3b82f6') : undefined
                             }}
                           >
-                            <span className="shrink-0 text-xs select-none">{icon}</span>
-                            <span className={`chip shrink-0 scale-95 ${badgeClass}`} style={{ fontSize: '9px', fontWeight: 900, padding: '0.1rem 0.35rem' }}>
+                            <span className="shrink-0 text-xs select-none">{style.icon}</span>
+                            <span className={`chip shrink-0 scale-95 ${style.badgeClass}`} style={{ fontSize: '9px', fontWeight: 900, padding: '0.1rem 0.35rem' }}>
                               Day {evt.day}
                             </span>
-                            <span className={`flex-1 font-mono break-all text-white/85 ${textClass}`}>
+                            <span className={`flex-1 font-mono break-all text-white/85 ${style.textClass}`}>
                               {evt.body}
                             </span>
                             {isLatest && (
@@ -1456,8 +1583,22 @@ export function WorldMapPanel() {
                   <div className="space-y-2 max-h-[110px] overflow-y-auto pr-1 scrollbar-thin scrollbar-thumb-cyan-500/20">
                     {displayedLogs.map((log, idx) => {
                       const style = classifyEventLog(log)
+                      
+                      let cardStyle = 'border-white/5 bg-white/2 hover:border-white/10'
+                      if (style.theme === 'ultimate') {
+                        cardStyle = 'border-amber-500/30 bg-amber-950/10'
+                      } else if (style.theme === 'monarch' || style.isCritical) {
+                        cardStyle = 'border-red-500/30 bg-red-950/10 animate-pulse'
+                      } else if (style.theme === 'player') {
+                        cardStyle = 'border-cyan-500/30 bg-cyan-950/10'
+                      }
+
                       return (
-                        <div key={idx} className="flex items-center gap-2 text-xs border-b border-white/5 pb-1.5 leading-normal transition-all hover:bg-white/5 p-1 rounded">
+                        <div 
+                          key={idx} 
+                          className={`flex items-center gap-2 text-xs border p-1.5 leading-normal transition-all hover:bg-white/5 rounded ${cardStyle}`}
+                        >
+                          <span className="shrink-0 text-xs select-none">{style.icon}</span>
                           <span className={`chip shrink-0 scale-90 ${style.badgeClass}`} style={{ fontSize: '9px', fontWeight: 800, padding: '0.08rem 0.3rem' }}>
                             {style.badge}
                           </span>
@@ -3437,35 +3578,129 @@ export function WorldMapPanel() {
                                 </h3>
                                 
                                 {(() => {
-                                  const dayLogs = livingWorld.eventLogs.filter(log => log.startsWith(`[Day ${targetDay}]`))
-                                  
-                                  if (dayLogs.length === 0) {
-                                    return (
-                                      <div className="text-zinc-500 italic py-16 text-center text-xs flex-1 flex items-center justify-center">
-                                        📡 이 날짜에는 특별한 전술 사건이나 이상 징후가 보고되지 않았습니다.
-                                      </div>
-                                    )
-                                  }
+                const dayLogs = livingWorld.eventLogs.filter(log => log.startsWith(`[Day ${targetDay}]`))
+                
+                if (dayLogs.length === 0) {
+                  return (
+                    <div className="text-zinc-500 italic py-16 text-center text-xs flex-1 flex items-center justify-center">
+                      📡 이 날짜에는 특별한 전술 사건이나 이상 징후가 보고되지 않았습니다.
+                    </div>
+                  )
+                }
 
-                                  return (
-                                    <div className="space-y-2.5 overflow-y-auto max-h-[400px] pr-1 flex-1 scrollbar-thin">
-                                      {dayLogs.map((log, idx) => {
-                                        const style = classifyEventLog(log)
-                                        const cleanText = log.replace(/^\[Day \d+\]\s*/, '')
-                                        return (
-                                          <div key={idx} className="flex items-start gap-2.5 text-xs border-b border-white/5 pb-2.5 leading-normal transition-all hover:bg-white/5 p-1.5 rounded">
-                                            <span className={`chip shrink-0 scale-90 mt-0.5 ${style.badgeClass}`} style={{ fontSize: '7.5px', padding: '0.1rem 0.35rem' }}>
-                                              {style.badge}
-                                            </span>
-                                            <span className={`flex-1 font-mono text-[10.5px] tracking-wide leading-relaxed ${style.textClass}`}>
-                                              {cleanText}
-                                            </span>
-                                          </div>
-                                        )
-                                      })}
-                                    </div>
-                                  )
-                                })()}
+                // 해당 날짜의 recentEvents 중에서 상세 정보를 찾아 매치시키기 위함
+                const dayEvents = (livingWorld.recentEvents ?? []).filter(e => e.day === targetDay)
+
+                return (
+                  <div className="space-y-3 overflow-y-auto max-h-[400px] pr-1 flex-1 scrollbar-thin scrollbar-thumb-cyan-500/20">
+                    {dayLogs.map((log, idx) => {
+                      const style = classifyEventLog(log)
+                      const cleanText = log.replace(/^\[Day \d+\]\s*/, '')
+                      
+                      // 구조화된 이벤트가 존재할 경우, 그 매칭되는 이벤트 찾기 (body나 regionId 등으로 식별)
+                      const matchedEvt = dayEvents.find(e => {
+                        // 텍스트 유사도 또는 키워드 매칭
+                        const cleanBody = e.body.replace(/^\[Day \d+\]\s*/, '')
+                        return cleanBody.includes(cleanText) || cleanText.includes(cleanBody)
+                      })
+
+                      // 테마별 세밀한 배경/테두리 스타일 매핑
+                      let cardStyle = 'border-white/5 bg-zinc-950/20'
+                      let hoverGlow = 'hover:border-white/20'
+                      let criticalLabel = ''
+
+                      if (style.theme === 'ultimate') {
+                        cardStyle = 'border-amber-500/40 bg-gradient-to-r from-amber-500/5 to-purple-950/20 shadow-[0_0_15px_rgba(245,158,11,0.15)]'
+                        hoverGlow = 'hover:border-amber-400 hover:shadow-[0_0_20px_rgba(245,158,11,0.25)]'
+                        criticalLabel = '🌟 ULTIMATE ENGAGEMENT'
+                      } else if (style.theme === 'monarch' || style.isCritical) {
+                        cardStyle = 'border-red-500/40 bg-gradient-to-r from-red-950/30 to-black/40 shadow-[0_0_15px_rgba(239,68,68,0.15)] animate-pulse'
+                        hoverGlow = 'hover:border-red-400 hover:shadow-[0_0_20px_rgba(239,68,68,0.25)]'
+                        criticalLabel = '🚨 CRISIS WARNING'
+                      } else if (style.theme === 'death') {
+                        cardStyle = 'border-rose-500/30 bg-rose-950/10'
+                        hoverGlow = 'hover:border-rose-400 hover:shadow-[0_0_10px_rgba(244,63,94,0.1)]'
+                        criticalLabel = '🥀 HEROIC SACRIFICE'
+                      } else if (style.theme === 'crisis') {
+                        cardStyle = 'border-orange-500/30 bg-orange-950/10'
+                        hoverGlow = 'hover:border-orange-400'
+                        criticalLabel = '⚠️ DEFENSE BREACH'
+                      } else if (style.theme === 'player') {
+                        cardStyle = 'border-cyan-500/40 bg-gradient-to-r from-cyan-950/20 to-slate-900/30 shadow-[0_0_12px_rgba(6,182,212,0.15)]'
+                        hoverGlow = 'hover:border-cyan-400 hover:shadow-[0_0_18px_rgba(6,182,212,0.25)]'
+                        criticalLabel = '⚡ HERO ACTION'
+                      } else if (style.theme === 'loot') {
+                        cardStyle = 'border-emerald-500/20 bg-emerald-950/5'
+                        hoverGlow = 'hover:border-emerald-400'
+                      } else if (style.theme === 'awakening') {
+                        cardStyle = 'border-purple-500/30 bg-purple-950/5'
+                        hoverGlow = 'hover:border-purple-400'
+                      }
+
+                      return (
+                        <div 
+                          key={idx} 
+                          className={`flex flex-col gap-2 border rounded-xl p-3.5 leading-normal transition-all duration-300 transform hover:scale-[1.008] ${cardStyle} ${hoverGlow}`}
+                        >
+                          <div className="flex items-center justify-between gap-2 border-b border-white/5 pb-2">
+                            <div className="flex items-center gap-2">
+                              <span className="text-base select-none">{style.icon}</span>
+                              <span className={`chip scale-90 ${style.badgeClass}`} style={{ fontSize: '8px', fontWeight: 900, padding: '0.15rem 0.45rem' }}>
+                                {style.badge}
+                              </span>
+                            </div>
+                            {criticalLabel && (
+                              <span className={`text-[8.5px] font-black uppercase tracking-widest ${
+                                style.theme === 'ultimate' ? 'text-amber-400' :
+                                style.theme === 'monarch' || style.isCritical ? 'text-red-400 animate-pulse' :
+                                style.theme === 'death' ? 'text-rose-400' :
+                                style.theme === 'player' ? 'text-cyan-400' :
+                                'text-orange-400'
+                              }`}>
+                                {criticalLabel}
+                              </span>
+                            )}
+                          </div>
+
+                          <div className={`font-mono text-[11px] break-all leading-relaxed ${style.textClass} text-white/90`}>
+                            {style.theme === 'player' ? (
+                              // 플레이어 이름 강조
+                              <span>
+                                {cleanText.split('플레이어').map((part, i, arr) => (
+                                  <React.Fragment key={i}>
+                                    {part}
+                                    {i < arr.length - 1 && (
+                                      <span className="text-cyan-300 font-extrabold text-[12px] underline decoration-cyan-500/50 decoration-2 px-0.5">
+                                        플레이어
+                                      </span>
+                                    )}
+                                  </React.Fragment>
+                                ))}
+                              </span>
+                            ) : cleanText}
+                          </div>
+
+                          {/* 구조화된 정보의 대사(quote) 및 서브타이틀이 존재하면 렌더링 */}
+                          {matchedEvt && (matchedEvt.quote || matchedEvt.subtitle) && (
+                            <div className="mt-1.5 rounded bg-black/45 border border-white/5 p-2.5 flex flex-col gap-1 leading-relaxed">
+                              {matchedEvt.subtitle && (
+                                <span className="text-[8.5px] font-black tracking-wider text-cyan-400/80 font-mono uppercase">
+                                  📡 SIGNAL CODE: {matchedEvt.subtitle}
+                                </span>
+                              )}
+                              {matchedEvt.quote && (
+                                <span className="text-[10px] text-zinc-300 italic font-medium pl-1.5 border-l border-zinc-500/30">
+                                  {matchedEvt.quote}
+                                </span>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      )
+                    })}
+                  </div>
+                )
+              })()}
                               </div>
 
                               {/* 국가 전선 현황 (우) */}
