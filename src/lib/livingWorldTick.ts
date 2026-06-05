@@ -1379,9 +1379,9 @@ export function advanceWorldDay(state: LivingWorldState, rng: RngFn, options: Ad
         const merchantOption = rng()
         if (merchantOption < 0.4) {
           // 1. 골드를 소모하여 대량의 그림자 정수 획득
-          const goldCost = Math.round(oppDifficulty * variant.goldCostScale * (1 + rng() * 0.2))
           const baseEss = oppRank === 'E' || oppRank === 'D' ? 3 : oppRank === 'C' || oppRank === 'B' ? 6 : 9
           const essenceReward = Math.round(baseEss * variant.essenceRewardScale)
+          const goldCost = Math.round(essenceReward * 35 * variant.goldCostScale * (1 + rng() * 0.2))
           cost = { gold: goldCost }
           promisedReward = {
             shadowEssence: essenceReward,
@@ -1390,7 +1390,7 @@ export function advanceWorldDay(state: LivingWorldState, rng: RngFn, options: Ad
         } else if (merchantOption < 0.7) {
           // 2. 그림자 정수를 소모하여 고성능 아이템/장비 보조 골드 획득
           const essenceCost = oppRank === 'E' || oppRank === 'D' ? 1 : oppRank === 'C' || oppRank === 'B' ? 2 : 3
-          const goldReward = Math.round(oppDifficulty * variant.goldRewardScale * (1 + rng() * 0.3))
+          const goldReward = Math.round(essenceCost * (100 + oppDifficulty * 0.02) * variant.goldRewardScale * (1 + rng() * 0.3))
           cost = { shadowEssence: essenceCost }
           promisedReward = {
             gold: goldReward,
