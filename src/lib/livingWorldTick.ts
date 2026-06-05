@@ -1319,9 +1319,9 @@ export function advanceWorldDay(state: LivingWorldState, rng: RngFn, options: Ad
 
         const goldReward = Math.round(oppDifficulty * 1.5 * variant.goldMult * (1 + rng() * 0.25))
         const xpReward = Math.round(oppDifficulty * 1.2 * variant.xpMult * (1 + rng() * 0.25))
-        const baseEssence = oppRank === 'E' || oppRank === 'D' ? 2 : oppRank === 'C' || oppRank === 'B' ? 4 : 6
-        const essenceReward = baseEssence + variant.essenceBonus
-
+        const baseEssence = oppRank === 'E' || oppRank === 'D' ? 80 : oppRank === 'C' || oppRank === 'B' ? 150 : 250
+        const essenceReward = baseEssence + variant.essenceBonus * 20
+ 
         promisedReward = {
           gold: goldReward,
           hunterXp: xpReward,
@@ -1379,9 +1379,9 @@ export function advanceWorldDay(state: LivingWorldState, rng: RngFn, options: Ad
         const merchantOption = rng()
         if (merchantOption < 0.4) {
           // 1. 골드를 소모하여 대량의 그림자 정수 획득
-          const baseEss = oppRank === 'E' || oppRank === 'D' ? 3 : oppRank === 'C' || oppRank === 'B' ? 6 : 9
+          const baseEss = oppRank === 'E' || oppRank === 'D' ? 90 : oppRank === 'C' || oppRank === 'B' ? 180 : 270
           const essenceReward = Math.round(baseEss * variant.essenceRewardScale)
-          const goldCost = Math.round(essenceReward * 35 * variant.goldCostScale * (1 + rng() * 0.2))
+          const goldCost = Math.round(essenceReward * 15 * variant.goldCostScale * (1 + rng() * 0.2))
           cost = { gold: goldCost }
           promisedReward = {
             shadowEssence: essenceReward,
@@ -1389,8 +1389,8 @@ export function advanceWorldDay(state: LivingWorldState, rng: RngFn, options: Ad
           }
         } else if (merchantOption < 0.7) {
           // 2. 그림자 정수를 소모하여 고성능 아이템/장비 보조 골드 획득
-          const essenceCost = oppRank === 'E' || oppRank === 'D' ? 1 : oppRank === 'C' || oppRank === 'B' ? 2 : 3
-          const goldReward = Math.round(essenceCost * (100 + oppDifficulty * 0.02) * variant.goldRewardScale * (1 + rng() * 0.3))
+          const essenceCost = oppRank === 'E' || oppRank === 'D' ? 40 : oppRank === 'C' || oppRank === 'B' ? 80 : 150
+          const goldReward = Math.round(essenceCost * 40 * variant.goldRewardScale * (1 + rng() * 0.3))
           cost = { shadowEssence: essenceCost }
           promisedReward = {
             gold: goldReward,
@@ -1445,7 +1445,7 @@ export function advanceWorldDay(state: LivingWorldState, rng: RngFn, options: Ad
         loreId = `lore-${nextDay}-${Math.floor(rng() * 10000)}`
 
         const xpReward = Math.round(oppDifficulty * 1.5 * (1 + rng() * 0.2))
-        const essenceReward = oppRank === 'E' || oppRank === 'D' ? 1 : oppRank === 'C' || oppRank === 'B' ? 2 : 3
+        const essenceReward = oppRank === 'E' || oppRank === 'D' ? 50 : oppRank === 'C' || oppRank === 'B' ? 100 : 180
 
         promisedReward = {
           shadowEssence: essenceReward,
