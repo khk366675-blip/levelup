@@ -1963,7 +1963,7 @@ export function WorldMapPanel() {
                     }
                     .ring-pulse {
                       transform-origin: center;
-                      animation: pulse-ring 2s cubic-bezier(0.215, 0.610, 0.355, 1) infinite;
+                      display: none;
                     }
                     
                     /* Stage 2 Micro-animations */
@@ -2257,18 +2257,7 @@ export function WorldMapPanel() {
                             onClick={() => setActiveDetailRegion(region)}
                           />
 
-                          {/* 점령/위험 상태 시 맥박 링 */}
-                          {(occupiedMonarch || corruption > 50) && (
-                            <circle
-                              cx={x}
-                              cy={y}
-                              r="15"
-                              fill="none"
-                              stroke={colors.stroke}
-                              strokeWidth="1.5"
-                              className="ring-pulse"
-                            />
-                          )}
+                          {/* 점령/위험 상태 시 맥박 링 제거 */}
 
                           {/* 국가 중심 원 코어 */}
                           <circle
@@ -2491,15 +2480,7 @@ export function WorldMapPanel() {
                               })
                             }
                           >
-                            <circle
-                              cx={x}
-                              cy={y}
-                              r="11"
-                              fill="rgba(226, 75, 74, 0.15)"
-                              stroke="#e24b4a"
-                              strokeWidth="1"
-                              className="ring-pulse"
-                            />
+
                             <circle
                               cx={x}
                               cy={y}

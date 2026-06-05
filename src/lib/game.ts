@@ -207,12 +207,12 @@ export const BALANCED_XP_BY_TYPE: Record<QuestRewardType, Record<Difficulty, num
 // 12-3: stats rise with the same hierarchy. Gate remains item-first, so gate stat rewards stay absent.
 export const STAT_REWARD_MULTIPLIER_BY_TYPE: Record<QuestRewardType, Record<Difficulty, number>> = {
   daily: {
-    easy: 0.14,
-    normal: 0.22,
-    hard: 0.20,
-    elite: 0.20,
-    apex: 0.20,
-    boss: 0.20,
+    easy: 0.25,
+    normal: 0.40,
+    hard: 0.35,
+    elite: 0.42,
+    apex: 0.50,
+    boss: 0.60,
   },
   main: {
     easy: 3.2,

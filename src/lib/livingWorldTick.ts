@@ -428,42 +428,45 @@ export function advanceWorldDay(state: LivingWorldState, rng: RngFn, options: Ad
       const activePower = getActiveRegionPower(region, nextNamedHunters, gate, nextRiftNodes)
       const ratio = activePower / Math.max(1, gate.difficulty ?? 0)
 
-      // 파견 전력이 0보다 큰 경우에만 도전 시도
-      if (activePower <= 0) {
-        // 이 게이트에 파견된 헌터가 없다면 (등급 미스매치로 방치됨) -> 도전하지 않고 방치 처리
-        if ((gate.daysRemaining ?? 0) <= 5) {
-          if (!gate.loveCall?.active) {
-            const helperHunterIds: string[] = []
-            for (const hid in nextNamedHunters) {
-              const h = nextNamedHunters[hid]
-              if (
-                h &&
-                h.regionId === regionId &&
-                h.status === 'active' &&
-                canHunterAnswerLoveCall(h.rank, loveCallHelperMaxRank)
-              ) {
-                helperHunterIds.push(h.id)
-              }
-            }
-            const promisedGold = Math.round(gate.difficulty * 0.2 * (1 + (5 - gate.daysRemaining) * 0.15))
-            const promisedEssence = Math.round(gate.difficulty * 0.08 * (1 + (5 - gate.daysRemaining) * 0.15))
-            const promisedXp = Math.round(gate.difficulty * 0.15 * (1 + (5 - gate.daysRemaining) * 0.15))
+      // 러브콜 발송 여부 판단 (파견 전력이 없거나, 타국의 S급 게이트가 폭주 직전인 경우)
+      const shouldTriggerLoveCall = !gate.loveCall?.active && 
+                                   (gate.daysRemaining ?? 0) <= 5 && 
+                                   (activePower <= 0 || (gate.isSGrade && gate.regionId !== 'kr'))
 
-            gate.loveCall = {
-              active: true,
-              promisedReward: {
-                gold: promisedGold,
-                shadowEssence: promisedEssence,
-                hunterXp: promisedXp
-              },
-              helperHunterIds,
-              issuedDay: nextDay
-            }
-            nextRiftNodes[gate.id] = gate
-            addLog(`📢 [${rName}]에서 긴급 방치 게이트 [${gate.name}] (시한 ${gate.daysRemaining}일)에 대해 용병 헌터 러브콜을 발송했습니다!`)
-            addEvent('gate_open', 'minor', '용병 러브콜 발송', `📢 [${rName}]의 [${gate.name}] 게이트에 대해 지원 요청이 들어왔습니다.`, gate.regionId, undefined, false)
+      if (shouldTriggerLoveCall) {
+        const helperHunterIds: string[] = []
+        for (const hid in nextNamedHunters) {
+          const h = nextNamedHunters[hid]
+          if (
+            h &&
+            h.regionId === regionId &&
+            h.status === 'active' &&
+            canHunterAnswerLoveCall(h.rank, loveCallHelperMaxRank)
+          ) {
+            helperHunterIds.push(h.id)
           }
         }
+        const promisedGold = Math.round(gate.difficulty * 0.2 * (1 + (5 - gate.daysRemaining) * 0.15))
+        const promisedEssence = Math.round(gate.difficulty * 0.08 * (1 + (5 - gate.daysRemaining) * 0.15))
+        const promisedXp = Math.round(gate.difficulty * 0.15 * (1 + (5 - gate.daysRemaining) * 0.15))
+
+        gate.loveCall = {
+          active: true,
+          promisedReward: {
+            gold: promisedGold,
+            shadowEssence: promisedEssence,
+            hunterXp: promisedXp
+          },
+          helperHunterIds,
+          issuedDay: nextDay
+        }
+        nextRiftNodes[gate.id] = gate
+        addLog(`📢 [${rName}]에서 긴급 방치 게이트 [${gate.name}] (시한 ${gate.daysRemaining}일)에 대해 용병 헌터 러브콜을 발송했습니다!`)
+        addEvent('gate_open', 'minor', '용병 러브콜 발송', `📢 [${rName}]의 [${gate.name}] 게이트에 대해 지원 요청이 들어왔습니다.`, gate.regionId, undefined, false)
+      }
+
+      // 파견 전력이 0 이하인 경우 도전하지 않고 방치 처리
+      if (activePower <= 0) {
         continue
       }
 
