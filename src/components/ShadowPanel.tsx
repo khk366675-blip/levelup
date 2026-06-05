@@ -53,7 +53,7 @@ import {
   getShadowSkillTagLabel,
   translateQualityTier,
 } from '../lib/shadowSkills'
-import type { OwnedShadow, ShadowInnateGrade, ShadowRarity, ShadowRole } from '../lib/types'
+import type { OwnedShadow, ShadowInnateGrade, ShadowRarity, ShadowRole, ShadowStatKey } from '../lib/types'
 
 type SourceFilterKey = 'all' | 'normal' | 'gate_named' | 'achievement_named'
 type RoleFilterKey = 'all' | ShadowRole
@@ -749,7 +749,59 @@ export function ShadowPanel() {
   const shadowLegionNodes = useGame(s => s.shadowLegionNodes ?? {})
   const restoreShadowFromCollapse = useGame(s => s.restoreShadowFromCollapse)
   const crystallizeCollapsedShadow = useGame(s => s.crystallizeCollapsedShadow)
+  
+  const mutationMaterialNormal = useGame(s => s.mutationMaterialNormal ?? 0)
+  const mutationMaterialAdvanced = useGame(s => s.mutationMaterialAdvanced ?? 0)
+  const mutationMaterialSupreme = useGame(s => s.mutationMaterialSupreme ?? 0)
+  const mutateShadow = useGame(s => s.mutateShadow)
+
+  const [selectedMutationGrade, setSelectedMutationGrade] = useState<'normal' | 'advanced' | 'supreme'>('normal')
+  const [mutationResult, setMutationResult] = useState<{
+    shadow: OwnedShadow
+    beforeStats: Record<string, number>
+    afterStats: Record<string, number>
+    beforeVisuals: any
+    afterVisuals: any
+    newTraits: string[]
+    grade: 'normal' | 'advanced' | 'supreme'
+  } | undefined>()
+
   const [labOpen, setLabOpen] = useState(false)
+
+  const handleMutate = (shadowId: string, grade: 'normal' | 'advanced' | 'supreme') => {
+    const beforeState = useGame.getState()
+    const shadowBefore = beforeState.ownedShadows?.find(s => s.instanceId === shadowId)
+    if (!shadowBefore) return
+
+    const combatProfileBefore = getShadowCombatProfile(shadowBefore)
+    const beforeStats = { ...combatProfileBefore.stats }
+    const beforeVisuals = { ...shadowBefore.mutation?.visualOverrides }
+
+    mutateShadow(shadowId, grade)
+
+    const afterState = useGame.getState()
+    const shadowAfter = afterState.ownedShadows?.find(s => s.instanceId === shadowId)
+    if (!shadowAfter) return
+
+    const combatProfileAfter = getShadowCombatProfile(shadowAfter)
+    const afterStats = { ...combatProfileAfter.stats }
+    const afterVisuals = { ...shadowAfter.mutation?.visualOverrides }
+
+    const beforeTraits = new Set((shadowBefore.mutation?.addedTraits ?? []).map(t => t.id))
+    const newTraits = (shadowAfter.mutation?.addedTraits ?? [])
+      .filter(t => !beforeTraits.has(t.id))
+      .map(t => `${t.name} (${t.description})`)
+
+    setMutationResult({
+      shadow: shadowAfter,
+      beforeStats,
+      afterStats,
+      beforeVisuals,
+      afterVisuals,
+      newTraits,
+      grade,
+    })
+  }
 
   const handleReawaken = (shadowId: string) => {
     const beforeState = useGame.getState()
@@ -1247,6 +1299,78 @@ export function ShadowPanel() {
         onSkip={() => setSlotUnlockResult(undefined)}
       />
 
+      {/* Shadow Mutation Reveal Modal */}
+      <DramaticReveal
+        isOpen={Boolean(mutationResult)}
+        steps={[
+          { text: '심연의 마력이 소용돌이칩니다...', tone: 'shadow' as const },
+          { text: '변이 촉매가 그림자의 영혼을 휘감습니다!', tone: 'shadow' as const },
+          { text: '외형의 속성이 새로운 형태로 재구성됩니다...', tone: 'shadow' as const },
+          { text: '그림자가 완전히 새로운 변주를 이룩했습니다!', tone: 'success' as const }
+        ]}
+        tone="shadow"
+        position="modal"
+        result={mutationResult && (
+          <div className="text-center py-2 max-h-[70vh] overflow-y-auto pr-1">
+            <div className="system-text text-[10px] text-cyan-300">SHADOW MUTATED</div>
+            <h3 className="mt-1 text-2xl font-black text-white">{mutationResult.shadow.name} 변이 완료</h3>
+            
+            <div className="my-4 relative mx-auto max-w-[140px]">
+              <div className="pointer-events-none absolute inset-0 rounded-full border border-purple-500/35 shadow-[0_0_36px_rgba(168,85,247,0.4)] animate-pulse" />
+              <ShadowPortrait shadow={mutationResult.shadow} size="lg" active highlighted innateGrade={mutationResult.shadow.innateGrade} />
+            </div>
+
+            <div className="grid grid-cols-2 gap-2 text-left text-xs max-w-sm mx-auto">
+              <div className="border border-white/5 bg-ink-950/40 p-2 rounded">
+                <div className="text-[10px] text-white/40 mb-1 font-bold">능력치 변화</div>
+                <div className="space-y-1">
+                  {Object.keys(mutationResult.afterStats).map(key => {
+                    const beforeVal = mutationResult.beforeStats[key] ?? 0
+                    const afterVal = mutationResult.afterStats[key] ?? 0
+                    const delta = afterVal - beforeVal
+                    if (delta <= 0) return null
+                    const statLabel = SHADOW_STAT_LABEL[key as ShadowStatKey] || key
+                    return (
+                      <div key={key} className="flex justify-between">
+                        <span className="text-white/60">{statLabel}</span>
+                        <span className="text-emerald-400 font-bold">+{delta} ({beforeVal} → {afterVal})</span>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+
+              <div className="border border-white/5 bg-ink-950/40 p-2 rounded flex flex-col justify-between">
+                <div>
+                  <div className="text-[10px] text-white/40 mb-1 font-bold">외형 재구성</div>
+                  <div className="space-y-0.5 text-[10px] tabular-nums">
+                    <div>색상: <span style={{ color: mutationResult.shadow.mutation?.visualOverrides?.accentColor }} className="font-bold">{mutationResult.shadow.mutation?.visualOverrides?.accentColor}</span></div>
+                    <div>오라: <span className="text-white/80 font-bold">{mutationResult.shadow.mutation?.visualOverrides?.auraType}</span></div>
+                    <div>눈빛: <span className="text-white/80 font-bold">{mutationResult.shadow.mutation?.visualOverrides?.eyeStyle}</span></div>
+                    <div>무기: <span className="text-white/80 font-bold">{mutationResult.shadow.mutation?.visualOverrides?.weaponShape}</span></div>
+                    <div>강도: <span className="text-white/80 font-bold">{mutationResult.shadow.mutation?.visualOverrides?.visualIntensity}x</span></div>
+                  </div>
+                </div>
+                <div className="text-[9px] text-cyan-300 mt-2">단계: {mutationResult.shadow.mutation?.mutationStage}단계 변이</div>
+              </div>
+            </div>
+
+            {mutationResult.newTraits.length > 0 && (
+              <div className="mt-3 max-w-sm mx-auto border border-amber-500/25 bg-amber-500/10 p-2.5 rounded-lg text-left">
+                <div className="text-[10px] text-amber-200/60 font-bold">★ 새로운 특성 획득! ★</div>
+                <div className="mt-1 text-xs font-bold text-white leading-relaxed">
+                  {mutationResult.newTraits.map((trait, i) => (
+                    <div key={i}>{trait}</div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+        onComplete={() => setMutationResult(undefined)}
+        onSkip={() => setMutationResult(undefined)}
+      />
+
       <ShadowRevealModal reveal={shadowReveal} onClose={() => setShadowReveal(undefined)} />
       <div className="panel corner-bracket overflow-hidden p-5 border-purple-400/25 bg-[radial-gradient(circle_at_50%_0%,rgba(124,58,237,0.2),transparent_36%),linear-gradient(135deg,rgba(15,23,42,0.75),rgba(2,6,23,0.94))]">
         <div className="br" />
@@ -1334,6 +1458,7 @@ export function ShadowPanel() {
                         <span className="text-cyan-200">A {((shadowStats.accuracy ?? 0) * 100).toFixed(0)}%</span>
                         {combatProfile.topStats.slice(0, 2).map(stat => <span key={stat.key}>{stat.shortLabel}</span>)}
                         {(shadow.enhancementLevel ?? 0) > 0 && <span className="text-amber-200">+{shadow.enhancementLevel}</span>}
+                        {shadow.mutation && shadow.mutation.mutationStage > 0 && <span className="text-purple-300">🧬{shadow.mutation.mutationStage}</span>}
                       </div>
                     </button>
                   )
@@ -2031,6 +2156,100 @@ export function ShadowPanel() {
                     </div>
                   </div>
                 </div>
+
+                {/* 그림자 변이 연구소 */}
+                {selectedShadow ? (
+                  (() => {
+                    const materialNormal = mutationMaterialNormal
+                    const materialAdvanced = mutationMaterialAdvanced
+                    const materialSupreme = mutationMaterialSupreme
+
+                    const selectedCount = 
+                      selectedMutationGrade === 'normal' ? materialNormal :
+                      selectedMutationGrade === 'advanced' ? materialAdvanced :
+                      materialSupreme
+
+                    const canMutate = selectedCount >= 1
+
+                    return (
+                      <div className="rounded-lg border border-purple-400/35 bg-purple-950/20 p-3 text-xs flex flex-col justify-between">
+                        <div>
+                          <div className="flex items-center justify-between mb-1.5">
+                            <span className="font-bold text-white/95">그림자 변이 연구소</span>
+                            <span className="text-[10px] text-cyan-300">누적: {selectedShadow.mutation?.mutationStage ?? 0}회</span>
+                          </div>
+                          <p className="text-[10px] text-white/55 leading-relaxed mb-3">
+                            변이 촉매를 주입하여 그림자의 외형, 능력치, 특성을 영구 변조시킵니다. 평균 스탯은 상승하며 하한선이 보장됩니다.
+                          </p>
+
+                          {/* 촉매 등급 선택 */}
+                          <div className="space-y-2 mb-3">
+                            <label className="text-[10px] text-white/45 block">촉매 등급 선택</label>
+                            <div className="grid grid-cols-3 gap-1 bg-black/45 p-1 rounded border border-white/5">
+                              {(['normal', 'advanced', 'supreme'] as const).map(grade => {
+                                const active = selectedMutationGrade === grade
+                                const label = grade === 'normal' ? '일반' : grade === 'advanced' ? '고급' : '최고급'
+                                return (
+                                  <button
+                                    key={grade}
+                                    type="button"
+                                    onClick={() => setSelectedMutationGrade(grade)}
+                                    className={clsx(
+                                      'rounded py-1 text-[9px] font-bold text-center border transition',
+                                      active 
+                                        ? 'border-purple-400/40 bg-purple-500/15 text-purple-200 shadow-glow'
+                                        : 'border-transparent bg-transparent text-white/50 hover:text-white/80'
+                                    )}
+                                  >
+                                    <div>{label}</div>
+                                  </button>
+                                )
+                              })}
+                            </div>
+                          </div>
+
+                          {/* 보유 현황 HUD */}
+                          <div className="rounded bg-ink-900/60 p-2 border border-white/5 space-y-1.5 text-[10px]">
+                            <div className="flex justify-between items-center text-[9px] text-white/45 pb-1 border-b border-white/5">
+                              <span>등급</span>
+                              <span>보유 개수</span>
+                            </div>
+                            <div className="flex justify-between items-center">
+                              <span className="text-white/60">일반 촉매</span>
+                              <span className={clsx('font-bold', materialNormal > 0 ? 'text-white' : 'text-white/30')}>{materialNormal}개</span>
+                            </div>
+                            <div className="flex justify-between items-center">
+                              <span className="text-purple-300">고급 촉매</span>
+                              <span className={clsx('font-bold', materialAdvanced > 0 ? 'text-purple-200' : 'text-white/30')}>{materialAdvanced}개</span>
+                            </div>
+                            <div className="flex justify-between items-center">
+                              <span className="text-amber-300 font-extrabold">최고급 촉매</span>
+                              <span className={clsx('font-bold', materialSupreme > 0 ? 'text-amber-200' : 'text-white/30')}>{materialSupreme}개</span>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="mt-3 flex items-center justify-between border-t border-white/5 pt-2">
+                          <span className="text-[9px] text-white/40">
+                            요구: {selectedMutationGrade === 'normal' ? '일반 1개' : selectedMutationGrade === 'advanced' ? '고급 1개' : '최고급 1개'}
+                          </span>
+                          <button
+                            type="button"
+                            disabled={!canMutate}
+                            onClick={() => handleMutate(selectedShadow.instanceId, selectedMutationGrade)}
+                            className="btn btn-secondary py-1 px-3 text-[10px] disabled:opacity-40 disabled:cursor-not-allowed"
+                          >
+                            변이 주입
+                          </button>
+                        </div>
+                      </div>
+                    )
+                  })()
+                ) : (
+                  <div className="rounded-lg border border-dashed border-white/10 bg-ink-950/45 p-3 text-center flex items-center justify-center text-[10px] text-white/40">
+                    그림자를 선택하면 변이 연구소가 활성화됩니다.
+                  </div>
+                )}
               </div>
             </div>
           </div>

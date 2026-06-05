@@ -33,6 +33,7 @@ const CATEGORY_LABEL: Record<ShopProductCategory, string> = {
   shard: 'SHARD',
   relic: 'RELIC',
   premium: 'PREMIUM',
+  mutation: 'MUTATION',
 }
 
 const CATEGORY_CLASS: Record<ShopProductCategory, string> = {
@@ -42,6 +43,7 @@ const CATEGORY_CLASS: Record<ShopProductCategory, string> = {
   shard: 'border-emerald-500/30 bg-emerald-500/10 text-emerald-100',
   relic: 'border-amber-500/35 bg-amber-500/10 text-amber-100',
   premium: 'border-fuchsia-500/35 bg-fuchsia-500/10 text-fuchsia-100',
+  mutation: 'border-purple-400/35 bg-purple-400/10 text-purple-200',
 }
 
 function visualIcon(visual: TicketVisualMeta) {
@@ -100,7 +102,7 @@ export function ShopPanel() {
     if (activeFilter === 'summon') return product.category === 'shadow_summon'
     if (activeFilter === 'equipment') return product.category === 'equipment_draw'
     if (activeFilter === 'shard') return product.category === 'shard'
-    if (activeFilter === 'essence') return product.category === 'essence'
+    if (activeFilter === 'essence') return product.category === 'essence' || product.category === 'mutation'
     if (activeFilter === 'premium') return product.category === 'premium' || product.category === 'relic'
     return true
   })

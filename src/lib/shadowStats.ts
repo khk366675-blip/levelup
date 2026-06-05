@@ -439,7 +439,8 @@ export const getShadowCombatProfile = (
       bonusMult += skillBonus
     }
 
-    next[key] = Math.max(1, Math.round(base * bonusMult))
+    const mutationDelta = shadow.mutation?.statDelta?.[key] ?? 0
+    next[key] = Math.max(1, Math.round(base * bonusMult) + mutationDelta)
     return next
   }, {} as ShadowStatBlock)
 

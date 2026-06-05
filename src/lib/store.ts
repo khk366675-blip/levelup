@@ -233,6 +233,7 @@ import {
   rollShadowTraitDefinition,
   SHADOW_TRAITS,
   getValidEquippedShadowIds,
+  generateMutation,
 } from './shadows'
 import {
   createInitialTowerState,
@@ -434,6 +435,9 @@ export interface GameState {
   lastShadowExtractResult?: ShadowExtractResult
   gold?: number
   shadowEssence?: number
+  mutationMaterialNormal?: number
+  mutationMaterialAdvanced?: number
+  mutationMaterialSupreme?: number
   shadowSummonTickets?: ShadowSummonTicket[]
   expeditionTickets?: number
   shadowSummonShards?: Partial<Record<ShadowSummonShardType, number>>
@@ -559,6 +563,7 @@ export interface GameState {
   toggleShadowLock: (shadowInstanceId: string) => void
   toggleShadowFavorite: (shadowInstanceId: string) => void
   evolveShadow: (shadowInstanceId: string) => void
+  mutateShadow: (shadowInstanceId: string, materialGrade: 'normal' | 'advanced' | 'supreme') => void
   trainShadowWithEssence: (shadowInstanceId: string, optionId: string) => void
   buyShadowTicketWithEssence: () => void
   buyExtractionCatalystWithEssence: () => void
@@ -2370,6 +2375,27 @@ const createGateBattleOutcomeUpdate = (
           run.extractionBonusPercent = (run.extractionBonusPercent ?? 0) + 8
         }
 
+        let addedNormalMat = 0
+        let addedAdvancedMat = 0
+        let addedSupremeMat = 0
+
+        const gr = gate.rank ?? 'E'
+        const rand = Math.random()
+        if (gr === 'S' || gate.rewardTableId?.includes('boss')) {
+          if (rand < 0.03) addedSupremeMat = 1
+          else if (rand < 0.13) addedAdvancedMat = 1
+          else if (rand < 0.43) addedNormalMat = 1
+        } else if (gr === 'A' || gr === 'B') {
+          if (rand < 0.01) addedSupremeMat = 1
+          else if (rand < 0.08) addedAdvancedMat = 1
+          else if (rand < 0.33) addedNormalMat = 1
+        } else if (gr === 'C' || gr === 'D') {
+          if (rand < 0.04) addedAdvancedMat = 1
+          else if (rand < 0.19) addedNormalMat = 1
+        } else {
+          if (rand < 0.08) addedNormalMat = 1
+        }
+
         const clearTickets = getGateClearExpeditionTickets(gate.rank)
         const lines = [
           `게이트 던전 런 [${gate.name}] 완벽 공략 성공!`,
@@ -2379,6 +2405,19 @@ const createGateBattleOutcomeUpdate = (
           ...(clearTickets > 0 ? [`원정 티켓 +${clearTickets}장`] : []),
           ...run.accumulatedRewards.items.map(r => `전리품: [${r.itemName}]`),
         ]
+
+        if (addedNormalMat > 0) {
+          gateRewards.push({ type: 'item' as any, itemId: 'mutation_material_normal', itemName: '일반 변이 재료', rarity: 'common' })
+          lines.push(`전리품: 일반 변이 재료 +${addedNormalMat}개`)
+        }
+        if (addedAdvancedMat > 0) {
+          gateRewards.push({ type: 'item' as any, itemId: 'mutation_material_advanced', itemName: '고급 변이 재료', rarity: 'rare' })
+          lines.push(`전리품: 고급 변이 재료 +${addedAdvancedMat}개`)
+        }
+        if (addedSupremeMat > 0) {
+          gateRewards.push({ type: 'item' as any, itemId: 'mutation_material_supreme', itemName: '최고급 변이 재료', rarity: 'epic' })
+          lines.push(`전리품: 최고급 변이 재료 +${addedSupremeMat}개`)
+        }
 
         const newMessages = [
           {
@@ -2414,6 +2453,9 @@ const createGateBattleOutcomeUpdate = (
           hunter: nextHunter,
           gold: nextGold,
           shadowEssence: nextEssenceVal,
+          mutationMaterialNormal: (s.mutationMaterialNormal ?? 0) + addedNormalMat,
+          mutationMaterialAdvanced: (s.mutationMaterialAdvanced ?? 0) + addedAdvancedMat,
+          mutationMaterialSupreme: (s.mutationMaterialSupreme ?? 0) + addedSupremeMat,
           items: nextItems,
           shadowSummonTickets: nextShadowSummonTickets,
           expeditionTickets: (s.expeditionTickets ?? 0) + clearTickets,
@@ -3358,9 +3400,27 @@ const applyShopReward = (
     shards: Partial<Record<ShadowSummonShardType, number>>
     essence: number
     expeditionTickets: number
+    mutationMaterialNormal: number
+    mutationMaterialAdvanced: number
+    mutationMaterialSupreme: number
     lines: string[]
   }
 ) => {
+  if (reward.kind === 'mutation_material_normal') {
+    acc.mutationMaterialNormal += reward.quantity
+    acc.lines.push(`일반 변이 재료 +${reward.quantity}개`)
+    return
+  }
+  if (reward.kind === 'mutation_material_advanced') {
+    acc.mutationMaterialAdvanced += reward.quantity
+    acc.lines.push(`고급 변이 재료 +${reward.quantity}개`)
+    return
+  }
+  if (reward.kind === 'mutation_material_supreme') {
+    acc.mutationMaterialSupreme += reward.quantity
+    acc.lines.push(`최고급 변이 재료 +${reward.quantity}개`)
+    return
+  }
   if (reward.kind === 'expedition_ticket') {
     acc.expeditionTickets += reward.quantity
     acc.lines.push(`원정 티켓 +${reward.quantity}장`)
@@ -4059,6 +4119,9 @@ const createHardcoreDeathResetState = (
     lastShadowExtractResult: undefined,
     gold: 0,
     shadowEssence: 0,
+    mutationMaterialNormal: 0,
+    mutationMaterialAdvanced: 0,
+    mutationMaterialSupreme: 0,
     shadowSummonTickets: [],
     expeditionTickets: 0,
     shadowSummonShards: {},
@@ -4201,6 +4264,9 @@ export const useGame = create<GameState>()(
       lastShadowExtractResult: undefined,
       gold: 0,
       shadowEssence: 0,
+      mutationMaterialNormal: 0,
+      mutationMaterialAdvanced: 0,
+      mutationMaterialSupreme: 0,
       shadowSummonTickets: [],
       expeditionTickets: 0,
       shadowSummonShards: {},
@@ -4351,10 +4417,13 @@ export const useGame = create<GameState>()(
           shards: {} as Partial<Record<ShadowSummonShardType, number>>,
           essence: 0,
           expeditionTickets: 0,
+          mutationMaterialNormal: 0,
+          mutationMaterialAdvanced: 0,
+          mutationMaterialSupreme: 0,
           lines: [] as string[],
         }
         for (let i = 0; i < purchaseQuantity; i++) {
-          applyShopReward(product.reward, grants)
+          applyShopReward(product.reward, grants as any)
         }
 
         const spentLines = [
@@ -4369,6 +4438,9 @@ export const useGame = create<GameState>()(
           shadowSummonShards: addShadowSummonShards(s.shadowSummonShards, grants.shards),
           items: [...s.items, ...grants.items],
           expeditionTickets: (s.expeditionTickets ?? 0) + grants.expeditionTickets,
+          mutationMaterialNormal: (s.mutationMaterialNormal ?? 0) + grants.mutationMaterialNormal,
+          mutationMaterialAdvanced: (s.mutationMaterialAdvanced ?? 0) + grants.mutationMaterialAdvanced,
+          mutationMaterialSupreme: (s.mutationMaterialSupreme ?? 0) + grants.mutationMaterialSupreme,
           messages: [...s.messages, {
             id: uid(),
             kind: grants.items.length > 0 ? 'item' : grants.tickets.length > 0 || Object.keys(grants.shards).length > 0 ? 'shadow' : 'info',
@@ -9139,6 +9211,32 @@ export const useGame = create<GameState>()(
             }
           }
 
+          let addedNormalMat = 0
+          let addedAdvancedMat = 0
+          let addedSupremeMat = 0
+
+          const gr = gate.rank ?? 'E'
+          const rand = Math.random()
+          if (isMonarchId || gr === 'S') {
+            if (rand < 0.08) addedSupremeMat = 1
+            else if (rand < 0.28) addedAdvancedMat = 1
+            else if (rand < 0.68) addedNormalMat = 1
+          } else if (gr === 'A' || gr === 'B') {
+            if (rand < 0.03) addedSupremeMat = 1
+            else if (rand < 0.15) addedAdvancedMat = 1
+            else if (rand < 0.45) addedNormalMat = 1
+          } else if (gr === 'C' || gr === 'D') {
+            if (rand < 0.06) addedAdvancedMat = 1
+            else if (rand < 0.26) addedNormalMat = 1
+          } else {
+            if (rand < 0.12) addedNormalMat = 1
+          }
+
+          const matRewardLines: string[] = []
+          if (addedNormalMat > 0) matRewardLines.push(`일반 변이 재료 +${addedNormalMat}개`)
+          if (addedAdvancedMat > 0) matRewardLines.push(`고급 변이 재료 +${addedAdvancedMat}개`)
+          if (addedSupremeMat > 0) matRewardLines.push(`최고급 변이 재료 +${addedSupremeMat}개`)
+
           const jackpotTitle = hasJackpot ? '★대박 잭팟!★ ' : ''
           newMessages.push({
             id: uid(),
@@ -9152,6 +9250,7 @@ export const useGame = create<GameState>()(
               `Gold +${finalGold}${rolledGold.isJackpot ? ' (★잭팟 대박 보너스!★)' : ''}`,
               `그림자 정수 +${finalEssence}${rolledEssence.isJackpot ? ' (★잭팟 대박 보너스!★)' : ''}`,
               ...(droppedItemName ? [`획득 장비: ${droppedItemName}`] : []),
+              ...matRewardLines.map(line => `전리품: ${line}`),
             ],
             createdAt: todayISO(),
           })
@@ -9335,6 +9434,9 @@ export const useGame = create<GameState>()(
             achievementStats: nextAchievementStats,
             gold: nextGold,
             shadowEssence: nextShadowEssence,
+            mutationMaterialNormal: (freshState.mutationMaterialNormal ?? 0) + addedNormalMat,
+            mutationMaterialAdvanced: (freshState.mutationMaterialAdvanced ?? 0) + addedAdvancedMat,
+            mutationMaterialSupreme: (freshState.mutationMaterialSupreme ?? 0) + addedSupremeMat,
             items: nextItems,
             livingWorld: freshState.livingWorld ? {
               ...freshState.livingWorld,
@@ -10253,6 +10355,60 @@ export const useGame = create<GameState>()(
         })
       }),
 
+      mutateShadow: (shadowInstanceId, materialGrade) => set((s) => {
+        const ownedShadows = s.ownedShadows ?? []
+        const shadow = ownedShadows.find(sh => sh.instanceId === shadowInstanceId)
+        if (!shadow) return {}
+
+        let mNormal = s.mutationMaterialNormal ?? 0
+        let mAdvanced = s.mutationMaterialAdvanced ?? 0
+        let mSupreme = s.mutationMaterialSupreme ?? 0
+
+        if (materialGrade === 'normal') {
+          if (mNormal < 1) return {}
+          mNormal -= 1
+        } else if (materialGrade === 'advanced') {
+          if (mAdvanced < 1) return {}
+          mAdvanced -= 1
+        } else if (materialGrade === 'supreme') {
+          if (mSupreme < 1) return {}
+          mSupreme -= 1
+        } else {
+          return {}
+        }
+
+        const mutatedShadow = generateMutation(shadow, materialGrade)
+
+        const nextOwned = ownedShadows.map(sh =>
+          sh.instanceId === shadowInstanceId ? mutatedShadow : sh
+        )
+
+        const gradeLabels = {
+          normal: '일반',
+          advanced: '고급',
+          supreme: '최고급',
+        }
+
+        const lines = [
+          `[${shadow.name}]에게 ${gradeLabels[materialGrade]} 변이 재료를 주입하여 외형과 능력치를 변조했습니다.`,
+          `변이 단계: ${mutatedShadow.mutation?.mutationStage ?? 1}단계`,
+        ]
+
+        return {
+          ownedShadows: nextOwned,
+          mutationMaterialNormal: mNormal,
+          mutationMaterialAdvanced: mAdvanced,
+          mutationMaterialSupreme: mSupreme,
+          messages: [...s.messages, {
+            id: uid(),
+            kind: 'shadow' as const,
+            title: '그림자 변이 완료',
+            lines,
+            createdAt: todayISO(),
+          }],
+        }
+      }),
+
       trainShadowWithEssence: (shadowInstanceId, optionId) => set((s) => {
         const ownedShadows = s.ownedShadows ?? []
         const shadow = ownedShadows.find(sh => sh.instanceId === shadowInstanceId)
@@ -10867,6 +11023,9 @@ export const useGame = create<GameState>()(
         let nextOwnedShadows = s.ownedShadows ?? []
         let nextShadowEssence = s.shadowEssence ?? 0
         const nextMessages = [...s.messages]
+        let addedNormalMat = 0
+        let addedAdvancedMat = 0
+        let addedSupremeMat = 0
 
         if (resolved.result && !expedition.result) {
           const levelUps: string[] = []
@@ -10953,6 +11112,21 @@ export const useGame = create<GameState>()(
           if (awakenedTraits.length > 0) {
             bonusRewardLines.push(...awakenedTraits.map(line => `특성 각성: ${line}`))
           }
+
+          const matRoll = Math.random()
+          if (outcome === 'great_success') {
+            if (matRoll < 0.03) addedSupremeMat = 1
+            else if (matRoll < 0.15) addedAdvancedMat = 1
+            else if (matRoll < 0.50) addedNormalMat = 1
+          } else if (outcome === 'success') {
+            if (matRoll < 0.04) addedAdvancedMat = 1
+            else if (matRoll < 0.20) addedNormalMat = 1
+          }
+
+          if (addedNormalMat > 0) bonusRewardLines.push(`일반 변이 재료 +${addedNormalMat}개`)
+          if (addedAdvancedMat > 0) bonusRewardLines.push(`고급 변이 재료 +${addedAdvancedMat}개`)
+          if (addedSupremeMat > 0) bonusRewardLines.push(`최고급 변이 재료 +${addedSupremeMat}개`)
+
           if (bonusRewardLines.length > 0) {
             resolved.result.bonusRewards = [
               ...(resolved.result.bonusRewards ?? []),
@@ -11004,6 +11178,9 @@ export const useGame = create<GameState>()(
           hunter: nextHunter,
           ownedShadows: nextOwnedShadows,
           shadowEssence: nextShadowEssence,
+          mutationMaterialNormal: (s.mutationMaterialNormal ?? 0) + addedNormalMat,
+          mutationMaterialAdvanced: (s.mutationMaterialAdvanced ?? 0) + addedAdvancedMat,
+          mutationMaterialSupreme: (s.mutationMaterialSupreme ?? 0) + addedSupremeMat,
           activeShadowExpeditionId: resolved.status === 'completed' ? undefined : s.activeShadowExpeditionId,
           shadowExpeditions: (s.shadowExpeditions ?? []).map(item => item.id === expeditionId ? resolved : item),
           messages: nextMessages,
@@ -13268,6 +13445,17 @@ export const useGame = create<GameState>()(
         if (q.type === 'daily' && Math.random() < 0.10) {
           dailyTicketGained = 1
         }
+
+        let addedNormalMat = 0
+        let addedAdvancedMat = 0
+        let addedSupremeMat = 0
+        if (q.type === 'daily') {
+          const rand = Math.random()
+          if (rand < 0.005) addedSupremeMat = 1
+          else if (rand < 0.025) addedAdvancedMat = 1
+          else if (rand < 0.105) addedNormalMat = 1
+        }
+
         newMessages.push({
           id: uid(),
           kind: 'quest',
@@ -13278,6 +13466,9 @@ export const useGame = create<GameState>()(
             `직업 [${jobResult.activeJobName}] XP +${jobResult.jobXpGained}${jobResult.jobCategoryBonus > 0 ? ` (친화도 보너스 +${Math.round(jobResult.jobCategoryBonus * 100)}%)` : ''}`,
             ...(questGold ? [`Gold +${questGold}`] : []),
             ...(dailyTicketGained > 0 ? [`원정 티켓 +${dailyTicketGained}장`] : []),
+            ...(addedNormalMat > 0 ? [`일반 변이 재료 +${addedNormalMat}개`] : []),
+            ...(addedAdvancedMat > 0 ? [`고급 변이 재료 +${addedAdvancedMat}개`] : []),
+            ...(addedSupremeMat > 0 ? [`최고급 변이 재료 +${addedSupremeMat}개`] : []),
             ...Object.entries(statRewards).map(([k, v]) => `· ${k} ${formatStatReward(v ?? 0)}`),
           ],
           createdAt: todayISO(),
@@ -13339,6 +13530,9 @@ export const useGame = create<GameState>()(
         const baseState: Partial<GameState> = {
           hunter: { ...finalHunter, stats: newStats, streak, lastActiveDate: today },
           gold: (s.gold ?? 0) + questGold,
+          mutationMaterialNormal: (s.mutationMaterialNormal ?? 0) + addedNormalMat,
+          mutationMaterialAdvanced: (s.mutationMaterialAdvanced ?? 0) + addedAdvancedMat,
+          mutationMaterialSupreme: (s.mutationMaterialSupreme ?? 0) + addedSupremeMat,
           quests: updatedQuests,
           items: [...s.items, ...drops],
           expeditionTickets: (s.expeditionTickets ?? 0) + dailyTicketGained,

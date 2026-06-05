@@ -19,6 +19,7 @@ import type {
   ShadowTraitDefinition,
   ShadowLegionNode,
   RedGateState,
+  ShadowStatKey,
 } from './types'
 import {
   SHADOW_INNATE_GRADE_WEIGHTS_BY_SOURCE,
@@ -420,7 +421,8 @@ export const getShadowEffects = (shadow: OwnedShadow): ShadowEffect[] => {
       : effect.value * innateMul * utilMul,
   }))
   const baseEffects = applyMul(def?.effects ?? [])
-  const traitEffects = applyMul(shadow.traits.map(trait => ({ type: trait.effectType, value: trait.value })))
+  const allTraits = [...(shadow.traits ?? []), ...(shadow.mutation?.addedTraits ?? [])]
+  const traitEffects = applyMul(allTraits.map(trait => ({ type: trait.effectType, value: trait.value })))
   const secretTraitEffects = (shadow.secretTraits ?? []).flatMap((trait): ShadowEffect[] => {
     if (trait === 'silent-oath') {
       return [
@@ -1223,3 +1225,125 @@ export const SHADOW_LEGION_NODES: ShadowLegionNode[] = [
     effect: { shadowAccuracyBonus: 0.005 }
   }
 ]
+
+export function generateMutation(
+  shadow: OwnedShadow,
+  grade: 'normal' | 'advanced' | 'supreme'
+): OwnedShadow {
+  const mutated = { ...shadow }
+  if (!mutated.mutation) {
+    mutated.mutation = {
+      visualOverrides: {},
+      statDelta: {},
+      addedTraits: [],
+      mutationStage: 0,
+    }
+  } else {
+    mutated.mutation = {
+      visualOverrides: { ...mutated.mutation.visualOverrides },
+      statDelta: { ...mutated.mutation.statDelta },
+      addedTraits: [...(mutated.mutation.addedTraits ?? [])],
+      mutationStage: mutated.mutation.mutationStage,
+    }
+  }
+
+  const mutation = mutated.mutation!
+  mutation.mutationStage += 1
+
+  const accentColors = [
+    '#06b6d4', '#67e8f9', '#10b981', '#34d399', '#8b5cf6', '#a78bfa', '#d946ef', '#f0abfc', '#f43f5e', '#fb7185',
+    '#fbbf24', '#f59e0b', '#facc15', '#0ea5e9', '#38bdf8', '#60a5fa', '#f97316', '#fb923c', '#84cc16', '#a3e635'
+  ]
+  const auraTypes = [
+    'low-mist', 'speed-lines', 'battle-mist', 'blood-flare', 'faint-runes', 'rune-orbit', 'guard-haze', 'barrier',
+    'predator-haze', 'essence-sparks', 'named-corona', 'achievement-halo', 'paper-orbit', 'command-halo', 'soft-halo'
+  ]
+  const eyeStyles = [
+    'ember-points', 'visor', 'paired', 'burning-slit', 'small-glow', 'oracle', 'dim', 'steady', 'gold-points',
+    'star-slit', 'predator-slit'
+  ]
+  const silhouetteTypes = [
+    'rat', 'scout-knife', 'blade', 'greatsword', 'scroll', 'book-runes', 'round-shield', 'tower-shield', 'hound',
+    'chained-beast', 'banner'
+  ]
+  const weaponShapes = [
+    'twin-daggers', 'longsword', 'execution-blade', 'stylus', 'rune-quill', 'short-spear', 'wall-shield', 'rift-dagger',
+    'captain-spear', 'command-staff', 'patron-staff', 'ledger-quill', 'steel-greatsword', 'moon-shield', 'watcher-shield',
+    'registrar-quill', 'clock-blade', 'dawn-dagger'
+  ]
+
+  const pickRandom = <T>(arr: T[]): T => arr[Math.floor(Math.random() * arr.length)]
+  
+  mutation.visualOverrides = {
+    ...mutation.visualOverrides,
+    accentColor: pickRandom(accentColors),
+    auraType: pickRandom(auraTypes),
+    eyeStyle: pickRandom(eyeStyles),
+    silhouetteType: pickRandom(silhouetteTypes),
+    weaponShape: pickRandom(weaponShapes),
+    visualIntensity: parseFloat((1.0 + Math.random() * 0.8).toFixed(2)),
+  }
+
+  const statKeys: ShadowStatKey[] = [
+    'shadowAttack', 'shadowDefense', 'shadowDurability', 'shadowSpeed',
+    'shadowCrit', 'shadowFinisher', 'shadowControl', 'shadowSuppression',
+    'shadowSupport', 'shadowSurvival', 'shadowBossing', 'shadowExpedition',
+    'shadowSynergy'
+  ]
+
+  let numStatsToBoost = 2
+  let minBoost = 2
+  let maxBoost = 8
+
+  if (grade === 'advanced') {
+    numStatsToBoost = Math.floor(Math.random() * 3) + 3 // 3-5 keys
+    minBoost = 8
+    maxBoost = 20
+  } else if (grade === 'supreme') {
+    numStatsToBoost = Math.floor(Math.random() * 3) + 4 // 4-6 keys
+    minBoost = 25
+    maxBoost = 60
+  } else {
+    numStatsToBoost = Math.floor(Math.random() * 3) + 2 // 2-4 keys
+    minBoost = 2
+    maxBoost = 8
+  }
+
+  const boostedKeys = new Set<ShadowStatKey>()
+  while (boostedKeys.size < numStatsToBoost) {
+    boostedKeys.add(pickRandom(statKeys))
+  }
+
+  boostedKeys.forEach(key => {
+    const boostValue = Math.floor(Math.random() * (maxBoost - minBoost + 1)) + minBoost
+    const currentDelta = mutation.statDelta?.[key] ?? 0
+    if (!mutation.statDelta) mutation.statDelta = {}
+    mutation.statDelta[key] = currentDelta + boostValue
+  })
+
+  let traitChance = 0.15
+  if (grade === 'advanced') traitChance = 0.35
+  if (grade === 'supreme') traitChance = 0.75
+
+  if (Math.random() < traitChance) {
+    const existingIds = new Set<string>([
+      ...(mutated.traits ?? []).map(t => t.id),
+      ...(mutation.addedTraits ?? []).map(t => t.id)
+    ])
+    const possibleTraits = SHADOW_TRAITS.filter(t => !existingIds.has(t.id))
+    
+    if (possibleTraits.length > 0) {
+      const rolledTrait = pickRandom(possibleTraits)
+      if (!mutation.addedTraits) mutation.addedTraits = []
+      
+      if (mutation.addedTraits.length >= 3) {
+        const replaceIdx = Math.floor(Math.random() * mutation.addedTraits.length)
+        mutation.addedTraits[replaceIdx] = rolledTrait
+      } else {
+        mutation.addedTraits.push(rolledTrait)
+      }
+    }
+  }
+
+  return mutated
+}

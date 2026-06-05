@@ -15,6 +15,7 @@ export type ShopProductCategory =
   | 'shard'
   | 'relic'
   | 'premium'
+  | 'mutation'
 
 export type ShopEquipmentDrawTier = 'standard' | 'relic' | 'rare'
 export type EquipmentQualitySource = 'normal' | 'weekly' | 'boss' | 'high_boss'
@@ -25,6 +26,9 @@ export type ShopReward =
   | { kind: 'shadow_essence'; amount: number }
   | { kind: 'equipment_draw'; slot: EquipmentSlot | 'random'; quantity: number; drawTier: ShopEquipmentDrawTier }
   | { kind: 'expedition_ticket'; quantity: number }
+  | { kind: 'mutation_material_normal'; quantity: number }
+  | { kind: 'mutation_material_advanced'; quantity: number }
+  | { kind: 'mutation_material_supreme'; quantity: number }
   | { kind: 'mixed'; rewards: ShopReward[] }
 
 export interface ShopProduct {
@@ -224,6 +228,35 @@ export const SHOP_PRODUCTS: ShopProduct[] = [
     priceGold: 350,
     reward: { kind: 'expedition_ticket', quantity: 1 },
     rewardSummary: '원정 티켓 x1',
+  },
+  {
+    id: 'mutation-material-normal',
+    name: '일반 변이 재료',
+    description: '그림자를 일반적인 형태로 변형시키는 기본적인 재료입니다. 약간의 스탯 상승과 무작위 외형 변주를 제공합니다.',
+    category: 'mutation',
+    priceGold: 150,
+    reward: { kind: 'mutation_material_normal', quantity: 1 },
+    rewardSummary: '일반 변이 재료 x1',
+  },
+  {
+    id: 'mutation-material-advanced',
+    name: '고급 변이 재료',
+    description: '그림자를 정밀하게 변이시키는 고급 재료입니다. 더 높은 스탯 상승 기댓값과 새로운 특성 획득 확률을 지닙니다.',
+    category: 'mutation',
+    priceGold: 450,
+    priceEssence: 3,
+    reward: { kind: 'mutation_material_advanced', quantity: 1 },
+    rewardSummary: '고급 변이 재료 x1',
+  },
+  {
+    id: 'mutation-material-supreme',
+    name: '최고급 변이 재료',
+    description: '그림자를 완전히 재탄생시키는 궁극의 재료입니다. 매우 큰 스탯 상승을 보장하며, 높은 확률로 외형 변형과 특성 추가를 동반합니다.',
+    category: 'mutation',
+    priceGold: 1200,
+    priceEssence: 10,
+    reward: { kind: 'mutation_material_supreme', quantity: 1 },
+    rewardSummary: '최고급 변이 재료 x1',
   },
 ]
 

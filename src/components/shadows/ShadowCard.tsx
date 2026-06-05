@@ -221,6 +221,11 @@ export function ShadowCard({
                   <Sparkles className="h-2.5 w-2.5" /> 진화 가능
                 </span>
               )}
+              {shadow.mutation && shadow.mutation.mutationStage > 0 && (
+                <span className="inline-flex items-center gap-1 rounded border border-purple-400/35 bg-purple-400/10 px-2 py-0.5 text-[10px] system-text text-purple-200">
+                  🧪 변이 {shadow.mutation.mutationStage}단계
+                </span>
+              )}
             </div>
           </div>
 

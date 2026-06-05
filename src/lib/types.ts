@@ -737,6 +737,27 @@ export interface OwnedShadow {
   collapseReason?: string
   restoreCost?: number
   status?: 'active' | 'collapsed'
+  mutation?: ShadowMutationState
+}
+
+export interface ShadowMutationState {
+  visualOverrides?: {
+    accentColor?: string
+    auraType?: string
+    eyeStyle?: string
+    visualIntensity?: number
+    silhouetteType?: string
+    weaponShape?: string
+    headShape?: string
+    shoulderShape?: string
+    runeStyle?: string
+    accessory?: string
+    posture?: string
+    backgroundMotif?: string
+  }
+  statDelta?: Partial<Record<ShadowStatKey, number>>
+  addedTraits?: ShadowTrait[]
+  mutationStage: number
 }
 
 export interface ShadowSummonTicket {

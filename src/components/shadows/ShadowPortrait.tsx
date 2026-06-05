@@ -91,20 +91,54 @@ const fallbackProfile = (role: ShadowRole, rarity: ShadowRarity, named: boolean,
   }
 }
 
-const resolveProfile = (definition: ShadowDefinition | undefined, role: ShadowRole, rarity: ShadowRarity, named: boolean, evolved: boolean): PortraitProfile => {
+const resolveProfile = (
+  definition: ShadowDefinition | undefined,
+  role: ShadowRole,
+  rarity: ShadowRarity,
+  named: boolean,
+  evolved: boolean,
+  shadow?: OwnedShadow
+): PortraitProfile => {
   const fallback = fallbackProfile(role, rarity, named, evolved)
+  let silhouette = definition?.silhouetteType ?? fallback.silhouette
+  let weapon = definition?.weaponShape ?? fallback.weapon
+  let head = definition?.headShape ?? fallback.head
+  let shoulders = definition?.shoulderShape ?? fallback.shoulders
+  let aura = definition?.auraType ?? fallback.aura
+  let eyes = definition?.eyeStyle ?? fallback.eyes
+  let rune = definition?.runeStyle ?? fallback.rune
+  let accessory = definition?.accessory ?? fallback.accessory
+  let posture = definition?.posture ?? fallback.posture
+  let motif = definition?.backgroundMotif ?? fallback.motif
+  let intensity = definition?.visualIntensity ?? fallback.intensity
+
+  if (shadow?.mutation?.visualOverrides) {
+    const vo = shadow.mutation.visualOverrides
+    if (vo.silhouetteType) silhouette = vo.silhouetteType
+    if (vo.weaponShape) weapon = vo.weaponShape
+    if (vo.headShape) head = vo.headShape
+    if (vo.shoulderShape) shoulders = vo.shoulderShape
+    if (vo.auraType) aura = vo.auraType
+    if (vo.eyeStyle) eyes = vo.eyeStyle
+    if (vo.runeStyle) rune = vo.runeStyle
+    if (vo.accessory) accessory = vo.accessory
+    if (vo.posture) posture = vo.posture
+    if (vo.backgroundMotif) motif = vo.backgroundMotif
+    if (vo.visualIntensity !== undefined) intensity = vo.visualIntensity
+  }
+
   return {
-    silhouette: definition?.silhouetteType ?? fallback.silhouette,
-    weapon: definition?.weaponShape ?? fallback.weapon,
-    head: definition?.headShape ?? fallback.head,
-    shoulders: definition?.shoulderShape ?? fallback.shoulders,
-    aura: definition?.auraType ?? fallback.aura,
-    eyes: definition?.eyeStyle ?? fallback.eyes,
-    rune: definition?.runeStyle ?? fallback.rune,
-    accessory: definition?.accessory ?? fallback.accessory,
-    posture: definition?.posture ?? fallback.posture,
-    motif: definition?.backgroundMotif ?? fallback.motif,
-    intensity: definition?.visualIntensity ?? fallback.intensity,
+    silhouette,
+    weapon,
+    head,
+    shoulders,
+    aura,
+    eyes,
+    rune,
+    accessory,
+    posture,
+    motif,
+    intensity,
   }
 }
 
@@ -506,8 +540,8 @@ export function ShadowPortrait({
   const visualKey = hidden ? 'sealed-shadow-signal' : def?.visualKey ?? `${role}-${rarity}`
   const seed = hashString(visualKey)
   const palette = rarityPalette[displayRarity]
-  const accent = hidden ? '#94a3b8' : def?.accentColor ?? palette.frame
-  const profile = resolveProfile(hidden ? undefined : def, displayRole, displayRarity, displayNamed, displayEvolved)
+  const accent = hidden ? '#94a3b8' : shadow?.mutation?.visualOverrides?.accentColor ?? def?.accentColor ?? palette.frame
+  const profile = resolveProfile(hidden ? undefined : def, displayRole, displayRarity, displayNamed, displayEvolved, shadow)
   const silhouette = profile.silhouette
   const runeRotation = (seed % 28) - 14
   const mistShift = (seed % 18) - 9
@@ -520,11 +554,24 @@ export function ShadowPortrait({
   const isGateNamed = assetFamily === 'named_gate'
   const isAchievementNamed = assetFamily === 'named_achievement'
   const assetUrl = hidden ? undefined : getShadowPortraitAsset(def?.portraitKey)
+
+  const hexToRgba = (hexStr: string, alpha: number): string => {
+    const clean = hexStr.replace('#', '')
+    if (clean.length !== 6) return palette.glow
+    const r = parseInt(clean.substring(0, 2), 16)
+    const g = parseInt(clean.substring(2, 4), 16)
+    const b = parseInt(clean.substring(4, 6), 16)
+    return `rgba(${r}, ${g}, ${b}, ${alpha})`
+  }
+
+  const customGlow = shadow?.mutation ? hexToRgba(accent, 0.6) : palette.glow
+  const customMist = shadow?.mutation ? hexToRgba(accent, 0.16) : palette.mist
+
   const style = {
     '--shadow-accent': accent,
-    '--shadow-frame': palette.frame,
-    '--shadow-glow': palette.glow,
-    '--shadow-mist': palette.mist,
+    '--shadow-frame': shadow?.mutation ? accent : palette.frame,
+    '--shadow-glow': customGlow,
+    '--shadow-mist': customMist,
   } as CSSProperties
 
   return (
