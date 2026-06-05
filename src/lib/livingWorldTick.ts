@@ -1268,13 +1268,59 @@ export function advanceWorldDay(state: LivingWorldState, rng: RngFn, options: Ad
       let loreId: string | undefined = undefined
 
       if (chosenType === 'rift') {
-        title = `[희귀 균열] ${node.name || '미확인 균열'}`
-        description = `이 구역에서 특이한 파동을 지닌 희귀 균열이 반응하고 있습니다. 내부 마수가 다소 사나우나 특별 정수와 장비가 잠들어 있습니다.`
-        
-        // 희귀 균열 보상
-        const goldReward = Math.round(oppDifficulty * 1.8 * (1 + rng() * 0.3))
-        const xpReward = Math.round(oppDifficulty * 1.5 * (1 + rng() * 0.3))
-        const essenceReward = oppRank === 'E' || oppRank === 'D' ? 2 : oppRank === 'C' || oppRank === 'B' ? 4 : 6
+        const variants = [
+          {
+            title: `[마기 폭주 균열] ${node.name || '미확인 균열'}`,
+            description: `해당 구역의 차원 장막을 뚫고 폭주하는 마기가 극도로 과열되어 솟구칩니다. 날뛰는 마수들로 인해 전투가 극도로 까다롭지만, 평소보다 대량의 정수를 추출할 수 있습니다.`,
+            goldMult: 1.4,
+            xpMult: 1.4,
+            essenceBonus: 2,
+          },
+          {
+            title: `[절대 영도의 서리 균열] ${node.name || '미확인 균열'}`,
+            description: `차원 장벽 뒤편의 절대 영도 냉기가 주변 대지를 얼려버렸습니다. 몸이 무거워지고 마력 순환이 정체되지만, 중심부 심층에는 정제된 얼어붙은 귀금속 골드가 풍부하게 응축되어 있습니다.`,
+            goldMult: 2.5,
+            xpMult: 1.1,
+            essenceBonus: 0,
+          },
+          {
+            title: `[부패의 독무 균열] ${node.name || '미확인 균열'}`,
+            description: `지독한 맹독과 유기성 산성 안개가 흐르는 늪지형 균열입니다. 호흡기 차단막을 뚫는 침식 기운을 버텨야 하나, 마수의 시체로부터 연금술 촉매로 쓰이는 마력 에센스를 대거 획득합니다.`,
+            goldMult: 1.1,
+            xpMult: 1.2,
+            essenceBonus: 3,
+          },
+          {
+            title: `[왜곡된 시간의 균열] ${node.name || '미확인 균열'}`,
+            description: `시간선이 가닥가닥 엉켜 불규칙하게 흐르는 혼돈의 왜곡 지대입니다. 시공의 인과율이 흔들려 변칙적인 공습을 가해오지만, 공략 성공 시 영혼의 격벽이 강화되어 막대한 경험을 선물합니다.`,
+            goldMult: 1.2,
+            xpMult: 2.6,
+            essenceBonus: 1,
+          },
+          {
+            title: `[공허의 침식 균열] ${node.name || '미확인 균열'}`,
+            description: `모든 사물의 윤곽을 삼켜버릴 듯한 불길한 어둠이 아지랑이칩니다. 심연의 공허를 마주하는 사투 속에서 헌터들은 무한한 전율을 느끼며, 클리어 시 정수와 경험치를 동시에 대폭 가산받습니다.`,
+            goldMult: 1.5,
+            xpMult: 1.8,
+            essenceBonus: 2,
+          },
+          {
+            title: `[고대 마수 둥지 균열] ${node.name || '미확인 균열'}`,
+            description: `인간의 흔적이 닿지 않은 야성적인 고대 용족 계열 마수들의 둥지입니다. 강력한 둥지 군락과 군단원들이 가로막고 있으나, 그들이 둥지 깊은 곳에 쌓아둔 보물상자를 완전히 약탈할 수 있습니다.`,
+            goldMult: 2.8,
+            xpMult: 1.0,
+            essenceBonus: 0,
+          }
+        ]
+
+        const variant = variants[Math.floor(rng() * variants.length)]
+        title = variant.title
+        description = variant.description
+
+        const goldReward = Math.round(oppDifficulty * 1.5 * variant.goldMult * (1 + rng() * 0.25))
+        const xpReward = Math.round(oppDifficulty * 1.2 * variant.xpMult * (1 + rng() * 0.25))
+        const baseEssence = oppRank === 'E' || oppRank === 'D' ? 2 : oppRank === 'C' || oppRank === 'B' ? 4 : 6
+        const essenceReward = baseEssence + variant.essenceBonus
 
         promisedReward = {
           gold: goldReward,
@@ -1283,14 +1329,59 @@ export function advanceWorldDay(state: LivingWorldState, rng: RngFn, options: Ad
           text: `골드 +${goldReward.toLocaleString()}G, 정수 +${essenceReward}개, 경험치 +${xpReward.toLocaleString()}`
         }
       } else if (chosenType === 'merchant') {
-        title = `[떠도는 상인] ${rName}의 암시장`
-        description = `차원 상인이 이 지역에 잠깐 발을 들였습니다. 골드나 정수를 지불하여 평소 구하기 힘든 유용한 물품을 교환할 기회입니다.`
-        
+        const variants = [
+          {
+            title: `[수상한 연금술사] ${rName}의 이동 실험실`,
+            description: `음산한 마기가 감도는 보라색 후드를 쓴 연금술사가 정밀 비약을 만들기 위한 에센스 및 재고 거래를 은밀히 제안해 옵니다.`,
+            goldCostScale: 3.2,
+            essenceRewardScale: 1.0,
+            goldRewardScale: 9.0,
+            xpRewardScale: 4.2
+          },
+          {
+            title: `[심연의 유물 수집가] ${rName}의 진열대`,
+            description: `문명 이전의 심연 유물들을 가공하여 가치를 매기는 유물 학자입니다. 역사적 가치가 깃든 정수와 자금의 긴급 교환을 중재합니다.`,
+            goldCostScale: 3.5,
+            essenceRewardScale: 1.2,
+            goldRewardScale: 10.0,
+            xpRewardScale: 3.8
+          },
+          {
+            title: `[그림자 장막의 암거래상] ${rName}의 밀수품`,
+            description: `지하 암시장의 통제 구역에서 밀수된 특별 장비와 정수들을 급전이 필요하다는 이유로 거래하는 검은 손의 브로커입니다.`,
+            goldCostScale: 3.8,
+            essenceRewardScale: 1.1,
+            goldRewardScale: 11.5,
+            xpRewardScale: 4.0
+          },
+          {
+            title: `[베일 쓴 맹약의 환전상] ${rName}의 금고`,
+            description: `가면 뒤에 얼굴을 숨긴 금융 길드의 대리인입니다. 높은 수수료를 물지만 확실한 자금 회전과 그림자 에센스의 상호 환전을 중재합니다.`,
+            goldCostScale: 3.0,
+            essenceRewardScale: 0.9,
+            goldRewardScale: 8.5,
+            xpRewardScale: 4.5
+          },
+          {
+            title: `[방랑하는 차원 만물상] ${rName}의 차원 짐마차`,
+            description: `차원 왜곡의 틈새를 횡단하며 온갖 기묘한 잡화를 팔고 수집하는 방랑 짐꾼입니다. 마나 비약과 정수 등의 교환 기회를 단기 제공합니다.`,
+            goldCostScale: 3.4,
+            essenceRewardScale: 1.0,
+            goldRewardScale: 9.5,
+            xpRewardScale: 4.8
+          }
+        ]
+
+        const variant = variants[Math.floor(rng() * variants.length)]
+        title = variant.title
+        description = variant.description
+
         const merchantOption = rng()
         if (merchantOption < 0.4) {
           // 1. 골드를 소모하여 대량의 그림자 정수 획득
-          const goldCost = Math.round(oppDifficulty * 3.5 * (1 + rng() * 0.2))
-          const essenceReward = oppRank === 'E' || oppRank === 'D' ? 3 : oppRank === 'C' || oppRank === 'B' ? 6 : 9
+          const goldCost = Math.round(oppDifficulty * variant.goldCostScale * (1 + rng() * 0.2))
+          const baseEss = oppRank === 'E' || oppRank === 'D' ? 3 : oppRank === 'C' || oppRank === 'B' ? 6 : 9
+          const essenceReward = Math.round(baseEss * variant.essenceRewardScale)
           cost = { gold: goldCost }
           promisedReward = {
             shadowEssence: essenceReward,
@@ -1299,7 +1390,7 @@ export function advanceWorldDay(state: LivingWorldState, rng: RngFn, options: Ad
         } else if (merchantOption < 0.7) {
           // 2. 그림자 정수를 소모하여 고성능 아이템/장비 보조 골드 획득
           const essenceCost = oppRank === 'E' || oppRank === 'D' ? 1 : oppRank === 'C' || oppRank === 'B' ? 2 : 3
-          const goldReward = Math.round(oppDifficulty * 10 * (1 + rng() * 0.3))
+          const goldReward = Math.round(oppDifficulty * variant.goldRewardScale * (1 + rng() * 0.3))
           cost = { shadowEssence: essenceCost }
           promisedReward = {
             gold: goldReward,
@@ -1308,7 +1399,7 @@ export function advanceWorldDay(state: LivingWorldState, rng: RngFn, options: Ad
         } else {
           // 3. 골드를 지불하여 헌터에게 대량의 비약 경험치 주입
           const goldCost = Math.round(oppDifficulty * 2.0)
-          const xpReward = Math.round(oppDifficulty * 4.0)
+          const xpReward = Math.round(oppDifficulty * variant.xpRewardScale)
           cost = { gold: goldCost }
           promisedReward = {
             hunterXp: xpReward,
@@ -1317,29 +1408,49 @@ export function advanceWorldDay(state: LivingWorldState, rng: RngFn, options: Ad
         }
       } else {
         // anomaly (탐색형 이상 현상)
-        title = `[이상 신호] ${node.name || '잔해 발굴지'}`
-        description = `이 지표면 아래에서 기이한 문명 에너지가 흐르고 있습니다. 약간의 마나 조율(비용)을 거치면 고대 연구 기록과 보상을 확보할 수 있습니다.`
-        
+        const variants = [
+          {
+            title: `[고대 마력 기둥 잔해] ${node.name || '잔해 발굴지'}`,
+            description: `지상 위로 솟구친 고대의 거대 기둥 잔해에서 방전되는 에너지가 주변 차원을 왜곡하고 있습니다. 해독기를 가동해 정보를 복원하십시오.`,
+            lore: `"프로젝트 에테르 보고서: 마수가 죽을 때 남기는 마력 핵은 자연의 열역학 제2법칙을 정면으로 위배한다. 이것은 지구의 에너지 순환 체계가 아닌 다른 우주, 또는 침식하는 군주들의 세계로부터 주입되는 고유의 외래 물질이다."`
+          },
+          {
+            title: `[추락한 마력 철운석] ${node.name || '유성 충돌지'}`,
+            description: `대기권을 격파하고 충돌한 정체불명의 금속질 유성체입니다. 운석 균열에서 파란 마나 오라가 지글거립니다. 중화 및 시료 채취를 가동하십시오.`,
+            lore: `"격벽 건설 비망록: 차원 장막이 파열되어 건설된 마력 격벽들은 일종의 임시 수문(Sluice Gate)에 불과하다. 심연의 마력 파동 수위가 일정 임계점을 초과하면, 전역 방벽은 연쇄 방손되고 말 것이다. 시간이 얼마 없다."`
+          },
+          {
+            title: `[봉인된 잊힌 제단] ${node.name || '심층 신전'}`,
+            description: `오랜 세월 매몰되어 있던 심연의 제단이 마력의 공명으로 모습을 드러냈습니다. 마수들이 공양을 하던 석판의 암호를 해독해 고대 잔류 사념을 추출하십시오.`,
+            lore: `"한 퇴역 헌터의 일기: 군주들이라고 자칭하는 아홉 영적 신격들이 세계를 돌며 파멸을 일으킨다. 그들의 학살은 악의가 아닌, 일종의 엄격한 연극(Play)과 같다. 우리는 다음 막이 오르기 전 무대를 쓸고 갈 부속품에 불과한가?"`
+          },
+          {
+            title: `[침몰한 차원 연구소] ${node.name || '연구 지휘소'}`,
+            description: `게이트 왜곡으로 지반이 침하하면서 완전히 침식당한 옛 비밀 국가 연구 구역입니다. 중앙 백업 터미널을 복구하고 숨겨진 마력 로그를 획득하십시오.`,
+            lore: `"학술 기록물: 각성이 발생할 때 뇌하수체와 척수 마력 배출구의 진동수가 게이트 내부 코어 파동과 정확히 공명함을 확인했다. 각성은 인류를 구원할 진화가 아니라, 게이트에 귀속되도록 설계된 잠재적 전염병(Infection)이다."`
+          },
+          {
+            title: `[균열에 삼켜진 마을 터] ${node.name || '폐허 거점'}`,
+            description: `오염 침식이 빠르게 고착화되자 버려진 채 방치된 국경 방어구역 인근의 옛 마을 잔해입니다. 무너진 가옥 속에서 남겨진 기억 보관 큐브를 발굴하십시오.`,
+            lore: `"상인의 장부 뒤편 기록: 그림자 정수(Shadow Essence)는 단순한 광물 결정체가 아니다. 그것은 거대 왜곡에 짓눌려 소멸한 생명들의 압축된 잔류 영혼(Soul Residue)이며, 그 힘을 이끌어내기 위해선 끊임없이 소유자의 마력을 연료로 바쳐야 한다."`
+          }
+        ]
+
+        const variant = variants[Math.floor(rng() * variants.length)]
+        title = variant.title
+        description = variant.description
+
         const goldCost = Math.round(oppDifficulty * 0.8)
         cost = { gold: goldCost }
+        loreId = `lore-${nextDay}-${Math.floor(rng() * 10000)}`
 
-        const lores = [
-          `"프로젝트 에테르 보고서: 마수가 죽을 때 남기는 마력 핵은 자연의 열역학 제2법칙을 정면으로 위배한다. 이것은 지구가 아닌 다른 우주의 힘이다."`,
-          `"격벽 건설 비망록: 균열이 열린 뒤 건설된 차원 벽들은 일종의 댐과 같다. 그러나 마력의 수위가 계속 상승한다면 결국 댐은 붕괴하고 말 것이다."`,
-          `"한 헌터의 일기: 군주들이라고 불리는 신격 존재들이 있다. 그들은 마치 연극을 하듯 이 세계의 멸망을 연출하고 있다. 우리는 광대에 불과한가?"`,
-          `"학술 기록: 각성이 발생할 때 뇌파의 진동수가 균열 내부 마력의 진동수와 정확히 공명함을 확인했다. 각성은 인류의 진화인가, 전염병인가?"`,
-          `"상인의 마기 측정기록: 그림자 정수는 단순한 결정체가 아니다. 그것은 고도로 압축된 영혼의 흔적이며, 누군가의 영적 에너지를 연료로 소모한다."`
-        ]
-        const loreIndex = Math.floor(rng() * lores.length)
-        const chosenLore = lores[loreIndex]
-        loreId = `lore-${nextDay}-${loreIndex}`
+        const goldReward = Math.round(oppDifficulty * 1.3 * (1 + rng() * 0.2))
+        const xpReward = Math.round(oppDifficulty * 1.1 * (1 + rng() * 0.2))
 
-        const goldReward = Math.round(oppDifficulty * 1.2)
-        const xpReward = Math.round(oppDifficulty * 1.0)
         promisedReward = {
           gold: goldReward,
           hunterXp: xpReward,
-          lore: chosenLore,
+          lore: variant.lore,
           text: `[발굴 완수] 골드 +${goldReward.toLocaleString()}G, 경험치 +${xpReward.toLocaleString()}, 고대 연구 기록 발굴`
         }
       }
