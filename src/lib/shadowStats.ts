@@ -1,5 +1,6 @@
 import type { OwnedShadow, ShadowDefinition, ShadowInnateGrade, ShadowRole, ShadowStatKey } from './types'
 import { getShadowDefinition, SHADOW_TRAIT_DEFINITIONS, SHADOW_PASSIVE_DEFINITIONS, SHADOW_LEGION_NODES } from './shadows'
+import { getRuneValue } from './runes'
 
 let getLegionNodeLevelFn: (nodeId: string) => number = () => 0
 
@@ -439,8 +440,17 @@ export const getShadowCombatProfile = (
       bonusMult += skillBonus
     }
 
+    let runeDelta = 0
+    if (shadow.runeSlots) {
+      for (const rune of shadow.runeSlots) {
+        if (rune && rune.type === 'shadow' && rune.statKey === key) {
+          runeDelta += getRuneValue(rune)
+        }
+      }
+    }
+
     const mutationDelta = shadow.mutation?.statDelta?.[key] ?? 0
-    next[key] = Math.max(1, Math.round(base * bonusMult) + mutationDelta)
+    next[key] = Math.max(1, Math.round(base * bonusMult) + mutationDelta + runeDelta)
     return next
   }, {} as ShadowStatBlock)
 

@@ -42,6 +42,12 @@ export type TicketVisualKey =
   | 'shadow-bundle'
   | 'shadow-travel'
   | 'shop-supply'
+  | 'mutation-material-normal'
+  | 'mutation-material-advanced'
+  | 'mutation-material-supreme'
+  | 'rune-box-normal'
+  | 'rune-box-advanced'
+  | 'rune-box-supreme'
 
 export type TicketVisual = {
   key: TicketVisualKey
@@ -72,6 +78,12 @@ export const TICKET_ASSET_MANIFEST: Partial<Record<TicketVisualKey, string>> = {
   'exchange_essence_gold_to_shard': exchangeEssenceGoldToShard,
   'shadow-bundle': packShadowShards,
   'shadow-travel': ticketShadowTravel,
+  'mutation-material-normal': packShadowShards,
+  'mutation-material-advanced': packShadowPremiumShards,
+  'mutation-material-supreme': packShadowPremiumShards,
+  'rune-box-normal': ticketEquipmentChoiceBundle,
+  'rune-box-advanced': ticketEquipmentChoiceBundle,
+  'rune-box-supreme': ticketEquipmentChoiceBundle,
 }
 
 export const getTicketVisualAsset = (key: TicketVisualKey): string | undefined =>
@@ -246,6 +258,84 @@ export const TICKET_VISUALS_BY_PRODUCT_ID: Record<string, TicketVisual> = {
     accentClass: 'text-teal-100 border-teal-200/30 bg-teal-300/12',
     stubClass: 'border-teal-300/25 bg-teal-400/10 text-teal-100',
     poolLabel: '원정',
+  },
+  'mutation-material-normal': {
+    key: 'mutation-material-normal',
+    label: 'NORMAL CATALYST',
+    shortDescription: '일반 변이 촉매제',
+    glyph: 'MUTATION',
+    artKind: 'relic',
+    borderClass: 'border-purple-300/35',
+    surfaceClass: 'from-purple-500/16 via-pink-400/8 to-ink-950/80',
+    glowClass: 'shadow-[0_0_26px_rgba(168,85,247,0.13)]',
+    accentClass: 'text-purple-100 border-purple-200/30 bg-purple-300/12',
+    stubClass: 'border-purple-300/25 bg-purple-400/10 text-purple-100',
+    poolLabel: '변이 촉매',
+  },
+  'mutation-material-advanced': {
+    key: 'mutation-material-advanced',
+    label: 'ADVANCED CATALYST',
+    shortDescription: '고급 변이 촉매제',
+    glyph: 'MUTATION',
+    artKind: 'relic',
+    borderClass: 'border-purple-400/40',
+    surfaceClass: 'from-purple-600/18 via-pink-400/10 to-ink-950/80',
+    glowClass: 'shadow-[0_0_30px_rgba(217,70,239,0.18)]',
+    accentClass: 'text-pink-100 border-pink-200/35 bg-pink-300/12',
+    stubClass: 'border-purple-400/25 bg-purple-500/10 text-purple-200',
+    poolLabel: '변이 촉매',
+  },
+  'mutation-material-supreme': {
+    key: 'mutation-material-supreme',
+    label: 'SUPREME CATALYST',
+    shortDescription: '최고급 변이 촉매제',
+    glyph: 'MUTATION',
+    artKind: 'relic',
+    borderClass: 'border-amber-300/40',
+    surfaceClass: 'from-amber-400/18 via-yellow-200/8 to-ink-950/80',
+    glowClass: 'shadow-[0_0_34px_rgba(245,158,11,0.22)]',
+    accentClass: 'text-amber-100 border-amber-200/35 bg-amber-300/12',
+    stubClass: 'border-amber-300/25 bg-amber-400/10 text-amber-100',
+    poolLabel: '변이 촉매',
+  },
+  'rune-box-normal': {
+    key: 'rune-box-normal',
+    label: 'RUNE SUPPLY',
+    shortDescription: '일반 룬 보급 상자',
+    glyph: 'RUNE',
+    artKind: 'relic',
+    borderClass: 'border-rose-300/35',
+    surfaceClass: 'from-rose-500/16 via-pink-400/8 to-ink-950/80',
+    glowClass: 'shadow-[0_0_26px_rgba(244,63,94,0.13)]',
+    accentClass: 'text-rose-100 border-rose-200/30 bg-rose-300/12',
+    stubClass: 'border-rose-300/25 bg-rose-400/10 text-rose-100',
+    poolLabel: '룬 상자',
+  },
+  'rune-box-advanced': {
+    key: 'rune-box-advanced',
+    label: 'RUNE CACHE',
+    shortDescription: '고급 룬 보급 상자',
+    glyph: 'RUNE',
+    artKind: 'relic',
+    borderClass: 'border-rose-400/40',
+    surfaceClass: 'from-rose-600/18 via-orange-400/10 to-ink-950/80',
+    glowClass: 'shadow-[0_0_30px_rgba(244,63,94,0.18)]',
+    accentClass: 'text-orange-100 border-orange-200/35 bg-orange-300/12',
+    stubClass: 'border-rose-400/25 bg-rose-500/10 text-rose-200',
+    poolLabel: '룬 상자',
+  },
+  'rune-box-supreme': {
+    key: 'rune-box-supreme',
+    label: 'RUNE COFFER',
+    shortDescription: '최고급 룬 보급 상자',
+    glyph: 'RUNE',
+    artKind: 'relic',
+    borderClass: 'border-amber-300/40',
+    surfaceClass: 'from-amber-400/18 via-red-400/8 to-ink-950/80',
+    glowClass: 'shadow-[0_0_34px_rgba(245,158,11,0.22)]',
+    accentClass: 'text-amber-100 border-amber-200/35 bg-amber-300/12',
+    stubClass: 'border-amber-300/25 bg-amber-400/10 text-amber-100',
+    poolLabel: '룬 상자',
   },
 }
 

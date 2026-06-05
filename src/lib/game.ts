@@ -27,6 +27,7 @@ import type {
 import { CATEGORY_META, STAT_META, TITLE_DEFINITIONS } from './types'
 import { getMonsterPressureScaling } from './realityPressure'
 import { PROMOTION_EXAM_DEFINITIONS } from './promotionExams'
+import { getRuneValue } from './runes'
 
 import { getShadowEffects } from './shadows'
 import { resolveShadowActionRuntime, type ShadowRuntimeEvent } from './shadowCombatRuntime'
@@ -553,7 +554,7 @@ export const getEnhancedItemEffects = (item: Item): NonNullable<Item['effects']>
   const starMultiplier = getEquipmentStarMultiplier(item)
   const level = getEnhancementLevel(item)
 
-  return item.effects?.map(effect => {
+  const finalEffects = item.effects?.map(effect => {
     const baseValue = effect.value
     const bonus = getEnhancementBonus(item.rarity, effect.type, level)
     let finalValue = baseValue * starMultiplier + bonus
@@ -574,6 +575,21 @@ export const getEnhancedItemEffects = (item: Item): NonNullable<Item['effects']>
       value: isRound ? roundStatValue(finalValue) : roundStatValue(finalValue),
     }
   }) ?? []
+
+  if (item.runeSlots) {
+    for (const rune of item.runeSlots) {
+      if (rune && rune.type === 'equipment') {
+        const val = getRuneValue(rune)
+        finalEffects.push({
+          type: rune.effectType as any,
+          stat: rune.statKey as any,
+          value: val,
+        })
+      }
+    }
+  }
+
+  return finalEffects
 }
 
 export const getEnhanceMaterialCandidates = (

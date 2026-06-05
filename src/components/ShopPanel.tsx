@@ -34,6 +34,7 @@ const CATEGORY_LABEL: Record<ShopProductCategory, string> = {
   relic: 'RELIC',
   premium: 'PREMIUM',
   mutation: 'MUTATION',
+  rune: 'RUNE SYSTEM',
 }
 
 const CATEGORY_CLASS: Record<ShopProductCategory, string> = {
@@ -44,6 +45,7 @@ const CATEGORY_CLASS: Record<ShopProductCategory, string> = {
   relic: 'border-amber-500/35 bg-amber-500/10 text-amber-100',
   premium: 'border-fuchsia-500/35 bg-fuchsia-500/10 text-fuchsia-100',
   mutation: 'border-purple-400/35 bg-purple-400/10 text-purple-200',
+  rune: 'border-rose-500/35 bg-rose-500/10 text-rose-200',
 }
 
 function visualIcon(visual: TicketVisualMeta) {
@@ -71,7 +73,7 @@ export function ShopPanel() {
   const purchaseShopProduct = useGame(s => s.purchaseShopProduct)
   const [expandedProbabilityId, setExpandedProbabilityId] = useState<string | undefined>()
   const [equipmentReveal, setEquipmentReveal] = useState<EquipmentRevealPayload | undefined>()
-  const [activeFilter, setActiveFilter] = useState<'all' | 'summon' | 'equipment' | 'shard' | 'essence' | 'premium' | 'purchasable'>('all')
+  const [activeFilter, setActiveFilter] = useState<'all' | 'summon' | 'equipment' | 'rune' | 'shard' | 'essence' | 'premium' | 'purchasable'>('all')
   const [purchaseQuantities, setPurchaseQuantities] = useState<Record<string, number>>({})
 
   const purchasableCount = SHOP_PRODUCTS.filter(p => getDisabledReason(p, gold, shadowEssence) === '구매 가능').length
@@ -101,6 +103,7 @@ export function ShopPanel() {
     
     if (activeFilter === 'summon') return product.category === 'shadow_summon'
     if (activeFilter === 'equipment') return product.category === 'equipment_draw'
+    if (activeFilter === 'rune') return product.category === 'rune'
     if (activeFilter === 'shard') return product.category === 'shard'
     if (activeFilter === 'essence') return product.category === 'essence' || product.category === 'mutation'
     if (activeFilter === 'premium') return product.category === 'premium' || product.category === 'relic'
@@ -139,6 +142,7 @@ export function ShopPanel() {
     { id: 'all', label: '전체' },
     { id: 'summon', label: '소환' },
     { id: 'equipment', label: '장비권' },
+    { id: 'rune', label: '룬 보급' },
     { id: 'shard', label: '그림자 조각' },
     { id: 'essence', label: '그림자 정수/교환' },
     { id: 'premium', label: '프리미엄' },

@@ -16,6 +16,7 @@ export type ShopProductCategory =
   | 'relic'
   | 'premium'
   | 'mutation'
+  | 'rune'
 
 export type ShopEquipmentDrawTier = 'standard' | 'relic' | 'rare'
 export type EquipmentQualitySource = 'normal' | 'weekly' | 'boss' | 'high_boss'
@@ -29,6 +30,9 @@ export type ShopReward =
   | { kind: 'mutation_material_normal'; quantity: number }
   | { kind: 'mutation_material_advanced'; quantity: number }
   | { kind: 'mutation_material_supreme'; quantity: number }
+  | { kind: 'rune_box_normal'; quantity: number }
+  | { kind: 'rune_box_advanced'; quantity: number }
+  | { kind: 'rune_box_supreme'; quantity: number }
   | { kind: 'mixed'; rewards: ShopReward[] }
 
 export interface ShopProduct {
@@ -257,6 +261,35 @@ export const SHOP_PRODUCTS: ShopProduct[] = [
     priceEssence: 10,
     reward: { kind: 'mutation_material_supreme', quantity: 1 },
     rewardSummary: '최고급 변이 재료 x1',
+  },
+  {
+    id: 'rune-box-normal',
+    name: '일반 룬 상자',
+    description: '그림자와 장비에 장착 가능한 일반 ~ 희귀 등급의 무작위 룬을 획득합니다.',
+    category: 'rune',
+    priceGold: 200,
+    reward: { kind: 'rune_box_normal', quantity: 1 },
+    rewardSummary: '일반 룬 상자 x1',
+  },
+  {
+    id: 'rune-box-advanced',
+    name: '고급 룬 상자',
+    description: '그림자와 장비에 장착 가능한 고급 ~ 영웅 등급의 무작위 룬을 획득합니다.',
+    category: 'rune',
+    priceGold: 600,
+    priceEssence: 2,
+    reward: { kind: 'rune_box_advanced', quantity: 1 },
+    rewardSummary: '고급 룬 상자 x1',
+  },
+  {
+    id: 'rune-box-supreme',
+    name: '최고급 룬 상자',
+    description: '그림자와 장비에 장착 가능한 희귀 ~ 전설 등급의 무작위 룬을 획득합니다. 높은 전설 출현율!',
+    category: 'rune',
+    priceGold: 1800,
+    priceEssence: 8,
+    reward: { kind: 'rune_box_supreme', quantity: 1 },
+    rewardSummary: '최고급 룬 상자 x1',
   },
 ]
 

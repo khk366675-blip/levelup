@@ -28,6 +28,7 @@ import {
 } from './shop'
 
 import { getMockDirectBattleMonster } from './directBattleMonsters'
+import { getRuneValue } from './runes'
 
 export const SHADOW_RARITY_ORDER: ShadowRarity[] = ['common', 'uncommon', 'rare', 'epic', 'legendary']
 export const SHADOW_RANK_ORDER: ShadowRank[] = ['lesser', 'soldier', 'elite', 'knight', 'marshal', 'monarch', 'named']
@@ -423,6 +424,19 @@ export const getShadowEffects = (shadow: OwnedShadow): ShadowEffect[] => {
   const baseEffects = applyMul(def?.effects ?? [])
   const allTraits = [...(shadow.traits ?? []), ...(shadow.mutation?.addedTraits ?? [])]
   const traitEffects = applyMul(allTraits.map(trait => ({ type: trait.effectType, value: trait.value })))
+  
+  const runeEffects: ShadowEffect[] = []
+  if (shadow.runeSlots) {
+    for (const rune of shadow.runeSlots) {
+      if (rune && rune.type === 'shadow' && rune.effectType) {
+        runeEffects.push({
+          type: rune.effectType as ShadowEffectType,
+          value: getRuneValue(rune)
+        })
+      }
+    }
+  }
+
   const secretTraitEffects = (shadow.secretTraits ?? []).flatMap((trait): ShadowEffect[] => {
     if (trait === 'silent-oath') {
       return [
@@ -432,7 +446,7 @@ export const getShadowEffects = (shadow: OwnedShadow): ShadowEffect[] => {
     }
     return []
   })
-  return [...baseEffects, ...traitEffects, ...secretTraitEffects]
+  return [...baseEffects, ...traitEffects, ...runeEffects, ...secretTraitEffects]
 }
 
 export const getShadowEffectTotal = (

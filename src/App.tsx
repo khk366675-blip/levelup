@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useState, useRef, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Award,
@@ -101,15 +101,32 @@ export default function App() {
   const isOverlayActive = Boolean(manualBattleSession || activeFocusSession)
 
   const tabAnchorRef = useRef<HTMLDivElement | null>(null)
+  const [headerHeight, setHeaderHeight] = useState(64)
+  const observerRef = useRef<ResizeObserver | null>(null)
+
+  const headerRef = useCallback((node: HTMLHeadElement | null) => {
+    if (observerRef.current) {
+      observerRef.current.disconnect()
+      observerRef.current = null
+    }
+
+    if (node) {
+      const handleResize = () => {
+        setHeaderHeight(node.offsetHeight)
+      }
+      handleResize()
+
+      const observer = new ResizeObserver(handleResize)
+      observer.observe(node)
+      observerRef.current = observer
+    }
+  }, [])
 
   const scrollToTabAnchor = (behavior: ScrollBehavior) => {
     if (tabAnchorRef.current) {
       const element = tabAnchorRef.current
       const elementPosition = element.getBoundingClientRect().top + window.scrollY
-      // Mobile header: 56px, Desktop header: 64px
-      // Mobile offset = 56px + 4px extra space = 60px
-      // Desktop offset = 64px + 8px extra space = 72px
-      const offset = window.innerWidth >= 768 ? 72 : 60
+      const offset = headerHeight + 8
       const scrollPosition = elementPosition - offset
       
       const currentScroll = window.scrollY
@@ -238,7 +255,7 @@ export default function App() {
       <SystemMessageQueue />
 
       {/* Header */}
-      <header className="sticky top-0 z-30 backdrop-blur-md bg-ink-900/60 border-b border-cyan-400/15">
+      <header ref={headerRef} className="sticky top-0 z-30 backdrop-blur-md bg-ink-900/60 border-b border-cyan-400/15">
         <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
           <div className="flex min-w-0 flex-wrap items-center gap-2 sm:gap-3">
             <motion.div
@@ -305,7 +322,7 @@ export default function App() {
         <div ref={tabAnchorRef} className="scroll-mt-[60px] md:scroll-mt-[72px]" />
 
         {/* Tabs */}
-        <div className="sticky top-[56px] md:top-[64px] z-20 backdrop-blur-md bg-ink-950/75 border border-cyan-400/15 p-1 rounded-lg overflow-x-auto flex gap-1 shadow-[0_4px_20px_rgba(0,0,0,0.45)]">
+        <div style={{ top: `${headerHeight}px` }} className="sticky z-20 backdrop-blur-md bg-ink-950/75 border border-cyan-400/15 p-1 rounded-lg overflow-x-auto flex gap-1 shadow-[0_4px_20px_rgba(0,0,0,0.45)]">
           {TABS.map(t => {
             const Icon = t.icon
             const active = tab === t.key

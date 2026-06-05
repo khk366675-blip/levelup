@@ -738,6 +738,7 @@ export interface OwnedShadow {
   restoreCost?: number
   status?: 'active' | 'collapsed'
   mutation?: ShadowMutationState
+  runeSlots?: (RuneItem | null)[]
 }
 
 export interface ShadowMutationState {
@@ -925,6 +926,20 @@ export interface ItemEffect {
   category?: Category
   stat?: StatKey
   value: number
+}
+
+export interface RuneItem {
+  id: string
+  name: string
+  icon: string
+  type: 'shadow' | 'equipment'
+  grade: 'common' | 'uncommon' | 'rare' | 'epic' | 'legendary'
+  statKey?: string
+  effectType?: string
+  value: number
+  enhancementLevel: number
+  description: string
+  acquiredAt: string
 }
 
 export type EquipmentState = Partial<Record<EquipmentSlot, string>>
@@ -1458,6 +1473,7 @@ export interface Item {
   
   consumable?: boolean
   consumableEffects?: ConsumableEffect[]
+  runeSlots?: (RuneItem | null)[]
 }
 
 export type TitleCategory =

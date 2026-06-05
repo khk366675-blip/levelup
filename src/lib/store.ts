@@ -77,7 +77,17 @@ import type {
   RiftNode,
   NamedHunter,
   WorldEvent,
+  RuneItem,
 } from './types'
+
+import {
+  generateRandomRune,
+  getShadowRuneSlotsCount,
+  getItemRuneSlotsCount,
+  getRuneGoldEnhancementCost,
+  getRuneGoldEnhancementSuccessRate,
+  getRuneValue,
+} from './runes'
 
 import { initLivingWorld } from './livingWorld'
 import { getNPCEquipmentForScore } from './hunterEquipment'
@@ -665,6 +675,10 @@ export interface GameState {
   finalizeHardcoreDeathFromSession: () => void
   restoreShadowFromCollapse: (shadowId: string) => void
   crystallizeCollapsedShadow: (shadowId: string) => void
+  runes: RuneItem[]
+  equipRune: (runeId: string, targetId: string, targetType: 'shadow' | 'equipment', slotIndex: number) => void
+  unequipRune: (targetId: string, targetType: 'shadow' | 'equipment', slotIndex: number) => void
+  enhanceRuneWithGold: (runeId: string) => { success: boolean; greatSuccess: boolean; prevLevel: number; nextLevel: number; cost: number } | undefined
 }
 
 const initialHunter: HunterState = {
@@ -2397,14 +2411,33 @@ const createGateBattleOutcomeUpdate = (
         }
 
         const clearTickets = getGateClearExpeditionTickets(gate.rank)
+        
+        // ── Rune Drop ──
+        let rolledRune: RuneItem | undefined = undefined
+        const runeDropChance = gate.rank === 'S' ? 0.40 : gate.rank === 'A' ? 0.25 : gate.rank === 'B' ? 0.15 : 0.05
+        if (Math.random() < runeDropChance) {
+          let boxGrade: 'normal' | 'advanced' | 'supreme' = 'normal'
+          if (gate.rank === 'S') {
+            boxGrade = Math.random() < 0.20 ? 'supreme' : 'advanced'
+          } else if (gate.rank === 'A' || gate.rank === 'B') {
+            boxGrade = Math.random() < 0.10 ? 'advanced' : 'normal'
+          }
+          rolledRune = generateRandomRune(boxGrade)
+        }
+
         const lines = [
           `게이트 던전 런 [${gate.name}] 완벽 공략 성공!`,
           `총 획득 XP: +${finalXP}`,
           `총 획득 골드: +${finalGold}`,
           `총 획득 그림자 정수: +${finalEssence}`,
           ...(clearTickets > 0 ? [`원정 티켓 +${clearTickets}장`] : []),
+          ...(rolledRune ? [`전리품: 룬 획득 [${rolledRune.icon} ${rolledRune.name}]`] : []),
           ...run.accumulatedRewards.items.map(r => `전리품: [${r.itemName}]`),
         ]
+
+        if (rolledRune) {
+          gateRewards.push({ type: 'item' as any, itemId: rolledRune.id, itemName: rolledRune.name, rarity: rolledRune.grade })
+        }
 
         if (addedNormalMat > 0) {
           gateRewards.push({ type: 'item' as any, itemId: 'mutation_material_normal', itemName: '일반 변이 재료', rarity: 'common' })
@@ -2457,6 +2490,7 @@ const createGateBattleOutcomeUpdate = (
           mutationMaterialAdvanced: (s.mutationMaterialAdvanced ?? 0) + addedAdvancedMat,
           mutationMaterialSupreme: (s.mutationMaterialSupreme ?? 0) + addedSupremeMat,
           items: nextItems,
+          runes: [...(s.runes ?? []), ...(rolledRune ? [rolledRune] : [])],
           shadowSummonTickets: nextShadowSummonTickets,
           expeditionTickets: (s.expeditionTickets ?? 0) + clearTickets,
           shadowSummonShards: nextShadowSummonShards,
@@ -3396,6 +3430,7 @@ const applyShopReward = (
   reward: ShopReward,
   acc: {
     items: Item[]
+    runes: RuneItem[]
     tickets: ShadowSummonTicket[]
     shards: Partial<Record<ShadowSummonShardType, number>>
     essence: number
@@ -3406,6 +3441,30 @@ const applyShopReward = (
     lines: string[]
   }
 ) => {
+  if (reward.kind === 'rune_box_normal') {
+    for (let i = 0; i < reward.quantity; i++) {
+      const rune = generateRandomRune('normal')
+      acc.runes.push(rune)
+      acc.lines.push(`${rune.icon} ${rune.name} 획득 (일반 룬 상자)`)
+    }
+    return
+  }
+  if (reward.kind === 'rune_box_advanced') {
+    for (let i = 0; i < reward.quantity; i++) {
+      const rune = generateRandomRune('advanced')
+      acc.runes.push(rune)
+      acc.lines.push(`${rune.icon} ${rune.name} 획득 (고급 룬 상자)`)
+    }
+    return
+  }
+  if (reward.kind === 'rune_box_supreme') {
+    for (let i = 0; i < reward.quantity; i++) {
+      const rune = generateRandomRune('supreme')
+      acc.runes.push(rune)
+      acc.lines.push(`${rune.icon} ${rune.name} 획득 (최고급 룬 상자)`)
+    }
+    return
+  }
   if (reward.kind === 'mutation_material_normal') {
     acc.mutationMaterialNormal += reward.quantity
     acc.lines.push(`일반 변이 재료 +${reward.quantity}개`)
@@ -4085,6 +4144,7 @@ const createHardcoreDeathResetState = (
     hunter: initialHunter,
     quests: s.quests,
     items: [],
+    runes: [],
     titles: [],
     messages: [{
       id: uid(),
@@ -4237,6 +4297,7 @@ export const useGame = create<GameState>()(
       hardcoreState: createInitialHardcoreState(),
       quests: initialQuests,
       items: [],
+      runes: [],
       titles: [],
       messages: [],
       achievementStats: createInitialAchievementStats(),
@@ -4413,6 +4474,7 @@ export const useGame = create<GameState>()(
 
         const grants = {
           items: [] as Item[],
+          runes: [] as RuneItem[],
           tickets: [] as ShadowSummonTicket[],
           shards: {} as Partial<Record<ShadowSummonShardType, number>>,
           essence: 0,
@@ -4437,6 +4499,7 @@ export const useGame = create<GameState>()(
           shadowSummonTickets: [...(s.shadowSummonTickets ?? []), ...grants.tickets],
           shadowSummonShards: addShadowSummonShards(s.shadowSummonShards, grants.shards),
           items: [...s.items, ...grants.items],
+          runes: [...(s.runes ?? []), ...grants.runes],
           expeditionTickets: (s.expeditionTickets ?? 0) + grants.expeditionTickets,
           mutationMaterialNormal: (s.mutationMaterialNormal ?? 0) + grants.mutationMaterialNormal,
           mutationMaterialAdvanced: (s.mutationMaterialAdvanced ?? 0) + grants.mutationMaterialAdvanced,
@@ -5452,6 +5515,175 @@ export const useGame = create<GameState>()(
             createdAt: todayISO(),
           }],
         })
+        return { success: isSuccess, greatSuccess: isGreatSuccess, prevLevel: currentLevel, nextLevel, cost }
+      },
+
+      equipRune: (runeId, targetId, targetType, slotIndex) => {
+        const s = get()
+        const rune = s.runes?.find(r => r.id === runeId)
+        if (!rune) return
+
+        if (targetType === 'shadow') {
+          const shadow = s.ownedShadows?.find(sh => sh.instanceId === targetId)
+          if (!shadow) return
+          const maxSlots = getShadowRuneSlotsCount(shadow)
+          if (slotIndex < 0 || slotIndex >= maxSlots) return
+          const currentSlots = shadow.runeSlots ? [...shadow.runeSlots] : Array(maxSlots).fill(null)
+          if (currentSlots[slotIndex] !== null) return
+          currentSlots[slotIndex] = rune
+
+          const nextOwnedShadows = s.ownedShadows.map(sh =>
+            sh.instanceId === targetId ? { ...sh, runeSlots: currentSlots } : sh
+          )
+          const nextRunes = s.runes.filter(r => r.id !== runeId)
+
+          set({
+            ownedShadows: nextOwnedShadows,
+            runes: nextRunes,
+            messages: [...s.messages, {
+              id: uid(),
+              kind: 'shadow',
+              title: '룬 장착 완료',
+              lines: [`${shadow.name}의 ${slotIndex + 1}번 슬롯에 [${rune.icon} ${rune.name}]을 장착했습니다.`],
+              createdAt: todayISO(),
+            }]
+          })
+        } else if (targetType === 'equipment') {
+          const item = s.items?.find(it => it.id === targetId)
+          if (!item) return
+          const maxSlots = getItemRuneSlotsCount(item)
+          if (slotIndex < 0 || slotIndex >= maxSlots) return
+          const currentSlots = item.runeSlots ? [...item.runeSlots] : Array(maxSlots).fill(null)
+          if (currentSlots[slotIndex] !== null) return
+          currentSlots[slotIndex] = rune
+
+          const nextItems = s.items.map(it =>
+            it.id === targetId ? { ...it, runeSlots: currentSlots } : it
+          )
+          const nextRunes = s.runes.filter(r => r.id !== runeId)
+
+          set({
+            items: nextItems,
+            runes: nextRunes,
+            messages: [...s.messages, {
+              id: uid(),
+              kind: 'item',
+              title: '룬 장착 완료',
+              lines: [`[${item.name}]의 ${slotIndex + 1}번 슬롯에 [${rune.icon} ${rune.name}]을 장착했습니다.`],
+              createdAt: todayISO(),
+            }]
+          })
+        }
+      },
+
+      unequipRune: (targetId, targetType, slotIndex) => {
+        const s = get()
+
+        if (targetType === 'shadow') {
+          const shadow = s.ownedShadows?.find(sh => sh.instanceId === targetId)
+          if (!shadow || !shadow.runeSlots || !shadow.runeSlots[slotIndex]) return
+          const rune = shadow.runeSlots[slotIndex]!
+          const nextSlots = [...shadow.runeSlots]
+          nextSlots[slotIndex] = null
+
+          const nextOwnedShadows = s.ownedShadows.map(sh =>
+            sh.instanceId === targetId ? { ...sh, runeSlots: nextSlots } : sh
+          )
+          const nextRunes = [...(s.runes ?? []), rune]
+
+          set({
+            ownedShadows: nextOwnedShadows,
+            runes: nextRunes,
+            messages: [...s.messages, {
+              id: uid(),
+              kind: 'shadow',
+              title: '룬 해제 완료',
+              lines: [`${shadow.name}의 ${slotIndex + 1}번 슬롯에서 [${rune.icon} ${rune.name}]을 해제했습니다.`],
+              createdAt: todayISO(),
+            }]
+          })
+        } else if (targetType === 'equipment') {
+          const item = s.items?.find(it => it.id === targetId)
+          if (!item || !item.runeSlots || !item.runeSlots[slotIndex]) return
+          const rune = item.runeSlots[slotIndex]!
+          const nextSlots = [...item.runeSlots]
+          nextSlots[slotIndex] = null
+
+          const nextItems = s.items.map(it =>
+            it.id === targetId ? { ...it, runeSlots: nextSlots } : it
+          )
+          const nextRunes = [...(s.runes ?? []), rune]
+
+          set({
+            items: nextItems,
+            runes: nextRunes,
+            messages: [...s.messages, {
+              id: uid(),
+              kind: 'item',
+              title: '룬 해제 완료',
+              lines: [`[${item.name}]의 ${slotIndex + 1}번 슬롯에서 [${rune.icon} ${rune.name}]을 해제했습니다.`],
+              createdAt: todayISO(),
+            }]
+          })
+        }
+      },
+
+      enhanceRuneWithGold: (runeId) => {
+        const s = get()
+        const rune = s.runes?.find(r => r.id === runeId)
+        if (!rune || rune.enhancementLevel >= 5) return undefined
+
+        const playerGold = s.gold ?? 0
+        const cost = getRuneGoldEnhancementCost(rune)
+        if (playerGold < cost) return undefined
+
+        const successRate = getRuneGoldEnhancementSuccessRate(rune)
+        const isSuccess = Math.random() < successRate
+        const isGreatSuccess = isSuccess && (Math.random() < 0.10) && (rune.enhancementLevel + 2 <= 5)
+        const levelIncrease = isGreatSuccess ? 2 : 1
+
+        const nextGold = Math.max(0, playerGold - cost)
+        const currentLevel = rune.enhancementLevel
+        const nextLevel = isSuccess ? currentLevel + levelIncrease : currentLevel
+
+        const nextRunes = isSuccess
+          ? s.runes.map(r => r.id === runeId ? { ...r, enhancementLevel: nextLevel } : r)
+          : s.runes
+
+        const ratePct = Math.round(successRate * 100)
+
+        const title = isGreatSuccess
+          ? '🔥 룬 골드 강화 대성공! 🔥'
+          : isSuccess
+            ? '룬 골드 강화 성공'
+            : '룬 골드 강화 실패'
+
+        const lines = isGreatSuccess ? [
+          `[${rune.name}] 골드 강화 대성공!!! (한 번에 +2단계 상승) (${ratePct}% 확률)`,
+          `${rune.name} +${nextLevel} 강화 달성!`,
+          `비용으로 ${cost.toLocaleString()} 골드를 소모했습니다.`,
+        ] : isSuccess ? [
+          `[${rune.name}] 골드 강화 성공 (${ratePct}% 확률)`,
+          `${rune.name} +${nextLevel} 강화 달성!`,
+          `비용으로 ${cost.toLocaleString()} 골드를 소모했습니다.`,
+        ] : [
+          `[${rune.name}] 골드 강화 실패 (${ratePct}% 확률)`,
+          `강화 수치(+${currentLevel})가 유지됩니다.`,
+          `비용으로 ${cost.toLocaleString()} 골드를 소모했습니다.`,
+        ]
+
+        set({
+          gold: nextGold,
+          runes: nextRunes,
+          messages: [...s.messages, {
+            id: uid(),
+            kind: isGreatSuccess ? 'levelup' : 'item',
+            title,
+            lines,
+            createdAt: todayISO(),
+          }]
+        })
+
         return { success: isSuccess, greatSuccess: isGreatSuccess, prevLevel: currentLevel, nextLevel, cost }
       },
 
@@ -9166,6 +9398,20 @@ export const useGame = create<GameState>()(
 
           // 플레이어 월드맵 게이트 클리어 장비 드랍 보상
           let droppedItemName = ''
+          let rolledRune: RuneItem | undefined = undefined
+          const grVal = gate.rank ?? 'E'
+          const runeDropChance = isMonarchId ? 0.70 : grVal === 'S' ? 0.45 : grVal === 'A' ? 0.30 : grVal === 'B' ? 0.20 : 0.08
+          if (Math.random() < runeDropChance) {
+            let boxGrade: 'normal' | 'advanced' | 'supreme' = 'normal'
+            if (isMonarchId) {
+              boxGrade = Math.random() < 0.60 ? 'supreme' : 'advanced'
+            } else if (grVal === 'S') {
+              boxGrade = Math.random() < 0.25 ? 'supreme' : 'advanced'
+            } else if (grVal === 'A' || grVal === 'B') {
+              boxGrade = Math.random() < 0.15 ? 'advanced' : 'normal'
+            }
+            rolledRune = generateRandomRune(boxGrade)
+          }
           const dropRng = Math.random()
           let targetRarity: 'common' | 'uncommon' | 'rare' | 'epic' | 'legendary' | null = null
 
@@ -9250,6 +9496,7 @@ export const useGame = create<GameState>()(
               `Gold +${finalGold}${rolledGold.isJackpot ? ' (★잭팟 대박 보너스!★)' : ''}`,
               `그림자 정수 +${finalEssence}${rolledEssence.isJackpot ? ' (★잭팟 대박 보너스!★)' : ''}`,
               ...(droppedItemName ? [`획득 장비: ${droppedItemName}`] : []),
+              ...(rolledRune ? [`전리품: 룬 획득 [${rolledRune.icon} ${rolledRune.name}]`] : []),
               ...matRewardLines.map(line => `전리품: ${line}`),
             ],
             createdAt: todayISO(),
@@ -9438,6 +9685,7 @@ export const useGame = create<GameState>()(
             mutationMaterialAdvanced: (freshState.mutationMaterialAdvanced ?? 0) + addedAdvancedMat,
             mutationMaterialSupreme: (freshState.mutationMaterialSupreme ?? 0) + addedSupremeMat,
             items: nextItems,
+            runes: [...(freshState.runes ?? []), ...(rolledRune ? [rolledRune] : [])],
             livingWorld: freshState.livingWorld ? {
               ...freshState.livingWorld,
               namedHunters: updatedNamedHunters ?? freshState.livingWorld.namedHunters,
@@ -11026,6 +11274,7 @@ export const useGame = create<GameState>()(
         let addedNormalMat = 0
         let addedAdvancedMat = 0
         let addedSupremeMat = 0
+        let rolledRune: RuneItem | undefined = undefined
 
         if (resolved.result && !expedition.result) {
           const levelUps: string[] = []
@@ -11106,6 +11355,24 @@ export const useGame = create<GameState>()(
 
           // UI 표시용 bonusRewards 배열에 추가
           const bonusRewardLines: string[] = []
+
+          // ── Rune Drop for Shadow Expedition ──
+          rolledRune = undefined
+          const runeRollChance = outcome === 'great_success' ? 0.40 : outcome === 'success' ? 0.20 : outcome === 'partial' ? 0.05 : 0
+          if (Math.random() < runeRollChance) {
+            let boxGrade: 'normal' | 'advanced' | 'supreme' = 'normal'
+            if (outcome === 'great_success') {
+              boxGrade = Math.random() < 0.20 ? 'supreme' : 'advanced'
+            } else if (outcome === 'success') {
+              boxGrade = Math.random() < 0.08 ? 'advanced' : 'normal'
+            }
+            rolledRune = generateRandomRune(boxGrade)
+          }
+
+          if (rolledRune) {
+            bonusRewardLines.push(`원정 전리품: 룬 획득 [${rolledRune.icon} ${rolledRune.name}]`)
+          }
+
           if (masteryLevelUps.length > 0) {
             bonusRewardLines.push(`원정 숙련 상승: ${masteryLevelUps.join(', ')}`)
           }
@@ -11178,6 +11445,7 @@ export const useGame = create<GameState>()(
           hunter: nextHunter,
           ownedShadows: nextOwnedShadows,
           shadowEssence: nextShadowEssence,
+          runes: [...(s.runes ?? []), ...(rolledRune ? [rolledRune] : [])],
           mutationMaterialNormal: (s.mutationMaterialNormal ?? 0) + addedNormalMat,
           mutationMaterialAdvanced: (s.mutationMaterialAdvanced ?? 0) + addedAdvancedMat,
           mutationMaterialSupreme: (s.mutationMaterialSupreme ?? 0) + addedSupremeMat,
@@ -13439,6 +13707,12 @@ export const useGame = create<GameState>()(
         
         if (Math.random() < finalDropChance) drops.push(randomItem(s.hunter, equippedItems, consumableRarityBonus, titleRarityBonus, q.type))
 
+        // ── Rune Drop for Quest Completion ──
+        let rolledRune: RuneItem | undefined = undefined
+        if (q.type === 'daily' && Math.random() < 0.08) {
+          rolledRune = generateRandomRune('normal')
+        }
+
         // messages
         const newMessages: SystemMessage[] = []
         let dailyTicketGained = 0
@@ -13465,6 +13739,7 @@ export const useGame = create<GameState>()(
             `+${xp} XP 획득${xp !== baseXp ? ` (기본 ${baseXp})` : ''}`,
             `직업 [${jobResult.activeJobName}] XP +${jobResult.jobXpGained}${jobResult.jobCategoryBonus > 0 ? ` (친화도 보너스 +${Math.round(jobResult.jobCategoryBonus * 100)}%)` : ''}`,
             ...(questGold ? [`Gold +${questGold}`] : []),
+            ...(rolledRune ? [`전리품: 룬 획득 [${rolledRune.icon} ${rolledRune.name}]`] : []),
             ...(dailyTicketGained > 0 ? [`원정 티켓 +${dailyTicketGained}장`] : []),
             ...(addedNormalMat > 0 ? [`일반 변이 재료 +${addedNormalMat}개`] : []),
             ...(addedAdvancedMat > 0 ? [`고급 변이 재료 +${addedAdvancedMat}개`] : []),
@@ -13535,6 +13810,7 @@ export const useGame = create<GameState>()(
           mutationMaterialSupreme: (s.mutationMaterialSupreme ?? 0) + addedSupremeMat,
           quests: updatedQuests,
           items: [...s.items, ...drops],
+          runes: [...(s.runes ?? []), ...(rolledRune ? [rolledRune] : [])],
           expeditionTickets: (s.expeditionTickets ?? 0) + dailyTicketGained,
           messages: [...s.messages, ...newMessages],
           achievementStats: stats,
@@ -14262,6 +14538,7 @@ export const useGame = create<GameState>()(
           hunter: initialHunter,
           quests: resetQuests,
           items: [],
+          runes: [],
           titles: [],
           messages: [
             {
@@ -15368,7 +15645,7 @@ export const useGame = create<GameState>()(
     }),
     {
       name: 'levelup-save',
-      version: 30,
+      version: 31,
       partialize: (state) => ({
         ...state,
         manualBattleSession: undefined,
@@ -16108,6 +16385,13 @@ export const useGame = create<GameState>()(
         if (persistedState) {
           if (!persistedState.completedSpecialExpeditionIds) {
             persistedState.completedSpecialExpeditionIds = []
+          }
+        }
+
+        // ── Rune System (v31) 마이그레이션 ──
+        if (persistedState) {
+          if (!persistedState.runes) {
+            persistedState.runes = []
           }
         }
 
