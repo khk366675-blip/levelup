@@ -1440,18 +1440,18 @@ export function advanceWorldDay(state: LivingWorldState, rng: RngFn, options: Ad
         title = variant.title
         description = variant.description
 
-        const goldCost = Math.round(oppDifficulty * 0.8)
+        const goldCost = Math.round(oppDifficulty * 1.5)
         cost = { gold: goldCost }
         loreId = `lore-${nextDay}-${Math.floor(rng() * 10000)}`
 
-        const goldReward = Math.round(oppDifficulty * 1.3 * (1 + rng() * 0.2))
-        const xpReward = Math.round(oppDifficulty * 1.1 * (1 + rng() * 0.2))
+        const xpReward = Math.round(oppDifficulty * 1.5 * (1 + rng() * 0.2))
+        const essenceReward = oppRank === 'E' || oppRank === 'D' ? 1 : oppRank === 'C' || oppRank === 'B' ? 2 : 3
 
         promisedReward = {
-          gold: goldReward,
+          shadowEssence: essenceReward,
           hunterXp: xpReward,
           lore: variant.lore,
-          text: `[발굴 완수] 골드 +${goldReward.toLocaleString()}G, 경험치 +${xpReward.toLocaleString()}, 고대 연구 기록 발굴`
+          text: `[발굴 완수] 정수 +${essenceReward}개, 경험치 +${xpReward.toLocaleString()}, 고대 연구 기록 발굴 (비용: ${goldCost.toLocaleString()}G)`
         }
       }
 
