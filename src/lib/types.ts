@@ -2370,6 +2370,28 @@ export interface LoveCallState {
   issuedDay: number
 }
 
+export interface OpportunityReward {
+  gold?: number
+  shadowEssence?: number
+  hunterXp?: number
+  lore?: string
+  text?: string
+}
+
+export interface OpportunityState {
+  type: 'rift' | 'merchant' | 'anomaly'
+  title: string
+  description: string
+  promisedReward: OpportunityReward
+  cost?: {
+    gold?: number
+    shadowEssence?: number
+  }
+  daysRemaining: number
+  difficultyRank: Rank
+  loreId?: string
+}
+
 export interface RiftNode {
   id: string
   regionId: string        // 소속 국가 (RiftRegion.id)
@@ -2387,6 +2409,7 @@ export interface RiftNode {
   daysRemaining: number   // 남은 시한 (일)
   isSGrade?: boolean      // S급 게이트 여부
   loveCall?: LoveCallState // [L1-A] 러브콜 상태 추가
+  opportunity?: OpportunityState // [NEW] 기회형 한정 시간 이벤트 상태 추가
 }
 
 // ── Living Rift World MVP-1 ──────────────────────────────────────────

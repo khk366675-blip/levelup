@@ -445,6 +445,7 @@ export function WorldMapPanel() {
   const manualSession = useGame((s) => s.manualBattleSession)
   const startWorldManualBattle = useGame((s) => s.startWorldManualBattle)
   const resolveEndingChoice = useGame((s) => s.resolveEndingChoice)
+  const acceptWorldOpportunity = useGame((s) => s.acceptWorldOpportunity)
 
   // 헌터 스펙 및 실효 CP 연동용 상태
   const hunter = useGame((s) => s.hunter)
@@ -492,6 +493,21 @@ export function WorldMapPanel() {
   const [selectedNode, setSelectedNode] = useState<RiftNode | null>(null)
   const [toastMessage, setToastMessage] = useState<string | null>(null)
   const [selectedHelpers, setSelectedHelpers] = useState<string[]>([])
+  const [activeLoreText, setActiveLoreText] = useState<string | null>(null)
+
+  const handleAcceptOpportunity = (nodeId: string) => {
+    const res = acceptWorldOpportunity(nodeId)
+    if (res.success) {
+      if (res.loreText) {
+        setActiveLoreText(res.loreText)
+      } else {
+        triggerToast(res.message || '이벤트를 성공적으로 처리했습니다!')
+      }
+      setSelectedNode(null)
+    } else {
+      triggerToast(res.message || '요구 자원이 부족하거나 처리에 실패했습니다.')
+    }
+  }
 
   // Stage 2: Settings HUD and scrolling ticker states
   const [animationMode, setAnimationMode] = useState<'all' | 'critical' | 'off'>('all')
@@ -2315,19 +2331,20 @@ export function WorldMapPanel() {
                     {Object.values(livingWorld?.riftNodes ?? {})
                       .filter(
                         (node: any) =>
-                          (node.regionId === 'kr' || node.loveCall?.active || node.isSGrade) &&
+                          (node.regionId === 'kr' || node.loveCall?.active || node.isSGrade || node.opportunity) &&
                           (riftNodesState[node.id] ?? node.status) === 'active'
                       )
                       .map((node: any) => {
                         const status = riftNodesState[node.id] ?? node.status
                         const worldNode = livingWorld?.riftNodes[node.id]
                         const isNodeRegionOccupied = livingWorld?.activeMonarchs?.some(
-                          (m) => m.status === 'rampaging' && m.occupiedRegionIds.includes(node.regionId)
+                          (m: any) => m.status === 'rampaging' && m.occupiedRegionIds.includes(node.regionId)
                         )
                         const hasLoveCall = worldNode?.loveCall?.active
+                        const hasOpportunity = worldNode?.opportunity
                         
                         // 타국가이면서 러브콜도 아직 없는데 S급 게이트인 경우 -> 현황 파악용 비공략 시각 노드
-                        const isNonLocalUnacceptedS = node.regionId !== 'kr' && !hasLoveCall && node.isSGrade
+                        const isNonLocalUnacceptedS = node.regionId !== 'kr' && !hasLoveCall && !hasOpportunity && node.isSGrade
                         
                         const [x, y] = getNodeCoordinates(node)
 
@@ -2335,6 +2352,8 @@ export function WorldMapPanel() {
                           ? '#ef4444' 
                           : hasLoveCall 
                           ? '#fbbf24' 
+                          : hasOpportunity
+                          ? '#34d399' // 기회형 이벤트 에메랄드
                           : isNonLocalUnacceptedS 
                           ? '#a855f7' // S급 시각용 얌전한 보라색
                           : '#22d3ee'
@@ -2343,6 +2362,8 @@ export function WorldMapPanel() {
                           ? '#380c10' 
                           : hasLoveCall 
                           ? '#2e1d09' 
+                          : hasOpportunity
+                          ? '#064e3b' // 기회형 이벤트 딥에메랄드
                           : isNonLocalUnacceptedS 
                           ? '#2e1035' // 얌전한 딥보라 배경
                           : '#083344'
@@ -2350,8 +2371,8 @@ export function WorldMapPanel() {
                         // S급 시각 노드는 약간의 존재감을 주되 얌전하게 5.0 (일반 4.5, 서울 허브 5.5)
                         const nodeRadius = isNonLocalUnacceptedS ? 5.0 : 4.5
 
-                        // 줌 스케일 및 러브콜, S급 여부에 따른 라벨 가독성 제어
-                        const showGateLabel = hasLoveCall || isNonLocalUnacceptedS || (selectedNode && selectedNode.id === node.id) || zoomTransform.k >= 2.0
+                        // 줌 스케일 및 러브콜, 기회, S급 여부에 따른 라벨 가독성 제어
+                        const showGateLabel = hasLoveCall || hasOpportunity || isNonLocalUnacceptedS || (selectedNode && selectedNode.id === node.id) || zoomTransform.k >= 2.0
 
                         return (
                           <g
@@ -2386,6 +2407,15 @@ export function WorldMapPanel() {
                               </g>
                             )}
 
+                            {hasOpportunity && (
+                              <g transform={`translate(${x + 6}, ${y - 6})`}>
+                                <circle cx="0" cy="0" r="4.5" fill="#34d399" />
+                                <text x="0" y="2" textAnchor="middle" className="text-[6px] font-black fill-black">
+                                  ✨
+                                </text>
+                              </g>
+                            )}
+
                             {showGateLabel && (
                               <g
                                 transform={`translate(${x}, ${y + 11})`}
@@ -2398,6 +2428,8 @@ export function WorldMapPanel() {
                                       ? 'fill-red-300'
                                       : hasLoveCall
                                       ? 'fill-amber-200'
+                                      : hasOpportunity
+                                      ? 'fill-emerald-300'
                                       : isNonLocalUnacceptedS
                                       ? 'fill-purple-300'
                                       : 'fill-cyan-300'
@@ -2409,6 +2441,8 @@ export function WorldMapPanel() {
                                 >
                                   {hasLoveCall 
                                     ? `📞 [지원] ${node.name}` 
+                                    : hasOpportunity
+                                    ? `✨ ${hasOpportunity.title}`
                                     : isNonLocalUnacceptedS 
                                     ? `👿 [S급] ${node.name}` 
                                     : node.name
@@ -3008,6 +3042,87 @@ export function WorldMapPanel() {
                                           )
                                         })}
                                       </div>
+                                    )}
+                                  </div>
+                                </div>
+                              )
+                            })()}
+
+                            {/* 기회형 월드 이벤트 상황판 */}
+                            {!hasLoveCall && selectedNode.opportunity && (() => {
+                              const opp = selectedNode.opportunity
+                              let costText = '없음 (아쉬운 소멸)'
+                              if (opp.cost) {
+                                if (opp.cost.gold && opp.cost.shadowEssence) {
+                                  costText = `💸 ${opp.cost.gold.toLocaleString()} Gold & 💜 ${opp.cost.shadowEssence} 정수 소모`
+                                } else if (opp.cost.gold) {
+                                  costText = `💸 ${opp.cost.gold.toLocaleString()} Gold`
+                                } else if (opp.cost.shadowEssence) {
+                                  costText = `💜 ${opp.cost.shadowEssence} 정수 소모`
+                                }
+                              }
+
+                              return (
+                                <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/5 p-2.5 space-y-2">
+                                  <div className="flex justify-between items-center">
+                                    <span className="text-[10px] font-black text-emerald-300">
+                                      ✨ 한정 시간 기회: {opp.title}
+                                    </span>
+                                    <span className="text-[7.5px] rounded bg-emerald-500/20 px-1 py-0.5 font-bold text-emerald-300 animate-pulse">
+                                      ⏳ {opp.daysRemaining}일 남음
+                                    </span>
+                                  </div>
+                                  <p className="text-[8.5px] text-white/70 leading-relaxed bg-black/15 p-1.5 rounded">
+                                    {opp.description}
+                                  </p>
+
+                                  <div className="rounded bg-black/40 p-1.5 space-y-0.5 text-[8.5px] border border-white/5 font-mono">
+                                    <div className="flex justify-between font-bold text-emerald-400">
+                                      <span>🎁 획득 보상</span>
+                                      <span>기회 획득 가능</span>
+                                    </div>
+                                    <div className="text-[8px] text-white/80 whitespace-pre-line leading-normal">
+                                      {opp.promisedReward.text}
+                                    </div>
+                                    <div className="flex justify-between text-white/40 text-[7.5px] pt-1 border-t border-white/5">
+                                      <span>⚠️ 요구 조건 / 대가</span>
+                                      <span className="font-bold text-rose-300">{costText}</span>
+                                    </div>
+                                  </div>
+
+                                  <div className="pt-1">
+                                    {opp.type === 'rift' ? (
+                                      <div className="space-y-1.5">
+                                        <div className="text-[7.5px] text-rose-300 font-bold leading-normal">
+                                          ★ 난이도 경고: 희귀 균열 내부의 몬스터들은 공격성이 높습니다.
+                                        </div>
+                                        <button
+                                          onClick={() => {
+                                            startWorldManualBattle(selectedNode.id, [])
+                                          }}
+                                          className="w-full py-1 text-[9px] font-black text-black bg-emerald-400 hover:bg-emerald-300 active:scale-98 transition rounded shadow shadow-emerald-400/20"
+                                        >
+                                          ⚔️ 희귀 균열 진입 (전투 시작)
+                                        </button>
+                                      </div>
+                                    ) : opp.type === 'merchant' ? (
+                                      <button
+                                        onClick={() => {
+                                          handleAcceptOpportunity(selectedNode.id)
+                                        }}
+                                        className="w-full py-1 text-[9px] font-black text-black bg-emerald-400 hover:bg-emerald-300 active:scale-98 transition rounded shadow shadow-emerald-400/20"
+                                      >
+                                        🤝 특별 교환 제안 수락
+                                      </button>
+                                    ) : (
+                                      <button
+                                        onClick={() => {
+                                          handleAcceptOpportunity(selectedNode.id)
+                                        }}
+                                        className="w-full py-1 text-[9px] font-black text-black bg-emerald-400 hover:bg-emerald-300 active:scale-98 transition rounded shadow shadow-emerald-400/20"
+                                      >
+                                        🔍 유물 발굴 및 복원
+                                      </button>
                                     )}
                                   </div>
                                 </div>
@@ -4398,6 +4513,32 @@ export function WorldMapPanel() {
         animationMode={animationMode}
         playbackSpeed={animationSpeed}
       />
+
+      {/* 고대 문명 유물 로어(Lore) 팝업 모달 */}
+      {activeLoreText && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/85 backdrop-blur-sm p-4 animate-fadeIn">
+          <div className="relative w-full max-w-md rounded-lg border border-emerald-500/40 bg-zinc-950 p-6 shadow-2xl shadow-emerald-500/10 space-y-4">
+            <div className="flex items-center gap-2 text-emerald-400 border-b border-emerald-500/20 pb-3">
+              <span className="text-lg">📜</span>
+              <h3 className="text-sm font-black tracking-wide">고대 마력 연구 발굴 보고서</h3>
+            </div>
+            <p className="text-xs text-zinc-300 leading-relaxed font-serif whitespace-pre-line italic bg-emerald-950/20 border border-emerald-500/10 p-3.5 rounded">
+              {activeLoreText}
+            </p>
+            <div className="text-[10px] text-zinc-500 text-right leading-none">
+              - 심연 고대 탐사대 기록보관소
+            </div>
+            <div className="pt-2 flex justify-end">
+              <button
+                onClick={() => setActiveLoreText(null)}
+                className="px-4 py-1.5 text-xs font-black text-black bg-emerald-400 hover:bg-emerald-300 active:scale-98 transition rounded shadow shadow-emerald-400/20"
+              >
+                기록 닫기
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

@@ -1,4 +1,4 @@
-import type { LivingWorldState, NamedHunter, RegionState, RiftNode, Rank, ActiveMonarch, WorldEvent } from './types'
+import type { LivingWorldState, NamedHunter, RegionState, RiftNode, Rank, ActiveMonarch, WorldEvent, OpportunityReward } from './types'
 import { RIFT_REGIONS, REGION_ADJACENCY, RIFT_NODES, GATE_DEFINITIONS } from './seed'
 import { MONARCHS } from './monarchs'
 import { getRegionalTheme } from './livingWorldGateContent'
@@ -11,6 +11,8 @@ type RngFn = () => number
 
 export interface AdvanceWorldDayOptions {
   loveCallHelperMaxRank?: Rank
+  playerRank?: Rank
+  playerPower?: number
 }
 
 // =====================================================================
@@ -301,6 +303,30 @@ export function advanceWorldDay(state: LivingWorldState, rng: RngFn, options: Ad
     const node = { ...nextRiftNodes[nodeId] }
 
     if (node.status === 'active') {
+      if (node.opportunity) {
+        const remaining = (node.opportunity.daysRemaining ?? 1) - 1
+        if (remaining <= 0) {
+          // 기회형 한정 시간 이벤트 만료 - 여파 없이 소멸
+          const region = { ...nextRegions[node.regionId] }
+          const rName = RIFT_REGIONS.find(r => r.id === node.regionId)?.name ?? node.regionId.toUpperCase()
+          
+          addLog(`⏳ [${rName}]의 한정 이벤트 [${node.opportunity.title}]이(가) 시간이 만료되어 흔적도 없이 사라졌습니다.`)
+          
+          node.opportunity = undefined
+          node.status = 'undiscovered'
+          node.daysRemaining = node.deadline || 7
+          
+          region.activeGateIds = region.activeGateIds.filter(id => id !== node.id)
+          nextRegions[node.regionId] = region
+          nextRiftNodes[node.id] = node
+        } else {
+          node.opportunity.daysRemaining = remaining
+          node.daysRemaining = remaining
+          nextRiftNodes[node.id] = node
+        }
+        continue
+      }
+
       const remaining = (node.daysRemaining ?? 0) - 1
       if (remaining <= 0) {
         // 폭주!
@@ -397,6 +423,7 @@ export function advanceWorldDay(state: LivingWorldState, rng: RngFn, options: Ad
 
     // 2. 각 활성 게이트별로 도전 판정
     for (const gate of regionActiveGates) {
+      if (gate.opportunity) continue // 기회형 이벤트는 플레이어 독점이므로 NPC가 공략하지 않음
       // 해당 게이트에 파견된 헌터들의 전력합 산출
       const activePower = getActiveRegionPower(region, nextNamedHunters, gate, nextRiftNodes)
       const ratio = activePower / Math.max(1, gate.difficulty ?? 0)
@@ -1164,6 +1191,187 @@ export function advanceWorldDay(state: LivingWorldState, rng: RngFn, options: Ad
   } else {
     // 대한민국 영토가 안전해졌다면 (격퇴 등으로) 플래그를 클리어
     nextHomeReachedMonarchId = undefined
+  }
+
+  // ==========================================
+  // [기회형 한정 시간 월드 이벤트 생성 롤링]
+  // ==========================================
+  const playerRank = options.playerRank ?? 'E'
+  const playerPower = options.playerPower ?? 300
+
+  // 현재 활성화된 기회 이벤트 개수 세기
+  let activeOppCount = 0
+  for (const nodeId in nextRiftNodes) {
+    if (nextRiftNodes[nodeId].opportunity) {
+      activeOppCount++
+    }
+  }
+
+  // 기회 노드 최대 2개 유지. 개수가 0개이면 100% 스폰, 1개이면 30% 확률로 스폰
+  const maxOpp = 2
+  const shouldSpawnOpp = activeOppCount === 0 || (activeOppCount < maxOpp && rng() < 0.3)
+
+  if (shouldSpawnOpp) {
+    // 스폰 대상 노드 후보 찾기: 군주 점령지가 아니고, loveCall이나 opportunity가 없으며, S급 노드가 아니고, cleared가 아닌 노드
+    const oppCandidates = Object.keys(nextRiftNodes).filter(nodeId => {
+      const node = nextRiftNodes[nodeId]
+      const isOccupied = nextActiveMonarchs.some(m => m.status === 'rampaging' && m.occupiedRegionIds.includes(node.regionId))
+      return (
+        node &&
+        !isOccupied &&
+        !node.loveCall?.active &&
+        !node.opportunity &&
+        !node.isSGrade &&
+        node.status !== 'cleared'
+      )
+    })
+
+    if (oppCandidates.length > 0) {
+      const chosenNodeId = oppCandidates[Math.floor(rng() * oppCandidates.length)]
+      const node = { ...nextRiftNodes[chosenNodeId] }
+      const region = { ...nextRegions[node.regionId] }
+      const rName = RIFT_REGIONS.find(r => r.id === node.regionId)?.name ?? node.regionId.toUpperCase()
+
+      // 1. 이벤트 타입 결정: 3종 중 무작위
+      const oppTypes: ('rift' | 'merchant' | 'anomaly')[] = ['rift', 'merchant', 'anomaly']
+      const chosenType = oppTypes[Math.floor(rng() * oppTypes.length)]
+
+      // 2. 등급 스케일링
+      // 플레이어의 현재 랭크 주변 랭크 중 무작위 선택
+      const RANKS: Rank[] = ['E', 'D', 'C', 'B', 'A', 'S', 'National']
+      const pRankIdx = RANKS.indexOf(playerRank)
+      const minIdx = Math.max(0, pRankIdx - 1)
+      const maxIdx = Math.min(RANKS.length - 2, pRankIdx + 1) // S급까지만 (National 제외)
+      const oppRankIdx = Math.floor(minIdx + rng() * (maxIdx - minIdx + 1))
+      const oppRank = RANKS[oppRankIdx]
+
+      // 권장 전투력 스케일링
+      const rankCPRange: Record<Rank, [number, number]> = {
+        E: [200, 700],
+        D: [600, 1500],
+        C: [1400, 3200],
+        B: [3000, 6000],
+        A: [5500, 9500],
+        S: [9000, 20000],
+        National: [20000, 40000]
+      }
+      const [rMin, rMax] = rankCPRange[oppRank]
+      let oppDifficulty = Math.round(playerPower * (0.85 + rng() * 0.4))
+      oppDifficulty = Math.max(rMin, Math.min(rMax, oppDifficulty))
+
+      const daysRemaining = Math.round(3 + rng() * 4) // 3 ~ 6일 시한
+
+      let title = ''
+      let description = ''
+      let promisedReward: OpportunityReward = {}
+      let cost: { gold?: number; shadowEssence?: number } | undefined = undefined
+      let loreId: string | undefined = undefined
+
+      if (chosenType === 'rift') {
+        title = `[희귀 균열] ${node.name || '미확인 균열'}`
+        description = `이 구역에서 특이한 파동을 지닌 희귀 균열이 반응하고 있습니다. 내부 마수가 다소 사나우나 특별 정수와 장비가 잠들어 있습니다.`
+        
+        // 희귀 균열 보상
+        const goldReward = Math.round(oppDifficulty * 1.8 * (1 + rng() * 0.3))
+        const xpReward = Math.round(oppDifficulty * 1.5 * (1 + rng() * 0.3))
+        const essenceReward = oppRank === 'E' || oppRank === 'D' ? 2 : oppRank === 'C' || oppRank === 'B' ? 4 : 6
+
+        promisedReward = {
+          gold: goldReward,
+          hunterXp: xpReward,
+          shadowEssence: essenceReward,
+          text: `골드 +${goldReward.toLocaleString()}G, 정수 +${essenceReward}개, 경험치 +${xpReward.toLocaleString()}`
+        }
+      } else if (chosenType === 'merchant') {
+        title = `[떠도는 상인] ${rName}의 암시장`
+        description = `차원 상인이 이 지역에 잠깐 발을 들였습니다. 골드나 정수를 지불하여 평소 구하기 힘든 유용한 물품을 교환할 기회입니다.`
+        
+        const merchantOption = rng()
+        if (merchantOption < 0.4) {
+          // 1. 골드를 소모하여 대량의 그림자 정수 획득
+          const goldCost = Math.round(oppDifficulty * 3.5 * (1 + rng() * 0.2))
+          const essenceReward = oppRank === 'E' || oppRank === 'D' ? 3 : oppRank === 'C' || oppRank === 'B' ? 6 : 9
+          cost = { gold: goldCost }
+          promisedReward = {
+            shadowEssence: essenceReward,
+            text: `[교환] 그림자 정수 +${essenceReward}개 (비용: ${goldCost.toLocaleString()}G)`
+          }
+        } else if (merchantOption < 0.7) {
+          // 2. 그림자 정수를 소모하여 고성능 아이템/장비 보조 골드 획득
+          const essenceCost = oppRank === 'E' || oppRank === 'D' ? 1 : oppRank === 'C' || oppRank === 'B' ? 2 : 3
+          const goldReward = Math.round(oppDifficulty * 10 * (1 + rng() * 0.3))
+          cost = { shadowEssence: essenceCost }
+          promisedReward = {
+            gold: goldReward,
+            text: `[판매] 골드 +${goldReward.toLocaleString()}G (비용: 그림자 정수 ${essenceCost}개)`
+          }
+        } else {
+          // 3. 골드를 지불하여 헌터에게 대량의 비약 경험치 주입
+          const goldCost = Math.round(oppDifficulty * 2.0)
+          const xpReward = Math.round(oppDifficulty * 4.0)
+          cost = { gold: goldCost }
+          promisedReward = {
+            hunterXp: xpReward,
+            text: `[비약 수령] 헌터 경험치 +${xpReward.toLocaleString()} (비용: ${goldCost.toLocaleString()}G)`
+          }
+        }
+      } else {
+        // anomaly (탐색형 이상 현상)
+        title = `[이상 신호] ${node.name || '잔해 발굴지'}`
+        description = `이 지표면 아래에서 기이한 문명 에너지가 흐르고 있습니다. 약간의 마나 조율(비용)을 거치면 고대 연구 기록과 보상을 확보할 수 있습니다.`
+        
+        const goldCost = Math.round(oppDifficulty * 0.8)
+        cost = { gold: goldCost }
+
+        const lores = [
+          `"프로젝트 에테르 보고서: 마수가 죽을 때 남기는 마력 핵은 자연의 열역학 제2법칙을 정면으로 위배한다. 이것은 지구가 아닌 다른 우주의 힘이다."`,
+          `"격벽 건설 비망록: 균열이 열린 뒤 건설된 차원 벽들은 일종의 댐과 같다. 그러나 마력의 수위가 계속 상승한다면 결국 댐은 붕괴하고 말 것이다."`,
+          `"한 헌터의 일기: 군주들이라고 불리는 신격 존재들이 있다. 그들은 마치 연극을 하듯 이 세계의 멸망을 연출하고 있다. 우리는 광대에 불과한가?"`,
+          `"학술 기록: 각성이 발생할 때 뇌파의 진동수가 균열 내부 마력의 진동수와 정확히 공명함을 확인했다. 각성은 인류의 진화인가, 전염병인가?"`,
+          `"상인의 마기 측정기록: 그림자 정수는 단순한 결정체가 아니다. 그것은 고도로 압축된 영혼의 흔적이며, 누군가의 영적 에너지를 연료로 소모한다."`
+        ]
+        const loreIndex = Math.floor(rng() * lores.length)
+        const chosenLore = lores[loreIndex]
+        loreId = `lore-${nextDay}-${loreIndex}`
+
+        const goldReward = Math.round(oppDifficulty * 1.2)
+        const xpReward = Math.round(oppDifficulty * 1.0)
+        promisedReward = {
+          gold: goldReward,
+          hunterXp: xpReward,
+          lore: chosenLore,
+          text: `[발굴 완수] 골드 +${goldReward.toLocaleString()}G, 경험치 +${xpReward.toLocaleString()}, 고대 연구 기록 발굴`
+        }
+      }
+
+      node.opportunity = {
+        type: chosenType,
+        title,
+        description,
+        promisedReward,
+        cost,
+        daysRemaining,
+        difficultyRank: oppRank,
+        loreId
+      }
+
+      // 기회 노드는 활성화되어야 함
+      node.status = 'active'
+      node.daysRemaining = daysRemaining
+      node.difficulty = oppDifficulty
+      node.difficultyRank = oppRank
+
+      // 해당 지역의 activeGateIds에 추가
+      if (!region.activeGateIds.includes(node.id)) {
+        region.activeGateIds.push(node.id)
+      }
+
+      nextRegions[node.regionId] = region
+      nextRiftNodes[node.id] = node
+
+      addLog(`✨ [기회 출현] [${rName}] 구역에 한정 기회 [${title}]이(가) 나타났습니다! (시한 ${daysRemaining}일)`)
+      addEvent('gate_open', 'minor', '한정 월드 이벤트 발생', `✨ [${rName}]에 새로운 기회 [${title}]이(가) 출현했습니다.`, node.regionId, undefined, false, undefined, `WORLD OPPORTUNITY DETECTED`)
+    }
   }
 
   // [NEW] dailySummaries 갱신 계산

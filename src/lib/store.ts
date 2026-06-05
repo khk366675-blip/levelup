@@ -85,6 +85,7 @@ import { advanceWorldDay } from './livingWorldTick'
 import { MONARCHS, FINAL_ANGEL, buildMonarchBattleUnit } from './monarchs'
 import { buildHunterBattleUnit, buildShadowBattleUnits } from './battleUnits'
 import { createDirectBattleState, runMockDirectBattle } from './directBattleRuntime'
+import { getHunterCombatPower } from './combatPower'
 
 import {
   AiCoachMemoryState,
@@ -596,6 +597,7 @@ export interface GameState {
   cancelWorldManualBattle: () => void
   switchWorldManualBattleToAuto: () => void
   resolveEndingChoice: (choice: 'surface' | 'true') => void
+  acceptWorldOpportunity: (nodeId: string) => { success: boolean; loreText?: string; message?: string }
 
   // rewards / challenge cards
   ensureDailyRewardSystems: () => void
@@ -5480,8 +5482,8 @@ export const useGame = create<GameState>()(
         } as RiftNode
         if (!node) return
 
-        // 진입 권한 가드: 대한민국 영역 외의 일반 게이트에는 진입 불가 (러브콜인 경우는 허용)
-        if (!isMonarchId && node.regionId !== 'kr' && !node.loveCall?.active) {
+        // 진입 권한 가드: 대한민국 영역 외의 일반 게이트에는 진입 불가 (러브콜/기회형 이벤트인 경우는 허용)
+        if (!isMonarchId && node.regionId !== 'kr' && !node.loveCall?.active && !node.opportunity) {
           return
         }
 
@@ -5554,6 +5556,7 @@ export const useGame = create<GameState>()(
               status: 'cleared',
               daysRemaining: 0,
               loveCall: undefined,
+              opportunity: undefined,
             }
           } else {
             updatedWorldNodes[nodeId] = {
@@ -5561,6 +5564,7 @@ export const useGame = create<GameState>()(
               status: 'cleared',
               daysRemaining: 0,
               loveCall: undefined,
+              opportunity: undefined,
             }
           }
 
@@ -8984,9 +8988,16 @@ export const useGame = create<GameState>()(
           } else {
             // loveCall이 이미 undefined 처리되었을 수 있으므로 첫 진입 s 시점의 원본 노드 참조
             const originalNode = s.livingWorld?.riftNodes[nodeId]
-            baseGold = originalNode?.loveCall?.promisedReward.gold ?? Math.round(getGateGoldReward(gate.rank) * 1.2)
-            baseHunterXp = originalNode?.loveCall?.promisedReward.hunterXp ?? Math.round((rewardTable?.xp ?? 900) * 1.2)
-            baseEssence = originalNode?.loveCall?.promisedReward.shadowEssence ?? (gate.rank === 'S' ? 5 : 2)
+            if (originalNode?.opportunity) {
+              const oppReward = originalNode.opportunity.promisedReward
+              baseGold = oppReward.gold ?? Math.round(getGateGoldReward(gate.rank) * 1.5)
+              baseHunterXp = oppReward.hunterXp ?? Math.round((rewardTable?.xp ?? 900) * 1.5)
+              baseEssence = oppReward.shadowEssence ?? (gate.rank === 'S' ? 5 : 2)
+            } else {
+              baseGold = originalNode?.loveCall?.promisedReward.gold ?? Math.round(getGateGoldReward(gate.rank) * 1.2)
+              baseHunterXp = originalNode?.loveCall?.promisedReward.hunterXp ?? Math.round((rewardTable?.xp ?? 900) * 1.2)
+              baseEssence = originalNode?.loveCall?.promisedReward.shadowEssence ?? (gate.rank === 'S' ? 5 : 2)
+            }
           }
 
           // 변동 보상 및 잭팟 롤링 적용 (골드, 경험치, 에센스)
@@ -9253,6 +9264,7 @@ export const useGame = create<GameState>()(
             if (updatedRiftNodes[nodeId]) {
               const nodeVal = { ...updatedRiftNodes[nodeId] }
               nodeVal.loveCall = undefined
+              nodeVal.opportunity = undefined
               updatedRiftNodes[nodeId] = nodeVal
             }
           }
@@ -9315,6 +9327,101 @@ export const useGame = create<GameState>()(
               activeRiftNodeId: undefined,
             })
           }
+        }
+      },
+
+      acceptWorldOpportunity: (nodeId) => {
+        const s = get()
+        if (!s.livingWorld) return { success: false, message: '세계가 아직 활성화되지 않았습니다.' }
+        const node = s.livingWorld.riftNodes[nodeId]
+        if (!node || !node.opportunity) return { success: false, message: '해당 기회가 존재하지 않습니다.' }
+
+        const opp = node.opportunity
+        // 1. 대가(cost) 지불 체크
+        let nextGold = s.gold ?? 0
+        let nextEssence = s.shadowEssence ?? 0
+        const cost = opp.cost
+
+        if (cost) {
+          if (cost.gold && nextGold < cost.gold) {
+            return { success: false, message: '골드가 부족합니다.' }
+          }
+          if (cost.shadowEssence && nextEssence < cost.shadowEssence) {
+            return { success: false, message: '그림자 정수가 부족합니다.' }
+          }
+
+          if (cost.gold) nextGold -= cost.gold
+          if (cost.shadowEssence) nextEssence -= cost.shadowEssence
+        }
+
+        // 2. 보상(reward) 지급
+        const reward = opp.promisedReward
+        let newMessages = [...s.messages]
+        let nextHunter = { ...s.hunter }
+
+        if (reward.gold) {
+          nextGold += reward.gold
+        }
+        if (reward.shadowEssence) {
+          nextEssence += reward.shadowEssence
+        }
+        if (reward.hunterXp) {
+          const xpResult = applyXp(nextHunter, reward.hunterXp, 'challenge')
+          nextHunter = xpResult.hunter
+          if (xpResult.outcome?.leveledUp) {
+            newMessages.push({
+              id: uid(),
+              kind: 'levelup',
+              title: 'LEVEL UP',
+              lines: [
+                `Lv.${s.hunter.level} → Lv.${xpResult.outcome.newLevel}`,
+                `자동 분배 — ${formatStatGains(xpResult.outcome.autoStatGains)}`,
+                `자유 배분권 +${xpResult.outcome.freeStatPointsGained}`,
+              ],
+              createdAt: todayISO(),
+            })
+          }
+        }
+
+        // 3. 월드 노드 해제 및 기회 상태 제거
+        const nextLivingWorld = { ...s.livingWorld }
+        const nextRiftNodes = { ...nextLivingWorld.riftNodes }
+        const nodeVal = { ...nextRiftNodes[nodeId] }
+
+        nodeVal.opportunity = undefined
+        nodeVal.status = 'cleared'
+        nodeVal.daysRemaining = 0
+        nextRiftNodes[nodeId] = nodeVal
+
+        const region = { ...nextLivingWorld.regions[nodeVal.regionId] }
+        region.activeGateIds = region.activeGateIds.filter(id => id !== nodeId)
+        nextLivingWorld.regions[nodeVal.regionId] = region
+
+        nextLivingWorld.riftNodes = nextRiftNodes
+        
+        // 이벤트 로그 추가
+        const rName = RIFT_REGIONS.find(r => r.id === nodeVal.regionId)?.name ?? nodeVal.regionId.toUpperCase()
+        const worldLogs = [...nextLivingWorld.eventLogs]
+        worldLogs.push(`[Day ${nextLivingWorld.day}] ✨ [기회 획득] 플레이어가 [${rName}]의 [${opp.title}]을(를) 완수하여 보상을 획득했습니다!`)
+        nextLivingWorld.eventLogs = worldLogs
+
+        // store state 갱신
+        const nextRiftNodesState = { ...s.riftNodes, [nodeId]: 'cleared' as RiftNodeStatus }
+
+        set({
+          gold: nextGold,
+          shadowEssence: nextEssence,
+          hunter: nextHunter,
+          messages: newMessages,
+          livingWorld: nextLivingWorld,
+          riftNodes: nextRiftNodesState,
+          activeRiftNodeId: undefined, // 팝업 닫기 위해
+        })
+
+        return {
+          success: true,
+          loreText: reward.lore,
+          message: `${opp.title}을(를) 성공적으로 완료했습니다!`
         }
       },
 
@@ -9455,13 +9562,13 @@ export const useGame = create<GameState>()(
 
         // 진입 권한 가드: 대한민국 외 지역 일반 게이트 진입 차단 (안전장치)
         // 단, 러브콜(지원 요청)이 활성화되어 있는 게이트는 대한민국 외여도 개입(진입) 가능!
-        if (!isMonarchId && node.regionId !== 'kr' && !node.loveCall?.active) {
+        if (!isMonarchId && node.regionId !== 'kr' && !node.loveCall?.active && !node.opportunity) {
           set({
             messages: appendMessageOnce(s.messages, {
               id: uid(),
               kind: 'info',
               title: '진입 권한 제한',
-              lines: ['대한민국 영역 외의 게이트에는 직접 개입할 수 없습니다. (러브콜(지원 요청)이 활성화된 게이트만 진입 가능)'],
+              lines: ['대한민국 영역 외의 게이트에는 직접 개입할 수 없습니다. (지원 요청(러브콜) 또는 한정 시간 기회가 활성화된 게이트만 진입 가능)'],
               createdAt: todayISO(),
             })
           })
@@ -12505,8 +12612,18 @@ export const useGame = create<GameState>()(
         const nextRiftNodes = { ...s.riftNodes }
         if (s.livingWorld) {
           const rng = createSeededRng(s.livingWorld.seed + s.livingWorld.day)
+          const pPower = getHunterCombatPower({
+            hunter: s.hunter,
+            items: s.items,
+            equipment: s.equipment,
+            ownedShadows: s.ownedShadows ?? [],
+            equippedShadowIds: s.equippedShadowIds ?? [],
+            activeConsumableEffects: s.activeConsumableEffects ?? [],
+          })
           nextLivingWorld = advanceWorldDay(s.livingWorld, rng, {
             loveCallHelperMaxRank: getRenownTier(getEffectiveRenown(s.hunter, s.achievementStats, getMonarchsDefeatedCount(s.livingWorld))).maxHelperRank,
+            playerRank: s.hunter.rank,
+            playerPower: pPower,
           })
           nextLivingWorld.lastTickDate = targetDate
 
@@ -13528,8 +13645,18 @@ export const useGame = create<GameState>()(
       debugAdvanceLivingWorldDay: () => set((s) => {
         if (!s.livingWorld) return {}
         const rng = createSeededRng(s.livingWorld.seed + s.livingWorld.day)
+        const pPower = getHunterCombatPower({
+          hunter: s.hunter,
+          items: s.items,
+          equipment: s.equipment,
+          ownedShadows: s.ownedShadows ?? [],
+          equippedShadowIds: s.equippedShadowIds ?? [],
+          activeConsumableEffects: s.activeConsumableEffects ?? [],
+        })
         const nextLivingWorld = advanceWorldDay(s.livingWorld, rng, {
           loveCallHelperMaxRank: getRenownTier(getEffectiveRenown(s.hunter, s.achievementStats, getMonarchsDefeatedCount(s.livingWorld))).maxHelperRank,
+          playerRank: s.hunter.rank,
+          playerPower: pPower,
         })
         const nextRiftNodes = { ...s.riftNodes }
         if (nextLivingWorld.riftNodes) {
