@@ -1320,6 +1320,23 @@ export interface HardcoreBackupMeta {
   backupKey: string
 }
 
+export interface HallOfFameRecord {
+  generation: number
+  level: number
+  rank: string
+  gateClearedCount: number
+  redGateClearedCount: number
+  bossKillsCount: number
+  highestTowerFloor: number
+  monarchsDefeatedNames: string[]
+  deathReason: string
+  battleContext: string
+  survivalDays: number
+  streak: number
+  timestamp: number
+  backupKey: string
+}
+
 export interface GateEchoState {
   id: string
   date: string

@@ -69,6 +69,7 @@ import type {
   HardcoreState,
   GateEchoState,
   HardcoreBackupMeta,
+  HallOfFameRecord,
   RiftNodeStatus,
   LivingWorldState,
   WorldBattleSession,
@@ -3080,9 +3081,9 @@ const createChallengeCard = (
   condition: ChallengeCardCondition
 ): ChallengeCard => {
   const rewardByDifficulty: Record<ChallengeCard['difficulty'], ChallengeCard['reward']> = {
-    easy: { hunterXp: 15, gold: 22, shadowEssence: 1, boxUpgradePoints: 1 },
-    normal: { hunterXp: 35, gold: 36, shadowEssence: 2, boxUpgradePoints: 2 },
-    hard: { hunterXp: 80, gold: 60, shadowEssence: 5, boxUpgradePoints: 3 },
+    easy: { hunterXp: 15, gold: 22, shadowEssence: 5, boxUpgradePoints: 1 },
+    normal: { hunterXp: 35, gold: 36, shadowEssence: 10, boxUpgradePoints: 2 },
+    hard: { hunterXp: 80, gold: 60, shadowEssence: 20, boxUpgradePoints: 3 },
   }
   return {
     id: `${date}-${slug}`,
@@ -3568,7 +3569,7 @@ const rollChallengeFullCompletionBonus = (): Pick<BoxReward, 'hunterXp' | 'gold'
   return {
     hunterXp: 25,
     gold: 85,
-    shadowEssence: 2,
+    shadowEssence: 15,
     shadowSummonTickets: extra.shadowSummonTickets,
     shadowSummonShards: shards,
   }
@@ -3599,7 +3600,7 @@ const rollBoxReward = (s: GameState, box: RewardBox): BoxReward => {
 
   if (box.type === 'daily') {
     reward.hunterXp = Math.round(24 * mult)
-    reward.shadowEssence = Math.max(1, Math.round((1 + Math.floor(Math.random() * 3)) * mult))
+    reward.shadowEssence = Math.max(5, Math.round((5 + Math.floor(Math.random() * 11)) * mult))
     if (Math.random() < 0.08 * mult) {
       const consumable = getItemFromPool(item => item.consumable === true, 'rare', qualitySource)
       if (consumable) reward.consumables?.push(consumable)
@@ -3941,6 +3942,28 @@ function backfillMainQuestFromDefaultTemplate(quest: Quest, template: Quest): Qu
 }
 
 
+const cleanUpOldHardcoreBackups = (maxBackups = 5) => {
+  if (typeof localStorage === 'undefined') return
+  const prefix = 'levelup-save-hardcore-backup-gen-'
+  const backupKeys: { key: string; gen: number }[] = []
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i)
+    if (key && key.startsWith(prefix)) {
+      const genStr = key.replace(prefix, '')
+      const gen = parseInt(genStr, 10)
+      if (!isNaN(gen)) {
+        backupKeys.push({ key, gen })
+      }
+    }
+  }
+  backupKeys.sort((a, b) => b.gen - a.gen)
+  if (backupKeys.length > maxBackups) {
+    for (let i = maxBackups; i < backupKeys.length; i++) {
+      localStorage.removeItem(backupKeys[i].key)
+    }
+  }
+}
+
 const createHardcoreDeathResetState = (
   s: GameState,
   reason: string,
@@ -3948,20 +3971,54 @@ const createHardcoreDeathResetState = (
 ): Partial<GameState> => {
   const hardcore = ensureHardcoreState(s.hardcoreState)
   const timestamp = Date.now()
+  const gen = hardcore.deathCount + 1
+  const genBackupKey = `levelup-save-hardcore-backup-gen-${gen}`
   const backupMeta: HardcoreBackupMeta = {
     timestamp,
     reason,
     playerLevel: s.hunter.level,
     battleContext,
-    backupKey: HARDCORE_BACKUP_KEY,
+    backupKey: genBackupKey,
   }
 
   try {
     if (typeof localStorage !== 'undefined') {
-      localStorage.setItem(HARDCORE_BACKUP_KEY, JSON.stringify({ meta: backupMeta, state: s }))
+      const backupData = JSON.stringify({ meta: backupMeta, state: s })
+      localStorage.setItem(HARDCORE_BACKUP_KEY, backupData)
+      localStorage.setItem(genBackupKey, backupData)
+      cleanUpOldHardcoreBackups(5)
     }
   } catch (error) {
     if (import.meta.env.DEV) console.warn('[Hardcore] backup failed', error)
+  }
+
+  try {
+    if (typeof localStorage !== 'undefined') {
+      const recordsRaw = localStorage.getItem('levelup-hall-of-fame')
+      const records: HallOfFameRecord[] = recordsRaw ? JSON.parse(recordsRaw) : []
+      const record: HallOfFameRecord = {
+        generation: gen,
+        level: s.hunter.level,
+        rank: s.hunter.rank,
+        gateClearedCount: s.achievementStats?.gateClearedCount ?? 0,
+        redGateClearedCount: s.achievementStats?.redGateClearedCount ?? 0,
+        bossKillsCount: s.achievementStats?.bossKillsCount ?? 0,
+        highestTowerFloor: s.infiniteTower?.highestClearedFloor ?? 0,
+        monarchsDefeatedNames: s.livingWorld?.activeMonarchs
+          ?.filter((m: any) => m.status === 'defeated')
+          .map((m: any) => m.name) ?? [],
+        deathReason: reason,
+        battleContext: battleContext,
+        survivalDays: s.livingWorld?.day ?? 1,
+        streak: s.hunter.streak ?? 0,
+        timestamp,
+        backupKey: genBackupKey,
+      }
+      records.unshift(record)
+      localStorage.setItem('levelup-hall-of-fame', JSON.stringify(records))
+    }
+  } catch (error) {
+    if (import.meta.env.DEV) console.warn('[Hardcore] hall of fame save failed', error)
   }
 
   return {
@@ -8984,19 +9041,20 @@ export const useGame = create<GameState>()(
             // 군주전: 일반 National/S랭크 기준의 2.5배 수준으로 대폭 하향 (recommendedPower 비정상 폭주 방지)
             baseGold = Math.round(getGateGoldReward(gate.rank || 'S') * 2.5)
             baseHunterXp = Math.round((rewardTable?.xp ?? 1500) * 2.5)
-            baseEssence = gate.rank === 'S' ? 12 : 6
+            baseEssence = gate.rank === 'S' ? 1200 : gate.rank === 'A' ? 900 : gate.rank === 'B' ? 700 : gate.rank === 'C' ? 500 : 300
           } else {
             // loveCall이 이미 undefined 처리되었을 수 있으므로 첫 진입 s 시점의 원본 노드 참조
             const originalNode = s.livingWorld?.riftNodes[nodeId]
+            const defaultWorldEssence = gate.rank === 'S' ? 500 : gate.rank === 'A' ? 400 : gate.rank === 'B' ? 300 : gate.rank === 'C' ? 200 : 100
             if (originalNode?.opportunity) {
               const oppReward = originalNode.opportunity.promisedReward
               baseGold = oppReward.gold ?? Math.round(getGateGoldReward(gate.rank) * 1.5)
               baseHunterXp = oppReward.hunterXp ?? Math.round((rewardTable?.xp ?? 900) * 1.5)
-              baseEssence = oppReward.shadowEssence ?? (gate.rank === 'S' ? 5 : 2)
+              baseEssence = oppReward.shadowEssence ?? defaultWorldEssence
             } else {
               baseGold = originalNode?.loveCall?.promisedReward.gold ?? Math.round(getGateGoldReward(gate.rank) * 1.2)
               baseHunterXp = originalNode?.loveCall?.promisedReward.hunterXp ?? Math.round((rewardTable?.xp ?? 900) * 1.2)
-              baseEssence = originalNode?.loveCall?.promisedReward.shadowEssence ?? (gate.rank === 'S' ? 5 : 2)
+              baseEssence = originalNode?.loveCall?.promisedReward.shadowEssence ?? defaultWorldEssence
             }
           }
 

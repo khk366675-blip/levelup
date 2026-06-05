@@ -31,6 +31,7 @@ import { HunterGradePanel } from './components/HunterGradePanel'
 import { ShadowPanel } from './components/ShadowPanel'
 import { BackupControls } from './components/BackupControls'
 import { ClueRecordsModal } from './components/ClueRecordsModal'
+import { HallOfFameModal } from './components/HallOfFameModal'
 import { RewardBoxPanel } from './components/RewardBoxPanel'
 import { ChallengeCardsPanel } from './components/ChallengeCardsPanel'
 import { ShopPanel } from './components/ShopPanel'
@@ -68,6 +69,7 @@ export default function App() {
   const [showTitle, setShowTitle] = useState(true)
   const [tab, setTab] = useState<Tab>('rewards')
   const [clueOpen, setClueOpen] = useState(false)
+  const [hallOfFameOpen, setHallOfFameOpen] = useState(false)
   const [addOpen, setAddOpen] = useState(false)
   const [showRoutineLibrary, setShowRoutineLibrary] = useState(false)
   const [showTomorrowPlanPreview, setShowTomorrowPlanPreview] = useState(false)
@@ -270,6 +272,13 @@ export default function App() {
               title="지금까지 수집된 차원 관측 단서를 확인합니다"
             >
               📡 관측 기록
+            </button>
+            <button
+              onClick={() => setHallOfFameOpen(true)}
+              className="btn btn-ghost text-xs text-amber-200/85 hover:text-amber-100 border border-amber-500/20 hover:border-amber-500/40 bg-amber-500/5 hover:bg-amber-500/10 shadow-[0_0_8px_rgba(245,158,11,0.05)]"
+              title="선대 헌터들의 숭고한 유산과 업적을 기립니다"
+            >
+              🕯️ 명예의 전당
             </button>
             <button 
               onClick={handleReset} 
@@ -525,6 +534,7 @@ export default function App() {
 
       <AddQuestModal open={addOpen} onClose={() => setAddOpen(false)} type={tab === 'main' ? 'main' : 'daily'} />
       <ClueRecordsModal open={clueOpen} onClose={() => setClueOpen(false)} />
+      <HallOfFameModal open={hallOfFameOpen} onClose={() => setHallOfFameOpen(false)} />
       
       {/* Mobile Bottom Quick Nav */}
       {!isOverlayActive && (

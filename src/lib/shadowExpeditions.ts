@@ -130,28 +130,28 @@ export const SHADOW_EXPEDITION_TEMPLATES: ExpeditionTemplate[] = [
 
 const REWARDS: Record<ShadowExpeditionType, Record<ShadowExpeditionOutcome, { xp: number; essence: number }>> = {
   training: {
-    great_success: { xp: 36, essence: 4 },
-    success: { xp: 22, essence: 2 },
-    partial: { xp: 10, essence: 1 },
+    great_success: { xp: 36, essence: 20 },
+    success: { xp: 22, essence: 10 },
+    partial: { xp: 10, essence: 5 },
     failure: { xp: 4, essence: 0 },
   },
   essence: {
-    great_success: { xp: 18, essence: 14 },
-    success: { xp: 10, essence: 8 },
-    partial: { xp: 5, essence: 3 },
-    failure: { xp: 2, essence: 1 },
+    great_success: { xp: 18, essence: 80 },
+    success: { xp: 10, essence: 50 },
+    partial: { xp: 5, essence: 20 },
+    failure: { xp: 2, essence: 5 },
   },
   hunt: {
-    great_success: { xp: 28, essence: 10 },
-    success: { xp: 16, essence: 6 },
-    partial: { xp: 8, essence: 2 },
-    failure: { xp: 2, essence: 1 },
+    great_success: { xp: 28, essence: 60 },
+    success: { xp: 16, essence: 35 },
+    partial: { xp: 8, essence: 12 },
+    failure: { xp: 2, essence: 5 },
   },
   scout: {
-    great_success: { xp: 24, essence: 8 },
-    success: { xp: 14, essence: 5 },
-    partial: { xp: 6, essence: 1 },
-    failure: { xp: 2, essence: 1 },
+    great_success: { xp: 24, essence: 50 },
+    success: { xp: 14, essence: 30 },
+    partial: { xp: 6, essence: 8 },
+    failure: { xp: 2, essence: 4 },
   },
 }
 
