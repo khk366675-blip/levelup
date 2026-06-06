@@ -1941,9 +1941,9 @@ export function ShadowPanel() {
                         const rarityIndex = SHADOW_RARITY_ORDER.indexOf(shadow.rarity)
                         const safeRarityIndex = rarityIndex === -1 ? 0 : rarityIndex
 
-                        totalGoldPerMin += 5 + level * 0.5 + (safeRarityIndex + 1) * 2
-                        totalEssencePerMin += 0.5 + level * 0.05 + (safeRarityIndex + 1) * 0.2
-                        totalXpPerMin += 2 + level * 0.1
+                        totalGoldPerMin += (safeRarityIndex + 1) + level * 0.1
+                        totalEssencePerMin += (safeRarityIndex + 1) * 0.1 + level * 0.01
+                        totalXpPerMin += 0.2 + level * 0.01
                       })
 
                       const lastClaimTimeStr = shadowAutoSweepState?.lastClaimTime ?? new Date().toISOString()

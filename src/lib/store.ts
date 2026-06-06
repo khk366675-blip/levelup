@@ -10771,9 +10771,9 @@ export const useGame = create<GameState>()(
             const safeRarityIndex = rarityIndex === -1 ? 0 : rarityIndex
 
             // Base rewards per minute per shadow
-            const baseGold = 5 + level * 0.5 + (safeRarityIndex + 1) * 2
-            const baseEssence = 0.5 + level * 0.05 + (safeRarityIndex + 1) * 0.2
-            const baseXp = 2 + level * 0.1
+            const baseGold = (safeRarityIndex + 1) + level * 0.1
+            const baseEssence = (safeRarityIndex + 1) * 0.1 + level * 0.01
+            const baseXp = 0.2 + level * 0.01
 
             const shadowGold = Math.floor(baseGold * cappedMinutes)
             const shadowEssence = Math.floor(baseEssence * cappedMinutes)
