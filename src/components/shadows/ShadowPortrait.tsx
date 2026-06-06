@@ -664,34 +664,6 @@ export function ShadowPortrait({
           <g opacity={hidden ? 0.28 : 1}>
             {renderAura(profile, accent, displayNamed, displayEvolved)}
             {renderBackgroundMotif(profile, accent, seed, displayNamed, displayEvolved)}
-            
-            {/* 고단계 변이 시 중첩되는 회전 마법진(Magic Orbit Rings) 추가 */}
-            {stage >= 3 && (
-              <circle
-                cx="58"
-                cy="64"
-                r="50"
-                fill="none"
-                stroke={accent}
-                strokeWidth="1.2"
-                strokeDasharray="4 8"
-                opacity={0.3 + stage * 0.08}
-                style={{ transformOrigin: '58px 64px', animation: 'spin 15s linear infinite' }}
-              />
-            )}
-            {stage >= 5 && (
-              <circle
-                cx="58"
-                cy="64"
-                r="53"
-                fill="none"
-                stroke={accent}
-                strokeWidth="0.8"
-                strokeDasharray="8 4"
-                opacity="0.45"
-                style={{ transformOrigin: '58px 64px', animation: 'spin 25s linear infinite reverse' }}
-              />
-            )}
 
             <path 
               d="M58 10 L103 35 L103 91 L58 119 L13 91 L13 35 Z" 
@@ -723,11 +695,83 @@ export function ShadowPortrait({
           src={assetUrl}
           alt={label}
           className="portrait-asset-loaded absolute inset-0 h-full w-full object-contain scale-[1.26] translate-y-[2%] origin-bottom object-bottom transition-all duration-300 group-hover:scale-[1.36] z-10"
-          style={{ filter: `drop-shadow(0 -3px 12px var(--shadow-glow)) drop-shadow(0 0 20px var(--shadow-glow))` }}
+          style={{ 
+            filter: `drop-shadow(0 -3px 12px var(--shadow-glow)) drop-shadow(0 0 20px var(--shadow-glow)) ${
+              stage > 0 ? `drop-shadow(0 0 ${6 + stage * 3}px ${accent})` : ''
+            } ${
+              stage >= 3 ? `brightness(${1.0 + stage * 0.06}) saturate(${1.0 + stage * 0.12})` : ''
+            }` 
+          }}
           loading="lazy"
           draggable={false}
           onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }}
         />
+      )}
+
+      {/* 2.5. Foreground Mutation SVG Overlay (Magic circles/particles in front of the PNG) */}
+      {!hidden && stage > 0 && (
+        <svg 
+          className="pointer-events-none absolute inset-0 h-full w-full z-15" 
+          viewBox="0 0 116 128"
+        >
+          {/* 3단계 이상 변이 시 캐릭터 전면을 휘감는 회전 마법진(Magic Orbit Rings) */}
+          {stage >= 3 && (
+            <circle
+              cx="58"
+              cy="64"
+              r="49"
+              fill="none"
+              stroke={accent}
+              strokeWidth="1.3"
+              strokeDasharray="4 8"
+              opacity={0.32 + stage * 0.08}
+              style={{ transformOrigin: '58px 64px', animation: 'spin 15s linear infinite' }}
+            />
+          )}
+          {stage >= 5 && (
+            <circle
+              cx="58"
+              cy="64"
+              r="52"
+              fill="none"
+              stroke={accent}
+              strokeWidth="1.0"
+              strokeDasharray="8 4"
+              opacity="0.55"
+              style={{ transformOrigin: '58px 64px', animation: 'spin 25s linear infinite reverse' }}
+            />
+          )}
+
+          {/* 2단계 이상 변이 시 캐릭터 본체 전면을 박동하며 떠오르는 마력 파티클(Floating Sparks) */}
+          {stage >= 2 && (
+            <g opacity={0.3 + stage * 0.08}>
+              {[0, 1, 2, 3, 4].map(i => {
+                const x = 25 + (i * 18) + ((seed + i) % 12)
+                const y = 35 + ((seed * (i + 2)) % 60)
+                return (
+                  <circle
+                    key={i}
+                    cx={x}
+                    cy={y}
+                    r={1 + (i % 2)}
+                    fill={accent}
+                    style={{ animation: `pulse ${1.4 + (i % 3) * 0.4}s infinite` }}
+                  />
+                )
+              })}
+            </g>
+          )}
+
+          {/* 4단계 이상 변이 시 캐릭터 사방에서 부유하며 빛나는 룬 각인(Floating Runes) */}
+          {stage >= 4 && (
+            <g opacity="0.6" style={{ animation: 'pulse 3s infinite' }}>
+              <path d="M22 35 L26 39 L22 43 L18 39 Z" fill={accent} />
+              <path d="M94 85 L98 89 L94 93 L90 89 Z" fill={accent} />
+              <path d="M88 30 L92 34 L88 38 L84 34 Z" fill={accent} />
+              <path d="M26 90 L30 94 L26 98 L22 94 Z" fill={accent} />
+            </g>
+          )}
+        </svg>
       )}
 
       {/* 3. Floating Overlay Chips (z-20 on top of the image) */}
