@@ -219,8 +219,8 @@ export function BattleDamagePopup({ popups }: Props) {
 
         // Setup drop shadow styling based on crit magnitude
         const dropShadow = pop.isCrit
-          ? `drop-shadow(0 0 10px ${popStyle === 'shadow' || popStyle.startsWith('shadow-') ? 'rgba(168,85,247,0.7)' : popStyle === 'curse' ? 'rgba(239,68,68,0.7)' : 'rgba(245,158,11,0.7)'}) drop-shadow(0 4px 8px rgba(0,0,0,0.95))`
-          : 'drop-shadow(0 3px 6px rgba(0,0,0,0.9)'
+          ? `drop-shadow(0 0 8px ${popStyle === 'shadow' || popStyle.startsWith('shadow-') ? '#a855f7' : popStyle === 'curse' ? '#ef4444' : popStyle === 'sharp' ? '#22d3ee' : '#f59e0b'}) drop-shadow(0 0 16px ${popStyle === 'shadow' || popStyle.startsWith('shadow-') ? '#a855f7' : popStyle === 'curse' ? '#ef4444' : popStyle === 'sharp' ? '#22d3ee' : '#f59e0b'}) drop-shadow(0 4px 8px rgba(0,0,0,0.95))`
+          : `drop-shadow(0 0 4px ${textColorClass.includes('cyan') ? '#22d3ee' : textColorClass.includes('amber') ? '#f59e0b' : textColorClass.includes('purple') ? '#a855f7' : textColorClass.includes('red') ? '#ef4444' : 'rgba(0,0,0,0.1)'}) drop-shadow(0 3px 6px rgba(0,0,0,0.95))`
 
         const textStyle: React.CSSProperties = {
           WebkitTextStroke: `${strokeWidth} ${strokeColor}`,
@@ -297,6 +297,43 @@ export function BattleDamagePopup({ popups }: Props) {
               top: `${offsetY}px`,
             }}
           >
+            {/* Background Spark Burst Layer for Critical / Signature damages */}
+            {pop.isCrit && (
+              <svg width="120" height="120" viewBox="0 0 100 100" className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 overflow-visible pointer-events-none -z-10">
+                {Array.from({ length: 8 }).map((_, idx) => {
+                  const angle = (idx * 45) * (Math.PI / 180)
+                  const rad = 28 + (idx % 2) * 10
+                  const x2 = 50 + Math.cos(angle) * rad
+                  const y2 = 50 + Math.sin(angle) * rad
+                  
+                  const spkColor = popStyle === 'shadow' || popStyle.startsWith('shadow-') ? '#c084fc' :
+                    popStyle === 'curse' ? '#f87171' :
+                    popStyle === 'sharp' ? '#67e8f9' : '#fcd34d'
+                    
+                  return (
+                    <motion.line
+                      key={idx}
+                      x1="50" y1="50" x2="50" y2="50"
+                      stroke={spkColor}
+                      strokeWidth="3"
+                      strokeLinecap="round"
+                      animate={{
+                        x1: [50, 50 + Math.cos(angle) * (rad - 10)],
+                        y1: [50, 50 + Math.sin(angle) * (rad - 10)],
+                        x2: [50, x2],
+                        y2: [50, y2],
+                        opacity: [1, 0]
+                      }}
+                      transition={{
+                        duration: 0.35,
+                        ease: "easeOut"
+                      }}
+                    />
+                  )
+                })}
+              </svg>
+            )}
+
             <div 
               className={textClass}
               style={textStyle}

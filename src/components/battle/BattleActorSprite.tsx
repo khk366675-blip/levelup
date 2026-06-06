@@ -228,8 +228,8 @@ export function BattleActorSprite({
   const variants = {
     idle: {
       y: [0, -6, 0],
-      opacity: 0.72,
-      filter: 'contrast(0.85) grayscale(0.08)',
+      opacity: 0.95,
+      filter: 'contrast(1.08) saturate(1.05)',
       transition: {
         y: {
           duration: 2.2,
@@ -246,7 +246,7 @@ export function BattleActorSprite({
       scale: activeScale,
       rotate: activeRotate,
       opacity: activeOpacity,
-      filter: 'contrast(1.15) brightness(1.05)',
+      filter: 'contrast(1.2) brightness(1.08) saturate(1.15)',
       transition: {
         duration: activeDuration,
         times: activeTimes,
@@ -259,7 +259,7 @@ export function BattleActorSprite({
       scale: reactScale,
       rotate: reactRotate,
       opacity: 1,
-      filter: 'contrast(1.05)',
+      filter: 'contrast(1.15) saturate(1.1)',
       transition: {
         duration: reactDuration,
         times: reactTimes,
@@ -338,15 +338,20 @@ export function BattleActorSprite({
         />
       )
     } else if (activeMotion === 'cast-hold') {
-      // Mage Prepare: 캐스팅 룬 45% 캐스팅 전조 동안 압축 회전
+      // Mage Prepare: 캐스팅 룬 45% 캐스팅 전조 동안 압축 회전 (이모지 제거, SVG 마법진화)
       element = (
         <motion.div
           initial={{ scale: 0.5, rotate: 0, opacity: 0 }}
           animate={{ scale: [0.8, 1.25, 1.25, 0], rotate: [0, 180, 270, 360], opacity: [0, 0.95, 0.95, 0] }}
           transition={{ duration: 0.72, ease: 'easeOut' }}
-          className="absolute -top-6 left-1/2 -translate-x-1/2 w-14 h-14 border border-dashed border-indigo-400 rounded-full flex items-center justify-center bg-indigo-500/5 shadow-[0_0_10px_rgba(129,140,248,0.5)]"
+          className="absolute -top-10 left-1/2 -translate-x-1/2 w-16 h-16 flex items-center justify-center bg-transparent pointer-events-none"
         >
-          <span className="text-[8px] text-indigo-200">🔮</span>
+          <svg width="60" height="60" viewBox="0 0 64 64" className="overflow-visible">
+            <circle cx="32" cy="32" r="26" fill="none" stroke="#818cf8" strokeWidth="1.2" strokeDasharray="4, 4" />
+            <polygon points="32,6 54,44 10,44" fill="none" stroke="#67e8f9" strokeWidth="1" />
+            <polygon points="32,58 54,20 10,20" fill="none" stroke="#67e8f9" strokeWidth="1" />
+            <circle cx="32" cy="32" r="7" fill="#ffffff" style={{ filter: 'drop-shadow(0 0 5px #818cf8)' }} />
+          </svg>
         </motion.div>
       )
     } else if (activeMotion === 'guard-raise') {
@@ -370,15 +375,20 @@ export function BattleActorSprite({
         />
       )
     } else if (activeMotion === 'command-cast') {
-      // Tactician Prepare: 금빛 책 홀로그램
+      // Tactician Prepare: 금빛 8각 전술 룬 인장 (이모지 제거, SVG 전술진화)
       element = (
         <motion.div
           initial={{ scale: 0.6, opacity: 0 }}
           animate={{ scale: [0.8, 1.15, 0.8], opacity: [0, 0.95, 0] }}
           transition={{ duration: 0.6 }}
-          className="absolute -top-4 w-12 h-12 border-2 border-amber-400/40 rounded bg-amber-500/5 rotate-45 flex items-center justify-center"
+          className="absolute -top-10 left-1/2 -translate-x-1/2 w-16 h-16 flex items-center justify-center pointer-events-none"
         >
-          <span className="text-[8px] text-amber-200 -rotate-45">📖</span>
+          <svg width="52" height="52" viewBox="0 0 48 48" className="overflow-visible">
+            <polygon points="24,2 39.5,8.5 46,24 39.5,39.5 24,46 8.5,39.5 2,24 8.5,8.5" fill="none" stroke="#fbbf24" strokeWidth="2" style={{ filter: 'drop-shadow(0 0 4px #fbbf24)' }} />
+            <circle cx="24" cy="24" r="14" fill="none" stroke="#fbbf24" strokeWidth="0.8" strokeDasharray="3, 3" />
+            <line x1="24" y1="8" x2="24" y2="40" stroke="#fbbf24" strokeWidth="1" />
+            <line x1="8" y1="24" x2="40" y2="24" stroke="#fbbf24" strokeWidth="1" />
+          </svg>
         </motion.div>
       )
     } else if (activeMotion === 'vanish-shadow-strike') {
@@ -412,16 +422,20 @@ export function BattleActorSprite({
         />
       )
     } else if (activeMotion === 'hostile-heavy') {
-      // Boss Prepare: 적색 해골 경고 오라
+      // Boss Prepare: 적색 해골 경고 오라 (이모지 제거, SVG 강렬 경고 인디케이터화)
       element = (
         <motion.div
           initial={{ scale: 0.7, opacity: 0 }}
           animate={{ scale: [1, 1.45, 1.1], opacity: [0, 1, 0] }}
           transition={{ duration: 0.56 }}
-          className="absolute -top-12 left-1/2 -translate-x-1/2 w-16 h-16 flex items-center justify-center z-30"
+          className="absolute -top-14 left-1/2 -translate-x-1/2 w-20 h-20 flex items-center justify-center z-30 pointer-events-none"
         >
           <div className="absolute inset-0 bg-red-600/10 rounded-full filter blur-md animate-ping" />
-          <span className="text-4xl filter drop-shadow-[0_0_10px_rgba(239,68,68,0.95)]">👹</span>
+          <svg width="64" height="64" viewBox="0 0 60 60" className="overflow-visible">
+            <polygon points="30,3 57,49 3,49" fill="none" stroke="#ef4444" strokeWidth="3" strokeLinejoin="round" style={{ filter: 'drop-shadow(0 0 6px #ef4444)' }} />
+            <path d="M 30,16 L 30,34 M 30,40 L 30,43" stroke="#ef4444" strokeWidth="5.5" strokeLinecap="round" />
+            <circle cx="30" cy="30" r="27" fill="none" stroke="#ef4444" strokeWidth="1" strokeDasharray="4, 4" className="animate-spin" style={{ transformOrigin: '30px 30px', animationDuration: '3.5s' }} />
+          </svg>
         </motion.div>
       )
     }
@@ -454,14 +468,19 @@ export function BattleActorSprite({
     let element: React.ReactNode = null
 
     if (hitReaction === 'quick-hit-shake') {
-      // Swordsman Impact: 청백 사선 베기 흔적
+      // Swordsman Impact: 청백 사선 베기 흔적 (SVG path 검기화)
       element = (
-        <motion.div
-          initial={{ scaleX: 0.1, scaleY: 0.6, rotate: -30, opacity: 0 }}
-          animate={{ scaleX: [0.1, 1.45, 0.2], scaleY: [0.6, 0.3, 0.1], opacity: [0, 1, 1, 0] }}
-          transition={{ duration: 0.32, ease: 'easeOut' }}
-          className="absolute w-44 h-8 bg-gradient-to-r from-transparent via-cyan-200 to-transparent filter blur-[0.5px] shadow-[0_0_12px_#22d3ee] z-30"
-        />
+        <svg width="180" height="100" viewBox="0 0 180 100" className="absolute pointer-events-none overflow-visible z-30">
+          <motion.path
+            d="M 10,90 Q 90,50 170,10"
+            fill="none" stroke="#67e8f9" strokeWidth="6"
+            strokeLinecap="round"
+            style={{ filter: 'drop-shadow(0 0 8px #22d3ee)' }}
+            initial={{ pathLength: 0, opacity: 1 }}
+            animate={{ pathLength: [0, 1, 1], pathOffset: [0, 0, 1], opacity: [0, 1, 0] }}
+            transition={{ duration: 0.32, ease: 'easeOut' }}
+          />
+        </svg>
       )
     } else if (hitReaction === 'heavy-recoil') {
       // Warrior Impact: 발밑 충격파 균열
@@ -500,41 +519,47 @@ export function BattleActorSprite({
         </div>
       )
     } else if (hitReaction === 'guard-block') {
-      // Guardian Impact: 에메랄드 헥사곤 보호막 Aegis Shield
+      // Guardian Impact: 에메랄드 헥사곤 보호막 Aegis Shield (SVG 프레임화)
       element = (
         <motion.div
           initial={{ scale: 0.6, opacity: 0 }}
           animate={{ scale: [0.6, 1.15, 0.9], opacity: [0, 1, 1, 0] }}
           transition={{ duration: 0.38, ease: 'easeOut' }}
-          className="absolute w-24 h-24 border-3 border-emerald-400 bg-emerald-500/10 shadow-[0_0_20px_rgba(16,185,129,0.7)] z-35 flex items-center justify-center font-black text-emerald-200"
-          style={{
-            clipPath: 'polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%)',
-            textShadow: '0 0 5px rgba(52,211,153,0.8)'
-          }}
+          className="absolute w-24 h-24 flex items-center justify-center z-35 pointer-events-none"
         >
-          <span className="text-[10px] tracking-widest system-text">AEGIS</span>
+          <svg width="96" height="96" viewBox="0 0 100 100" className="overflow-visible">
+            <polygon points="50,10 85,27 85,73 50,90 15,73 15,27" fill="rgba(16,185,129,0.1)" stroke="#34d399" strokeWidth="4.5" style={{ filter: 'drop-shadow(0 0 8px #10b981)' }} />
+            <polygon points="50,18 78,32 78,68 50,82 22,68 22,32" fill="none" stroke="#67e8f9" strokeWidth="1.5" />
+            <text x="50" y="55" textAnchor="middle" fill="#e0f7fa" fontSize="11" fontWeight="900" letterSpacing="1.5" style={{ filter: 'drop-shadow(0 0 4px #34d399)' }}>AEGIS</text>
+          </svg>
         </motion.div>
       )
     } else if (hitReaction === 'fast-stagger') {
-      // Tracker: 15% (0.05s) vanish strike delay, rendering quick X cuts on side-step
+      // Tracker: 15% (0.05s) vanish strike delay, rendering quick X cuts on side-step (SVG화)
       element = (
-        <div className="absolute inset-0 flex items-center justify-center">
-          <motion.div
-            initial={{ scaleX: 0.1, rotate: 45, opacity: 0 }}
-            animate={{ scaleX: [0.1, 0.1, 1.65, 0.2], opacity: [0, 0, 1, 0] }}
-            transition={{ duration: 0.35, times: [0, 0.15, 0.45, 1] }}
-            className="absolute w-36 h-4 bg-gradient-to-r from-transparent via-emerald-300 to-transparent filter blur-[0.5px] z-30"
+        <svg width="140" height="140" viewBox="0 0 100 100" className="absolute pointer-events-none overflow-visible z-30">
+          <motion.path
+            d="M 15,15 L 85,85"
+            fill="none" stroke="#34d399" strokeWidth="4"
+            strokeLinecap="round"
+            style={{ filter: 'drop-shadow(0 0 5px #10b981)' }}
+            initial={{ pathLength: 0 }}
+            animate={{ pathLength: [0, 0, 1, 0] }}
+            transition={{ duration: 0.35, times: [0, 0.15, 0.5, 1] }}
           />
-          <motion.div
-            initial={{ scaleX: 0.1, rotate: -45, opacity: 0 }}
-            animate={{ scaleX: [0.1, 0.1, 1.65, 0.2], opacity: [0, 0, 1, 0] }}
-            transition={{ duration: 0.35, times: [0, 0.25, 0.55, 1] }}
-            className="absolute w-36 h-4 bg-gradient-to-r from-transparent via-emerald-300 to-transparent filter blur-[0.5px] z-30"
+          <motion.path
+            d="M 85,15 L 15,85"
+            fill="none" stroke="#34d399" strokeWidth="4"
+            strokeLinecap="round"
+            style={{ filter: 'drop-shadow(0 0 5px #10b981)' }}
+            initial={{ pathLength: 0 }}
+            animate={{ pathLength: [0, 0.25, 1, 0] }}
+            transition={{ duration: 0.35, times: [0, 0.25, 0.6, 1] }}
           />
-        </div>
+        </svg>
       )
     } else if (hitReaction === 'buff-debuff-pulse') {
-      // Tactician: Command glyph pulses for 45% timing on target, followed by gold command pulse aura
+      // Tactician: Command glyph pulses for 45% timing on target, followed by gold command pulse aura (이모지 제거, SVG 격자화)
       element = (
         <div className="absolute inset-0 flex items-center justify-center">
           {/* Tactical Marker brackets */}
@@ -542,9 +567,13 @@ export function BattleActorSprite({
             initial={{ scale: 0.2, rotate: 45, opacity: 0 }}
             animate={{ scale: [0.2, 1.25, 1.25, 0], rotate: [45, 45, 90, 90], opacity: [0, 0.95, 0.95, 0] }}
             transition={{ duration: 0.6, times: [0, 0.15, 0.45, 1] }}
-            className="absolute w-22 h-22 border-3 border-amber-400 bg-amber-400/5 rounded-lg z-30 shadow-[0_0_18px_rgba(245,158,11,0.7)]"
-            style={{ clipPath: 'polygon(50% 0%, 100% 38%, 82% 100%, 18% 100%, 0% 38%)' }}
-          />
+            className="absolute w-22 h-22 flex items-center justify-center z-30"
+          >
+            <svg width="80" height="80" viewBox="0 0 80 80" className="overflow-visible">
+              <polygon points="40,10 65,25 70,55 40,70 10,55 15,25" fill="none" stroke="#fbbf24" strokeWidth="2.5" style={{ filter: 'drop-shadow(0 0 6px #f59e0b)' }} />
+              <circle cx="40" cy="40" r="18" fill="none" stroke="#fbbf24" strokeWidth="1" strokeDasharray="3, 3" />
+            </svg>
+          </motion.div>
           <motion.div
             initial={{ scale: 0.8, opacity: 0 }}
             animate={{ scale: [0.8, 0.8, 1.65, 1.85], opacity: [0, 0, 0.9, 0] }}
@@ -572,16 +601,38 @@ export function BattleActorSprite({
         </div>
       )
     } else if (hitReaction === 'curse-flicker-stagger') {
-      // Hidden Curse: Brand seal pulses for 40% time, then target shatters in crimson flakes
+      // Hidden Curse: Brand seal pulses for 40% time, then target shatters in crimson drops (이모지 제거, SVG 파편화)
       element = (
-        <div className="absolute inset-0 flex items-center justify-center">
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
           <motion.div
             initial={{ scale: 0.2, opacity: 0 }}
             animate={{ scale: [0.2, 1.25, 1.05, 1.35, 0], opacity: [0, 1, 0.85, 1, 0] }}
             transition={{ duration: 0.68, times: [0, 0.15, 0.4, 0.55, 1] }}
-            className="absolute w-20 h-20 border-2 border-dashed border-red-600 rounded-full flex items-center justify-center bg-red-950/10 shadow-[0_0_15px_rgba(239,68,68,0.8)] z-30"
+            className="absolute w-20 h-20 flex items-center justify-center z-30"
           >
-            <span className="text-xl text-red-500 filter drop-shadow-[0_0_4px_red] animate-pulse">🩸</span>
+            <svg width="80" height="80" viewBox="0 0 80 80" className="overflow-visible">
+              <circle cx="40" cy="40" r="28" fill="none" stroke="#ef4444" strokeWidth="2" strokeDasharray="5, 3" style={{ filter: 'drop-shadow(0 0 5px #b91c1c)' }} />
+              {/* Splattering blood drop paths */}
+              {Array.from({ length: 6 }).map((_, i) => {
+                const angle = i * 60 * (Math.PI / 180)
+                const radVal = 32
+                const tx = Math.cos(angle) * radVal
+                const ty = Math.sin(angle) * radVal
+                return (
+                  <motion.path
+                    key={i}
+                    d="M 40,40 Q 42,35 40,32 Q 38,35 40,40"
+                    fill="#b91c1c"
+                    stroke="#ef4444"
+                    strokeWidth="1.2"
+                    animate={{
+                      transform: [`translate(0px, 0px) scale(1)`, `translate(${tx}px, ${ty}px) scale(0)`]
+                    }}
+                    transition={{ duration: 0.5, ease: "easeOut", delay: 0.15 }}
+                  />
+                )
+              })}
+            </svg>
           </motion.div>
           <motion.div
             initial={{ scale: 0.8, opacity: 0 }}
@@ -592,15 +643,20 @@ export function BattleActorSprite({
         </div>
       )
     } else if (hitReaction === 'warp-shake') {
-      // Hidden Rift: Rift dimensional crack distortion opens at 45% time, sucking target in
+      // Hidden Rift: Rift dimensional crack distortion opens at 45% time, sucking target in (SVG화)
       element = (
         <div className="absolute inset-0 flex items-center justify-center">
           <motion.div
             initial={{ scale: 0.4, rotate: 0, opacity: 0 }}
             animate={{ scale: [0.4, 1.35, 1.35, 0], rotate: [0, 90, 120, 180], opacity: [0, 0.95, 0.95, 0] }}
             transition={{ duration: 0.64, times: [0, 0.25, 0.45, 1] }}
-            className="absolute w-28 h-28 border-2 border-violet-500 bg-violet-600/10 rounded-full filter blur-xs shadow-[0_0_20px_rgba(139,92,246,0.85)] z-30"
-          />
+            className="absolute w-28 h-28 border-2 border-violet-500 bg-violet-600/10 rounded-full filter blur-xs shadow-[0_0_20px_rgba(139,92,246,0.85)] z-30 flex items-center justify-center"
+          >
+            <svg width="96" height="96" viewBox="0 0 100 100" className="overflow-visible">
+              <circle cx="50" cy="50" r="42" fill="none" stroke="#c084fc" strokeWidth="1.5" strokeDasharray="6, 3" />
+              <polygon points="50,15 80,68 20,68" fill="none" stroke="#22d3ee" strokeWidth="1.2" />
+            </svg>
+          </motion.div>
           <motion.div
             initial={{ scale: 0.2, opacity: 0 }}
             animate={{ scale: [0.2, 0.2, 1.35, 0], opacity: [0, 0, 1, 0] }}
@@ -683,8 +739,8 @@ export function BattleActorSprite({
       <div
         className={clsx(cardBorderClass, hasSprite ? 'overflow-visible' : 'overflow-hidden')}
         style={{
-          width: compact ? (isBoss ? 104 : 80) : (isBoss ? 200 : 144),
-          height: compact ? (isBoss ? 136 : 104) : (isBoss ? 250 : 180),
+          width: compact ? (isBoss ? 230 : 180) : (isBoss ? 320 : 240),
+          height: compact ? (isBoss ? 280 : 220) : (isBoss ? 390 : 290),
           transform: yCoord !== undefined ? `scale(${0.72 + (yCoord / 100) * 0.4})` : undefined,
           transformOrigin: 'bottom center',
         }}

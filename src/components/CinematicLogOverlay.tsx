@@ -205,7 +205,12 @@ export function CinematicLogOverlay({
   return (
     <div
       key={currentLog.id}
-      className={clsx('pointer-events-none cinematic-log-overlay', positionClass, className)}
+      className={clsx(
+        'pointer-events-none',
+        position === 'inline' ? 'cinematic-log-overlay-inline' : 'cinematic-log-overlay',
+        positionClass,
+        className
+      )}
       style={{ '--cinematic-exit-delay': `${Math.max(0, displayMs - 320)}ms` } as CSSProperties}
       aria-live="polite"
     >

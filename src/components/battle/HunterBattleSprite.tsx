@@ -23,16 +23,16 @@ export function HunterBattleSprite({
     return null
   }
 
-  // Active / Targeted special glow filter suited for cyan themed hunter
+  // Active / Targeted special glow filter suited for cyan themed hunter - Halved blur radius for sharpness
   const glowFilter = isDefeated
     ? 'grayscale(1) contrast(0.5) opacity(0.35)'
     : isActive
-    ? 'drop-shadow(0 0 16px rgba(34,211,238,0.85)) drop-shadow(0 0 6px rgba(34,211,238,0.6))'
+    ? 'drop-shadow(0 0 8px rgba(34,211,238,0.9)) drop-shadow(0 0 3px rgba(34,211,238,0.7))'
     : isTargeted
     ? isSupportTarget
-      ? 'drop-shadow(0 0 14px rgba(52,211,153,0.85)) drop-shadow(0 0 6px rgba(52,211,153,0.5))'
-      : 'drop-shadow(0 0 14px rgba(244,63,94,0.85)) drop-shadow(0 0 6px rgba(244,63,94,0.5))'
-    : 'drop-shadow(0 -2px 8px rgba(6,182,212,0.35))'
+      ? 'drop-shadow(0 0 7px rgba(52,211,153,0.9)) drop-shadow(0 0 3px rgba(52,211,153,0.6))'
+      : 'drop-shadow(0 0 7px rgba(244,63,94,0.9)) drop-shadow(0 0 3px rgba(244,63,94,0.6))'
+    : 'drop-shadow(0 -1px 4px rgba(6,182,212,0.5))'
 
   return (
     <div className="relative w-full h-full flex flex-col items-center justify-end pointer-events-none select-none overflow-visible">
@@ -45,8 +45,8 @@ export function HunterBattleSprite({
           isActive && "animate-pulse"
         )}
         style={{
-          maxHeight: compact ? 115 : 195,
-          maxWidth: compact ? 125 : 210,
+          maxHeight: compact ? 250 : 360,
+          maxWidth: compact ? 260 : 380,
           width: 'auto',
           height: 'auto',
           objectFit: 'contain',

@@ -36,12 +36,12 @@ export function MonsterBattleSprite({
 
   // Scale settings - Bosses are larger but kept within limits to prevent clipping
   const maxHeight = isBoss
-    ? (compact ? 145 : 255)
-    : (compact ? 112 : 190)
+    ? (compact ? 235 : 340)
+    : (compact ? 200 : 260)
 
   const maxWidth = isBoss
-    ? (compact ? 155 : 270)
-    : (compact ? 122 : 205)
+    ? (compact ? 260 : 360)
+    : (compact ? 210 : 280)
 
   return (
     <div className="relative w-full h-full flex flex-col items-center justify-end pointer-events-none select-none overflow-visible">

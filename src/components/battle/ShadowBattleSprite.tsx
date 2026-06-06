@@ -33,18 +33,18 @@ export function ShadowBattleSprite({
     )
   }
 
-  // Active / Targeted special glow filter
+  // Active / Targeted special glow filter - Halved blur radius to make borders sharp and clear
   const glowFilter = isDefeated
     ? 'grayscale(1) contrast(0.5) opacity(0.35)'
     : isActive
-    ? 'drop-shadow(0 0 16px rgba(168,85,247,0.85)) drop-shadow(0 0 6px rgba(168,85,247,0.6))'
+    ? 'drop-shadow(0 0 8px rgba(168,85,247,0.9)) drop-shadow(0 0 3px rgba(168,85,247,0.7))'
     : isTargeted
-    ? 'drop-shadow(0 0 14px rgba(244,63,94,0.85)) drop-shadow(0 0 6px rgba(244,63,94,0.5))'
+    ? 'drop-shadow(0 0 7px rgba(244,63,94,0.9)) drop-shadow(0 0 3px rgba(244,63,94,0.6))'
     : innateGrade === 'S'
-    ? 'drop-shadow(0 -2px 10px rgba(245,158,11,0.45))'
+    ? 'drop-shadow(0 -1px 4px rgba(245,158,11,0.6))'
     : innateGrade === 'A'
-    ? 'drop-shadow(0 -2px 8px rgba(168,85,247,0.35))'
-    : 'drop-shadow(0 -2px 8px rgba(139,92,246,0.3))'
+    ? 'drop-shadow(0 -1px 4px rgba(168,85,247,0.5))'
+    : 'drop-shadow(0 -1px 4px rgba(139,92,246,0.4))'
 
   return (
     <div className="relative w-full h-full flex flex-col items-center justify-end pointer-events-none select-none overflow-visible">
@@ -57,8 +57,8 @@ export function ShadowBattleSprite({
           isActive && "animate-pulse"
         )}
         style={{
-          maxHeight: compact ? 110 : 185,
-          maxWidth: compact ? 120 : 200,
+          maxHeight: compact ? 250 : 360,
+          maxWidth: compact ? 260 : 380,
           width: 'auto',
           height: 'auto',
           objectFit: 'contain',

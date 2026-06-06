@@ -226,9 +226,9 @@ export function BattleArenaOverlay({
 
         {/* Round Reveal Cinematic Log Overlay */}
         {roundReveal && roundReveal.steps.length > 0 && (
-          <div className="absolute inset-0 z-50 bg-black/10 flex flex-col justify-end p-4 pointer-events-none">
-            <div className="w-full max-w-[340px] mx-auto mb-2 animate-fade-in z-50 pointer-events-auto">
-              <div className="relative min-h-[48px] z-50">
+          <div className="absolute inset-0 z-[145] bg-black/10 flex flex-col justify-end items-center p-4 pointer-events-none">
+            <div className="w-full max-w-[340px] mx-auto mb-2 animate-fade-in z-[145] pointer-events-auto">
+              <div className="relative min-h-[48px] z-[145]">
                 <CinematicLogOverlay
                   logs={roundReveal.steps.map(step => step.cinematicLog)}
                   visible={roundReveal.steps.length > 0}
@@ -245,7 +245,7 @@ export function BattleArenaOverlay({
 
         {/* Battle Ended Screen Overlay */}
         {preview.state.isFinished && !roundReveal && (
-          <div className="absolute inset-0 z-[45] bg-black/75 backdrop-blur-[3px] flex items-center justify-center">
+          <div className="absolute inset-0 z-[155] bg-black/75 backdrop-blur-[3px] flex items-center justify-center">
             <div className={clsx(
               'max-w-[400px] w-[90%] border rounded-xl p-5 text-center shadow-3xl animate-bounce-short',
               preview.state.winner === 'player' ? 'border-amber-400/40 bg-slate-900/90 shadow-amber-400/10' : 'border-rose-500/40 bg-slate-900/90 shadow-rose-500/10'

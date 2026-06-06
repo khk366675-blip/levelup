@@ -311,6 +311,20 @@ body::before {
   animation: cinematic-log-enter 0.24s ease-out both, cinematic-log-exit 0.32s ease-in var(--cinematic-exit-delay, 0.86s) forwards;
 }
 
+.cinematic-log-overlay-inline {
+  animation: cinematic-log-inline-enter 0.24s ease-out both, cinematic-log-inline-exit 0.32s ease-in var(--cinematic-exit-delay, 0.86s) forwards;
+}
+
+@keyframes cinematic-log-inline-enter {
+  0% { opacity: 0; transform: translateY(8px) scale(0.96); filter: blur(5px); }
+  100% { opacity: 1; transform: translateY(0) scale(1); filter: blur(0); }
+}
+
+@keyframes cinematic-log-inline-exit {
+  0% { opacity: 1; transform: translateY(0) scale(1); }
+  100% { opacity: 0; transform: translateY(-8px) scale(0.98); }
+}
+
 .dramatic-reveal {
   animation: dramatic-reveal-enter 0.24s ease-out both;
 }
