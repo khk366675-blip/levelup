@@ -564,8 +564,9 @@ export function ShadowPortrait({
     return `rgba(${r}, ${g}, ${b}, ${alpha})`
   }
 
-  const customGlow = shadow?.mutation ? hexToRgba(accent, 0.6) : palette.glow
-  const customMist = shadow?.mutation ? hexToRgba(accent, 0.16) : palette.mist
+  const stage = shadow?.mutation?.mutationStage ?? 0
+  const customGlow = shadow?.mutation ? hexToRgba(accent, Math.min(1.0, 0.55 + stage * 0.09)) : palette.glow
+  const customMist = shadow?.mutation ? hexToRgba(accent, Math.min(0.5, 0.14 + stage * 0.05)) : palette.mist
 
   const style = {
     '--shadow-accent': accent,
@@ -592,8 +593,8 @@ export function ShadowPortrait({
       style={{
         ...style,
         height: className?.includes('h-full') ? '100%' : undefined,
-        boxShadow: highlighted || active || displayNamed
-          ? `0 0 ${Math.round(24 + profile.intensity * 8)}px ${palette.glow}`
+        boxShadow: highlighted || active || displayNamed || stage > 0
+          ? `0 0 ${Math.round(24 + profile.intensity * 8 + stage * 5)}px ${customGlow}`
           : undefined,
       }}
       aria-label={label}
@@ -604,9 +605,10 @@ export function ShadowPortrait({
           'absolute inset-0 overflow-hidden rounded-md border bg-ink-950/80 transition-all duration-300',
           hidden ? 'border-slate-400/30' : def?.isAchievementNamed || shadow?.isAchievementNamed ? 'border-cyan-200/50' : displayNamed ? 'border-amber-300/50' : 'border-white/10',
           active && 'ring-2 ring-cyan-300/35',
+          stage >= 4 && 'border-2 shadow-[0_0_15px_rgba(255,255,255,0.15)]',
         )}
         style={{
-          borderColor: active || displayNamed ? accent : undefined,
+          borderColor: active || displayNamed || stage >= 4 ? accent : undefined,
           boxShadow: `inset 0 0 30px rgba(2, 6, 23, 0.85)`,
         }}
       >
@@ -614,7 +616,7 @@ export function ShadowPortrait({
         <div
           className="absolute inset-0 opacity-80"
           style={{
-            background: `radial-gradient(circle at 50% 34%, ${accent}22, transparent ${displayNamed ? 44 : 34}%), radial-gradient(circle at 50% 88%, ${accent}16, transparent 42%)`,
+            background: `radial-gradient(circle at 50% 34%, ${hexToRgba(accent, Math.min(0.8, 0.15 + stage * 0.08))}, transparent ${displayNamed ? 44 : 34}%), radial-gradient(circle at 50% 88%, ${hexToRgba(accent, Math.min(0.6, 0.1 + stage * 0.06))}, transparent 42%)`,
           }}
         />
         <div

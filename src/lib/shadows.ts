@@ -1290,14 +1290,36 @@ export function generateMutation(
 
   const pickRandom = <T>(arr: T[]): T => arr[Math.floor(Math.random() * arr.length)]
   
+  // 변이 단계가 올라갈수록 더 화려한 프리미엄 색상/오라/눈빛 구성 해금 및 가중치 부여
+  let targetColors = accentColors
+  let targetAuras = auraTypes
+  let targetEyes = eyeStyles
+
+  const stage = mutation.mutationStage
+  if (stage >= 4) {
+    // 4단계 이상: 전설급/네온 화려한 색상 및 강력한 효과 풀로 제한
+    targetColors = ['#ff007f', '#00ffff', '#ffd700', '#ff3300', '#fb7185', '#a78bfa', '#f59e0b', '#d946ef', '#a855f7']
+    targetAuras = ['named-corona', 'achievement-halo', 'rune-orbit', 'barrier', 'predator-haze', 'essence-sparks']
+    targetEyes = ['burning-slit', 'gold-points', 'predator-slit', 'oracle', 'star-slit']
+  } else if (stage >= 2) {
+    // 2~3단계: 화려한 색상 및 이펙트 포함 확장
+    targetColors = [...accentColors, '#ff007f', '#00ffff', '#a855f7']
+    targetAuras = [...auraTypes, 'named-corona', 'rune-orbit']
+    targetEyes = [...eyeStyles, 'burning-slit', 'gold-points']
+  }
+
+  // 변이 단계가 높을수록 비주얼 강도(visualIntensity) 상향 (단계당 0.15 증가)
+  const baseIntensity = 1.0 + (stage * 0.15)
+  const visualIntensity = parseFloat((baseIntensity + Math.random() * 0.5).toFixed(2))
+
   mutation.visualOverrides = {
     ...mutation.visualOverrides,
-    accentColor: pickRandom(accentColors),
-    auraType: pickRandom(auraTypes),
-    eyeStyle: pickRandom(eyeStyles),
+    accentColor: pickRandom(targetColors),
+    auraType: pickRandom(targetAuras),
+    eyeStyle: pickRandom(targetEyes),
     silhouetteType: pickRandom(silhouetteTypes),
     weaponShape: pickRandom(weaponShapes),
-    visualIntensity: parseFloat((1.0 + Math.random() * 0.8).toFixed(2)),
+    visualIntensity,
   }
 
   const statKeys: ShadowStatKey[] = [
