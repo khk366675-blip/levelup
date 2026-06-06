@@ -114,15 +114,18 @@ const resolveProfile = (
 
   if (shadow?.mutation?.visualOverrides) {
     const vo = shadow.mutation.visualOverrides
-    if (vo.silhouetteType) silhouette = vo.silhouetteType
-    if (vo.weaponShape) weapon = vo.weaponShape
-    if (vo.headShape) head = vo.headShape
-    if (vo.shoulderShape) shoulders = vo.shoulderShape
+    const isPremium = rarity === 'legendary' || named
+    // 전설/네임드는 고유의 멋진 외형(실루엣, 무기, 머리, 어깨, 포즈)을 그대로 보존하여 역체감 방지
+    if (vo.silhouetteType && !isPremium) silhouette = vo.silhouetteType
+    if (vo.weaponShape && !isPremium) weapon = vo.weaponShape
+    if (vo.headShape && !isPremium) head = vo.headShape
+    if (vo.shoulderShape && !isPremium) shoulders = vo.shoulderShape
+    if (vo.posture && !isPremium) posture = vo.posture
+
     if (vo.auraType) aura = vo.auraType
     if (vo.eyeStyle) eyes = vo.eyeStyle
     if (vo.runeStyle) rune = vo.runeStyle
     if (vo.accessory) accessory = vo.accessory
-    if (vo.posture) posture = vo.posture
     if (vo.backgroundMotif) motif = vo.backgroundMotif
     if (vo.visualIntensity !== undefined) intensity = vo.visualIntensity
   }
@@ -567,10 +570,11 @@ export function ShadowPortrait({
   const stage = shadow?.mutation?.mutationStage ?? 0
   const customGlow = shadow?.mutation ? hexToRgba(accent, Math.min(1.0, 0.55 + stage * 0.09)) : palette.glow
   const customMist = shadow?.mutation ? hexToRgba(accent, Math.min(0.5, 0.14 + stage * 0.05)) : palette.mist
+  const isPremiumFrame = displayRarity === 'legendary' || displayNamed
 
   const style = {
     '--shadow-accent': accent,
-    '--shadow-frame': shadow?.mutation ? accent : palette.frame,
+    '--shadow-frame': isPremiumFrame ? palette.frame : (shadow?.mutation ? accent : palette.frame),
     '--shadow-glow': customGlow,
     '--shadow-mist': customMist,
   } as CSSProperties
@@ -660,7 +664,42 @@ export function ShadowPortrait({
           <g opacity={hidden ? 0.28 : 1}>
             {renderAura(profile, accent, displayNamed, displayEvolved)}
             {renderBackgroundMotif(profile, accent, seed, displayNamed, displayEvolved)}
-            <path d="M58 10 L103 35 L103 91 L58 119 L13 91 L13 35 Z" fill="none" stroke={accent} strokeWidth={displayNamed ? 2.8 : displayEvolved ? 2 : 1.4} opacity={displayNamed ? 0.82 : 0.42 + profile.intensity * 0.06} />
+            
+            {/* 고단계 변이 시 중첩되는 회전 마법진(Magic Orbit Rings) 추가 */}
+            {stage >= 3 && (
+              <circle
+                cx="58"
+                cy="64"
+                r="50"
+                fill="none"
+                stroke={accent}
+                strokeWidth="1.2"
+                strokeDasharray="4 8"
+                opacity={0.3 + stage * 0.08}
+                style={{ transformOrigin: '58px 64px', animation: 'spin 15s linear infinite' }}
+              />
+            )}
+            {stage >= 5 && (
+              <circle
+                cx="58"
+                cy="64"
+                r="53"
+                fill="none"
+                stroke={accent}
+                strokeWidth="0.8"
+                strokeDasharray="8 4"
+                opacity="0.45"
+                style={{ transformOrigin: '58px 64px', animation: 'spin 25s linear infinite reverse' }}
+              />
+            )}
+
+            <path 
+              d="M58 10 L103 35 L103 91 L58 119 L13 91 L13 35 Z" 
+              fill="none" 
+              stroke={accent} 
+              strokeWidth={displayNamed ? 2.8 + stage * 0.35 : displayEvolved ? 2 + stage * 0.35 : 1.4 + stage * 0.35} 
+              opacity={displayNamed ? 0.82 : 0.42 + profile.intensity * 0.06} 
+            />
             {displayEvolved && (
               <path d="M58 26 L82 39 L82 89 L58 103 L34 89 L34 39 Z" fill="none" stroke={accent} strokeWidth="1.4" strokeDasharray="5 3" opacity="0.55" />
             )}

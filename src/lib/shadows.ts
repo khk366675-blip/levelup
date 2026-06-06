@@ -1291,13 +1291,16 @@ export function generateMutation(
   const pickRandom = <T>(arr: T[]): T => arr[Math.floor(Math.random() * arr.length)]
   
   // 변이 단계가 올라갈수록 더 화려한 프리미엄 색상/오라/눈빛 구성 해금 및 가중치 부여
+  // 전설급(Legendary) 및 네임드(Named) 그림자는 1단계부터 항상 프리미엄 풀에서 선별되도록 보장
   let targetColors = accentColors
   let targetAuras = auraTypes
   let targetEyes = eyeStyles
 
   const stage = mutation.mutationStage
-  if (stage >= 4) {
-    // 4단계 이상: 전설급/네온 화려한 색상 및 강력한 효과 풀로 제한
+  const isPremiumShadow = shadow.rarity === 'legendary' || shadow.isNamed || shadow.isGateNamed || shadow.isAchievementNamed
+
+  if (stage >= 4 || isPremiumShadow) {
+    // 4단계 이상이거나 전설/네임드인 경우: 전설급/네온 화려한 색상 및 강력한 효과 풀로 제한
     targetColors = ['#ff007f', '#00ffff', '#ffd700', '#ff3300', '#fb7185', '#a78bfa', '#f59e0b', '#d946ef', '#a855f7']
     targetAuras = ['named-corona', 'achievement-halo', 'rune-orbit', 'barrier', 'predator-haze', 'essence-sparks']
     targetEyes = ['burning-slit', 'gold-points', 'predator-slit', 'oracle', 'star-slit']
