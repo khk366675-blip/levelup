@@ -820,10 +820,23 @@ export function ShadowPanel() {
   const [rarityFilter, setRarityFilter] = useState<RarityFilterKey>('all')
   const [gradeFilter, setGradeFilter] = useState<GradeFilterKey>('all')
   const [sort, setSort] = useState<SortKey>('obtained')
-  const [view, setView] = useState<'owned' | 'codex'>('owned')
+  const [view, setView] = useState<'owned' | 'codex' | 'autosweep'>('owned')
   const [query, setQuery] = useState('')
   const [selectedShadowId, setSelectedShadowId] = useState<string | undefined>()
   const [isExpanded, setIsExpanded] = useState(false)
+
+  const shadowAutoSweepState = useGame(s => s.shadowAutoSweepState)
+  const assignShadowToAutoSweep = useGame(s => s.assignShadowToAutoSweep)
+  const removeShadowFromAutoSweep = useGame(s => s.removeShadowFromAutoSweep)
+  const claimAutoSweepRewards = useGame(s => s.claimAutoSweepRewards)
+
+  const [nowTime, setNowTime] = useState(new Date())
+  const [sweepResult, setSweepResult] = useState<{ gold: number; shadowEssence: number; xp: number; items: { name: string; icon: string; quantity: number }[]; elapsedMinutes: number; mutatedNames: string[] } | null>(null)
+
+  useEffect(() => {
+    const timer = setInterval(() => setNowTime(new Date()), 1000)
+    return () => clearInterval(timer)
+  }, [])
 
   useEffect(() => {
     setIsExpanded(false)
@@ -1504,6 +1517,80 @@ export function ShadowPanel() {
       />
 
       <ShadowRevealModal reveal={shadowReveal} onClose={() => setShadowReveal(undefined)} />
+
+      {sweepResult && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink-950/80 p-4 backdrop-blur-md">
+          <div className="relative w-full max-w-lg rounded-xl border border-cyan-400/35 bg-ink-900/95 p-6 shadow-[0_0_50px_rgba(34,211,238,0.25)] corner-bracket text-center">
+            <div className="br" />
+            <h3 className="text-xl font-bold text-cyan-200 mb-2">그림자 자동 소탕 보고서</h3>
+            <p className="text-xs text-white/55 mb-4">그림자들이 심연을 헤치고 돌아왔습니다.</p>
+            
+            <div className="my-3 border border-white/5 bg-ink-950/60 p-4 rounded text-left space-y-3">
+              <div className="flex justify-between items-center text-sm border-b border-white/10 pb-2">
+                <span className="text-white/60 font-semibold">소탕 누적 시간</span>
+                <span className="text-white font-black">{sweepResult.elapsedMinutes}분 경과</span>
+              </div>
+              <div className="grid grid-cols-3 gap-2 text-center text-xs">
+                <div className="bg-ink-900/60 border border-white/5 p-2 rounded">
+                  <div className="text-[10px] text-white/40 mb-1">획득 골드</div>
+                  <div className="text-yellow-400 font-black">+{sweepResult.gold}</div>
+                </div>
+                <div className="bg-ink-900/60 border border-white/5 p-2 rounded">
+                  <div className="text-[10px] text-white/40 mb-1">획득 정수</div>
+                  <div className="text-cyan-400 font-black">+{sweepResult.shadowEssence}</div>
+                </div>
+                <div className="bg-ink-900/60 border border-white/5 p-2 rounded">
+                  <div className="text-[10px] text-white/40 mb-1">획득 경험치</div>
+                  <div className="text-purple-400 font-black">+{sweepResult.xp}</div>
+                </div>
+              </div>
+
+              {sweepResult.items.length > 0 && (
+                <div>
+                  <div className="text-[11px] text-white/40 mb-1.5 font-semibold">전리품 획득</div>
+                  <div className="grid grid-cols-2 gap-2 max-h-36 overflow-y-auto pr-1">
+                    {sweepResult.items.map((item, idx) => (
+                      <div key={idx} className="flex items-center gap-2 bg-ink-900/40 p-1.5 rounded border border-white/5 text-[11px]">
+                        <span className="text-sm shrink-0">{item.icon}</span>
+                        <span className="text-white/70 truncate flex-1">{item.name}</span>
+                        <span className="text-cyan-300 font-bold shrink-0">+{item.quantity}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {sweepResult.mutatedNames.length > 0 && (
+                <div className="border border-purple-500/25 bg-purple-500/5 p-2 rounded">
+                  <div className="text-[11px] text-purple-300 mb-1 font-semibold flex items-center gap-1">
+                    <Sparkles className="w-3.5 h-3.5 text-purple-400 animate-spin" />
+                    <span>그림자 자동 변이 발생!</span>
+                  </div>
+                  <p className="text-[10px] text-white/70">
+                    격에 맞는 변이 재료를 획득하여 스스로 강해진 그림자:
+                  </p>
+                  <div className="mt-1 flex flex-wrap gap-1">
+                    {Array.from(new Set(sweepResult.mutatedNames)).map((name, i) => (
+                      <span key={i} className="rounded bg-purple-500/20 px-2 py-0.5 text-[10px] text-purple-200 border border-purple-500/35 font-bold">
+                        🧪 {name}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setSweepResult(null)}
+              className="mt-4 w-full rounded-md border border-cyan-400/50 bg-cyan-400/20 py-2.5 text-sm font-bold text-cyan-50 shadow-[0_0_15px_rgba(34,211,238,0.2)] hover:bg-cyan-400/30 transition-all cursor-pointer"
+            >
+              확인
+            </button>
+          </div>
+        </div>
+      )}
+
       <div className="panel corner-bracket overflow-hidden p-5 border-purple-400/25 bg-[radial-gradient(circle_at_50%_0%,rgba(124,58,237,0.2),transparent_36%),linear-gradient(135deg,rgba(15,23,42,0.75),rgba(2,6,23,0.94))]">
         <div className="br" />
         {/* 1. DEPLOYED LEGION (출전 군단) - 맨 상단 배치 */}
@@ -1593,64 +1680,76 @@ export function ShadowPanel() {
         </div>
 
         {/* 2. 도감/보유 목록 컨트롤 패널 (필터/검색) */}
-        <div className="panel corner-bracket p-3 border-white/10 bg-ink-950/60 mb-3">
-          <div className="br" />
-          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-[auto_auto_minmax(180px,1fr)]">
-            <div className="grid grid-cols-2 gap-2">
-              <button type="button" onClick={() => setView('owned')} className={`min-h-10 rounded-md border px-3 py-2 text-xs font-bold ${view === 'owned' ? 'border-cyan-400/50 bg-cyan-400/15 text-cyan-100 shadow-[0_0_10px_rgba(34,211,238,0.1)]' : 'border-white/10 bg-ink-900/45 text-white/50 hover:text-white/80'}`}>보유</button>
-              <button type="button" onClick={() => setView('codex')} className={`min-h-10 rounded-md border px-3 py-2 text-xs font-bold ${view === 'codex' ? 'border-cyan-400/50 bg-cyan-400/15 text-cyan-100 shadow-[0_0_10px_rgba(34,211,238,0.1)]' : 'border-white/10 bg-ink-900/45 text-white/50 hover:text-white/80'}`}>도감</button>
+        {(view as string) !== 'autosweep' ? (
+          <div className="panel corner-bracket p-3 border-white/10 bg-ink-950/60 mb-3">
+            <div className="br" />
+            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-[auto_auto_minmax(180px,1fr)]">
+              <div className="grid grid-cols-3 gap-2">
+                <button type="button" onClick={() => setView('owned')} className={`min-h-10 rounded-md border px-1 py-2 text-[11px] font-bold ${(view as string) === 'owned' ? 'border-cyan-400/50 bg-cyan-400/15 text-cyan-100 shadow-[0_0_10px_rgba(34,211,238,0.1)]' : 'border-white/10 bg-ink-900/45 text-white/50 hover:text-white/80'}`}>보유</button>
+                <button type="button" onClick={() => setView('codex')} className={`min-h-10 rounded-md border px-1 py-2 text-[11px] font-bold ${(view as string) === 'codex' ? 'border-cyan-400/50 bg-cyan-400/15 text-cyan-100 shadow-[0_0_10px_rgba(34,211,238,0.1)]' : 'border-white/10 bg-ink-900/45 text-white/50 hover:text-white/80'}`}>도감</button>
+                <button type="button" onClick={() => setView('autosweep')} className={`min-h-10 rounded-md border px-1 py-2 text-[11px] font-bold ${(view as string) === 'autosweep' ? 'border-violet-500/50 bg-violet-500/15 text-violet-100 shadow-[0_0_10px_rgba(139,92,246,0.1)]' : 'border-white/10 bg-ink-900/45 text-white/50 hover:text-white/80'}`}>자동 소탕</button>
+              </div>
+              <select
+                value={ownershipFilter}
+                onChange={event => {
+                  const next = event.target.value as OwnershipFilterKey
+                  setOwnershipFilter(next)
+                  if (next === 'unowned') setView('codex')
+                }}
+                className="min-h-10 w-full min-w-0 rounded-md border border-white/10 bg-ink-900/80 px-3 py-2 text-xs text-white/70"
+              >
+                {ownershipFilters.map(item => <option key={item.key} value={item.key}>{item.label}</option>)}
+              </select>
+              <label className="relative block min-w-0">
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-white/35" />
+                <input
+                  value={query}
+                  onChange={event => setQuery(event.target.value)}
+                  placeholder="그림자 검색"
+                  className="min-h-10 w-full rounded-md border border-white/10 bg-ink-900/80 py-2 pl-9 pr-3 text-xs text-white/75 outline-none placeholder:text-white/30 focus:border-cyan-300/45"
+                />
+              </label>
             </div>
-            <select
-              value={ownershipFilter}
-              onChange={event => {
-                const next = event.target.value as OwnershipFilterKey
-                setOwnershipFilter(next)
-                if (next === 'unowned') setView('codex')
-              }}
-              className="min-h-10 w-full min-w-0 rounded-md border border-white/10 bg-ink-900/80 px-3 py-2 text-xs text-white/70"
-            >
-              {ownershipFilters.map(item => <option key={item.key} value={item.key}>{item.label}</option>)}
-            </select>
-            <label className="relative block min-w-0">
-              <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-white/35" />
-              <input
-                value={query}
-                onChange={event => setQuery(event.target.value)}
-                placeholder="그림자 검색"
-                className="min-h-10 w-full rounded-md border border-white/10 bg-ink-900/80 py-2 pl-9 pr-3 text-xs text-white/75 outline-none placeholder:text-white/30 focus:border-cyan-300/45"
-              />
-            </label>
+            <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-7">
+              <select value={sourceFilter} onChange={event => setSourceFilter(event.target.value as SourceFilterKey)} className="min-h-10 min-w-0 rounded-md border border-white/10 bg-ink-900/80 px-2 py-2 text-xs text-white/70">
+                {sourceFilters.map(item => <option key={item.key} value={item.key}>{item.label}</option>)}
+              </select>
+              <select value={roleFilter} onChange={event => setRoleFilter(event.target.value as RoleFilterKey)} className="min-h-10 min-w-0 rounded-md border border-white/10 bg-ink-900/80 px-2 py-2 text-xs text-white/70">
+                {roleFilters.map(item => <option key={item.key} value={item.key}>{item.label}</option>)}
+              </select>
+              <select value={statusFilter} onChange={event => setStatusFilter(event.target.value as StatusFilterKey)} className="min-h-10 min-w-0 rounded-md border border-white/10 bg-ink-900/80 px-2 py-2 text-xs text-white/70">
+                {statusFilters.map(item => <option key={item.key} value={item.key}>{item.label}</option>)}
+              </select>
+              <select value={rarityFilter} onChange={event => setRarityFilter(event.target.value as RarityFilterKey)} className="min-h-10 min-w-0 rounded-md border border-white/10 bg-ink-900/80 px-2 py-2 text-xs text-white/70">
+                {rarityFilters.map(item => <option key={item.key} value={item.key}>{item.label}</option>)}
+              </select>
+              <select value={gradeFilter} onChange={event => setGradeFilter(event.target.value as GradeFilterKey)} className="min-h-10 min-w-0 rounded-md border border-white/10 bg-ink-900/80 px-2 py-2 text-xs text-white/70">
+                {gradeFilters.map(item => <option key={item.key} value={item.key}>{item.label}</option>)}
+              </select>
+              <select value={sort} onChange={event => setSort(event.target.value as SortKey)} className="min-h-10 min-w-0 rounded-md border border-white/10 bg-ink-900/80 px-2 py-2 text-xs text-white/70 sm:col-span-2 xl:col-span-2">
+                <option value="obtained">기본순 (출전·즐겨찾기·잠금)</option>
+                <option value="rarity">희귀도순</option>
+                <option value="innateGrade">태생 등급순</option>
+                <option value="level">레벨순</option>
+                <option value="enhancement">강화순</option>
+                <option value="evolution">진화 가능순</option>
+                <option value="rank">계급순</option>
+                <option value="name">이름순</option>
+                <option value="favorite">즐겨찾기순</option>
+                <option value="locked">잠금순</option>
+              </select>
+            </div>
           </div>
-          <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-7">
-            <select value={sourceFilter} onChange={event => setSourceFilter(event.target.value as SourceFilterKey)} className="min-h-10 min-w-0 rounded-md border border-white/10 bg-ink-900/80 px-2 py-2 text-xs text-white/70">
-              {sourceFilters.map(item => <option key={item.key} value={item.key}>{item.label}</option>)}
-            </select>
-            <select value={roleFilter} onChange={event => setRoleFilter(event.target.value as RoleFilterKey)} className="min-h-10 min-w-0 rounded-md border border-white/10 bg-ink-900/80 px-2 py-2 text-xs text-white/70">
-              {roleFilters.map(item => <option key={item.key} value={item.key}>{item.label}</option>)}
-            </select>
-            <select value={statusFilter} onChange={event => setStatusFilter(event.target.value as StatusFilterKey)} className="min-h-10 min-w-0 rounded-md border border-white/10 bg-ink-900/80 px-2 py-2 text-xs text-white/70">
-              {statusFilters.map(item => <option key={item.key} value={item.key}>{item.label}</option>)}
-            </select>
-            <select value={rarityFilter} onChange={event => setRarityFilter(event.target.value as RarityFilterKey)} className="min-h-10 min-w-0 rounded-md border border-white/10 bg-ink-900/80 px-2 py-2 text-xs text-white/70">
-              {rarityFilters.map(item => <option key={item.key} value={item.key}>{item.label}</option>)}
-            </select>
-            <select value={gradeFilter} onChange={event => setGradeFilter(event.target.value as GradeFilterKey)} className="min-h-10 min-w-0 rounded-md border border-white/10 bg-ink-900/80 px-2 py-2 text-xs text-white/70">
-              {gradeFilters.map(item => <option key={item.key} value={item.key}>{item.label}</option>)}
-            </select>
-            <select value={sort} onChange={event => setSort(event.target.value as SortKey)} className="min-h-10 min-w-0 rounded-md border border-white/10 bg-ink-900/80 px-2 py-2 text-xs text-white/70 sm:col-span-2 xl:col-span-2">
-              <option value="obtained">기본순 (출전·즐겨찾기·잠금)</option>
-              <option value="rarity">희귀도순</option>
-              <option value="innateGrade">태생 등급순</option>
-              <option value="level">레벨순</option>
-              <option value="enhancement">강화순</option>
-              <option value="evolution">진화 가능순</option>
-              <option value="rank">계급순</option>
-              <option value="name">이름순</option>
-              <option value="favorite">즐겨찾기순</option>
-              <option value="locked">잠금순</option>
-            </select>
+        ) : (
+          <div className="panel corner-bracket p-3 border-white/10 bg-ink-950/60 mb-3">
+            <div className="br" />
+            <div className="flex gap-2">
+              <button type="button" onClick={() => setView('owned')} className={`min-h-10 rounded-md border px-3 py-2 text-xs font-bold ${(view as string) === 'owned' ? 'border-cyan-400/50 bg-cyan-400/15 text-cyan-100 shadow-[0_0_10px_rgba(34,211,238,0.1)]' : 'border-white/10 bg-ink-900/45 text-white/50 hover:text-white/80'}`}>보유</button>
+              <button type="button" onClick={() => setView('codex')} className={`min-h-10 rounded-md border px-3 py-2 text-xs font-bold ${(view as string) === 'codex' ? 'border-cyan-400/50 bg-cyan-400/15 text-cyan-100 shadow-[0_0_10px_rgba(34,211,238,0.1)]' : 'border-white/10 bg-ink-900/45 text-white/50 hover:text-white/80'}`}>도감</button>
+              <button type="button" onClick={() => setView('autosweep')} className={`min-h-10 rounded-md border px-3 py-2 text-xs font-bold ${(view as string) === 'autosweep' ? 'border-violet-500/50 bg-violet-500/15 text-violet-100 shadow-[0_0_10px_rgba(139,92,246,0.1)]' : 'border-white/10 bg-ink-900/45 text-white/50 hover:text-white/80'}`}>자동 소탕</button>
+            </div>
           </div>
-        </div>
+        )}
 
         {/* 3. 메인 그리드 영역 (도감/보유 목록 + 우측 상세 정보 패널) */}
         <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_340px] items-start mb-5">
@@ -1717,7 +1816,7 @@ export function ShadowPanel() {
                   </div>
                 )}
               </div>
-            ) : (
+            ) : view === 'codex' ? (
               <div className="relative pb-6">
                 <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-3">
                   {(isExpanded ? codexDefs : codexDefs.slice(0, 3)).map(def => {
@@ -1764,6 +1863,240 @@ export function ShadowPanel() {
                     </button>
                   </div>
                 )}
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {/* 1. Dashboard */}
+                <div className="panel corner-bracket p-4 border-violet-500/20 bg-violet-500/5">
+                  <div className="br" />
+                  <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                    <div>
+                      <div className="system-text text-[10px] text-violet-300">AUTO SWEEP SYSTEM</div>
+                      <h3 className="text-base font-bold text-violet-100">그림자 자동 소탕</h3>
+                      <p className="mt-1 text-[11px] text-white/55">
+                        그림자를 소탕에 배치하여 방치형 수입(골드, 정수, 경험치) 및 희귀 전리품을 수급합니다. 격에 맞는 변이 재료 획득 시 스스로 변이합니다.
+                      </p>
+                    </div>
+                    
+                    {/* Accumulated Rewards & Claim Button */}
+                    <div className="flex flex-wrap items-center gap-3 shrink-0">
+                      <div className="text-right">
+                        <div className="text-[10px] text-white/40">누적 경과 시간</div>
+                        <div className="text-sm font-bold text-white tabular-nums">
+                          {(() => {
+                            const lastClaimTimeStr = shadowAutoSweepState?.lastClaimTime ?? new Date().toISOString()
+                            const elapsedMs = nowTime.getTime() - new Date(lastClaimTimeStr).getTime()
+                            const elapsedMin = Math.floor(elapsedMs / 60000)
+                            const hrs = Math.floor(elapsedMin / 60)
+                            const mins = elapsedMin % 60
+                            return `${hrs}시간 ${mins}분 / 24시간`
+                          })()}
+                        </div>
+                      </div>
+                      
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const res = claimAutoSweepRewards()
+                          if (res) {
+                            setSweepResult(res)
+                          }
+                        }}
+                        disabled={(() => {
+                          const lastClaimTimeStr = shadowAutoSweepState?.lastClaimTime ?? new Date().toISOString()
+                          const elapsedMs = nowTime.getTime() - new Date(lastClaimTimeStr).getTime()
+                          const elapsedMin = Math.floor(elapsedMs / 60000)
+                          return elapsedMin <= 0 || (shadowAutoSweepState?.assignedShadowIds ?? []).length === 0
+                        })()}
+                        className={clsx(
+                          "rounded border px-4 py-2 text-xs font-bold transition-all shadow-[0_0_15px_rgba(139,92,246,0.15)]",
+                          (() => {
+                            const lastClaimTimeStr = shadowAutoSweepState?.lastClaimTime ?? new Date().toISOString()
+                            const elapsedMs = nowTime.getTime() - new Date(lastClaimTimeStr).getTime()
+                            const elapsedMin = Math.floor(elapsedMs / 60000)
+                            const canClaim = elapsedMin > 0 && (shadowAutoSweepState?.assignedShadowIds ?? []).length > 0
+                            return canClaim
+                              ? "border-violet-400 bg-violet-500/20 text-violet-100 hover:bg-violet-500/30 cursor-pointer"
+                              : "border-white/5 bg-ink-900/45 text-white/30 cursor-not-allowed"
+                          })()
+                        )}
+                      >
+                        소탕 보상 수령
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Production Stats Summary */}
+                  <div className="mt-4 grid grid-cols-3 gap-2 border-t border-white/5 pt-3">
+                    {(() => {
+                      const assignedIds = shadowAutoSweepState?.assignedShadowIds ?? []
+                      const assignedShadows = ownedShadows.filter(s => assignedIds.includes(s.instanceId))
+
+                      let totalGoldPerMin = 0
+                      let totalEssencePerMin = 0
+                      let totalXpPerMin = 0
+
+                      assignedShadows.forEach(shadow => {
+                        const level = shadow.level ?? 1
+                        const rarityIndex = SHADOW_RARITY_ORDER.indexOf(shadow.rarity)
+                        const safeRarityIndex = rarityIndex === -1 ? 0 : rarityIndex
+
+                        totalGoldPerMin += 5 + level * 0.5 + (safeRarityIndex + 1) * 2
+                        totalEssencePerMin += 0.5 + level * 0.05 + (safeRarityIndex + 1) * 0.2
+                        totalXpPerMin += 2 + level * 0.1
+                      })
+
+                      const lastClaimTimeStr = shadowAutoSweepState?.lastClaimTime ?? new Date().toISOString()
+                      const elapsedMs = nowTime.getTime() - new Date(lastClaimTimeStr).getTime()
+                      const elapsedMin = Math.floor(elapsedMs / 60000)
+                      const cappedMin = Math.min(elapsedMin, 1440)
+
+                      const accGold = Math.floor(totalGoldPerMin * cappedMin)
+                      const accEssence = Math.floor(totalEssencePerMin * cappedMin)
+                      const accXp = Math.floor(totalXpPerMin * cappedMin)
+
+                      return (
+                        <>
+                          <div className="bg-ink-950/45 p-2 rounded text-center">
+                            <span className="block text-[10px] text-white/40">골드 생산</span>
+                            <span className="text-xs font-semibold text-yellow-400">+{accGold}</span>
+                            <span className="block text-[9px] text-white/30">+{totalGoldPerMin.toFixed(1)}/분</span>
+                          </div>
+                          <div className="bg-ink-950/45 p-2 rounded text-center">
+                            <span className="block text-[10px] text-white/40">그림자 정수 생산</span>
+                            <span className="text-xs font-semibold text-cyan-400">+{accEssence}</span>
+                            <span className="block text-[9px] text-white/30">+{totalEssencePerMin.toFixed(2)}/분</span>
+                          </div>
+                          <div className="bg-ink-950/45 p-2 rounded text-center">
+                            <span className="block text-[10px] text-white/40">그림자 경험치 생산</span>
+                            <span className="text-xs font-semibold text-purple-400">+{accXp}</span>
+                            <span className="block text-[9px] text-white/30">+{totalXpPerMin.toFixed(1)}/분</span>
+                          </div>
+                        </>
+                      )
+                    })()}
+                  </div>
+                </div>
+
+                {/* 2. Deployed Slots */}
+                <div>
+                  <h4 className="text-xs font-bold text-white/60 mb-2">배치된 소탕 그림자 ({(shadowAutoSweepState?.assignedShadowIds ?? []).length}/6)</h4>
+                  <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                    {Array.from({ length: 6 }).map((_, slotIdx) => {
+                      const assignedIds = shadowAutoSweepState?.assignedShadowIds ?? []
+                      const instanceId = assignedIds[slotIdx]
+                      const shadow = instanceId ? ownedShadows.find(sh => sh.instanceId === instanceId) : null
+
+                      if (shadow) {
+                        return (
+                          <div
+                            key={slotIdx}
+                            onClick={() => setSelectedShadowId(shadow.instanceId)}
+                            className={clsx(
+                              "panel corner-bracket p-3 flex flex-col justify-between min-h-[140px] cursor-pointer transition-all border hover:border-violet-400/50",
+                              selectedShadowId === shadow.instanceId ? "border-violet-500 bg-violet-500/10 shadow-[0_0_15px_rgba(139,92,246,0.15)]" : "border-violet-500/30 bg-ink-950/60"
+                            )}
+                          >
+                            <div className="br" />
+                            <div className="flex gap-3">
+                              <div className="w-12 h-12 shrink-0 border border-violet-500/35 rounded overflow-hidden">
+                                <ShadowPortrait shadow={shadow} size="sm" active highlighted />
+                              </div>
+                              <div className="min-w-0 flex-1">
+                                <div className="text-[10px] system-text text-violet-400">{SHADOW_RARITY_LABEL[shadow.rarity]}</div>
+                                <h5 className="text-xs font-bold text-white truncate">{shadow.name}</h5>
+                                <div className="mt-1 text-[9px] text-white/40 space-y-0.5">
+                                  <div>Lv.{shadow.level ?? 1} · {SHADOW_ROLE_LABEL[shadow.role]}</div>
+                                  <div className="text-purple-300 font-semibold">🧪 변이 {shadow.mutation?.mutationStage ?? 0}/{MAX_SHADOW_MUTATION_STAGE}단계</div>
+                                </div>
+                              </div>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                removeShadowFromAutoSweep(shadow.instanceId)
+                              }}
+                              className="mt-3 w-full rounded bg-red-950/45 hover:bg-red-900/30 border border-red-500/20 text-red-200 py-1 text-[10px] font-bold transition-all"
+                            >
+                              소탕 배치 해제
+                            </button>
+                          </div>
+                        )
+                      }
+
+                      return (
+                        <div key={slotIdx} className="panel corner-bracket border-white/5 bg-ink-900/10 p-3 flex flex-col items-center justify-center min-h-[140px] border-dashed border-2">
+                          <div className="br" />
+                          <span className="text-xs text-white/30 font-semibold mb-1">소탕 대기 슬롯</span>
+                          <span className="text-[10px] text-white/20 text-center">아래 대기실에서 그림자를 배치하세요</span>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+
+                {/* 3. Waitlist */}
+                <div>
+                  <h4 className="text-xs font-bold text-white/60 mb-2">소탕 대기 그림자</h4>
+                  {(() => {
+                    const assignedIds = shadowAutoSweepState?.assignedShadowIds ?? []
+                    const waitlist = ownedShadows.filter(s => !assignedIds.includes(s.instanceId))
+
+                    if (waitlist.length === 0) {
+                      return (
+                        <div className="panel corner-bracket p-10 text-center text-xs text-white/45 bg-ink-950/45 border-white/5">
+                          <div className="br" />
+                          대기 중인 그림자가 없습니다.
+                        </div>
+                      )
+                    }
+
+                    return (
+                      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                        {waitlist.map(shadow => (
+                          <div
+                            key={shadow.instanceId}
+                            onClick={() => setSelectedShadowId(shadow.instanceId)}
+                            className={clsx(
+                              "panel corner-bracket p-2.5 flex items-center justify-between gap-3 cursor-pointer transition-all border hover:border-violet-500/50",
+                              selectedShadowId === shadow.instanceId ? "border-violet-500/60 bg-violet-500/5" : "border-white/10 bg-ink-950/40"
+                            )}
+                          >
+                            <div className="br" />
+                            <div className="flex items-center gap-2.5 min-w-0">
+                              <div className="w-10 h-10 border border-white/10 rounded overflow-hidden shrink-0">
+                                <ShadowPortrait shadow={shadow} size="sm" active />
+                              </div>
+                              <div className="min-w-0">
+                                <h5 className="text-xs font-bold text-white/90 truncate">{shadow.name}</h5>
+                                <div className="text-[9px] text-white/45">
+                                  Lv.{shadow.level ?? 1} · {SHADOW_RARITY_LABEL[shadow.rarity]}
+                                </div>
+                              </div>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                assignShadowToAutoSweep(shadow.instanceId)
+                              }}
+                              disabled={assignedIds.length >= 6}
+                              className={clsx(
+                                "rounded px-2.5 py-1 text-[10px] font-bold border shrink-0 transition-all",
+                                assignedIds.length < 6
+                                  ? "border-violet-500/50 bg-violet-500/10 text-violet-200 hover:bg-violet-500/25"
+                                  : "border-white/5 bg-ink-900/35 text-white/20 cursor-not-allowed"
+                              )}
+                            >
+                              소탕 배치
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )
+                  })()}
+                </div>
               </div>
             )}
           </div>

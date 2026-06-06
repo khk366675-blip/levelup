@@ -43,6 +43,7 @@ import type {
   StatKey,
   SystemMessage,
   ShadowExtractResult,
+  ShadowAutoSweepState,
   ShadowExpedition,
   ShadowExpeditionCommand,
   ShadowExpeditionOutcome,
@@ -245,6 +246,7 @@ import {
   getValidEquippedShadowIds,
   generateMutation,
   MAX_SHADOW_MUTATION_STAGE,
+  SHADOW_RARITY_ORDER,
 } from './shadows'
 import {
   createInitialTowerState,
@@ -477,6 +479,11 @@ export interface GameState {
   /** 12-40F: 현실 행동 기반 게임 준비도 상태 */
   dailyProgression?: DailyProgressionState
   focusSession?: FocusSessionState
+  shadowAutoSweepState?: ShadowAutoSweepState
+  assignShadowToAutoSweep: (shadowInstanceId: string) => void
+  removeShadowFromAutoSweep: (shadowInstanceId: string) => void
+  claimAutoSweepRewards: () => { gold: number; shadowEssence: number; xp: number; items: { name: string; icon: string; quantity: number }[]; elapsedMinutes: number; mutatedNames: string[] } | null
+
   initialized: boolean
 
   // hunter
@@ -4218,6 +4225,10 @@ const createHardcoreDeathResetState = (
     aiCoachMemory: s.aiCoachMemory,
     dailyProgression: s.dailyProgression,
     focusSession: s.focusSession,
+    shadowAutoSweepState: {
+      lastClaimTime: new Date().toISOString(),
+      assignedShadowIds: [],
+    },
     hunterGrade: createInitialHunterGradeState({
       hunter: initialHunter,
       focusSession: s.focusSession,
@@ -4350,6 +4361,10 @@ export const useGame = create<GameState>()(
       secretProgress: undefined,
       focusSession: { history: [], totalFocusedMs: 0 },
       hunterGrade: undefined,
+      shadowAutoSweepState: {
+        lastClaimTime: new Date().toISOString(),
+        assignedShadowIds: [],
+      },
       initialized: false,
 
       setHunterName: (name) => set((s) => ({ hunter: { ...s.hunter, name } })),
@@ -10662,6 +10677,300 @@ export const useGame = create<GameState>()(
         }
       }),
 
+      assignShadowToAutoSweep: (shadowInstanceId) => {
+        // 1. Silent claim of any pending rewards
+        get().claimAutoSweepRewards()
+
+        // 2. Add shadow and reset timer to now
+        set((s) => {
+          const assigned = s.shadowAutoSweepState?.assignedShadowIds ?? []
+          if (assigned.includes(shadowInstanceId)) return {}
+          if (assigned.length >= 6) return {}
+          const exists = (s.ownedShadows ?? []).some(sh => sh.instanceId === shadowInstanceId)
+          if (!exists) return {}
+
+          return {
+            shadowAutoSweepState: {
+              lastClaimTime: new Date().toISOString(),
+              assignedShadowIds: [...assigned, shadowInstanceId]
+            }
+          }
+        })
+      },
+
+      removeShadowFromAutoSweep: (shadowInstanceId) => {
+        // 1. Silent claim of any pending rewards
+        get().claimAutoSweepRewards()
+
+        // 2. Remove shadow and reset timer to now
+        set((s) => {
+          const assigned = s.shadowAutoSweepState?.assignedShadowIds ?? []
+          if (!assigned.includes(shadowInstanceId)) return {}
+
+          return {
+            shadowAutoSweepState: {
+              lastClaimTime: new Date().toISOString(),
+              assignedShadowIds: assigned.filter(id => id !== shadowInstanceId)
+            }
+          }
+        })
+      },
+
+      claimAutoSweepRewards: () => {
+        let resultPayload: { gold: number; shadowEssence: number; xp: number; items: { name: string; icon: string; quantity: number }[]; elapsedMinutes: number; mutatedNames: string[] } | null = null
+
+        set((s) => {
+          const now = new Date()
+          const lastClaim = new Date(s.shadowAutoSweepState?.lastClaimTime ?? now.toISOString())
+          const elapsedMs = now.getTime() - lastClaim.getTime()
+          const elapsedMinutes = Math.floor(elapsedMs / 60000)
+
+          const assignedIds = s.shadowAutoSweepState?.assignedShadowIds ?? []
+          if (assignedIds.length === 0) {
+            resultPayload = null
+            return {
+              shadowAutoSweepState: {
+                lastClaimTime: now.toISOString(),
+                assignedShadowIds: []
+              }
+            }
+          }
+
+          if (elapsedMinutes <= 0) {
+            resultPayload = null
+            return {}
+          }
+
+          const cappedMinutes = Math.min(elapsedMinutes, 1440) // 최대 24시간 누적
+
+          let totalGold = 0
+          let totalEssence = 0
+          let totalXp = 0
+          const addedItemsList: { name: string; icon: string; quantity: number }[] = []
+
+          let nextOwnedShadows = [...(s.ownedShadows ?? [])]
+          let nextRunes = [...(s.runes ?? [])]
+          let nextItems = [...(s.items ?? [])]
+          let nextTickets = [...(s.shadowSummonTickets ?? [])]
+          let nextShards = { ...(s.shadowSummonShards ?? {}) }
+
+          let addedNormalMat = 0
+          let addedAdvancedMat = 0
+          let addedSupremeMat = 0
+
+          const mutatedNames: string[] = []
+          const logLines: string[] = []
+
+          for (const instanceId of assignedIds) {
+            const shadowIdx = nextOwnedShadows.findIndex(sh => sh.instanceId === instanceId)
+            if (shadowIdx === -1) continue
+
+            const shadow = nextOwnedShadows[shadowIdx]
+            const level = shadow.level ?? 1
+            const rarityIndex = SHADOW_RARITY_ORDER.indexOf(shadow.rarity)
+            const safeRarityIndex = rarityIndex === -1 ? 0 : rarityIndex
+
+            // Base rewards per minute per shadow
+            const baseGold = 5 + level * 0.5 + (safeRarityIndex + 1) * 2
+            const baseEssence = 0.5 + level * 0.05 + (safeRarityIndex + 1) * 0.2
+            const baseXp = 2 + level * 0.1
+
+            const shadowGold = Math.floor(baseGold * cappedMinutes)
+            const shadowEssence = Math.floor(baseEssence * cappedMinutes)
+            const shadowXp = Math.floor(baseXp * cappedMinutes)
+
+            totalGold += shadowGold
+            totalEssence += shadowEssence
+            totalXp += shadowXp
+
+            // Update shadow XP
+            let updatedShadow = shadow
+            if (shadowXp > 0) {
+              const xpRes = addShadowXp(updatedShadow, shadowXp)
+              updatedShadow = xpRes.shadow
+              if (xpRes.leveledUp) {
+                logLines.push(`[${shadow.name}] 레벨 업! Lv.${xpRes.newLevel}`)
+              }
+            }
+
+            // Roll rewards per minute
+            let rolledNormalMat = 0
+            let rolledAdvancedMat = 0
+            let rolledSupremeMat = 0
+            let rolledTicketsCount = 0
+            let rolledShardsCount = 0
+            let rolledRunesCount = 0
+            let rolledEquipsCount = 0
+
+            for (let m = 0; m < cappedMinutes; m++) {
+              // Roll Mutation Materials
+              const rMat = Math.random()
+              if (rMat < 0.0005) {
+                rolledSupremeMat++
+              } else if (rMat < 0.0025) { // 0.2% 고급
+                rolledAdvancedMat++
+              } else if (rMat < 0.0075) { // 0.5% 일반
+                rolledNormalMat++
+              }
+
+              // Roll Summon Ticket
+              if (Math.random() < 0.001) {
+                rolledTicketsCount++
+              }
+
+              // Roll Shards
+              if (Math.random() < 0.001) {
+                rolledShardsCount++
+              }
+
+              // Roll Rune
+              if (Math.random() < 0.0005) {
+                rolledRunesCount++
+              }
+
+              // Roll Equipment
+              if (Math.random() < 0.0005) {
+                rolledEquipsCount++
+              }
+            }
+
+            // Process rolled Supreme materials for this shadow
+            for (let i = 0; i < rolledSupremeMat; i++) {
+              const isCompatible = true // 최고급은 모든 등급 그림자 호환
+              const currentStage = updatedShadow.mutation?.mutationStage ?? 0
+              if (isCompatible && currentStage < MAX_SHADOW_MUTATION_STAGE) {
+                updatedShadow = generateMutation(updatedShadow, 'supreme')
+                mutatedNames.push(updatedShadow.name)
+                logLines.push(`[${shadow.name}]이(가) 최고급 변이 재료를 획득하여 스스로 변이했습니다! (${updatedShadow.mutation?.mutationStage}단계)`)
+              } else {
+                addedSupremeMat++
+              }
+            }
+
+            // Process rolled Advanced materials for this shadow
+            for (let i = 0; i < rolledAdvancedMat; i++) {
+              const isCompatible = shadow.rarity !== 'legendary' // 전설은 최고급만 가능하므로 고급 호환 불가
+              const currentStage = updatedShadow.mutation?.mutationStage ?? 0
+              if (isCompatible && currentStage < MAX_SHADOW_MUTATION_STAGE) {
+                updatedShadow = generateMutation(updatedShadow, 'advanced')
+                mutatedNames.push(updatedShadow.name)
+                logLines.push(`[${shadow.name}]이(가) 고급 변이 재료를 획득하여 스스로 변이했습니다! (${updatedShadow.mutation?.mutationStage}단계)`)
+              } else {
+                addedAdvancedMat++
+              }
+            }
+
+            // Process rolled Normal materials for this shadow
+            for (let i = 0; i < rolledNormalMat; i++) {
+              const isCompatible = shadow.rarity === 'common' || shadow.rarity === 'uncommon' // 일반/비범함 그림자만 일반 재료 가능
+              const currentStage = updatedShadow.mutation?.mutationStage ?? 0
+              if (isCompatible && currentStage < MAX_SHADOW_MUTATION_STAGE) {
+                updatedShadow = generateMutation(updatedShadow, 'normal')
+                mutatedNames.push(updatedShadow.name)
+                logLines.push(`[${shadow.name}]이(가) 일반 변이 재료를 획득하여 스스로 변이했습니다! (${updatedShadow.mutation?.mutationStage}단계)`)
+              } else {
+                addedNormalMat++
+              }
+            }
+
+            // Process rolled Summon tickets for this shadow
+            for (let i = 0; i < rolledTicketsCount; i++) {
+              const ticket = createShadowSummonTicket({ ticketType: 'normal_shadow', source: 'reward_box' })
+              nextTickets.push(ticket)
+              const idx = addedItemsList.findIndex(x => x.name === ticket.label)
+              if (idx !== -1) addedItemsList[idx].quantity++
+              else addedItemsList.push({ name: ticket.label, icon: '🎫', quantity: 1 })
+            }
+
+            // Process rolled Shards for this shadow
+            if (rolledShardsCount > 0) {
+              nextShards = addShadowSummonShards(nextShards, { normal: rolledShardsCount })
+              const idx = addedItemsList.findIndex(x => x.name === '그림자 조각')
+              if (idx !== -1) addedItemsList[idx].quantity += rolledShardsCount
+              else addedItemsList.push({ name: '그림자 조각', icon: '🧩', quantity: rolledShardsCount })
+            }
+
+            // Process rolled Runes for this shadow
+            for (let i = 0; i < rolledRunesCount; i++) {
+              const boxGrade = Math.random() < 0.05 ? 'supreme' : (Math.random() < 0.20 ? 'advanced' : 'normal')
+              const rolledRune = generateRandomRune(boxGrade)
+              nextRunes.push(rolledRune)
+              const idx = addedItemsList.findIndex(x => x.name === rolledRune.name)
+              if (idx !== -1) addedItemsList[idx].quantity++
+              else addedItemsList.push({ name: rolledRune.name, icon: rolledRune.icon, quantity: 1 })
+            }
+
+            // Process rolled Equipment for this shadow
+            for (let i = 0; i < rolledEquipsCount; i++) {
+              const equippedItems = getEquippedItems(s.items, s.equipment)
+              const rolledEquip = randomItem(s.hunter, equippedItems, 0, 0, 'random')
+              nextItems.push(rolledEquip)
+              const idx = addedItemsList.findIndex(x => x.name === rolledEquip.name)
+              if (idx !== -1) addedItemsList[idx].quantity++
+              else addedItemsList.push({ name: rolledEquip.name, icon: rolledEquip.icon, quantity: 1 })
+            }
+
+            // Save updated shadow back
+            nextOwnedShadows[shadowIdx] = updatedShadow
+          }
+
+          // Append mutation materials added to inventory to addedItemsList
+          if (addedNormalMat > 0) {
+            addedItemsList.push({ name: '일반 변이 재료', icon: '🧪', quantity: addedNormalMat })
+          }
+          if (addedAdvancedMat > 0) {
+            addedItemsList.push({ name: '고급 변이 재료', icon: '🧪', quantity: addedAdvancedMat })
+          }
+          if (addedSupremeMat > 0) {
+            addedItemsList.push({ name: '최고급 변이 재료', icon: '🧪', quantity: addedSupremeMat })
+          }
+
+          resultPayload = {
+            gold: totalGold,
+            shadowEssence: totalEssence,
+            xp: totalXp,
+            items: addedItemsList,
+            elapsedMinutes,
+            mutatedNames,
+          }
+
+          return {
+            gold: (s.gold ?? 0) + totalGold,
+            shadowEssence: (s.shadowEssence ?? 0) + totalEssence,
+            ownedShadows: nextOwnedShadows,
+            runes: nextRunes,
+            items: nextItems,
+            shadowSummonTickets: nextTickets,
+            shadowSummonShards: nextShards,
+            mutationMaterialNormal: (s.mutationMaterialNormal ?? 0) + addedNormalMat,
+            mutationMaterialAdvanced: (s.mutationMaterialAdvanced ?? 0) + addedAdvancedMat,
+            mutationMaterialSupreme: (s.mutationMaterialSupreme ?? 0) + addedSupremeMat,
+            shadowAutoSweepState: {
+              lastClaimTime: now.toISOString(),
+              assignedShadowIds: s.shadowAutoSweepState?.assignedShadowIds ?? [],
+            },
+            messages: [
+              ...s.messages,
+              {
+                id: uid(),
+                kind: 'shadow' as const,
+                title: '그림자 자동 소탕 보상 수령',
+                lines: [
+                  `소탕 시간: ${elapsedMinutes}분 경과 (최대 1440분 누적)`,
+                  `골드 +${totalGold}`,
+                  `그림자 정수 +${totalEssence}`,
+                  ...logLines,
+                  ...addedItemsList.map(item => `${item.name} +${item.quantity}개`),
+                ],
+                createdAt: todayISO(),
+              }
+            ]
+          }
+        })
+
+        return resultPayload
+      },
+
       trainShadowWithEssence: (shadowInstanceId, optionId) => set((s) => {
         const ownedShadows = s.ownedShadows ?? []
         const shadow = ownedShadows.find(sh => sh.instanceId === shadowInstanceId)
@@ -14814,6 +15123,10 @@ export const useGame = create<GameState>()(
           shopPurchases: {},
           skillStates: {},
           secretProgress: resetSecretProgressOnLoop(s.secretProgress),
+          shadowAutoSweepState: {
+            lastClaimTime: new Date().toISOString(),
+            assignedShadowIds: [],
+          },
           aiCoachCoreContext: preservedAiCoachCoreContext,
           aiCoachMemory: preservedAiCoachMemory,
           dailyProgression: preservedDailyProgression,
@@ -15650,7 +15963,7 @@ export const useGame = create<GameState>()(
     }),
     {
       name: 'levelup-save',
-      version: 31,
+      version: 32,
       partialize: (state) => ({
         ...state,
         manualBattleSession: undefined,
@@ -15669,6 +15982,16 @@ export const useGame = create<GameState>()(
         }, 0)
       },
       migrate: (persistedState: any, version: number) => {
+        if (version < 32) {
+          if (persistedState) {
+            if (!persistedState.shadowAutoSweepState) {
+              persistedState.shadowAutoSweepState = {
+                lastClaimTime: new Date().toISOString(),
+                assignedShadowIds: []
+              };
+            }
+          }
+        }
         if (version < 24) {
           if (persistedState) {
             persistedState.activeWorldBattle = undefined;

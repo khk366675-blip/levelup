@@ -741,6 +741,11 @@ export interface OwnedShadow {
   runeSlots?: (RuneItem | null)[]
 }
 
+export interface ShadowAutoSweepState {
+  lastClaimTime: string
+  assignedShadowIds: string[]
+}
+
 export interface ShadowMutationState {
   visualOverrides?: {
     accentColor?: string
