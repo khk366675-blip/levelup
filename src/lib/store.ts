@@ -10771,8 +10771,8 @@ export const useGame = create<GameState>()(
             const safeRarityIndex = rarityIndex === -1 ? 0 : rarityIndex
 
             // Base rewards per minute per shadow
-            const baseGold = (safeRarityIndex + 1) + level * 0.1
-            const baseEssence = (safeRarityIndex + 1) * 0.1 + level * 0.01
+            const baseGold = (safeRarityIndex + 1) * 0.2 + level * 0.02
+            const baseEssence = (safeRarityIndex + 1) * 0.05 + level * 0.005
             const baseXp = 0.2 + level * 0.01
 
             const shadowGold = Math.floor(baseGold * cappedMinutes)
@@ -10805,31 +10805,31 @@ export const useGame = create<GameState>()(
             for (let m = 0; m < cappedMinutes; m++) {
               // Roll Mutation Materials
               const rMat = Math.random()
-              if (rMat < 0.0005) {
+              if (rMat < 0.000125) { // 최고급 0.0125%
                 rolledSupremeMat++
-              } else if (rMat < 0.0025) { // 0.2% 고급
+              } else if (rMat < 0.000525) { // 고급 0.04%
                 rolledAdvancedMat++
-              } else if (rMat < 0.0075) { // 0.5% 일반
+              } else if (rMat < 0.001025) { // 일반 0.05%
                 rolledNormalMat++
               }
 
               // Roll Summon Ticket
-              if (Math.random() < 0.001) {
+              if (Math.random() < 0.00025) { // 소환권 0.025%
                 rolledTicketsCount++
               }
 
               // Roll Shards
-              if (Math.random() < 0.001) {
+              if (Math.random() < 0.00025) { // 조각 0.025%
                 rolledShardsCount++
               }
 
               // Roll Rune
-              if (Math.random() < 0.0005) {
+              if (Math.random() < 0.00025) { // 룬 0.025%
                 rolledRunesCount++
               }
 
               // Roll Equipment
-              if (Math.random() < 0.0005) {
+              if (Math.random() < 0.00025) { // 장비 0.025%
                 rolledEquipsCount++
               }
             }
