@@ -37,6 +37,7 @@ import {
   SHADOW_SKILL_DEFINITIONS,
   SHADOW_LEGION_NODES,
   getShadowMaxTraitSlots,
+  MAX_SHADOW_MUTATION_STAGE,
 } from '../lib/shadows'
 import {
   SHADOW_STAT_GROUPS,
@@ -2387,19 +2388,20 @@ export function ShadowPanel() {
                     const materialAdvanced = mutationMaterialAdvanced
                     const materialSupreme = mutationMaterialSupreme
 
+                    const isMaxMutation = (selectedShadow.mutation?.mutationStage ?? 0) >= MAX_SHADOW_MUTATION_STAGE
                     const selectedCount = 
                       selectedMutationGrade === 'normal' ? materialNormal :
                       selectedMutationGrade === 'advanced' ? materialAdvanced :
                       materialSupreme
 
-                    const canMutate = selectedCount >= 1
+                    const canMutate = selectedCount >= 1 && !isMaxMutation
 
                     return (
                       <div className="rounded-lg border border-purple-400/35 bg-purple-950/20 p-3 text-xs flex flex-col justify-between">
                         <div>
                           <div className="flex items-center justify-between mb-1.5">
                             <span className="font-bold text-white/95">그림자 변이 연구소</span>
-                            <span className="text-[10px] text-cyan-300">누적: {selectedShadow.mutation?.mutationStage ?? 0}회</span>
+                            <span className="text-[10px] text-cyan-300">누적: {selectedShadow.mutation?.mutationStage ?? 0}/{MAX_SHADOW_MUTATION_STAGE}회</span>
                           </div>
                           <p className="text-[10px] text-white/55 leading-relaxed mb-3">
                             변이 촉매를 주입하여 그림자의 외형, 능력치, 특성을 영구 변조시킵니다. 평균 스탯은 상승하며 하한선이 보장됩니다.
@@ -2462,7 +2464,7 @@ export function ShadowPanel() {
                             onClick={() => handleMutate(selectedShadow.instanceId, selectedMutationGrade)}
                             className="btn btn-secondary py-1 px-3 text-[10px] disabled:opacity-40 disabled:cursor-not-allowed"
                           >
-                            변이 주입
+                            {isMaxMutation ? '최대 변이 완료' : '변이 주입'}
                           </button>
                         </div>
                       </div>

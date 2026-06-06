@@ -244,6 +244,7 @@ import {
   SHADOW_TRAITS,
   getValidEquippedShadowIds,
   generateMutation,
+  MAX_SHADOW_MUTATION_STAGE,
 } from './shadows'
 import {
   createInitialTowerState,
@@ -10607,6 +10608,10 @@ export const useGame = create<GameState>()(
         const ownedShadows = s.ownedShadows ?? []
         const shadow = ownedShadows.find(sh => sh.instanceId === shadowInstanceId)
         if (!shadow) return {}
+
+        if ((shadow.mutation?.mutationStage ?? 0) >= MAX_SHADOW_MUTATION_STAGE) {
+          return {}
+        }
 
         let mNormal = s.mutationMaterialNormal ?? 0
         let mAdvanced = s.mutationMaterialAdvanced ?? 0

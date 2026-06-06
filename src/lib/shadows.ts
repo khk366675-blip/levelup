@@ -829,6 +829,8 @@ export const ACHIEVEMENT_SHADOWS_BY_QUEST_ID: Record<string, string[]> = SHADOW_
   }, {} as Record<string, string[]>)
 
 export const MAX_SHADOW_ENHANCEMENT_LEVEL = 5
+export const MAX_SHADOW_MUTATION_STAGE = 5
+
 
 export const SHADOW_DECOMPOSE_ESSENCE: Record<ShadowRarity, number> = {
   common: 60,
