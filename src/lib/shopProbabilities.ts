@@ -168,8 +168,8 @@ const fixedSection = (product: ShopProduct): ProbabilitySection => ({
 })
 
 const SHADOW_STONE_BOX_WEIGHTS = {
-  common: { common: 60, uncommon: 25, rare: 10, epic: 4.5, legendary: 0.5 },
-  advanced: { common: 15, uncommon: 30, rare: 35, epic: 16, legendary: 4 },
+  common: { common: 50, uncommon: 25, rare: 10, epic: 7.5, legendary: 7.5 },
+  advanced: { common: 20, uncommon: 20, rare: 20, epic: 20, legendary: 20 },
 }
 
 const getShadowStoneBoxSections = (boxType: 'common' | 'advanced'): ProbabilitySection[] => {

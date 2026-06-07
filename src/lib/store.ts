@@ -3492,8 +3492,8 @@ const getBoxGoldReward = (box: RewardBox, tierMultiplier: number): number => {
 
 const rollEnhancementStoneFromBox = (boxType: 'common' | 'advanced', rng: () => number = Math.random): ShadowRarity => {
   const weights: Record<ShadowRarity, number> = boxType === 'common'
-    ? { common: 60, uncommon: 25, rare: 10, epic: 4.5, legendary: 0.5 }
-    : { common: 15, uncommon: 30, rare: 35, epic: 16, legendary: 4 }
+    ? { common: 50, uncommon: 25, rare: 10, epic: 7.5, legendary: 7.5 }
+    : { common: 20, uncommon: 20, rare: 20, epic: 20, legendary: 20 }
   
   const total = Object.values(weights).reduce((sum, w) => sum + w, 0)
   let roll = rng() * total
