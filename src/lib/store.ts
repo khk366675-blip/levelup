@@ -7275,10 +7275,16 @@ export const useGame = create<GameState>()(
         const shadow = (s.ownedShadows ?? []).find(sh => sh.instanceId === shadowId)
         if (!shadow) return
         const refund = Math.max(10, Math.floor((shadow.restoreCost ?? shadowRestoreCost(shadow)) * 0.25))
+        const originalAssigned = s.shadowAutoSweepState?.assignedShadowIds ?? []
+        const nextAssigned = originalAssigned.filter(id => id !== shadowId)
         set({
           shadowEssence: (s.shadowEssence ?? 0) + refund,
           ownedShadows: (s.ownedShadows ?? []).filter(sh => sh.instanceId !== shadowId),
           equippedShadowIds: (s.equippedShadowIds ?? []).filter(id => id !== shadowId),
+          shadowAutoSweepState: s.shadowAutoSweepState ? {
+            ...s.shadowAutoSweepState,
+            assignedShadowIds: nextAssigned
+          } : undefined,
           messages: [...s.messages, {
             id: uid(),
             kind: 'info',
@@ -10652,8 +10658,14 @@ export const useGame = create<GameState>()(
             ? { ...shadow, enhancementLevel: nextLevel, absorbedCount: (shadow.absorbedCount ?? 0) + 1 }
             : shadow
         )
+        const originalAssigned = s.shadowAutoSweepState?.assignedShadowIds ?? []
+        const nextAssigned = originalAssigned.filter(id => id !== material.instanceId)
         return {
           ownedShadows: nextOwned,
+          shadowAutoSweepState: s.shadowAutoSweepState ? {
+            ...s.shadowAutoSweepState,
+            assignedShadowIds: nextAssigned
+          } : undefined,
           messages: [...s.messages, {
             id: uid(),
             kind: 'shadow' as const,
@@ -10722,9 +10734,15 @@ export const useGame = create<GameState>()(
         if (!canDecomposeShadow(shadow, equippedShadowIds)) return {}
         const essence = SHADOW_DECOMPOSE_ESSENCE[shadow.rarity] ?? 1
         const nextOwned = ownedShadows.filter(s => s.instanceId !== shadowInstanceId)
+        const originalAssigned = s.shadowAutoSweepState?.assignedShadowIds ?? []
+        const nextAssigned = originalAssigned.filter(id => id !== shadowInstanceId)
         return {
           ownedShadows: nextOwned,
           shadowEssence: (s.shadowEssence ?? 0) + essence,
+          shadowAutoSweepState: s.shadowAutoSweepState ? {
+            ...s.shadowAutoSweepState,
+            assignedShadowIds: nextAssigned
+          } : undefined,
           messages: [...s.messages, {
             id: uid(),
             kind: 'shadow' as const,
@@ -10899,7 +10917,11 @@ export const useGame = create<GameState>()(
           const elapsedMs = now.getTime() - lastClaim.getTime()
           const elapsedMinutes = Math.floor(elapsedMs / 60000)
 
-          const assignedIds = s.shadowAutoSweepState?.assignedShadowIds ?? []
+          const originalAssigned = s.shadowAutoSweepState?.assignedShadowIds ?? []
+          const ownedSet = new Set((s.ownedShadows ?? []).map(sh => sh.instanceId))
+          const assignedIds = originalAssigned.filter(id => ownedSet.has(id))
+          const hasInvalid = originalAssigned.length !== assignedIds.length
+
           if (assignedIds.length === 0) {
             resultPayload = null
             return {
@@ -10912,6 +10934,14 @@ export const useGame = create<GameState>()(
 
           if (elapsedMinutes <= 0) {
             resultPayload = null
+            if (hasInvalid) {
+              return {
+                shadowAutoSweepState: {
+                  lastClaimTime: s.shadowAutoSweepState?.lastClaimTime ?? now.toISOString(),
+                  assignedShadowIds: assignedIds
+                }
+              }
+            }
             return {}
           }
 
@@ -11141,7 +11171,7 @@ export const useGame = create<GameState>()(
             mutationMaterialSupreme: (s.mutationMaterialSupreme ?? 0) + addedSupremeMat,
             shadowAutoSweepState: {
               lastClaimTime: now.toISOString(),
-              assignedShadowIds: s.shadowAutoSweepState?.assignedShadowIds ?? [],
+              assignedShadowIds: assignedIds,
             },
             messages: [
               ...s.messages,
