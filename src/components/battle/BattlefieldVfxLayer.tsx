@@ -501,7 +501,7 @@ export function BattlefieldVfxLayer({ vfxs }: Props) {
                     style={{ boxShadow: `0 0 20px ${themeColor}` }}
                   />
 
-                  {/* SVG Container: Dynamic Slash Arc and Spark Bursts */}
+                  {/* SVG Container: Dynamic Slash Arc */}
                   <svg width="220" height="220" viewBox="0 0 100 100" className="absolute inset-0 pointer-events-none overflow-visible">
                     {/* Glowing Slash Arc (Slice trajectory) */}
                     <motion.path
@@ -520,88 +520,6 @@ export function BattlefieldVfxLayer({ vfxs }: Props) {
                       animate={{ pathLength: [0, 1, 1], pathOffset: [0, 0, 1], opacity: [0, 1, 0] }}
                       transition={{ duration: 0.26, ease: "easeInOut" }}
                     />
-
-                    {/* Staggered Spark Eruption (18 Particles) */}
-                    {Array.from({ length: 18 }).map((_, i) => {
-                      const angle = (i * 20 + (i % 3) * 7) * (Math.PI / 180)
-                      const radius = 38 + (i % 4) * 9
-                      const x2 = 50 + Math.cos(angle) * radius
-                      const y2 = 50 + Math.sin(angle) * radius
-                      
-                      const isPolygon = i % 4 === 0
-                      const isLine = i % 4 === 1
-                      
-                      if (isPolygon) {
-                        // Diamond shard particle
-                        const pts = `50,50 52.5,47.5 50,45 47.5,47.5`
-                        const moveX = Math.cos(angle) * radius
-                        const moveY = Math.sin(angle) * radius
-                        return (
-                          <motion.polygon
-                            key={i}
-                            points={pts}
-                            fill={themeColor}
-                            filter="url(#vfx-glow-medium)"
-                            animate={{
-                              transform: [`translate(0px, 0px) rotate(0deg) scale(1.5)`, `translate(${moveX}px, ${moveY}px) rotate(${i * 80}deg) scale(0)`]
-                            }}
-                            transition={{
-                              duration: 0.35,
-                              ease: "easeOut",
-                              delay: (i % 4) * 0.015
-                            }}
-                          />
-                        )
-                      }
-                      
-                      if (isLine) {
-                        // Laser spark ray
-                        return (
-                          <motion.line
-                            key={i}
-                            x1="50" y1="50" x2="50" y2="50"
-                            stroke={themeColor}
-                            strokeWidth="2.5"
-                            strokeLinecap="round"
-                            filter="url(#vfx-glow-medium)"
-                            animate={{
-                              x1: [50, 50 + Math.cos(angle) * (radius - 10)],
-                              y1: [50, 50 + Math.sin(angle) * (radius - 10)],
-                              x2: [50, x2],
-                              y2: [50, y2],
-                              opacity: [1, 1, 0]
-                            }}
-                            transition={{
-                              duration: 0.3,
-                              ease: "easeOut",
-                              delay: (i % 4) * 0.01
-                            }}
-                          />
-                        )
-                      }
-
-                      return (
-                        <motion.circle
-                          key={i}
-                          cx="50"
-                          cy="50"
-                          r={(i % 3 === 0) ? 4.5 : 2.5}
-                          fill={themeColor}
-                          filter="url(#vfx-glow-medium)"
-                          animate={{
-                            cx: [50, x2],
-                            cy: [50, y2],
-                            opacity: [1, 1, 0],
-                            scale: [1.6, 0.7, 0]
-                          }}
-                          transition={{ 
-                            duration: 0.32, 
-                            ease: "easeOut",
-                            delay: (i % 4) * 0.012
-                          }}
-                        />
-                      )
-                    })}
                   </svg>
                 </div>
               )}
@@ -714,7 +632,10 @@ export function BattlefieldVfxLayer({ vfxs }: Props) {
                               fill="#fda4af"
                               filter="url(#vfx-glow-medium)"
                               animate={{
-                                transform: [`translate(0px, 0px) scale(1.6)`, `translate(${tx}px, ${ty}px) rotate(${i * 45}deg) scale(0)`]
+                                x: [0, tx],
+                                y: [0, ty],
+                                scale: [1.6, 0],
+                                rotate: [0, i * 45]
                               }}
                               transition={{ duration: 0.5, ease: "easeOut", delay: (i % 3) * 0.02 }}
                             />
@@ -897,7 +818,10 @@ export function BattlefieldVfxLayer({ vfxs }: Props) {
                             fill="#e0f7fa"
                             filter="url(#vfx-glow-medium)"
                             animate={{
-                              transform: [`translate(0px, 0px) scale(1.4)`, `translate(${tx}px, ${ty}px) rotate(${i * 90}deg) scale(0)`]
+                              x: [0, tx],
+                              y: [0, ty],
+                              scale: [1.4, 0],
+                              rotate: [0, i * 90]
                             }}
                             transition={{ duration: 0.38, ease: "easeOut", delay: (i % 3) * 0.02 }}
                           />
@@ -938,7 +862,10 @@ export function BattlefieldVfxLayer({ vfxs }: Props) {
                               fill={i % 2 === 0 ? "#ef4444" : "#f59e0b"}
                               filter="url(#vfx-glow-medium)"
                               animate={{
-                                transform: [`translate(0px, 0px) scale(1.6)`, `translate(${tx}px, ${ty}px) rotate(${i * 45}deg) scale(0)`]
+                                x: [0, tx],
+                                y: [0, ty],
+                                scale: [1.6, 0],
+                                rotate: [0, i * 45]
                               }}
                               transition={{ duration: 0.46, ease: "easeOut", delay: (i % 4) * 0.012 }}
                             />
@@ -996,8 +923,8 @@ export function BattlefieldVfxLayer({ vfxs }: Props) {
                               fill="#c084fc"
                               filter="url(#vfx-glow-medium)"
                               animate={{
-                                cx: [50, 50 + tx],
-                                cy: [50, 50 + ty],
+                                x: [0, tx],
+                                y: [0, ty],
                                 opacity: [1, 1, 0],
                                 scale: [1.6, 0.8, 0]
                               }}
@@ -1072,7 +999,10 @@ export function BattlefieldVfxLayer({ vfxs }: Props) {
                               fill="none" stroke="#fbbf24" strokeWidth="1.2"
                               filter="url(#vfx-glow-medium)"
                               animate={{
-                                transform: [`translate(0px,0px) rotate(0deg) scale(1)`, `translate(${dx}px,${dy}px) rotate(${i * 90}deg) scale(0)`]
+                                x: [0, dx],
+                                y: [0, dy],
+                                scale: [1, 0],
+                                rotate: [0, i * 90]
                               }}
                               transition={{ duration: 0.48, ease: "easeOut", delay: 0.05 }}
                             />
