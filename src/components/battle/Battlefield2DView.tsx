@@ -473,86 +473,120 @@ export function Battlefield2DView({
       <div className="relative flex-1 w-full h-full p-4">
         {/* SVG Action Ranged Projectile / Subtle Trail Animation */}
         {latestAction?.actorId && latestAction.targetIds && latestAction.targetIds.length > 0 && (
-          <svg className="absolute inset-0 w-full h-full pointer-events-none z-[110]">
-            {latestAction.targetIds.map(targetId => {
-              const start = actorCoords[latestAction.actorId!]
-              const end = actorCoords[targetId]
-              if (!start || !end) return null
-              
-              const kind = latestAction.kind || 'attack'
-              const actor = overriddenActors.find(a => a.id === latestAction.actorId)
-              
-              // Melee attacks do NOT render SVG lines or projectiles to prevent visual clutter
-              if (isMeleeAction(actor?.role, kind)) return null
-              
-              // Color palettes tailored for ranged energy projectiles
-              let projectileColor = '#f43f5e' // Crimson rose for general attack
-              if (kind === 'heal') projectileColor = '#10b981'
-              else if (kind === 'guard') projectileColor = '#f59e0b'
-              else if (kind === 'skill') projectileColor = '#22d3ee'
-              else if (kind === 'magic') projectileColor = '#6366f1'
-              else if (kind === 'shadow') projectileColor = '#a855f7'
-              else if (kind === 'curse') projectileColor = '#ef4444'
-              
-              return (
-                <g key={`proj-${latestAction.actorId}-${targetId}`}>
-                  {/* 1. Very faint, elegant trajectory guide line (Barely visible, like air turbulence) */}
-                  <motion.line
-                    x1={`${start.x}%`}
-                    y1={`${start.y}%`}
-                    x2={`${end.x}%`}
-                    y2={`${end.y}%`}
-                    stroke={projectileColor}
-                    strokeWidth="1.5"
-                    strokeDasharray="4 4"
+          <>
+            {/* Guide lines are safe inside SVG as long as they don't use motion on x1/y1 attributes */}
+            <svg className="absolute inset-0 w-full h-full pointer-events-none z-[110]">
+              {latestAction.targetIds.map(targetId => {
+                const start = actorCoords[latestAction.actorId!]
+                const end = actorCoords[targetId]
+                if (!start || !end) return null
+                const kind = latestAction.kind || 'attack'
+                const actor = overriddenActors.find(a => a.id === latestAction.actorId)
+                if (isMeleeAction(actor?.role, kind)) return null
+
+                let projectileColor = '#f43f5e'
+                if (kind === 'heal') projectileColor = '#10b981'
+                else if (kind === 'guard') projectileColor = '#f59e0b'
+                else if (kind === 'skill') projectileColor = '#22d3ee'
+                else if (kind === 'magic') projectileColor = '#6366f1'
+                else if (kind === 'shadow') projectileColor = '#a855f7'
+                else if (kind === 'curse') projectileColor = '#ef4444'
+
+                return (
+                  <motion.g
+                    key={`line-${latestAction.actorId}-${targetId}`}
                     initial={{ opacity: 0 }}
                     animate={{ opacity: [0, 0.12, 0] }}
                     transition={{ duration: 0.35 }}
-                  />
-                  
-                  {/* 2. Traveling magical glow orb (projectile) */}
-                  <motion.circle
-                    r={isCompact ? 5 : 7}
-                    fill={projectileColor}
-                    className="filter drop-shadow-[0_0_8px_rgba(255,255,255,0.8)]"
-                    cx={`${start.x}%`}
-                    cy={`${start.y}%`}
-                    animate={{
-                      cx: [`${start.x}%`, `${end.x}%`],
-                      cy: [`${start.y}%`, `${end.y}%`],
-                      scale: [0.8, 1.2, 0.7],
-                      opacity: [1, 1, 0]
-                    }}
-                    transition={{
-                      duration: 0.35,
-                      ease: "easeOut"
-                    }}
-                  />
- 
-                  {/* 3. Small secondary spark following slightly behind (creates a neat tail effect!) */}
-                  <motion.circle
-                    r={isCompact ? 3 : 4}
-                    fill={projectileColor}
-                    opacity={0.7}
-                    className="filter blur-[1px]"
-                    cx={`${start.x}%`}
-                    cy={`${start.y}%`}
-                    animate={{
-                      cx: [`${start.x}%`, `${end.x}%`],
-                      cy: [`${start.y}%`, `${end.y}%`],
-                      scale: [0.6, 0.9, 0],
-                      opacity: [0.8, 0.8, 0]
-                    }}
-                    transition={{
-                      duration: 0.35,
-                      delay: 0.05, // 0.05s lag creates trail visual
-                      ease: "easeOut"
-                    }}
-                  />
-                </g>
-              )
-            })}
-          </svg>
+                  >
+                    <line
+                      x1={`${start.x}%`}
+                      y1={`${start.y}%`}
+                      x2={`${end.x}%`}
+                      y2={`${end.y}%`}
+                      stroke={projectileColor}
+                      strokeWidth="1.5"
+                      strokeDasharray="4 4"
+                    />
+                  </motion.g>
+                )
+              })}
+            </svg>
+
+            {/* HTML Ranged Projectiles (100% crash-free and smooth) */}
+            <div className="absolute inset-0 w-full h-full pointer-events-none z-[111]">
+              {latestAction.targetIds.map(targetId => {
+                const start = actorCoords[latestAction.actorId!]
+                const end = actorCoords[targetId]
+                if (!start || !end) return null
+                const kind = latestAction.kind || 'attack'
+                const actor = overriddenActors.find(a => a.id === latestAction.actorId)
+                if (isMeleeAction(actor?.role, kind)) return null
+
+                let projectileColor = '#f43f5e'
+                if (kind === 'heal') projectileColor = '#10b981'
+                else if (kind === 'guard') projectileColor = '#f59e0b'
+                else if (kind === 'skill') projectileColor = '#22d3ee'
+                else if (kind === 'magic') projectileColor = '#6366f1'
+                else if (kind === 'shadow') projectileColor = '#a855f7'
+                else if (kind === 'curse') projectileColor = '#ef4444'
+
+                const size = isCompact ? 10 : 14
+                const tailSize = isCompact ? 6 : 8
+
+                return (
+                  <div key={`proj-orbs-${latestAction.actorId}-${targetId}`}>
+                    {/* Primary Traveling Glow Orb */}
+                    <motion.div
+                      className="absolute rounded-full pointer-events-none filter drop-shadow-[0_0_8px_rgba(255,255,255,0.8)]"
+                      style={{
+                        width: size,
+                        height: size,
+                        backgroundColor: projectileColor,
+                        left: 0,
+                        top: 0,
+                        transform: 'translate(-50%, -50%)',
+                      }}
+                      animate={{
+                        left: [`${start.x}%`, `${end.x}%`],
+                        top: [`${start.y}%`, `${end.y}%`],
+                        scale: [0.8, 1.2, 0.7],
+                        opacity: [1, 1, 0]
+                      }}
+                      transition={{
+                        duration: 0.35,
+                        ease: "easeOut"
+                      }}
+                    />
+
+                    {/* Secondary Tail Spark */}
+                    <motion.div
+                      className="absolute rounded-full pointer-events-none filter blur-[1px]"
+                      style={{
+                        width: tailSize,
+                        height: tailSize,
+                        backgroundColor: projectileColor,
+                        left: 0,
+                        top: 0,
+                        transform: 'translate(-50%, -50%)',
+                      }}
+                      animate={{
+                        left: [`${start.x}%`, `${end.x}%`],
+                        top: [`${start.y}%`, `${end.y}%`],
+                        scale: [0.6, 0.9, 0],
+                        opacity: [0.8, 0.8, 0]
+                      }}
+                      transition={{
+                        duration: 0.35,
+                        delay: 0.05,
+                        ease: "easeOut"
+                      }}
+                    />
+                  </div>
+                )
+              })}
+            </div>
+          </>
         )}
  
         {/* Actors positioned absolutely using coords */}
