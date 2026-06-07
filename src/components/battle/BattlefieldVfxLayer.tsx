@@ -142,6 +142,9 @@ const VFX_MAPPING: Record<string, string> = {
   'monster-ember-brand': 'fire-strike',
   'monster-storm-lunge': 'lightning-strike',
   'monster-void-blur': 'dark-aura',
+  
+  // 장비 스킬
+  'equip-shadow-slash': 'dark-slash',
 }
 
 function resolveVfxImage(vfx: BattlefieldVfx): { image: string; motionType: 'slash' | 'strike' | 'pierce' | 'burst' | 'aura' | 'heal'; element: string } {
