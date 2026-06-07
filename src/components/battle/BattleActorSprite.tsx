@@ -168,8 +168,8 @@ export function BattleActorSprite({
     reactTimes = [0, 0.45, 0.6, 0.75, 0.9, 1]
     reactDuration = 0.72
   } else if (hitReaction === 'guard-block') {
-    reactX = actor.team === 'ally' ? [0, -4, 0] : [0, 4, 0]
-    reactScale = [1, 0.97, 1]
+    reactX = actor.team === 'ally' ? [0, -8, 0] : [0, 8, 0]
+    reactScale = [1, 0.95, 1]
     reactTimes = [0, 0.15, 0.75, 1]
     reactDuration = 0.4
   } else if (hitReaction === 'fast-stagger') {
@@ -210,17 +210,17 @@ export function BattleActorSprite({
     activeDuration = 0.28
     reactDuration = 0.28
     
-    // Attenuate horizontal recoil/rotate by 70% (remain 30%)
-    activeX = activeX.map(v => v * 0.3)
-    activeY = activeY.map(v => v * 0.3)
-    activeRotate = activeRotate.map(v => v * 0.3)
-    activeScale = activeScale.map(v => 1 + (v - 1) * 0.3)
+    // Attenuate horizontal recoil/rotate by 45% (remain 55%) to improve impact punchiness
+    activeX = activeX.map(v => v * 0.55)
+    activeY = activeY.map(v => v * 0.55)
+    activeRotate = activeRotate.map(v => v * 0.55)
+    activeScale = activeScale.map(v => 1 + (v - 1) * 0.55)
     activeTimes = [0, 0.2, 0.8, 1]
 
-    reactX = reactX.map(v => v * 0.3)
-    reactY = reactY.map(v => v * 0.3)
-    reactRotate = reactRotate.map(v => v * 0.3)
-    reactScale = reactScale.map(v => 1 + (v - 1) * 0.3)
+    reactX = reactX.map(v => v * 0.55)
+    reactY = reactY.map(v => v * 0.55)
+    reactRotate = reactRotate.map(v => v * 0.55)
+    reactScale = reactScale.map(v => 1 + (v - 1) * 0.55)
     reactTimes = [0, 0.2, 0.4, 0.6, 0.8, 1]
   }
 

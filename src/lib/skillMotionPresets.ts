@@ -250,17 +250,28 @@ export function getSkillMotionPreset(
   kind?: string,
   actionId?: string
 ): SkillMotionPreset & { intensity: 'basic' | 'skill' | 'signature' } {
+  // Extract base action ID if it contains colons (e.g. hunter-main:basic -> basic)
+  let baseActionId = actionId ?? ''
+  if (baseActionId.includes(':')) {
+    const parts = baseActionId.split(':')
+    baseActionId = parts[parts.length - 1]
+  }
+
   // 0. Determine presentation intensity (Default to basic for normal attacks)
   let intensity: 'basic' | 'skill' | 'signature' = 'signature'
-  if (actionId === 'basic-attack') {
+  if (baseActionId === 'basic' || baseActionId === 'basic-attack') {
     intensity = 'basic'
-  } else if (actionId === 'basic-focus-slash') {
+  } else if (baseActionId === 'basic-focus-slash') {
     intensity = 'skill'
   } else if (kind === 'attack' && !actionId) {
     intensity = 'basic' // fallback for normal flat attacks
   }
 
   let basePreset: SkillMotionPreset
+
+  const r = role ? role.toLowerCase() : ''
+  const isShadow = ['assault', 'guard', 'scout', 'analyst', 'support', 'hunter'].includes(r) ||
+                   (actionId && actionId.toLowerCase().includes('shadow-'))
 
   // 1. Check Special Boss Actions
   if (isBoss) {
@@ -274,7 +285,7 @@ export function getSkillMotionPreset(
     basePreset = SKILL_MOTION_PRESETS['guardian']  // Blocking actions map defensively
   }
   // 3. Resolve Shadow-specific Skill/Passive presets if actionId matches shadow identifiers
-  else if (actionId && (actionId.includes(':skill:') || actionId.includes(':passive:'))) {
+  else if (isShadow && actionId && (actionId.includes(':skill:') || actionId.includes(':passive:'))) {
     const actId = actionId.toLowerCase()
     if (actId.includes('silence') || actId.includes('suppress')) {
       basePreset = SKILL_MOTION_PRESETS['shadow-silence']
@@ -287,12 +298,16 @@ export function getSkillMotionPreset(
     } else if (actId.includes('mend') || actId.includes('pulse') || actId.includes('heal') || actId.includes('aura')) {
       basePreset = SKILL_MOTION_PRESETS['shadow-mend']
     } else if (actId.includes('mark') || actId.includes('scan') || actId.includes('weak') || actId.includes('index') || actId.includes('debuff') || actId.includes('read')) {
-      basePreset = SKILL_MOTION_PRESETS['shadow-scan']
+      // Assault or hunter skills containing 'mark' (like assault-execution-mark) should trigger visual hit shakes
+      if (r === 'assault' || r === 'hunter') {
+        basePreset = SKILL_MOTION_PRESETS['shadow-rend']
+      } else {
+        basePreset = SKILL_MOTION_PRESETS['shadow-scan']
+      }
     } else if (actId.includes('rift') || actId.includes('void') || actId.includes('crack') || actId.includes('dimension')) {
       basePreset = SKILL_MOTION_PRESETS['shadow-void']
     } else {
       // Fallback based on shadow role if any
-      const r = role ? role.toLowerCase() : ''
       if (r === 'assault' || r === 'hunter') {
         basePreset = SKILL_MOTION_PRESETS['shadow-rend']
       } else if (r === 'guard') {
@@ -322,6 +337,23 @@ export function getSkillMotionPreset(
     else if (id.includes('rift') || id.includes('dimension')) {
       basePreset = SKILL_MOTION_PRESETS['hidden-rift']
     }
+    // Shadow Roles mapping to Hunter Equivalents (For basic attacks or fallback situations)
+    else if (id === 'assault') {
+      basePreset = SKILL_MOTION_PRESETS['swordsman']
+    }
+    else if (id === 'guard') {
+      basePreset = SKILL_MOTION_PRESETS['guardian']
+    }
+    else if (id === 'scout' || id === 'hunter') {
+      basePreset = SKILL_MOTION_PRESETS['tracker']
+    }
+    else if (id === 'support') {
+      basePreset = SKILL_MOTION_PRESETS['tactician']
+    }
+    else if (id === 'analyst') {
+      basePreset = SKILL_MOTION_PRESETS['tactician']
+    }
+    // Hunter Roles
     else if (
       id.includes('swordsman') ||
       id.includes('swordsmaster') ||
