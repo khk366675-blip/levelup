@@ -1171,6 +1171,24 @@ export function BattlefieldVfxLayer({ vfxs }: Props) {
                     transition={{ duration: 0.52 }}
                     className="absolute inset-0 bg-[radial-gradient(circle,rgba(168,85,247,0.42),transparent_75%)] rounded-full filter blur-md"
                   />
+                  
+                  {/* B안 테스트: 그림자 스킬 투명화 PNG 이미지 추가 */}
+                  {resolved.image && (
+                    <motion.img
+                      src={resolved.image}
+                      alt="shadow-vfx-image"
+                      initial={{ scale: 0.4, rotate: resolved.motionType === 'slash' ? -35 : 0, opacity: 0 }}
+                      animate={{
+                        scale: resolved.motionType === 'slash' ? [0.5, 1.5, 1.6, 1.65] : [0.4, 1.35, 1.45, 1.5],
+                        rotate: resolved.motionType === 'slash' ? [-35, 15, 25, 30] : [0, 30, 45, 50],
+                        opacity: [0, 1, 0.85, 0]
+                      }}
+                      transition={{ duration: 0.68, ease: 'easeOut', times: [0, 0.15, 0.75, 1] }}
+                      className="absolute w-64 h-64 object-contain pointer-events-none z-30"
+                      style={{ mixBlendMode: 'screen', filter: `brightness(1.5) contrast(1.2) drop-shadow(0 0 16px ${glowColor})` }}
+                    />
+                  )}
+
                   <svg width="200" height="200" viewBox="0 0 100 100" className="absolute pointer-events-none overflow-visible">
                     {[0, 120, 240].map((rot, i) => (
                       <motion.path
@@ -1195,6 +1213,24 @@ export function BattlefieldVfxLayer({ vfxs }: Props) {
                     transition={{ duration: 0.45 }}
                     className="absolute inset-0 bg-[radial-gradient(circle,rgba(239,68,68,0.48),transparent_70%)] rounded-full filter blur-md"
                   />
+
+                  {/* B안 테스트: 저주 스킬 투명화 PNG 이미지 추가 */}
+                  {resolved.image && (
+                    <motion.img
+                      src={resolved.image}
+                      alt="curse-vfx-image"
+                      initial={{ scale: 0.4, rotate: 0, opacity: 0 }}
+                      animate={{
+                        scale: [0.5, 1.4, 1.5, 1.55],
+                        rotate: [-15, 15, 25, 30],
+                        opacity: [0, 1, 0.8, 0]
+                      }}
+                      transition={{ duration: 0.68, ease: 'easeOut', times: [0, 0.15, 0.75, 1] }}
+                      className="absolute w-60 h-60 object-contain pointer-events-none z-30"
+                      style={{ mixBlendMode: 'screen', filter: `brightness(1.45) contrast(1.2) drop-shadow(0 0 16px ${glowColor})` }}
+                    />
+                  )}
+
                   <svg width="160" height="160" viewBox="0 0 100 100" className="absolute pointer-events-none overflow-visible">
                     <motion.g
                       animate={{ scale: [0.6, 1.2, 0], rotate: 45 }}

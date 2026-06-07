@@ -311,17 +311,16 @@ export function BattleDamagePopup({ popups }: Props) {
                     popStyle === 'sharp' ? '#67e8f9' : '#fcd34d'
                     
                   return (
-                    <motion.line
+                    <motion.path
                       key={idx}
-                      x1="50" y1="50" x2="50" y2="50"
                       stroke={spkColor}
                       strokeWidth="3"
                       strokeLinecap="round"
                       animate={{
-                        x1: [50, 50 + Math.cos(angle) * (rad - 10)],
-                        y1: [50, 50 + Math.sin(angle) * (rad - 10)],
-                        x2: [50, x2],
-                        y2: [50, y2],
+                        d: [
+                          `M 50 50 L 50 50`,
+                          `M ${50 + Math.cos(angle) * (rad - 10)} ${50 + Math.sin(angle) * (rad - 10)} L ${x2} ${y2}`
+                        ],
                         opacity: [1, 0]
                       }}
                       transition={{
