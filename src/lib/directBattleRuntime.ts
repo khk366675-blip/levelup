@@ -735,7 +735,7 @@ const addEvadeLog = (
     targetUnitIds: [target.unitId],
     actionId: action.actionId,
     timing: actionTiming(action),
-    message: `${target.displayName} 회피! ${actor.displayName}'s ${action.label} missed. MISS.`,
+    message: `${target.displayName} 회피! ${actor.displayName}의 ${action.label} 공격이 빗나갔습니다. (MISS)`,
     eventType: 'fizzle',
     value: 0,
     actionCue: action.actionCue,
@@ -787,7 +787,7 @@ const applyDamage = (
       targetUnitIds: [target.unitId],
       actionId: action.actionId,
       timing: 'reaction',
-      message: `${protector.displayName} protected ${target.displayName} and absorbed ${redirected}.`,
+      message: `${protector.displayName}이(가) ${target.displayName}을(를) 보호하고 대신 ${redirected}의 피해를 흡수했습니다.`,
       eventType: 'reaction',
       value: redirected,
       actionCue: 'protect',
@@ -813,7 +813,7 @@ const applyDamage = (
     targetUnitIds: [target.unitId],
     actionId: action.actionId,
     timing: actionTiming(action),
-    message: `${actor.displayName} used ${action.label} on ${target.displayName} for ${damage} damage.${outcome?.isCritical ? ' 치명타!' : ''}`,
+    message: `${actor.displayName}이(가) ${target.displayName}에게 ${action.label}을(를) 사용하여 ${damage}의 피해를 입혔습니다.${outcome?.isCritical ? ' (치명타!)' : ''}`,
     eventType: 'damage',
     value: damage,
     isCrit: outcome?.isCritical,
@@ -871,7 +871,7 @@ const applyHeal = (
     targetUnitIds: [target.unitId],
     actionId: action.actionId,
     timing: actionTiming(action),
-    message: `${actor.displayName} stabilized ${target.displayName} for ${target.stats.currentHp - before} HP.`,
+    message: `${actor.displayName}이(가) ${target.displayName}의 체력을 조율하여 ${target.stats.currentHp - before} HP를 회복시켰습니다.`,
     eventType: 'heal',
     value: target.stats.currentHp - before,
     actionCue: action.actionCue,
@@ -1008,7 +1008,7 @@ const applyAllySupport = (
     targetUnitIds: [target.unitId],
     actionId: action.actionId,
     timing: actionTiming(action),
-    message: `${actor.displayName} reinforced ${target.displayName} with ${action.label}.`,
+    message: `${actor.displayName}이(가) ${action.label}을(를) 활성화하여 ${target.displayName}을(를) 강화했습니다.`,
     eventType: 'status',
     value: round((guardValue + shieldValue) * 100),
     actionCue: action.actionCue,
@@ -1105,7 +1105,7 @@ const addFizzleLog = (
     targetUnitIds: targetIds,
     actionId: action.actionId,
     timing: actionTiming(action),
-    message: `${actor.displayName}'s ${action.label} ${reason}.`,
+    message: `${actor.displayName}의 ${action.label} 스킬이 ${reason === 'fizzled' ? '실패했습니다' : reason} (상황 미충족).`,
     eventType: 'fizzle',
     actionCue: action.actionCue,
     animationCue: action.animationCue,
@@ -1134,7 +1134,7 @@ const executeAction = (state: DirectBattleState, queued: QueuedBattleAction) => 
       targetUnitIds: queued.targetIds,
       actionId: action.actionId,
       timing: queued.timing,
-      message: `${actor.displayName}'s ${action.label} is still on cooldown.`,
+      message: `${actor.displayName}의 ${action.label} 스킬이 아직 재사용 대기 중입니다.`,
       eventType: 'fizzle',
       actionCue: action.actionCue,
       animationCue: action.animationCue,
@@ -1179,7 +1179,7 @@ const executeAction = (state: DirectBattleState, queued: QueuedBattleAction) => 
       targetUnitIds: queued.targetIds,
       actionId: action.actionId,
       timing: queued.timing,
-      message: `${actor.displayName}'s ${action.label} found no valid target.`,
+      message: `${actor.displayName}의 ${action.label} 스킬을 사용할 유효한 대상이 없습니다.`,
       eventType: 'fizzle',
       actionCue: action.actionCue,
       animationCue: action.animationCue,
@@ -1206,7 +1206,7 @@ const executeAction = (state: DirectBattleState, queued: QueuedBattleAction) => 
       targetUnitIds: [actor.unitId],
       actionId: action.actionId,
       timing: queued.timing,
-      message: `${actor.displayName} waited and charged their next action.`,
+      message: `${actor.displayName}이(가) 대기하며 다음 행동을 준비합니다.`,
       eventType: 'status',
       actionCue: action.actionCue,
       animationCue: action.animationCue,
@@ -1248,8 +1248,8 @@ const executeAction = (state: DirectBattleState, queued: QueuedBattleAction) => 
       actionId: action.actionId,
       timing: queued.timing,
       message: target.unitId === actor.unitId
-        ? `${actor.displayName} took a guard stance.`
-        : `${actor.displayName} guarded ${target.displayName}.`,
+        ? `${actor.displayName}이(가) 방어 태세를 취했습니다.`
+        : `${actor.displayName}이(가) ${target.displayName}을(를) 방어했습니다.`,
       eventType: 'status',
       actionCue: action.actionCue,
       animationCue: action.animationCue,
@@ -1299,7 +1299,7 @@ const executeAction = (state: DirectBattleState, queued: QueuedBattleAction) => 
         targetUnitIds: [target.unitId],
         actionId: action.actionId,
         timing: queued.timing,
-        message: `${actor.displayName} exposed ${target.displayName} with ${action.label}.`,
+        message: `${actor.displayName}이(가) ${action.label}을(를) 사용하여 ${target.displayName}의 빈틈을 밝혀냈습니다.`,
         eventType: 'status',
         value: isSuppression ? 4 : 3,
         actionCue: action.actionCue,
@@ -1416,13 +1416,13 @@ export const executeDirectBattleRound = (
   // [HOTFIX] 그림자 패시브 실시간 격발기 (Round Start)
   resolveShadowPassivesInBattle(state, 'round_start')
 
-  addLog(state, { message: `Round ${state.round} started.`, eventType: 'round' })
+  addLog(state, { message: `제 ${state.round} 라운드가 시작되었습니다.`, eventType: 'round' })
 
   const monsterSelections = chooseMockMonsterActions(state)
   const queue = createActionQueue(state, [...playerSelections, ...monsterSelections])
   state.actionQueue = queue
   addLog(state, {
-    message: `ActionQueue prepared with ${queue.length} actions.`,
+    message: `행동 큐가 준비되었습니다. (총 ${queue.length}개의 행동)`,
     eventType: 'queue',
     value: queue.length,
     actionCue: 'action_queue',
@@ -1439,7 +1439,7 @@ export const executeDirectBattleRound = (
   updateBattleResult(state)
   if (state.isFinished) {
     addLog(state, {
-      message: state.winner === 'none' ? '전투 계산 안전 중단 (stalemate/safety limit reached)' : `${state.winner} team won the mock battle.`,
+      message: state.winner === 'none' ? '전투 계산 안전 중단 (승패 미결정)' : state.winner === 'player' ? '아군이 전투에서 승리했습니다!' : '적군이 전투에서 승리했습니다.',
       eventType: 'result',
       actionCue: 'battle_result',
     })

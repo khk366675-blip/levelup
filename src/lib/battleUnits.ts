@@ -479,12 +479,12 @@ export const buildShadowBattleUnit = (
   const unitId = `${options.unitIdPrefix ?? 'shadow'}-${shadow.instanceId}`
   const stats = convertShadowProfileToBattleStats(profile, options.currentHp)
   const actionList = [
-    baseAction(unitId, 'basic', 'Basic Attack', 'single_enemy', 0),
+    baseAction(unitId, 'basic', '기본 공격', 'single_enemy', 0),
     ...profile.activeSkills.slice(0, 2).map(skill => 
       skillAction(unitId, skill, buildShadowActionEffects(profile, skill, 'active'))
     ),
-    baseAction(unitId, 'guard', 'Guard', 'single_ally', 2),
-    baseAction(unitId, 'wait', 'Wait', 'self', -1),
+    baseAction(unitId, 'guard', '방어', 'single_ally', 2),
+    baseAction(unitId, 'wait', '대기', 'self', -1),
   ]
 
   return {
@@ -634,7 +634,7 @@ export const buildHunterBattleUnit = (
               cooldownTurns: 2,
             })]),
         baseAction(unitId, 'guard', guardSkill?.name ?? '방어', 'self', 2, guardSkill?.description ?? '이번 라운드 받는 피해를 줄입니다.'),
-        baseAction(unitId, 'wait', 'Wait', 'self', -1),
+        baseAction(unitId, 'wait', '대기', 'self', -1),
       ],
       passiveList: [],
       actionPriority: 3,
