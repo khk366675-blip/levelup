@@ -38,6 +38,8 @@ import {
   SHADOW_LEGION_NODES,
   getShadowMaxTraitSlots,
   MAX_SHADOW_MUTATION_STAGE,
+  getEnhanceProbability,
+  canEnhanceShadowWithStone,
 } from '../lib/shadows'
 import {
   SHADOW_STAT_GROUPS,
@@ -245,7 +247,14 @@ function ShadowDetailPanel({
   const runes = useGame(s => s.runes ?? [])
   const equipRune = useGame(s => s.equipRune)
   const unequipRune = useGame(s => s.unequipRune)
+  const shadowEnhanceStones = useGame(s => s.shadowEnhanceStones ?? { common: 0, uncommon: 0, rare: 0, epic: 0, legendary: 0 })
+  const enhanceShadowWithStone = useGame(s => s.enhanceShadowWithStone)
   const [equipSelectorSlot, setEquipSelectorSlot] = useState<number | null>(null)
+  const [selectedStoneRarity, setSelectedStoneRarity] = useState<ShadowRarity | null>(null)
+
+  useEffect(() => {
+    setSelectedStoneRarity(null)
+  }, [shadow?.instanceId])
 
   if (!shadow) {
     return (
@@ -466,6 +475,114 @@ function ShadowDetailPanel({
                 <span className="text-[9px] text-white/25">(전투나 상점에서 룬 상자를 획득하세요)</span>
               </div>
             )}
+          </div>
+        )}
+      </div>
+
+      {/* 그림자 강화석 강화 */}
+      <div className="mt-4 rounded-lg border border-purple-500/20 bg-purple-950/10 p-3">
+        <div className="mb-2 flex items-center justify-between">
+          <div className="flex items-center gap-1.5">
+            <Sparkles className="h-3.5 w-3.5 text-purple-300 animate-pulse" />
+            <span className="text-xs font-bold text-white/95">그림자 강화석 강화</span>
+          </div>
+          <span className="text-[10px] text-white/45 font-bold">
+            (현재 강화: +{shadow.enhancementLevel ?? 0} / {MAX_SHADOW_ENHANCEMENT_LEVEL})
+          </span>
+        </div>
+
+        {((shadow.enhancementLevel ?? 0) >= MAX_SHADOW_ENHANCEMENT_LEVEL) ? (
+          <div className="text-[10px] text-amber-200/80 py-3 text-center border border-dashed border-amber-500/20 bg-amber-950/10 rounded font-semibold">
+            최대 강화 수치(+{MAX_SHADOW_ENHANCEMENT_LEVEL})에 도달했습니다.
+          </div>
+        ) : shadow.isAchievementNamed ? (
+          <div className="text-[10px] text-white/35 py-3 text-center border border-dashed border-white/5 bg-black/20 rounded">
+            성취 네임드 그림자는 강화할 수 없습니다.
+          </div>
+        ) : (
+          <div className="space-y-3">
+            <div className="grid grid-cols-5 gap-1.5">
+              {SHADOW_RARITY_ORDER.map(rarity => {
+                const count = shadowEnhanceStones[rarity] ?? 0
+                const isEligible = canEnhanceShadowWithStone(shadow, rarity, count)
+                const isSelected = selectedStoneRarity === rarity
+                const prob = getEnhanceProbability(shadow, rarity)
+
+                const colorMap: Record<ShadowRarity, { border: string, bg: string, text: string }> = {
+                  common: { border: 'border-zinc-500/30', bg: 'bg-zinc-500/5', text: 'text-zinc-300' },
+                  uncommon: { border: 'border-emerald-500/30', bg: 'bg-emerald-500/5', text: 'text-emerald-300' },
+                  rare: { border: 'border-cyan-500/30', bg: 'bg-cyan-500/5', text: 'text-cyan-300' },
+                  epic: { border: 'border-purple-500/30', bg: 'bg-purple-500/5', text: 'text-purple-300' },
+                  legendary: { border: 'border-amber-500/30', bg: 'bg-amber-500/5', text: 'text-amber-300' }
+                }
+                const color = colorMap[rarity]
+
+                return (
+                  <button
+                    key={rarity}
+                    type="button"
+                    disabled={!isEligible}
+                    onClick={() => setSelectedStoneRarity(rarity)}
+                    className={clsx(
+                      "rounded border p-1 flex flex-col justify-between items-center text-center min-h-[72px] transition",
+                      !isEligible && "opacity-30 cursor-not-allowed border-white/5 bg-black/20",
+                      isEligible && isSelected && "ring-1 ring-purple-400 border-purple-400/80 bg-purple-500/10",
+                      isEligible && !isSelected && `${color.border} hover:bg-white/5`
+                    )}
+                  >
+                    <div className="text-sm shrink-0">💎</div>
+                    <div className="w-full min-w-0">
+                      <div className={clsx("truncate text-[9px] font-bold leading-tight", color.text)}>
+                        {SHADOW_RARITY_LABEL[rarity]}
+                      </div>
+                      <div className="text-[8px] text-white/50 truncate mt-0.5 font-mono">
+                        {count}개
+                      </div>
+                    </div>
+                    {isEligible && (
+                      <div className="text-[7.5px] text-cyan-300 font-bold mt-0.5">
+                        {(prob * 100).toFixed(0)}%
+                      </div>
+                    )}
+                  </button>
+                )
+              })}
+            </div>
+
+            {selectedStoneRarity && (
+              <div className="flex items-center justify-between border-t border-white/10 pt-2 text-[10px]">
+                <span className="text-white/60">
+                  선택: <strong className="text-white">{SHADOW_RARITY_LABEL[selectedStoneRarity]}</strong> 강화석
+                </span>
+                <span className="text-cyan-300 font-semibold">
+                  성공 확률: {(getEnhanceProbability(shadow, selectedStoneRarity) * 100).toFixed(0)}%
+                </span>
+              </div>
+            )}
+
+            <button
+              type="button"
+              disabled={!selectedStoneRarity}
+              onClick={() => {
+                if (!selectedStoneRarity) return
+                enhanceShadowWithStone(shadow.instanceId, selectedStoneRarity)
+                const nextCount = (shadowEnhanceStones[selectedStoneRarity] ?? 0) - 1
+                if (nextCount <= 0) {
+                  setSelectedStoneRarity(null)
+                }
+              }}
+              className={clsx(
+                "w-full rounded py-1.5 text-center text-xs font-bold transition",
+                selectedStoneRarity
+                  ? "bg-purple-600 text-white hover:bg-purple-500 shadow shadow-purple-900/30"
+                  : "bg-white/5 text-white/30 cursor-not-allowed border border-white/10"
+              )}
+            >
+              {selectedStoneRarity
+                ? `강화 시도 (확률: ${(getEnhanceProbability(shadow, selectedStoneRarity) * 100).toFixed(0)}%)`
+                : "강화석을 선택하십시오"
+              }
+            </button>
           </div>
         )}
       </div>

@@ -1388,3 +1388,45 @@ export function generateMutation(
 
   return mutated
 }
+
+export const getEnhanceProbability = (shadow: OwnedShadow, stoneRarity: ShadowRarity): number => {
+  const currentLevel = shadow.enhancementLevel ?? 0
+  const targetLevel = currentLevel + 1
+  
+  // Base rates by target level
+  const baseRates: Record<number, number> = {
+    1: 1.0,
+    2: 0.80,
+    3: 0.60,
+    4: 0.40,
+    5: 0.20,
+  }
+  const baseRate = baseRates[targetLevel] ?? 0
+  
+  // Grade difference bonus
+  const rarityIndex = SHADOW_RARITY_ORDER.indexOf(shadow.rarity)
+  const stoneIndex = SHADOW_RARITY_ORDER.indexOf(stoneRarity)
+  if (rarityIndex === -1 || stoneIndex === -1) return 0
+  
+  const diff = stoneIndex - rarityIndex
+  if (diff < 0) return 0 // Stone is lower grade than shadow
+  
+  const bonus = diff * 0.15
+  return Math.min(1.0, baseRate + bonus)
+}
+
+export const canEnhanceShadowWithStone = (
+  shadow: OwnedShadow,
+  stoneRarity: ShadowRarity,
+  stoneCount: number
+): boolean => {
+  if ((shadow.enhancementLevel ?? 0) >= MAX_SHADOW_ENHANCEMENT_LEVEL) return false
+  if (shadow.isAchievementNamed) return false // Achievement named shadows cannot be enhanced (matches absorbShadow constraint)
+  
+  const rarityIndex = SHADOW_RARITY_ORDER.indexOf(shadow.rarity)
+  const stoneIndex = SHADOW_RARITY_ORDER.indexOf(stoneRarity)
+  if (rarityIndex === -1 || stoneIndex === -1) return false
+  if (stoneIndex < rarityIndex) return false // Stone is lower grade than shadow
+  
+  return stoneCount > 0
+}

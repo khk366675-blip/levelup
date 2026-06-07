@@ -49,6 +49,7 @@ import type {
   ShadowExpeditionOutcome,
   ShadowSummonTicket,
   ShadowSummonShardType,
+  ShadowRarity,
   AchievementTicketGrade,
   SkillDefinition,
   SkillRuntimeState,
@@ -247,6 +248,8 @@ import {
   generateMutation,
   MAX_SHADOW_MUTATION_STAGE,
   SHADOW_RARITY_ORDER,
+  getEnhanceProbability,
+  canEnhanceShadowWithStone,
 } from './shadows'
 import {
   createInitialTowerState,
@@ -451,12 +454,14 @@ export interface GameState {
   mutationMaterialNormal?: number
   mutationMaterialAdvanced?: number
   mutationMaterialSupreme?: number
+  shadowEnhanceStones?: Record<ShadowRarity, number>
   shadowSummonTickets?: ShadowSummonTicket[]
   expeditionTickets?: number
   shadowSummonShards?: Partial<Record<ShadowSummonShardType, number>>
   shadowFragments?: Record<string, number>
   shadowAchievementTicketClaims?: Record<string, string>
   shadowExpeditions: ShadowExpedition[]
+  enhanceShadowWithStone: (shadowInstanceId: string, stoneRarity: ShadowRarity) => void
   lastShadowExpeditionDate?: string
   activeShadowExpeditionId?: string
   completedSpecialExpeditionIds?: string[]
@@ -2433,6 +2438,13 @@ const createGateBattleOutcomeUpdate = (
           rolledRune = generateRandomRune(boxGrade)
         }
 
+        let rolledStone: ShadowRarity | undefined = undefined
+        const isHighQuality = gate.rank === 'S' || gate.rewardTableId?.includes('boss')
+        const stoneDropChance = isHighQuality ? 0.30 : 0.15
+        if (Math.random() < stoneDropChance) {
+          rolledStone = rollGateEnhancementStone(gate.rank ?? 'E', isHighQuality)
+        }
+
         const lines = [
           `게이트 던전 런 [${gate.name}] 완벽 공략 성공!`,
           `총 획득 XP: +${finalXP}`,
@@ -2440,11 +2452,16 @@ const createGateBattleOutcomeUpdate = (
           `총 획득 그림자 정수: +${finalEssence}`,
           ...(clearTickets > 0 ? [`원정 티켓 +${clearTickets}장`] : []),
           ...(rolledRune ? [`전리품: 룬 획득 [${rolledRune.icon} ${rolledRune.name}]`] : []),
+          ...(rolledStone ? [`전리품: [${SHADOW_RARITY_LABEL[rolledStone]}] 그림자 강화석 +1개`] : []),
           ...run.accumulatedRewards.items.map(r => `전리품: [${r.itemName}]`),
         ]
 
         if (rolledRune) {
           gateRewards.push({ type: 'item' as any, itemId: rolledRune.id, itemName: rolledRune.name, rarity: rolledRune.grade })
+        }
+
+        if (rolledStone) {
+          gateRewards.push({ type: 'item' as any, itemId: `shadow_stone_${rolledStone}`, itemName: `[${SHADOW_RARITY_LABEL[rolledStone]}] 그림자 강화석`, rarity: rolledStone })
         }
 
         if (addedNormalMat > 0) {
@@ -2499,6 +2516,13 @@ const createGateBattleOutcomeUpdate = (
           mutationMaterialSupreme: (s.mutationMaterialSupreme ?? 0) + addedSupremeMat,
           items: nextItems,
           runes: [...(s.runes ?? []), ...(rolledRune ? [rolledRune] : [])],
+          shadowEnhanceStones: (() => {
+            const nextStones = { ...(s.shadowEnhanceStones ?? { common: 0, uncommon: 0, rare: 0, epic: 0, legendary: 0 }) }
+            if (rolledStone) {
+              nextStones[rolledStone] = (nextStones[rolledStone] ?? 0) + 1
+            }
+            return nextStones
+          })(),
           shadowSummonTickets: nextShadowSummonTickets,
           expeditionTickets: (s.expeditionTickets ?? 0) + clearTickets,
           shadowSummonShards: nextShadowSummonShards,
@@ -2711,17 +2735,32 @@ const createGateBattleOutcomeUpdate = (
     nextActiveGate = { ...activeGate, status: 'failed' }
   }
 
+  const isVictory = combatLog.result === 'victory'
+  const isBoss = gate.monsterIds.some(mId => {
+    const m = getMockDirectBattleMonster(mId)
+    return m?.unitType === 'boss'
+  })
+
+  let rolledStone: ShadowRarity | undefined = undefined
+  if (isVictory) {
+    const isHighQuality = gate.rank === 'S' || isBoss
+    const stoneDropChance = isHighQuality ? 0.30 : 0.15
+    if (Math.random() < stoneDropChance) {
+      rolledStone = rollGateEnhancementStone(gate.rank ?? 'E', isHighQuality)
+    }
+  }
+
+  if (rolledStone) {
+    gateRewards.push({ type: 'item' as any, itemId: `shadow_stone_${rolledStone}`, itemName: `[${SHADOW_RARITY_LABEL[rolledStone]}] 그림자 강화석`, rarity: rolledStone })
+  }
+
   const finalLog: CombatLog = {
     ...combatLog,
     rewards: gateRewards,
     penaltyApplied,
     source: combatLog.source || 'gate',
   }
-  const isVictory = combatLog.result === 'victory'
-  const isBoss = gate.monsterIds.some(mId => {
-    const m = getMockDirectBattleMonster(mId)
-    return m?.unitType === 'boss'
-  })
+
   const nextSkillStates = finalLog.battleId.startsWith('direct-gate-')
     ? applyDirectBattleSkillRuntimeUses(s.skillStates, finalLog.turns, isVictory, isBoss,
         s.dailyProgression?.dateKey === getActivePlanDateKey(s.quests) ? (s.dailyProgression?.skillXpBonus ?? 0) : 0)
@@ -2744,6 +2783,16 @@ const createGateBattleOutcomeUpdate = (
       kind: 'shadow' as const,
       title: '게이트 정화 보상',
       lines: [`게이트 공략 완료 보상으로 원정 티켓 +${clearTickets}장을 획득했습니다.`],
+      createdAt: todayISO(),
+    }]
+  }
+
+  if (rolledStone) {
+    finalMessages = [...finalMessages, {
+      id: uid(),
+      kind: 'shadow' as const,
+      title: '그림자 강화석 획득',
+      lines: [`게이트 던전 정화 완료 보상으로 [${SHADOW_RARITY_LABEL[rolledStone]}] 그림자 강화석을 획득했습니다!`],
       createdAt: todayISO(),
     }]
   }
@@ -2772,6 +2821,13 @@ const createGateBattleOutcomeUpdate = (
     shadowSummonShards: nextShadowSummonShards,
     ownedShadows: nextOwnedShadows,
     equippedShadowIds: nextEquippedShadowIds,
+    shadowEnhanceStones: (() => {
+      const nextStones = { ...(s.shadowEnhanceStones ?? { common: 0, uncommon: 0, rare: 0, epic: 0, legendary: 0 }) }
+      if (rolledStone) {
+        nextStones[rolledStone] = (nextStones[rolledStone] ?? 0) + 1
+      }
+      return nextStones
+    })(),
     gateStatus: nextGateStatus,
     activeGate: nextActiveGate,
     activeConsumableEffects: nextConsumables,
@@ -3434,6 +3490,52 @@ const getBoxGoldReward = (box: RewardBox, tierMultiplier: number): number => {
   return Math.round((120 + floor * 7 + Math.floor(Math.random() * 45)) * tierMultiplier)
 }
 
+const rollEnhancementStoneFromBox = (boxType: 'common' | 'advanced', rng: () => number = Math.random): ShadowRarity => {
+  const weights: Record<ShadowRarity, number> = boxType === 'common'
+    ? { common: 60, uncommon: 25, rare: 10, epic: 4.5, legendary: 0.5 }
+    : { common: 15, uncommon: 30, rare: 35, epic: 16, legendary: 4 }
+  
+  const total = Object.values(weights).reduce((sum, w) => sum + w, 0)
+  let roll = rng() * total
+  for (const [key, value] of Object.entries(weights) as Array<[ShadowRarity, number]>) {
+    roll -= value
+    if (roll <= 0) return key
+  }
+  return 'common'
+}
+
+const rollQuestEnhancementStone = (rng: () => number = Math.random): ShadowRarity => {
+  const weights: Record<ShadowRarity, number> = {
+    common: 50,
+    uncommon: 30,
+    rare: 15,
+    epic: 4.5,
+    legendary: 0.5
+  }
+  const total = Object.values(weights).reduce((sum, w) => sum + w, 0)
+  let roll = rng() * total
+  for (const [key, value] of Object.entries(weights) as Array<[ShadowRarity, number]>) {
+    roll -= value
+    if (roll <= 0) return key
+  }
+  return 'common'
+}
+
+const rollGateEnhancementStone = (gateRank: string, isBossOrGreat: boolean, rng: () => number = Math.random): ShadowRarity => {
+  const isHighQuality = gateRank === 'S' || isBossOrGreat
+  const weights: Record<ShadowRarity, number> = isHighQuality
+    ? { common: 20, uncommon: 30, rare: 30, epic: 16, legendary: 4 }
+    : { common: 60, uncommon: 25, rare: 10, epic: 4.5, legendary: 0.5 }
+  
+  const total = Object.values(weights).reduce((sum, w) => sum + w, 0)
+  let roll = rng() * total
+  for (const [key, value] of Object.entries(weights) as Array<[ShadowRarity, number]>) {
+    roll -= value
+    if (roll <= 0) return key
+  }
+  return 'common'
+}
+
 const applyShopReward = (
   reward: ShopReward,
   acc: {
@@ -3446,9 +3548,21 @@ const applyShopReward = (
     mutationMaterialNormal: number
     mutationMaterialAdvanced: number
     mutationMaterialSupreme: number
+    shadowEnhanceStones?: Record<ShadowRarity, number>
     lines: string[]
   }
 ) => {
+  if (reward.kind === 'shadow_stone_box') {
+    for (let i = 0; i < reward.quantity; i++) {
+      const rolledRarity = rollEnhancementStoneFromBox(reward.boxType)
+      if (acc.shadowEnhanceStones) {
+        acc.shadowEnhanceStones[rolledRarity] = (acc.shadowEnhanceStones[rolledRarity] ?? 0) + 1
+      }
+      const boxName = reward.boxType === 'common' ? '일반 강화석 상자' : '고급 강화석 상자'
+      acc.lines.push(`💎 [${SHADOW_RARITY_LABEL[rolledRarity]}] 그림자 강화석 획득 (${boxName})`)
+    }
+    return
+  }
   if (reward.kind === 'rune_box_normal') {
     for (let i = 0; i < reward.quantity; i++) {
       const rune = generateRandomRune('normal')
@@ -4190,6 +4304,7 @@ const createHardcoreDeathResetState = (
     mutationMaterialNormal: 0,
     mutationMaterialAdvanced: 0,
     mutationMaterialSupreme: 0,
+    shadowEnhanceStones: { common: 0, uncommon: 0, rare: 0, epic: 0, legendary: 0 },
     shadowSummonTickets: [],
     expeditionTickets: 0,
     shadowSummonShards: {},
@@ -4340,6 +4455,7 @@ export const useGame = create<GameState>()(
       mutationMaterialNormal: 0,
       mutationMaterialAdvanced: 0,
       mutationMaterialSupreme: 0,
+      shadowEnhanceStones: { common: 0, uncommon: 0, rare: 0, epic: 0, legendary: 0 },
       shadowSummonTickets: [],
       expeditionTickets: 0,
       shadowSummonShards: {},
@@ -4498,6 +4614,7 @@ export const useGame = create<GameState>()(
           mutationMaterialNormal: 0,
           mutationMaterialAdvanced: 0,
           mutationMaterialSupreme: 0,
+          shadowEnhanceStones: { common: 0, uncommon: 0, rare: 0, epic: 0, legendary: 0 } as Record<ShadowRarity, number>,
           lines: [] as string[],
         }
         for (let i = 0; i < purchaseQuantity; i++) {
@@ -4508,6 +4625,12 @@ export const useGame = create<GameState>()(
           `Gold -${totalGoldCost}`,
           ...(product.priceEssence ? [`그림자 정수 -${totalEssenceCost}`] : []),
         ]
+
+        const nextEnhanceStones = { ...(s.shadowEnhanceStones ?? { common: 0, uncommon: 0, rare: 0, epic: 0, legendary: 0 }) }
+        for (const [r, count] of Object.entries(grants.shadowEnhanceStones)) {
+          const rarity = r as ShadowRarity
+          nextEnhanceStones[rarity] = (nextEnhanceStones[rarity] ?? 0) + count
+        }
 
         return {
           gold: (s.gold ?? 0) - totalGoldCost,
@@ -4520,6 +4643,7 @@ export const useGame = create<GameState>()(
           mutationMaterialNormal: (s.mutationMaterialNormal ?? 0) + grants.mutationMaterialNormal,
           mutationMaterialAdvanced: (s.mutationMaterialAdvanced ?? 0) + grants.mutationMaterialAdvanced,
           mutationMaterialSupreme: (s.mutationMaterialSupreme ?? 0) + grants.mutationMaterialSupreme,
+          shadowEnhanceStones: nextEnhanceStones,
           messages: [...s.messages, {
             id: uid(),
             kind: grants.items.length > 0 ? 'item' : grants.tickets.length > 0 || Object.keys(grants.shards).length > 0 ? 'shadow' : 'info',
@@ -10540,6 +10664,56 @@ export const useGame = create<GameState>()(
         }
       }),
 
+      enhanceShadowWithStone: (shadowInstanceId, stoneRarity) => set((s) => {
+        const ownedShadows = s.ownedShadows ?? []
+        const shadow = ownedShadows.find(sh => sh.instanceId === shadowInstanceId)
+        if (!shadow) return {}
+
+        const stones = s.shadowEnhanceStones ?? { common: 0, uncommon: 0, rare: 0, epic: 0, legendary: 0 }
+        const stoneCount = stones[stoneRarity] ?? 0
+
+        if (!canEnhanceShadowWithStone(shadow, stoneRarity, stoneCount)) return {}
+
+        // Consume 1 stone
+        const nextStones = {
+          ...stones,
+          [stoneRarity]: Math.max(0, stoneCount - 1)
+        }
+
+        // Roll probability
+        const prob = getEnhanceProbability(shadow, stoneRarity)
+        const success = Math.random() < prob
+
+        const currentLevel = shadow.enhancementLevel ?? 0
+        let nextLevel = currentLevel
+        let logLine = ''
+
+        if (success) {
+          nextLevel = currentLevel + 1
+          logLine = `[${SHADOW_RARITY_LABEL[shadow.rarity]}] ${shadow.name} +${nextLevel} 강화 성공! (사용: ${SHADOW_RARITY_LABEL[stoneRarity]} 강화석, 확률: ${(prob * 100).toFixed(0)}%)`
+        } else {
+          logLine = `[${SHADOW_RARITY_LABEL[shadow.rarity]}] ${shadow.name} +${currentLevel + 1} 강화 실패 (사용: ${SHADOW_RARITY_LABEL[stoneRarity]} 강화석, 확률: ${(prob * 100).toFixed(0)}%)`
+        }
+
+        const nextOwned = ownedShadows.map(sh =>
+          sh.instanceId === shadowInstanceId
+            ? { ...sh, enhancementLevel: nextLevel }
+            : sh
+        )
+
+        return {
+          ownedShadows: nextOwned,
+          shadowEnhanceStones: nextStones,
+          messages: [...s.messages, {
+            id: uid(),
+            kind: 'shadow' as const,
+            title: success ? '그림자 강화 성공' : '그림자 강화 실패',
+            lines: [logLine],
+            createdAt: todayISO(),
+          }]
+        }
+      }),
+
       decomposeShadow: (shadowInstanceId) => set((s) => {
         const ownedShadows = s.ownedShadows ?? []
         const equippedShadowIds = s.equippedShadowIds ?? []
@@ -10753,6 +10927,7 @@ export const useGame = create<GameState>()(
           let nextItems = [...(s.items ?? [])]
           let nextTickets = [...(s.shadowSummonTickets ?? [])]
           let nextShards = { ...(s.shadowSummonShards ?? {}) }
+          const nextEnhanceStones = { ...(s.shadowEnhanceStones ?? { common: 0, uncommon: 0, rare: 0, epic: 0, legendary: 0 }) }
 
           let addedNormalMat = 0
           let addedAdvancedMat = 0
@@ -10801,6 +10976,7 @@ export const useGame = create<GameState>()(
             let rolledShardsCount = 0
             let rolledRunesCount = 0
             let rolledEquipsCount = 0
+            let rolledStones: Record<ShadowRarity, number> = { common: 0, uncommon: 0, rare: 0, epic: 0, legendary: 0 }
 
             for (let m = 0; m < cappedMinutes; m++) {
               // Roll Mutation Materials
@@ -10831,6 +11007,12 @@ export const useGame = create<GameState>()(
               // Roll Equipment
               if (Math.random() < 0.00025) { // 장비 0.025%
                 rolledEquipsCount++
+              }
+
+              // Roll Shadow Enhancement Stone
+              if (Math.random() < 0.0002) { // 0.02%
+                const rolledRarity = rollEnhancementStoneFromBox('common')
+                rolledStones[rolledRarity]++
               }
             }
 
@@ -10910,6 +11092,17 @@ export const useGame = create<GameState>()(
               else addedItemsList.push({ name: rolledEquip.name, icon: rolledEquip.icon, quantity: 1 })
             }
 
+            // Process rolled stones for this shadow
+            for (const [r, count] of Object.entries(rolledStones) as Array<[ShadowRarity, number]>) {
+              if (count > 0) {
+                nextEnhanceStones[r] = (nextEnhanceStones[r] ?? 0) + count
+                const name = `[${SHADOW_RARITY_LABEL[r]}] 그림자 강화석`
+                const idx = addedItemsList.findIndex(x => x.name === name)
+                if (idx !== -1) addedItemsList[idx].quantity += count
+                else addedItemsList.push({ name, icon: '💎', quantity: count })
+              }
+            }
+
             // Save updated shadow back
             nextOwnedShadows[shadowIdx] = updatedShadow
           }
@@ -10942,6 +11135,7 @@ export const useGame = create<GameState>()(
             items: nextItems,
             shadowSummonTickets: nextTickets,
             shadowSummonShards: nextShards,
+            shadowEnhanceStones: nextEnhanceStones,
             mutationMaterialNormal: (s.mutationMaterialNormal ?? 0) + addedNormalMat,
             mutationMaterialAdvanced: (s.mutationMaterialAdvanced ?? 0) + addedAdvancedMat,
             mutationMaterialSupreme: (s.mutationMaterialSupreme ?? 0) + addedSupremeMat,
@@ -11589,6 +11783,7 @@ export const useGame = create<GameState>()(
         let addedAdvancedMat = 0
         let addedSupremeMat = 0
         let rolledRune: RuneItem | undefined = undefined
+        let rolledStone: ShadowRarity | undefined = undefined
 
         if (resolved.result && !expedition.result) {
           const levelUps: string[] = []
@@ -11708,6 +11903,20 @@ export const useGame = create<GameState>()(
           if (addedAdvancedMat > 0) bonusRewardLines.push(`고급 변이 재료 +${addedAdvancedMat}개`)
           if (addedSupremeMat > 0) bonusRewardLines.push(`최고급 변이 재료 +${addedSupremeMat}개`)
 
+          let stoneChance = 0
+          if (outcome === 'great_success') stoneChance = 0.25
+          else if (outcome === 'success') stoneChance = 0.15
+          else if (outcome === 'partial') stoneChance = 0.05
+
+          if (Math.random() < stoneChance) {
+            const isGreat = outcome === 'great_success'
+            rolledStone = rollGateEnhancementStone('E', isGreat)
+          }
+
+          if (rolledStone) {
+            bonusRewardLines.push(`원정 전리품: [${SHADOW_RARITY_LABEL[rolledStone]}] 그림자 강화석 획득`)
+          }
+
           if (bonusRewardLines.length > 0) {
             resolved.result.bonusRewards = [
               ...(resolved.result.bonusRewards ?? []),
@@ -11763,6 +11972,13 @@ export const useGame = create<GameState>()(
           mutationMaterialNormal: (s.mutationMaterialNormal ?? 0) + addedNormalMat,
           mutationMaterialAdvanced: (s.mutationMaterialAdvanced ?? 0) + addedAdvancedMat,
           mutationMaterialSupreme: (s.mutationMaterialSupreme ?? 0) + addedSupremeMat,
+          shadowEnhanceStones: (() => {
+            const nextStones = { ...(s.shadowEnhanceStones ?? { common: 0, uncommon: 0, rare: 0, epic: 0, legendary: 0 }) }
+            if (rolledStone) {
+              nextStones[rolledStone] = (nextStones[rolledStone] ?? 0) + 1
+            }
+            return nextStones
+          })(),
           activeShadowExpeditionId: resolved.status === 'completed' ? undefined : s.activeShadowExpeditionId,
           shadowExpeditions: (s.shadowExpeditions ?? []).map(item => item.id === expeditionId ? resolved : item),
           messages: nextMessages,
@@ -14027,6 +14243,11 @@ export const useGame = create<GameState>()(
           rolledRune = generateRandomRune('normal')
         }
 
+        let rolledStone: ShadowRarity | undefined = undefined
+        if (q.type === 'daily' && Math.random() < 0.08) {
+          rolledStone = rollQuestEnhancementStone()
+        }
+
         // messages
         const newMessages: SystemMessage[] = []
         let dailyTicketGained = 0
@@ -14054,6 +14275,7 @@ export const useGame = create<GameState>()(
             `직업 [${jobResult.activeJobName}] XP +${jobResult.jobXpGained}${jobResult.jobCategoryBonus > 0 ? ` (친화도 보너스 +${Math.round(jobResult.jobCategoryBonus * 100)}%)` : ''}`,
             ...(questGold ? [`Gold +${questGold}`] : []),
             ...(rolledRune ? [`전리품: 룬 획득 [${rolledRune.icon} ${rolledRune.name}]`] : []),
+            ...(rolledStone ? [`전리품: [${SHADOW_RARITY_LABEL[rolledStone]}] 그림자 강화석 획득`] : []),
             ...(dailyTicketGained > 0 ? [`원정 티켓 +${dailyTicketGained}장`] : []),
             ...(addedNormalMat > 0 ? [`일반 변이 재료 +${addedNormalMat}개`] : []),
             ...(addedAdvancedMat > 0 ? [`고급 변이 재료 +${addedAdvancedMat}개`] : []),
@@ -14125,6 +14347,13 @@ export const useGame = create<GameState>()(
           quests: updatedQuests,
           items: [...s.items, ...drops],
           runes: [...(s.runes ?? []), ...(rolledRune ? [rolledRune] : [])],
+          shadowEnhanceStones: (() => {
+            const nextStones = { ...(s.shadowEnhanceStones ?? { common: 0, uncommon: 0, rare: 0, epic: 0, legendary: 0 }) }
+            if (rolledStone) {
+              nextStones[rolledStone] = (nextStones[rolledStone] ?? 0) + 1
+            }
+            return nextStones
+          })(),
           expeditionTickets: (s.expeditionTickets ?? 0) + dailyTicketGained,
           messages: [...s.messages, ...newMessages],
           achievementStats: stats,

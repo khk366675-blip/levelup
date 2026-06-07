@@ -35,6 +35,7 @@ const CATEGORY_LABEL: Record<ShopProductCategory, string> = {
   premium: 'PREMIUM',
   mutation: 'MUTATION',
   rune: 'RUNE SYSTEM',
+  stone: 'SHADOW STONE',
 }
 
 const CATEGORY_CLASS: Record<ShopProductCategory, string> = {
@@ -46,6 +47,7 @@ const CATEGORY_CLASS: Record<ShopProductCategory, string> = {
   premium: 'border-fuchsia-500/35 bg-fuchsia-500/10 text-fuchsia-100',
   mutation: 'border-purple-400/35 bg-purple-400/10 text-purple-200',
   rune: 'border-rose-500/35 bg-rose-500/10 text-rose-200',
+  stone: 'border-purple-600/35 bg-purple-600/10 text-purple-200',
 }
 
 function visualIcon(visual: TicketVisualMeta) {

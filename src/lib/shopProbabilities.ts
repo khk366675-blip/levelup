@@ -167,6 +167,23 @@ const fixedSection = (product: ShopProduct): ProbabilitySection => ({
   note: '확률 추첨 없이 표시된 보상을 즉시 지급합니다.',
 })
 
+const SHADOW_STONE_BOX_WEIGHTS = {
+  common: { common: 60, uncommon: 25, rare: 10, epic: 4.5, legendary: 0.5 },
+  advanced: { common: 15, uncommon: 30, rare: 35, epic: 16, legendary: 4 },
+}
+
+const getShadowStoneBoxSections = (boxType: 'common' | 'advanced'): ProbabilitySection[] => {
+  const weights = SHADOW_STONE_BOX_WEIGHTS[boxType]
+  const rows = rowsFromWeights(weights, shadowRarityLabel, ['common', 'uncommon', 'rare', 'epic', 'legendary'])
+  return [
+    {
+      title: '획득 가능한 강화석 등급',
+      rows,
+      note: '그림자 등급과 동일하거나 상위 등급의 강화석으로만 강화가 가능합니다.',
+    }
+  ]
+}
+
 export const getShopProbabilitySections = (product: ShopProduct): ProbabilitySection[] => {
   const visit = (reward: ShopReward, title?: string): ProbabilitySection[] => {
     if (reward.kind === 'shadow_ticket') {
@@ -180,6 +197,7 @@ export const getShopProbabilitySections = (product: ShopProduct): ProbabilitySec
       }]
     }
     if (reward.kind === 'equipment_draw') return getEquipmentDrawSections(reward, title)
+    if (reward.kind === 'shadow_stone_box') return getShadowStoneBoxSections(reward.boxType)
     if (reward.kind === 'mixed') {
       return reward.rewards.flatMap((child, index) => visit(child, `권 ${index + 1}`))
     }

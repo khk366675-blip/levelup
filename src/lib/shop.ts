@@ -17,6 +17,7 @@ export type ShopProductCategory =
   | 'premium'
   | 'mutation'
   | 'rune'
+  | 'stone'
 
 export type ShopEquipmentDrawTier = 'standard' | 'relic' | 'rare'
 export type EquipmentQualitySource = 'normal' | 'weekly' | 'boss' | 'high_boss'
@@ -33,6 +34,7 @@ export type ShopReward =
   | { kind: 'rune_box_normal'; quantity: number }
   | { kind: 'rune_box_advanced'; quantity: number }
   | { kind: 'rune_box_supreme'; quantity: number }
+  | { kind: 'shadow_stone_box'; boxType: 'common' | 'advanced'; quantity: number }
   | { kind: 'mixed'; rewards: ShopReward[] }
 
 export interface ShopProduct {
@@ -290,6 +292,25 @@ export const SHOP_PRODUCTS: ShopProduct[] = [
     priceEssence: 8,
     reward: { kind: 'rune_box_supreme', quantity: 1 },
     rewardSummary: '최고급 룬 상자 x1',
+  },
+  {
+    id: 'shadow-stone-box-common',
+    name: '일반 강화석 상자',
+    description: '모든 등급의 그림자 강화석 중 하나를 무작위로 획득합니다. (낮은 등급 강화석 획득 확률이 높음)',
+    category: 'stone',
+    priceGold: 250,
+    reward: { kind: 'shadow_stone_box', boxType: 'common', quantity: 1 },
+    rewardSummary: '일반 강화석 상자 x1',
+  },
+  {
+    id: 'shadow-stone-box-advanced',
+    name: '고급 강화석 상자',
+    description: '모든 등급의 그림자 강화석 중 하나를 무작위로 획득합니다. (높은 등급 강화석 획득 확률이 대폭 상승)',
+    category: 'stone',
+    priceGold: 750,
+    priceEssence: 3,
+    reward: { kind: 'shadow_stone_box', boxType: 'advanced', quantity: 1 },
+    rewardSummary: '고급 강화석 상자 x1',
   },
 ]
 

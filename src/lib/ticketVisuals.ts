@@ -48,6 +48,8 @@ export type TicketVisualKey =
   | 'rune-box-normal'
   | 'rune-box-advanced'
   | 'rune-box-supreme'
+  | 'shadow-stone-box-common'
+  | 'shadow-stone-box-advanced'
 
 export type TicketVisual = {
   key: TicketVisualKey
@@ -84,6 +86,8 @@ export const TICKET_ASSET_MANIFEST: Partial<Record<TicketVisualKey, string>> = {
   'rune-box-normal': ticketEquipmentChoiceBundle,
   'rune-box-advanced': ticketEquipmentChoiceBundle,
   'rune-box-supreme': ticketEquipmentChoiceBundle,
+  'shadow-stone-box-common': packShadowShards,
+  'shadow-stone-box-advanced': packShadowPremiumShards,
 }
 
 export const getTicketVisualAsset = (key: TicketVisualKey): string | undefined =>
@@ -336,6 +340,32 @@ export const TICKET_VISUALS_BY_PRODUCT_ID: Record<string, TicketVisual> = {
     accentClass: 'text-amber-100 border-amber-200/35 bg-amber-300/12',
     stubClass: 'border-amber-300/25 bg-amber-400/10 text-amber-100',
     poolLabel: '룬 상자',
+  },
+  'shadow-stone-box-common': {
+    key: 'shadow-stone-box-common',
+    label: 'STONE SUPPLY',
+    shortDescription: '일반 강화석 상자',
+    glyph: 'RUNE',
+    artKind: 'relic',
+    borderClass: 'border-cyan-300/35',
+    surfaceClass: 'from-cyan-500/16 via-blue-400/8 to-ink-950/80',
+    glowClass: 'shadow-[0_0_26px_rgba(34,211,238,0.13)]',
+    accentClass: 'text-cyan-100 border-cyan-200/30 bg-cyan-300/12',
+    stubClass: 'border-cyan-300/25 bg-cyan-400/10 text-cyan-100',
+    poolLabel: '강화석 상자',
+  },
+  'shadow-stone-box-advanced': {
+    key: 'shadow-stone-box-advanced',
+    label: 'STONE CACHE',
+    shortDescription: '고급 강화석 상자',
+    glyph: 'RUNE',
+    artKind: 'relic',
+    borderClass: 'border-purple-400/40',
+    surfaceClass: 'from-purple-600/18 via-pink-400/10 to-ink-950/80',
+    glowClass: 'shadow-[0_0_30px_rgba(168,85,247,0.18)]',
+    accentClass: 'text-pink-100 border-pink-200/35 bg-pink-300/12',
+    stubClass: 'border-purple-400/25 bg-purple-500/10 text-purple-200',
+    poolLabel: '강화석 상자',
   },
 }
 
