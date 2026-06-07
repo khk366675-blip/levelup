@@ -385,6 +385,17 @@ export function BattlefieldVfxLayer({ vfxs }: Props) {
           const resolved = resolveVfxImage(vfx)
           const glowColor = getElementGlow(resolved.element, vfx.isBoss)
 
+          console.log('[LEVELUP VFX DEBUG] Rendering VFX:', {
+            id: vfx.id,
+            actionId: vfx.actionId,
+            actionText: vfx.actionText,
+            type: vfx.type,
+            resolved,
+            glowColor,
+            targetX: vfx.targetX,
+            targetY: vfx.targetY
+          })
+
           return (
             <motion.div
               key={vfx.id}

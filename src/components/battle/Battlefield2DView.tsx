@@ -305,6 +305,7 @@ export function Battlefield2DView({
     })
 
     if (newVfxs.length > 0) {
+      console.log('[LEVELUP VFX DEBUG] Triggering new VFXs:', newVfxs)
       setVfxs(prev => [...prev, ...newVfxs])
       setTimeout(() => {
         setVfxs(prev => prev.filter(v => !newVfxs.some(n => n.id === v.id)))
