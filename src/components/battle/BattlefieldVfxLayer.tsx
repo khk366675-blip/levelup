@@ -386,6 +386,8 @@ export function BattlefieldVfxLayer({ vfxs }: Props) {
           const resolved = resolveVfxImage(vfx)
           const glowColor = getElementGlow(resolved.element, vfx.isBoss)
 
+          const isBasicAttack = vfx.actionId === 'basic' || vfx.actionId === 'basic-attack' || (vfx.actionText || '').includes('기본 공격') || (vfx.actionText || '').includes('기본공격')
+
           console.log('[LEVELUP VFX DEBUG] Rendering VFX:', {
             id: vfx.id,
             actionId: vfx.actionId,
@@ -394,7 +396,8 @@ export function BattlefieldVfxLayer({ vfxs }: Props) {
             resolved,
             glowColor,
             targetX: vfx.targetX,
-            targetY: vfx.targetY
+            targetY: vfx.targetY,
+            isBasicAttack
           })
 
           return (
@@ -414,8 +417,8 @@ export function BattlefieldVfxLayer({ vfxs }: Props) {
               {/* 1. Attack / Slash / Strike Effect (Multi-layered shockwave & glowing slash path) */}
               {isAttack && (
                 <div className="relative flex items-center justify-center w-40 h-40">
-                  {/* B안 테스트: 참격 이미지 추가 연출 */}
-                  {resolved.motionType === 'slash' && (
+                  {/* B안 테스트: 참격 이미지 추가 연출 - 기본 공격이 아닐 때만 렌더링! */}
+                  {!isBasicAttack && resolved.motionType === 'slash' && (
                     <motion.img
                       src={resolved.image}
                       alt="slash-vfx"
@@ -426,7 +429,7 @@ export function BattlefieldVfxLayer({ vfxs }: Props) {
                       style={{ mixBlendMode: 'screen', filter: `brightness(1.45) contrast(1.2) drop-shadow(0 0 16px ${glowColor})` }}
                     />
                   )}
-                  {resolved.motionType === 'pierce' && (
+                  {!isBasicAttack && resolved.motionType === 'pierce' && (
                     <motion.img
                       src={resolved.image}
                       alt="pierce-vfx"
@@ -437,7 +440,7 @@ export function BattlefieldVfxLayer({ vfxs }: Props) {
                       style={{ mixBlendMode: 'screen', filter: `brightness(1.45) contrast(1.2) drop-shadow(0 0 16px ${glowColor})` }}
                     />
                   )}
-                  {resolved.motionType === 'strike' && (
+                  {!isBasicAttack && resolved.motionType === 'strike' && (
                     <motion.img
                       src={resolved.image}
                       alt="strike-vfx"
@@ -449,79 +452,80 @@ export function BattlefieldVfxLayer({ vfxs }: Props) {
                     />
                   )}
                   
-                  {/* B안 테스트: 공통 충격파 링 이미지 추가 연출 (크기 거대화) */}
-                  <motion.img
-                    src={effectPhysicalStrike}
-                    alt="shockwave-vfx"
-                    initial={{ scale: 0.3, rotate: 0, opacity: 0 }}
-                    animate={{ scale: [0.4, 1.4, 1.6, 1.7], rotate: [0, 10, 15, 20], opacity: [0, 0.95, 0.7, 0] }}
-                    transition={{ duration: 0.64, ease: 'easeOut', times: [0, 0.18, 0.8, 1] }}
-                    className="absolute w-56 h-56 object-contain pointer-events-none z-20"
-                    style={{ mixBlendMode: 'screen', filter: `brightness(1.35) contrast(1.15) drop-shadow(0 0 12px ${glowColor})` }}
-                  />
-                  {/* Shockwave Ring Layer 1 (Wide thin expansion) */}
-                  <motion.div
-                    initial={{ scale: 0.2, opacity: 1 }}
-                    animate={{ scale: 1.8, opacity: 0 }}
-                    transition={{ duration: 0.3, ease: "easeOut" }}
-                    className={clsx(
-                      "absolute w-28 h-28 rounded-full border-4 filter blur-[0.5px]",
-                      isBossAction 
-                        ? "border-rose-500 bg-rose-950/20 shadow-[0_0_25px_rgba(244,63,94,0.9)]" 
-                        : theme === 'swordsman'
-                        ? "border-cyan-300 bg-cyan-950/10 shadow-[0_0_20px_rgba(34,211,238,0.8)]"
-                        : theme === 'warrior'
-                        ? "border-amber-400 bg-amber-950/10 shadow-[0_0_25px_rgba(245,158,11,0.8)]"
-                        : theme === 'tracker'
-                        ? "border-emerald-300 bg-emerald-950/10 shadow-[0_0_20px_rgba(52,211,153,0.8)]"
-                        : "border-white bg-white/5 shadow-[0_0_15px_rgba(255,255,255,0.8)]"
-                    )}
-                  />
-                  
-                  {/* Shockwave Ring Layer 2 (Faster tighter neon glow ring) */}
-                  <motion.div
-                    initial={{ scale: 0.1, opacity: 0.9 }}
-                    animate={{ scale: 1.3, opacity: 0 }}
-                    transition={{ duration: 0.22, delay: 0.03, ease: "easeOut" }}
-                    className={clsx(
-                      "absolute w-28 h-28 rounded-full border-[6px]",
-                      isBossAction ? "border-rose-400" :
-                      theme === 'swordsman' ? "border-cyan-200" :
-                      theme === 'warrior' ? "border-amber-300" :
-                      theme === 'tracker' ? "border-emerald-200" : "border-white"
-                    )}
-                    style={{ filter: 'url(#vfx-glow-medium)' }}
-                  />
-
-                  {/* Core central flash */}
-                  <motion.div
-                    initial={{ scale: 0.15, opacity: 1 }}
-                    animate={{ scale: [1.3, 0], opacity: [1, 0] }}
-                    transition={{ duration: 0.18, ease: "easeOut" }}
-                    className="absolute w-12 h-12 bg-white rounded-full filter blur-[1px] z-10"
-                    style={{ boxShadow: `0 0 20px ${themeColor}` }}
-                  />
-
-                  {/* SVG Container: Dynamic Slash Arc */}
-                  <svg width="220" height="220" viewBox="0 0 100 100" className="absolute inset-0 pointer-events-none overflow-visible">
-                    {/* Glowing Slash Arc (Slice trajectory) */}
-                    <motion.path
-                      d="M 15 85 Q 48 24 85 15"
-                      fill="none"
-                      stroke={
-                        isBossAction ? "#fda4af" :
-                        theme === 'swordsman' ? "#67e8f9" :
-                        theme === 'warrior' ? "#fcd34d" :
-                        theme === 'tracker' ? "#6ee7b7" : "#ffffff"
-                      }
-                      strokeWidth="6.5"
-                      strokeLinecap="round"
-                      filter="url(#vfx-glow-heavy)"
-                      initial={{ pathLength: 0, opacity: 1 }}
-                      animate={{ pathLength: [0, 1, 1], pathOffset: [0, 0, 1], opacity: [0, 1, 0] }}
-                      transition={{ duration: 0.26, ease: "easeInOut" }}
-                    />
-                  </svg>
+                  {/* B안 테스트: 원래의 담백한 기본 공격 절차적 이펙트들 - 기본 공격일 때만 렌더링! */}
+                  {isBasicAttack && (
+                    <>
+                      {/* 공통 충격파 링 이미지 연출 */}
+                      <motion.img
+                        src={effectPhysicalStrike}
+                        alt="shockwave-vfx"
+                        initial={{ scale: 0.3, rotate: 0, opacity: 0 }}
+                        animate={{ scale: [0.4, 1.4, 1.6, 1.7], rotate: [0, 10, 15, 20], opacity: [0, 0.95, 0.7, 0] }}
+                        transition={{ duration: 0.64, ease: 'easeOut', times: [0, 0.18, 0.8, 1] }}
+                        className="absolute w-56 h-56 object-contain pointer-events-none z-20"
+                        style={{ mixBlendMode: 'screen', filter: `brightness(1.35) contrast(1.15) drop-shadow(0 0 12px ${glowColor})` }}
+                      />
+                      {/* Shockwave Ring Layer 1 (Wide thin expansion) */}
+                      <motion.div
+                        initial={{ scale: 0.2, opacity: 1 }}
+                        animate={{ scale: 1.8, opacity: 0 }}
+                        transition={{ duration: 0.3, ease: "easeOut" }}
+                        className={clsx(
+                          "absolute w-28 h-28 rounded-full border-4 filter blur-[0.5px]",
+                          isBossAction 
+                            ? "border-rose-500 bg-rose-950/20 shadow-[0_0_25px_rgba(244,63,94,0.9)]" 
+                            : theme === 'swordsman'
+                            ? "border-cyan-300 bg-cyan-950/10 shadow-[0_0_20px_rgba(34,211,238,0.8)]"
+                            : theme === 'warrior'
+                            ? "border-amber-400 bg-amber-950/10 shadow-[0_0_25px_rgba(245,158,11,0.8)]"
+                            : theme === 'tracker'
+                            ? "border-emerald-300 bg-emerald-950/10 shadow-[0_0_20px_rgba(52,211,153,0.8)]"
+                            : "border-white bg-white/5 shadow-[0_0_15px_rgba(255,255,255,0.8)]"
+                        )}
+                      />
+                      {/* Shockwave Ring Layer 2 (Faster tighter neon glow ring) */}
+                      <motion.div
+                        initial={{ scale: 0.1, opacity: 0.9 }}
+                        animate={{ scale: 1.3, opacity: 0 }}
+                        transition={{ duration: 0.22, delay: 0.03, ease: "easeOut" }}
+                        className={clsx(
+                          "absolute w-28 h-28 rounded-full border-[6px]",
+                          isBossAction ? "border-rose-400" :
+                          theme === 'swordsman' ? "border-cyan-200" :
+                          theme === 'warrior' ? "border-amber-300" :
+                          theme === 'tracker' ? "border-emerald-200" : "border-white"
+                        )}
+                        style={{ filter: 'url(#vfx-glow-medium)' }}
+                      />
+                      {/* Core central flash */}
+                      <motion.div
+                        initial={{ scale: 0.15, opacity: 1 }}
+                        animate={{ scale: [1.3, 0], opacity: [1, 0] }}
+                        transition={{ duration: 0.18, ease: "easeOut" }}
+                        className="absolute w-12 h-12 bg-white rounded-full filter blur-[1px] z-10"
+                        style={{ boxShadow: `0 0 20px ${themeColor}` }}
+                      />
+                      {/* SVG Container: Dynamic Slash Arc */}
+                      <svg width="220" height="220" viewBox="0 0 100 100" className="absolute inset-0 pointer-events-none overflow-visible">
+                        <motion.path
+                          d="M 15 85 Q 48 24 85 15"
+                          fill="none"
+                          stroke={
+                            isBossAction ? "#fda4af" :
+                            theme === 'swordsman' ? "#67e8f9" :
+                            theme === 'warrior' ? "#fcd34d" :
+                            theme === 'tracker' ? "#6ee7b7" : "#ffffff"
+                          }
+                          strokeWidth="6.5"
+                          strokeLinecap="round"
+                          filter="url(#vfx-glow-heavy)"
+                          initial={{ pathLength: 0, opacity: 1 }}
+                          animate={{ pathLength: [0, 1, 1], pathOffset: [0, 0, 1], opacity: [0, 1, 0] }}
+                          transition={{ duration: 0.26, ease: "easeInOut" }}
+                        />
+                      </svg>
+                    </>
+                  )}
                 </div>
               )}
 
@@ -574,16 +578,7 @@ export function BattlefieldVfxLayer({ vfxs }: Props) {
                     />
                   )}
 
-                  {/* B안 테스트: 스킬 피격 시 충격파 링 이미지 추가 */}
-                  <motion.img
-                    src={effectPhysicalStrike}
-                    alt="shockwave-vfx"
-                    initial={{ scale: 0.3, rotate: 0, opacity: 0 }}
-                    animate={{ scale: [0.4, 1.6, 1.75, 1.85], rotate: [0, -15, -25, -30], opacity: [0, 0.95, 0.7, 0] }}
-                    transition={{ duration: 0.82, ease: 'easeOut', times: [0, 0.18, 0.8, 1] }}
-                    className="absolute w-60 h-60 object-contain pointer-events-none z-20"
-                    style={{ mixBlendMode: 'screen', filter: `brightness(1.4) contrast(1.2) drop-shadow(0 0 16px ${glowColor})` }}
-                  />
+
                   {isBossAction ? (
                     // 2.1 Boss Action: Ground-cracking Crimson Doom Ritual
                     <>
