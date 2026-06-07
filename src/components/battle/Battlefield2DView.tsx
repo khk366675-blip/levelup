@@ -303,7 +303,7 @@ export function Battlefield2DView({
       setVfxs(prev => [...prev, ...newVfxs])
       setTimeout(() => {
         setVfxs(prev => prev.filter(v => !newVfxs.some(n => n.id === v.id)))
-      }, 700)
+      }, 1200)
     }
 
     // 2. Trigger Damage/Heal numbers on targets
@@ -435,8 +435,7 @@ export function Battlefield2DView({
         }}
       />
 
-      {/* VFX Layer */}
-      <BattlefieldVfxLayer vfxs={vfxs} />
+
 
       {/* Action Overlay Banner (Top-Center) */}
       {latestAction?.text && (
@@ -642,6 +641,9 @@ export function Battlefield2DView({
             </div>
           )
         })}
+
+        {/* VFX Layer */}
+        <BattlefieldVfxLayer vfxs={vfxs} />
 
         {/* Render popups relatively centered above each target ID */}
         {popups.map(pop => (

@@ -97,7 +97,7 @@ function getVfxTheme(role?: string): 'swordsman' | 'warrior' | 'mage' | 'guardia
 
 export function BattlefieldVfxLayer({ vfxs }: Props) {
   return (
-    <div className="absolute inset-0 pointer-events-none z-[120] overflow-hidden">
+    <div className="absolute inset-0 pointer-events-none z-[125] overflow-hidden">
       {/* SVG Neon Glow Filters Definition */}
       <svg className="absolute w-0 h-0 pointer-events-none" aria-hidden="true" style={{ position: 'absolute', width: 0, height: 0 }}>
         <defs>
@@ -182,10 +182,10 @@ export function BattlefieldVfxLayer({ vfxs }: Props) {
                     src={effectSlash}
                     alt="slash-vfx"
                     initial={{ scale: 0.5, rotate: -45, opacity: 0 }}
-                    animate={{ scale: [0.7, 1.6, 1.8], rotate: [-45, 15, 25], opacity: [0, 0.95, 0.95, 0] }}
-                    transition={{ duration: 0.28, ease: 'easeOut' }}
+                    animate={{ scale: [0.6, 1.45, 1.55, 1.6], rotate: [-45, 10, 20, 25], opacity: [0, 1, 0.8, 0] }}
+                    transition={{ duration: 0.72, ease: 'easeOut', times: [0, 0.15, 0.75, 1] }}
                     className="absolute w-64 h-64 object-contain pointer-events-none z-30"
-                    style={{ mixBlendMode: 'screen' }}
+                    style={{ mixBlendMode: 'screen', filter: 'brightness(1.45) contrast(1.2) drop-shadow(0 0 16px rgba(34, 211, 238, 0.8))' }}
                   />
                   
                   {/* B안 테스트: 충격파 링 이미지 추가 연출 (크기 거대화) */}
@@ -193,10 +193,10 @@ export function BattlefieldVfxLayer({ vfxs }: Props) {
                     src={effectShockwave}
                     alt="shockwave-vfx"
                     initial={{ scale: 0.3, rotate: 0, opacity: 0 }}
-                    animate={{ scale: [0.4, 1.5, 1.7], rotate: [0, 20], opacity: [0, 0.9, 0] }}
-                    transition={{ duration: 0.24, ease: 'easeOut' }}
+                    animate={{ scale: [0.4, 1.4, 1.6, 1.7], rotate: [0, 10, 15, 20], opacity: [0, 0.95, 0.7, 0] }}
+                    transition={{ duration: 0.64, ease: 'easeOut', times: [0, 0.18, 0.8, 1] }}
                     className="absolute w-56 h-56 object-contain pointer-events-none z-20"
-                    style={{ mixBlendMode: 'screen' }}
+                    style={{ mixBlendMode: 'screen', filter: 'brightness(1.35) contrast(1.15) drop-shadow(0 0 12px rgba(34, 211, 238, 0.6))' }}
                   />
                   {/* Shockwave Ring Layer 1 (Wide thin expansion) */}
                   <motion.div
@@ -354,10 +354,10 @@ export function BattlefieldVfxLayer({ vfxs }: Props) {
                     src={effectBurst}
                     alt="burst-vfx"
                     initial={{ scale: 0.5, rotate: 0, opacity: 0 }}
-                    animate={{ scale: [0.6, 1.7, 1.9], rotate: [0, 90], opacity: [0, 0.95, 0.95, 0] }}
-                    transition={{ duration: 0.38, ease: 'easeOut' }}
+                    animate={{ scale: [0.6, 1.6, 1.8, 1.95], rotate: [0, 45, 75, 90], opacity: [0, 1, 0.85, 0] }}
+                    transition={{ duration: 0.96, ease: 'easeOut', times: [0, 0.2, 0.8, 1] }}
                     className="absolute w-72 h-72 object-contain pointer-events-none z-30"
-                    style={{ mixBlendMode: 'screen' }}
+                    style={{ mixBlendMode: 'screen', filter: 'brightness(1.5) contrast(1.25) drop-shadow(0 0 20px rgba(129, 140, 248, 0.85))' }}
                   />
 
                   {/* B안 테스트: 스킬 피격 시 충격파 링 이미지 추가 (크기 거대화) */}
@@ -365,10 +365,10 @@ export function BattlefieldVfxLayer({ vfxs }: Props) {
                     src={effectShockwave}
                     alt="shockwave-vfx"
                     initial={{ scale: 0.3, rotate: 0, opacity: 0 }}
-                    animate={{ scale: [0.4, 1.7, 1.8], rotate: [0, -30], opacity: [0, 0.9, 0] }}
-                    transition={{ duration: 0.28, ease: 'easeOut' }}
+                    animate={{ scale: [0.4, 1.6, 1.75, 1.85], rotate: [0, -15, -25, -30], opacity: [0, 0.95, 0.7, 0] }}
+                    transition={{ duration: 0.82, ease: 'easeOut', times: [0, 0.18, 0.8, 1] }}
                     className="absolute w-60 h-60 object-contain pointer-events-none z-20"
-                    style={{ mixBlendMode: 'screen' }}
+                    style={{ mixBlendMode: 'screen', filter: 'brightness(1.4) contrast(1.2) drop-shadow(0 0 16px rgba(34, 211, 238, 0.65))' }}
                   />
                   {isBossAction ? (
                     // 2.1 Boss Action: Ground-cracking Crimson Doom Ritual
