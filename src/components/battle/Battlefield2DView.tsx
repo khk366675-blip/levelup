@@ -287,6 +287,9 @@ export function Battlefield2DView({
     // 1. Trigger VFX on targets (or on self if heal/guard)
     const targetsToApply = (vfxType === 'heal' || vfxType === 'guard') ? [actor] : targets
 
+    const actionParts = latestAction.actionId ? latestAction.actionId.split(':') : []
+    const sourceActionId = actionParts.length > 0 ? actionParts[actionParts.length - 1] : undefined
+
     const newVfxs = targetsToApply.map((t, idx) => {
       const coords = actorCoords[t.id] ?? { x: 50, y: 50 }
       return {
@@ -296,6 +299,8 @@ export function Battlefield2DView({
         targetY: coords.y,
         actorRole: actor.kind === 'shadow' ? `shadow-${actor.role}` : actor.role,
         isBoss: actor.isBoss || actor.kind === 'boss',
+        actionId: sourceActionId,
+        actionText: latestAction.text,
       }
     })
 

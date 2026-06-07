@@ -3,7 +3,28 @@ import fs from 'fs';
 import path from 'path';
 
 const EFFECTS_DIR = 'src/assets/effects';
-const files = ['effect-slash.png', 'effect-burst.png', 'effect-shockwave.png'];
+const files = [
+  'effect-physical-slash.png',
+  'effect-physical-strike.png',
+  'effect-physical-pierce.png',
+  'effect-fire-slash.png',
+  'effect-fire-strike.png',
+  'effect-fire-burst.png',
+  'effect-ice-strike.png',
+  'effect-ice-burst.png',
+  'effect-ice-pierce.png',
+  'effect-lightning-slash.png',
+  'effect-lightning-strike.png',
+  'effect-lightning-burst.png',
+  'effect-dark-slash.png',
+  'effect-dark-burst.png',
+  'effect-dark-aura.png',
+  'effect-holy-aura.png',
+  'effect-holy-heal.png',
+  'effect-holy-strike.png',
+  'effect-space-burst.png',
+  'effect-space-strike.png'
+];
 
 async function processEffects() {
   console.log('Starting transparency processing for effect images...');
