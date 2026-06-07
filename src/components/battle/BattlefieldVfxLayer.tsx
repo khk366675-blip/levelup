@@ -63,9 +63,6 @@ const VFX_IMAGES: Record<string, string> = {
 
 const VFX_MAPPING: Record<string, string> = {
   // 기본 액션
-  'basic': 'physical-slash',
-  'basic-attack': 'physical-slash',
-  'basic-focus-slash': 'physical-slash',
   'basic-guard-stance': 'holy-aura',
   'wait': 'physical-strike',
 
@@ -164,8 +161,12 @@ function resolveVfxImage(vfx: BattlefieldVfx): { image: string; motionType: 'sla
     const id = (vfx.actionId || '').toLowerCase()
     const role = (vfx.actorRole || '').toLowerCase()
 
+    const isBasicAttack = id === 'basic' || id === 'basic-attack' || text.includes('기본 공격') || text.includes('기본공격')
+
     // 2.1 속성(Element) 판별
-    if (text.includes('화염') || text.includes('불') || text.includes('폭주') || text.includes('연옥') || id.includes('fire') || id.includes('burn') || id.includes('ember') || id.includes('berserker') || id.includes('slayer')) {
+    if (isBasicAttack) {
+      element = 'physical'
+    } else if (text.includes('화염') || text.includes('불') || text.includes('폭주') || text.includes('연옥') || id.includes('fire') || id.includes('burn') || id.includes('ember') || id.includes('berserker') || id.includes('slayer')) {
       element = 'fire'
     } else if (text.includes('빙결') || text.includes('서리') || text.includes('냉기') || id.includes('ice') || id.includes('frost') || id.includes('freeze')) {
       element = 'ice'
