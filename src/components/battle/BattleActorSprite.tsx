@@ -663,8 +663,12 @@ export function BattleActorSprite({
       <div
         className={clsx(cardBorderClass, hasSprite ? 'overflow-visible' : 'overflow-hidden')}
         style={{
-          width: compact ? (isBoss ? 230 : 180) : (isBoss ? 320 : 240),
-          height: compact ? (isBoss ? 280 : 220) : (isBoss ? 390 : 290),
+          width: compact 
+            ? (isBoss ? 230 : (isShadow || isHunter ? 160 : 180)) 
+            : (isBoss ? 320 : (isShadow || isHunter ? 190 : 240)),
+          height: compact 
+            ? (isBoss ? 280 : (isShadow || isHunter ? 200 : 220)) 
+            : (isBoss ? 390 : (isShadow || isHunter ? 240 : 290)),
           transform: yCoord !== undefined ? `scale(${0.72 + (yCoord / 100) * 0.4})` : undefined,
           transformOrigin: 'bottom center',
         }}

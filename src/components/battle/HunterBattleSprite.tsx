@@ -45,8 +45,8 @@ export function HunterBattleSprite({
           isActive && "animate-pulse"
         )}
         style={{
-          maxHeight: compact ? 250 : 360,
-          maxWidth: compact ? 260 : 380,
+          maxHeight: compact ? 210 : 250,
+          maxWidth: compact ? 220 : 270,
           width: 'auto',
           height: 'auto',
           objectFit: 'contain',
