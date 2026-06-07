@@ -455,16 +455,6 @@ export function BattlefieldVfxLayer({ vfxs }: Props) {
                   {/* B안 테스트: 원래의 담백한 기본 공격 절차적 이펙트들 - 기본 공격일 때만 렌더링! */}
                   {isBasicAttack && (
                     <>
-                      {/* 공통 충격파 링 이미지 연출 */}
-                      <motion.img
-                        src={effectPhysicalStrike}
-                        alt="shockwave-vfx"
-                        initial={{ scale: 0.3, rotate: 0, opacity: 0 }}
-                        animate={{ scale: [0.4, 1.4, 1.6, 1.7], rotate: [0, 10, 15, 20], opacity: [0, 0.95, 0.7, 0] }}
-                        transition={{ duration: 0.64, ease: 'easeOut', times: [0, 0.18, 0.8, 1] }}
-                        className="absolute w-56 h-56 object-contain pointer-events-none z-20"
-                        style={{ mixBlendMode: 'screen', filter: `brightness(1.35) contrast(1.15) drop-shadow(0 0 12px ${glowColor})` }}
-                      />
                       {/* Shockwave Ring Layer 1 (Wide thin expansion) */}
                       <motion.div
                         initial={{ scale: 0.2, opacity: 1 }}
@@ -579,8 +569,9 @@ export function BattlefieldVfxLayer({ vfxs }: Props) {
                   )}
 
 
-                  {isBossAction ? (
-                    // 2.1 Boss Action: Ground-cracking Crimson Doom Ritual
+                  {isBasicAttack && (
+                    isBossAction ? (
+                      // 2.1 Boss Action: Ground-cracking Crimson Doom Ritual
                     <>
                       <motion.div
                         animate={{ scale: [0.5, 1.5, 1.7], rotate: [0, -90] }}
@@ -1115,47 +1106,66 @@ export function BattlefieldVfxLayer({ vfxs }: Props) {
                         />
                       </svg>
                     </>
-                  )}
+                  ))}
                 </div>
               )}
 
               {/* 3. Magic Circle Effect (High precision dual-ring magic shield) */}
               {isMagic && (
                 <div className="relative flex items-center justify-center w-36 h-36">
-                  <svg width="180" height="180" viewBox="0 0 100 100" className="absolute pointer-events-none overflow-visible">
-                    <motion.g
-                      animate={{ rotate: 360 }}
-                      transition={{ duration: 0.8, repeat: Infinity, ease: 'linear' }}
-                      style={{ transformOrigin: "50px 50px" }}
-                    >
-                      <circle
-                        cx="50" cy="50" r="42"
-                        fill="none" stroke="#22d3ee" strokeWidth="2"
-                        strokeDasharray="6, 4, 18, 6"
-                        filter="url(#vfx-glow-heavy)"
-                      />
-                    </motion.g>
-                    <motion.g
-                      animate={{ rotate: -360 }}
-                      transition={{ duration: 0.8, repeat: Infinity, ease: 'linear' }}
-                      style={{ transformOrigin: "50px 50px" }}
-                    >
-                      <polygon
-                        points="50,18 78,68 22,68"
-                        fill="none" stroke="#06b6d4" strokeWidth="1.2"
-                      />
-                    </motion.g>
-                    <motion.g
-                      animate={{ scale: [0.7, 1.25], opacity: [0.65, 0] }}
-                      transition={{ duration: 0.45, ease: "easeOut" }}
-                      style={{ transformOrigin: "50px 50px" }}
-                    >
-                      <circle
-                        cx="50" cy="50" r="30"
-                        fill="none" stroke="#e0f7fa" strokeWidth="1"
-                      />
-                    </motion.g>
-                  </svg>
+                  {/* B안 테스트: 마법 스킬 투명화 PNG 이미지 추가 */}
+                  {!isBasicAttack && resolved.image && (
+                    <motion.img
+                      src={resolved.image}
+                      alt="magic-vfx-image"
+                      initial={{ scale: 0.4, rotate: 0, opacity: 0 }}
+                      animate={{
+                        scale: [0.5, 1.4, 1.5, 1.6],
+                        rotate: [0, 45, 90],
+                        opacity: [0, 1, 0.85, 0]
+                      }}
+                      transition={{ duration: 0.68, ease: 'easeOut', times: [0, 0.15, 0.75, 1] }}
+                      className="absolute w-64 h-64 object-contain pointer-events-none z-30"
+                      style={{ mixBlendMode: 'screen', filter: `brightness(1.5) contrast(1.2) drop-shadow(0 0 16px ${glowColor})` }}
+                    />
+                  )}
+
+                  {isBasicAttack && (
+                    <svg width="180" height="180" viewBox="0 0 100 100" className="absolute pointer-events-none overflow-visible">
+                      <motion.g
+                        animate={{ rotate: 360 }}
+                        transition={{ duration: 0.8, repeat: Infinity, ease: 'linear' }}
+                        style={{ transformOrigin: "50px 50px" }}
+                      >
+                        <circle
+                          cx="50" cy="50" r="42"
+                          fill="none" stroke="#22d3ee" strokeWidth="2"
+                          strokeDasharray="6, 4, 18, 6"
+                          filter="url(#vfx-glow-heavy)"
+                        />
+                      </motion.g>
+                      <motion.g
+                        animate={{ rotate: -360 }}
+                        transition={{ duration: 0.8, repeat: Infinity, ease: 'linear' }}
+                        style={{ transformOrigin: "50px 50px" }}
+                      >
+                        <polygon
+                          points="50,18 78,68 22,68"
+                          fill="none" stroke="#06b6d4" strokeWidth="1.2"
+                        />
+                      </motion.g>
+                      <motion.g
+                        animate={{ scale: [0.7, 1.25], opacity: [0.65, 0] }}
+                        transition={{ duration: 0.45, ease: "easeOut" }}
+                        style={{ transformOrigin: "50px 50px" }}
+                      >
+                        <circle
+                          cx="50" cy="50" r="30"
+                          fill="none" stroke="#e0f7fa" strokeWidth="1"
+                        />
+                      </motion.g>
+                    </svg>
+                  )}
                 </div>
               )}
 
@@ -1169,7 +1179,7 @@ export function BattlefieldVfxLayer({ vfxs }: Props) {
                   />
                   
                   {/* B안 테스트: 그림자 스킬 투명화 PNG 이미지 추가 */}
-                  {resolved.image && (
+                  {!isBasicAttack && resolved.image && (
                     <motion.img
                       src={resolved.image}
                       alt="shadow-vfx-image"
@@ -1185,19 +1195,21 @@ export function BattlefieldVfxLayer({ vfxs }: Props) {
                     />
                   )}
 
-                  <svg width="200" height="200" viewBox="0 0 100 100" className="absolute pointer-events-none overflow-visible">
-                    {[0, 120, 240].map((rot, i) => (
-                      <motion.path
-                        key={i}
-                        d="M 50,50 Q 62,35 75,50 T 50,78 T 25,50"
-                        fill="none" stroke="#a855f7" strokeWidth="2.5"
-                        strokeLinecap="round"
-                        filter="url(#vfx-glow-heavy)"
-                        animate={{ rotate: [rot, rot - 180], scale: [0.65, 1.25, 0] }}
-                        transition={{ duration: 0.48, ease: "easeOut" }}
-                      />
-                    ))}
-                  </svg>
+                  {isBasicAttack && (
+                    <svg width="200" height="200" viewBox="0 0 100 100" className="absolute pointer-events-none overflow-visible">
+                      {[0, 120, 240].map((rot, i) => (
+                        <motion.path
+                          key={i}
+                          d="M 50,50 Q 62,35 75,50 T 50,78 T 25,50"
+                          fill="none" stroke="#a855f7" strokeWidth="2.5"
+                          strokeLinecap="round"
+                          filter="url(#vfx-glow-heavy)"
+                          animate={{ rotate: [rot, rot - 180], scale: [0.65, 1.25, 0] }}
+                          transition={{ duration: 0.48, ease: "easeOut" }}
+                        />
+                      ))}
+                    </svg>
+                  )}
                 </div>
               )}
 
@@ -1211,7 +1223,7 @@ export function BattlefieldVfxLayer({ vfxs }: Props) {
                   />
 
                   {/* B안 테스트: 저주 스킬 투명화 PNG 이미지 추가 */}
-                  {resolved.image && (
+                  {!isBasicAttack && resolved.image && (
                     <motion.img
                       src={resolved.image}
                       alt="curse-vfx-image"
@@ -1227,37 +1239,39 @@ export function BattlefieldVfxLayer({ vfxs }: Props) {
                     />
                   )}
 
-                  <svg width="160" height="160" viewBox="0 0 100 100" className="absolute pointer-events-none overflow-visible">
-                    <motion.g
-                      animate={{ scale: [0.6, 1.2, 0], rotate: 45 }}
-                      transition={{ duration: 0.45 }}
-                      style={{ transformOrigin: "50px 50px" }}
-                    >
-                      <polygon
-                        points="50,15 80,45 80,75 50,85 20,75 20,45"
-                        fill="none" stroke="#ef4444" strokeWidth="3"
-                        filter="url(#vfx-glow-heavy)"
-                      />
-                    </motion.g>
-                    {/* Cracking Shard Lines */}
-                    {Array.from({ length: 8 }).map((_, i) => {
-                      const angle = i * 45 * (Math.PI / 180)
-                      const radVal = 42
-                      const tx = Math.cos(angle) * radVal
-                      const ty = Math.sin(angle) * radVal
-                      return (
-                        <motion.path
-                          key={i}
-                          d={`M 50,50 L ${50 + tx},${50 + ty}`}
-                          stroke="#fee2e2" strokeWidth="1.5"
-                          filter="url(#vfx-glow-medium)"
-                          initial={{ pathLength: 0 }}
-                          animate={{ pathLength: 1, opacity: [1, 0] }}
-                          transition={{ duration: 0.4, delay: 0.05 }}
+                  {isBasicAttack && (
+                    <svg width="160" height="160" viewBox="0 0 100 100" className="absolute pointer-events-none overflow-visible">
+                      <motion.g
+                        animate={{ scale: [0.6, 1.2, 0], rotate: 45 }}
+                        transition={{ duration: 0.45 }}
+                        style={{ transformOrigin: "50px 50px" }}
+                      >
+                        <polygon
+                          points="50,15 80,45 80,75 50,85 20,75 20,45"
+                          fill="none" stroke="#ef4444" strokeWidth="3"
+                          filter="url(#vfx-glow-heavy)"
                         />
-                      )
-                    })}
-                  </svg>
+                      </motion.g>
+                      {/* Cracking Shard Lines */}
+                      {Array.from({ length: 8 }).map((_, i) => {
+                        const angle = i * 45 * (Math.PI / 180)
+                        const radVal = 42
+                        const tx = Math.cos(angle) * radVal
+                        const ty = Math.sin(angle) * radVal
+                        return (
+                          <motion.path
+                            key={i}
+                            d={`M 50,50 L ${50 + tx},${50 + ty}`}
+                            stroke="#fee2e2" strokeWidth="1.5"
+                            filter="url(#vfx-glow-medium)"
+                            initial={{ pathLength: 0 }}
+                            animate={{ pathLength: 1, opacity: [1, 0] }}
+                            transition={{ duration: 0.4, delay: 0.05 }}
+                          />
+                        )
+                      })}
+                    </svg>
+                  )}
                 </div>
               )}
 
