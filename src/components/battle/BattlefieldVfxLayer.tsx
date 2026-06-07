@@ -593,14 +593,18 @@ export function BattlefieldVfxLayer({ vfxs }: Props) {
                       />
                       <svg width="240" height="240" viewBox="0 0 120 120" className="absolute pointer-events-none overflow-visible">
                         {/* Doom Runes */}
-                        <motion.circle
-                          cx="60" cy="60" r="48"
-                          fill="none" stroke="#f43f5e" strokeWidth="2.5"
-                          strokeDasharray="4, 16, 28, 4"
-                          filter="url(#vfx-glow-heavy)"
+                        <motion.g
                           animate={{ rotate: 360 }}
                           transition={{ duration: 0.6, ease: "easeOut" }}
-                        />
+                          style={{ transformOrigin: "60px 60px" }}
+                        >
+                          <circle
+                            cx="60" cy="60" r="48"
+                            fill="none" stroke="#f43f5e" strokeWidth="2.5"
+                            strokeDasharray="4, 16, 28, 4"
+                            filter="url(#vfx-glow-heavy)"
+                          />
+                        </motion.g>
                         {/* Cracking Rift Lines */}
                         {[-60, -30, 0, 30, 60].map((deg, index) => {
                           const rad = (deg * Math.PI) / 180
@@ -626,11 +630,8 @@ export function BattlefieldVfxLayer({ vfxs }: Props) {
                           const tx = Math.cos(a) * radVal
                           const ty = Math.sin(a) * radVal
                           return (
-                            <motion.polygon
+                            <motion.g
                               key={i}
-                              points="60,60 63,55 60,52 57,55"
-                              fill="#fda4af"
-                              filter="url(#vfx-glow-medium)"
                               animate={{
                                 x: [0, tx],
                                 y: [0, ty],
@@ -638,7 +639,14 @@ export function BattlefieldVfxLayer({ vfxs }: Props) {
                                 rotate: [0, i * 45]
                               }}
                               transition={{ duration: 0.5, ease: "easeOut", delay: (i % 3) * 0.02 }}
-                            />
+                              style={{ transformOrigin: "60px 60px" }}
+                            >
+                              <polygon
+                                points="60,60 63,55 60,52 57,55"
+                                fill="#fda4af"
+                                filter="url(#vfx-glow-medium)"
+                              />
+                            </motion.g>
                           )
                         })}
                       </svg>
@@ -697,46 +705,62 @@ export function BattlefieldVfxLayer({ vfxs }: Props) {
                       />
                       <svg width="200" height="200" viewBox="0 0 100 100" className="absolute pointer-events-none overflow-visible">
                         {/* Pentagram Geometric Lines */}
-                        <motion.polygon
-                          points="50,15 82,75 18,75"
-                          fill="none" stroke="#ef4444" strokeWidth="2"
-                          filter="url(#vfx-glow-heavy)"
+                        <motion.g
                           animate={{ rotate: 180, scale: [0.5, 1.2] }}
                           transition={{ duration: 0.44 }}
-                        />
-                        <motion.polygon
-                          points="50,85 82,25 18,25"
-                          fill="none" stroke="#ef4444" strokeWidth="2"
-                          filter="url(#vfx-glow-heavy)"
+                          style={{ transformOrigin: "50px 50px" }}
+                        >
+                          <polygon
+                            points="50,15 82,75 18,75"
+                            fill="none" stroke="#ef4444" strokeWidth="2"
+                            filter="url(#vfx-glow-heavy)"
+                          />
+                        </motion.g>
+                        <motion.g
                           animate={{ rotate: -180, scale: [0.5, 1.2] }}
                           transition={{ duration: 0.44 }}
-                        />
-                        <motion.circle
-                          cx="50" cy="50" r="38"
-                          fill="none" stroke="#b91c1c" strokeWidth="3"
-                          strokeDasharray="8, 6"
+                          style={{ transformOrigin: "50px 50px" }}
+                        >
+                          <polygon
+                            points="50,85 82,25 18,25"
+                            fill="none" stroke="#ef4444" strokeWidth="2"
+                            filter="url(#vfx-glow-heavy)"
+                          />
+                        </motion.g>
+                        <motion.g
                           animate={{ rotate: 360 }}
                           transition={{ duration: 0.5, ease: "linear" }}
-                        />
+                          style={{ transformOrigin: "50px 50px" }}
+                        >
+                          <circle
+                            cx="50" cy="50" r="38"
+                            fill="none" stroke="#b91c1c" strokeWidth="3"
+                            strokeDasharray="8, 6"
+                          />
+                        </motion.g>
                         {/* Blood bubbles rising */}
                         {Array.from({ length: 14 }).map((_, i) => {
                           const dx = -20 + (i % 5) * 10
                           const dy = -45 - (i % 3) * 10
                           return (
-                            <motion.circle
+                            <motion.g
                               key={i}
-                              cx={50 + dx}
-                              cy="50"
-                              r={1.5 + (i % 3)}
-                              fill="#f87171"
-                              filter="url(#vfx-glow-medium)"
                               animate={{
                                 y: [0, dy],
                                 opacity: [0, 1, 1, 0],
                                 scale: [0.8, 1.3, 0.4]
                               }}
                               transition={{ duration: 0.55, ease: "easeOut", delay: (i % 4) * 0.03 }}
-                            />
+                              style={{ transformOrigin: `${50 + dx}px 50px` }}
+                            >
+                              <circle
+                                cx={50 + dx}
+                                cy="50"
+                                r={1.5 + (i % 3)}
+                                fill="#f87171"
+                                filter="url(#vfx-glow-medium)"
+                              />
+                            </motion.g>
                           )
                         })}
                       </svg>
@@ -752,15 +776,19 @@ export function BattlefieldVfxLayer({ vfxs }: Props) {
                       <svg width="220" height="220" viewBox="0 0 100 100" className="absolute pointer-events-none overflow-visible">
                         {/* Spatial Distortion Distortion Rings */}
                         {[0, 0.08, 0.16].map((del, i) => (
-                          <motion.circle
+                          <motion.g
                             key={i}
-                            cx="50" cy="50" r="40"
-                            fill="none" stroke="#a855f7" strokeWidth={4 - i}
-                            filter="url(#vfx-glow-heavy)"
                             initial={{ scale: 0.2, opacity: 1 }}
                             animate={{ scale: 1.5, opacity: 0 }}
                             transition={{ duration: 0.45, delay: del, ease: "easeOut" }}
-                          />
+                            style={{ transformOrigin: "50px 50px" }}
+                          >
+                            <circle
+                              cx="50" cy="50" r="40"
+                              fill="none" stroke="#a855f7" strokeWidth={4 - i}
+                              filter="url(#vfx-glow-heavy)"
+                            />
+                          </motion.g>
                         ))}
                         {/* Zigzag Lightning Crack path */}
                         <motion.path
@@ -812,11 +840,8 @@ export function BattlefieldVfxLayer({ vfxs }: Props) {
                         const tx = Math.cos(a) * radVal
                         const ty = Math.sin(a) * radVal
                         return (
-                          <motion.polygon
+                          <motion.g
                             key={i}
-                            points="50,50 53,46 50,42 47,46"
-                            fill="#e0f7fa"
-                            filter="url(#vfx-glow-medium)"
                             animate={{
                               x: [0, tx],
                               y: [0, ty],
@@ -824,7 +849,14 @@ export function BattlefieldVfxLayer({ vfxs }: Props) {
                               rotate: [0, i * 90]
                             }}
                             transition={{ duration: 0.38, ease: "easeOut", delay: (i % 3) * 0.02 }}
-                          />
+                            style={{ transformOrigin: "50px 50px" }}
+                          >
+                            <polygon
+                              points="50,50 53,46 50,42 47,46"
+                              fill="#e0f7fa"
+                              filter="url(#vfx-glow-medium)"
+                            />
+                          </motion.g>
                         )
                       })}
                     </svg>
@@ -839,15 +871,19 @@ export function BattlefieldVfxLayer({ vfxs }: Props) {
                       <svg width="220" height="220" viewBox="0 0 100 100" className="absolute pointer-events-none overflow-visible">
                         {/* Shockwaves */}
                         {[0, 0.08, 0.16].map((del, i) => (
-                          <motion.circle
+                          <motion.g
                             key={i}
-                            cx="50" cy="50" r="36"
-                            fill="none" stroke="#f59e0b" strokeWidth={5 - i}
-                            filter="url(#vfx-glow-heavy)"
                             initial={{ scale: 0.2, opacity: 1 }}
                             animate={{ scale: 1.65, opacity: 0 }}
                             transition={{ duration: 0.44, delay: del, ease: "easeOut" }}
-                          />
+                            style={{ transformOrigin: "50px 50px" }}
+                          >
+                            <circle
+                              cx="50" cy="50" r="36"
+                              fill="none" stroke="#f59e0b" strokeWidth={5 - i}
+                              filter="url(#vfx-glow-heavy)"
+                            />
+                          </motion.g>
                         ))}
                         {/* Magma Embers (Polygon shapes exploding) */}
                         {Array.from({ length: 18 }).map((_, i) => {
@@ -856,11 +892,8 @@ export function BattlefieldVfxLayer({ vfxs }: Props) {
                           const tx = Math.cos(angle) * radVal
                           const ty = Math.sin(angle) * radVal
                           return (
-                            <motion.polygon
+                            <motion.g
                               key={i}
-                              points="50,50 54,45 50,40 46,45"
-                              fill={i % 2 === 0 ? "#ef4444" : "#f59e0b"}
-                              filter="url(#vfx-glow-medium)"
                               animate={{
                                 x: [0, tx],
                                 y: [0, ty],
@@ -868,7 +901,14 @@ export function BattlefieldVfxLayer({ vfxs }: Props) {
                                 rotate: [0, i * 45]
                               }}
                               transition={{ duration: 0.46, ease: "easeOut", delay: (i % 4) * 0.012 }}
-                            />
+                              style={{ transformOrigin: "50px 50px" }}
+                            >
+                              <polygon
+                                points="50,50 54,45 50,40 46,45"
+                                fill={i % 2 === 0 ? "#ef4444" : "#f59e0b"}
+                                filter="url(#vfx-glow-medium)"
+                              />
+                            </motion.g>
                           )
                         })}
                       </svg>
@@ -878,37 +918,53 @@ export function BattlefieldVfxLayer({ vfxs }: Props) {
                     <>
                       <svg width="220" height="220" viewBox="0 0 100 100" className="absolute pointer-events-none overflow-visible">
                         {/* Outer Runes ring */}
-                        <motion.circle
-                          cx="50" cy="50" r="43"
-                          fill="none" stroke="#818cf8" strokeWidth="1.8"
-                          strokeDasharray="6, 8, 20, 4"
-                          filter="url(#vfx-glow-heavy)"
+                        <motion.g
                           animate={{ rotate: 360, scale: [0.6, 1.25, 0] }}
                           transition={{ duration: 0.58, ease: "easeInOut" }}
-                        />
+                          style={{ transformOrigin: "50px 50px" }}
+                        >
+                          <circle
+                            cx="50" cy="50" r="43"
+                            fill="none" stroke="#818cf8" strokeWidth="1.8"
+                            strokeDasharray="6, 8, 20, 4"
+                            filter="url(#vfx-glow-heavy)"
+                          />
+                        </motion.g>
                         {/* Inner geometric hexagram */}
-                        <motion.polygon
-                          points="50,15 80,67 20,67"
-                          fill="none" stroke="#67e8f9" strokeWidth="1.2"
-                          filter="url(#vfx-glow-heavy)"
+                        <motion.g
                           animate={{ rotate: -180, scale: [0.6, 1.2, 0] }}
                           transition={{ duration: 0.58, ease: "easeInOut" }}
-                        />
-                        <motion.polygon
-                          points="50,85 80,33 20,33"
-                          fill="none" stroke="#67e8f9" strokeWidth="1.2"
-                          filter="url(#vfx-glow-heavy)"
+                          style={{ transformOrigin: "50px 50px" }}
+                        >
+                          <polygon
+                            points="50,15 80,67 20,67"
+                            fill="none" stroke="#67e8f9" strokeWidth="1.2"
+                            filter="url(#vfx-glow-heavy)"
+                          />
+                        </motion.g>
+                        <motion.g
                           animate={{ rotate: 180, scale: [0.6, 1.2, 0] }}
                           transition={{ duration: 0.58, ease: "easeInOut" }}
-                        />
+                          style={{ transformOrigin: "50px 50px" }}
+                        >
+                          <polygon
+                            points="50,85 80,33 20,33"
+                            fill="none" stroke="#67e8f9" strokeWidth="1.2"
+                            filter="url(#vfx-glow-heavy)"
+                          />
+                        </motion.g>
                         {/* Magic core flash */}
-                        <motion.circle
-                          cx="50" cy="50" r="10"
-                          fill="#ffffff"
-                          filter="url(#vfx-glow-heavy)"
+                        <motion.g
                           animate={{ scale: [0.2, 1.5, 0] }}
                           transition={{ duration: 0.44 }}
-                        />
+                          style={{ transformOrigin: "50px 50px" }}
+                        >
+                          <circle
+                            cx="50" cy="50" r="10"
+                            fill="#ffffff"
+                            filter="url(#vfx-glow-heavy)"
+                          />
+                        </motion.g>
                         {/* Magic Star Dust particles */}
                         {Array.from({ length: 20 }).map((_, i) => {
                           const angle = i * 18 * (Math.PI / 180)
@@ -916,12 +972,8 @@ export function BattlefieldVfxLayer({ vfxs }: Props) {
                           const tx = Math.cos(angle) * radVal
                           const ty = Math.sin(angle) * radVal
                           return (
-                            <motion.circle
+                            <motion.g
                               key={i}
-                              cx="50" cy="50"
-                              r="2.5"
-                              fill="#c084fc"
-                              filter="url(#vfx-glow-medium)"
                               animate={{
                                 x: [0, tx],
                                 y: [0, ty],
@@ -929,7 +981,15 @@ export function BattlefieldVfxLayer({ vfxs }: Props) {
                                 scale: [1.6, 0.8, 0]
                               }}
                               transition={{ duration: 0.5, ease: "easeOut", delay: (i % 5) * 0.02 }}
-                            />
+                              style={{ transformOrigin: "50px 50px" }}
+                            >
+                              <circle
+                                cx="50" cy="50"
+                                r="2.5"
+                                fill="#c084fc"
+                                filter="url(#vfx-glow-medium)"
+                              />
+                            </motion.g>
                           )
                         })}
                       </svg>
@@ -940,14 +1000,18 @@ export function BattlefieldVfxLayer({ vfxs }: Props) {
                       <svg width="220" height="220" viewBox="0 0 100 100" className="absolute pointer-events-none overflow-visible">
                         {/* Multi-layered hexagonal grids */}
                         {[0, 15, 30].map((rot, i) => (
-                          <motion.polygon
+                          <motion.g
                             key={i}
-                            points="50,14 81,32 81,68 50,86 19,68 19,32"
-                            fill="none" stroke="#34d399" strokeWidth={2 - i * 0.4}
-                            filter="url(#vfx-glow-heavy)"
                             animate={{ rotate: [rot, rot + 45], scale: [0.5, 1.25, 0] }}
                             transition={{ duration: 0.48, ease: "easeOut" }}
-                          />
+                            style={{ transformOrigin: "50px 50px" }}
+                          >
+                            <polygon
+                              points="50,14 81,32 81,68 50,86 19,68 19,32"
+                              fill="none" stroke="#34d399" strokeWidth={2 - i * 0.4}
+                              filter="url(#vfx-glow-heavy)"
+                            />
+                          </motion.g>
                         ))}
                         {/* Golden Holy Cross shaft of light */}
                         <motion.path
@@ -966,38 +1030,47 @@ export function BattlefieldVfxLayer({ vfxs }: Props) {
                     <>
                       <svg width="200" height="200" viewBox="0 0 100 100" className="absolute pointer-events-none overflow-visible">
                         {/* Octagram matrix lines */}
-                        <motion.polygon
-                          points="50,15 75,25 85,50 75,75 50,85 25,75 15,50 25,25"
-                          fill="none" stroke="#fbbf24" strokeWidth="2.2"
-                          filter="url(#vfx-glow-heavy)"
+                        <motion.g
                           animate={{ rotate: 90, scale: [0.6, 1.25, 0] }}
                           transition={{ duration: 0.52 }}
-                        />
-                        <motion.polygon
-                          points="50,15 75,25 85,50 75,75 50,85 25,75 15,50 25,25"
-                          fill="none" stroke="#fbbf24" strokeWidth="1"
-                          filter="url(#vfx-glow-heavy)"
+                          style={{ transformOrigin: "50px 50px" }}
+                        >
+                          <polygon
+                            points="50,15 75,25 85,50 75,75 50,85 25,75 15,50 25,25"
+                            fill="none" stroke="#fbbf24" strokeWidth="2.2"
+                            filter="url(#vfx-glow-heavy)"
+                          />
+                        </motion.g>
+                        <motion.g
                           animate={{ rotate: -90, scale: [0.6, 1.15, 0] }}
                           transition={{ duration: 0.52 }}
-                        />
-                        <motion.circle
-                          cx="50" cy="50" r="28"
-                          fill="none" stroke="#f59e0b" strokeWidth="1"
-                          strokeDasharray="4, 4"
+                          style={{ transformOrigin: "50px 50px" }}
+                        >
+                          <polygon
+                            points="50,15 75,25 85,50 75,75 50,85 25,75 15,50 25,25"
+                            fill="none" stroke="#fbbf24" strokeWidth="1"
+                            filter="url(#vfx-glow-heavy)"
+                          />
+                        </motion.g>
+                        <motion.g
                           animate={{ rotate: 180 }}
                           transition={{ duration: 0.52 }}
-                        />
+                          style={{ transformOrigin: "50px 50px" }}
+                        >
+                          <circle
+                            cx="50" cy="50" r="28"
+                            fill="none" stroke="#f59e0b" strokeWidth="1"
+                            strokeDasharray="4, 4"
+                          />
+                        </motion.g>
                         {/* Floating formula grid cards */}
                         {Array.from({ length: 8 }).map((_, i) => {
                           const a = i * 45 * (Math.PI / 180)
                           const dx = Math.cos(a) * 45
                           const dy = Math.sin(a) * 45
                           return (
-                            <motion.rect
+                            <motion.g
                               key={i}
-                              x="46" y="46" width="8" height="8" rx="1"
-                              fill="none" stroke="#fbbf24" strokeWidth="1.2"
-                              filter="url(#vfx-glow-medium)"
                               animate={{
                                 x: [0, dx],
                                 y: [0, dy],
@@ -1005,7 +1078,14 @@ export function BattlefieldVfxLayer({ vfxs }: Props) {
                                 rotate: [0, i * 90]
                               }}
                               transition={{ duration: 0.48, ease: "easeOut", delay: 0.05 }}
-                            />
+                              style={{ transformOrigin: "50px 50px" }}
+                            >
+                              <rect
+                                x="46" y="46" width="8" height="8" rx="1"
+                                fill="none" stroke="#fbbf24" strokeWidth="1.2"
+                                filter="url(#vfx-glow-medium)"
+                              />
+                            </motion.g>
                           )
                         })}
                       </svg>
@@ -1019,14 +1099,18 @@ export function BattlefieldVfxLayer({ vfxs }: Props) {
                         className="absolute inset-0 rounded-lg border-2 border-amber-400 bg-amber-500/5 opacity-30 filter blur-sm"
                       />
                       <svg width="200" height="200" viewBox="0 0 100 100" className="absolute pointer-events-none overflow-visible">
-                        <motion.circle
-                          cx="50" cy="50" r="35"
-                          fill="none" stroke="#f59e0b" strokeWidth="3.5"
-                          filter="url(#vfx-glow-heavy)"
+                        <motion.g
                           initial={{ scale: 0.3, opacity: 1 }}
                           animate={{ scale: 1.45, opacity: 0 }}
                           transition={{ duration: 0.38, ease: "easeOut" }}
-                        />
+                          style={{ transformOrigin: "50px 50px" }}
+                        >
+                          <circle
+                            cx="50" cy="50" r="35"
+                            fill="none" stroke="#f59e0b" strokeWidth="3.5"
+                            filter="url(#vfx-glow-heavy)"
+                          />
+                        </motion.g>
                         <motion.path
                           d="M 15,50 L 50,15 L 85,50 L 50,85 Z"
                           fill="none" stroke="#f59e0b" strokeWidth="1.5"
@@ -1043,26 +1127,38 @@ export function BattlefieldVfxLayer({ vfxs }: Props) {
               {isMagic && (
                 <div className="relative flex items-center justify-center w-36 h-36">
                   <svg width="180" height="180" viewBox="0 0 100 100" className="absolute pointer-events-none overflow-visible">
-                    <motion.circle
-                      cx="50" cy="50" r="42"
-                      fill="none" stroke="#22d3ee" strokeWidth="2"
-                      strokeDasharray="6, 4, 18, 6"
-                      filter="url(#vfx-glow-heavy)"
+                    <motion.g
                       animate={{ rotate: 360 }}
                       transition={{ duration: 0.8, repeat: Infinity, ease: 'linear' }}
-                    />
-                    <motion.polygon
-                      points="50,18 78,68 22,68"
-                      fill="none" stroke="#06b6d4" strokeWidth="1.2"
+                      style={{ transformOrigin: "50px 50px" }}
+                    >
+                      <circle
+                        cx="50" cy="50" r="42"
+                        fill="none" stroke="#22d3ee" strokeWidth="2"
+                        strokeDasharray="6, 4, 18, 6"
+                        filter="url(#vfx-glow-heavy)"
+                      />
+                    </motion.g>
+                    <motion.g
                       animate={{ rotate: -360 }}
                       transition={{ duration: 0.8, repeat: Infinity, ease: 'linear' }}
-                    />
-                    <motion.circle
-                      cx="50" cy="50" r="30"
-                      fill="none" stroke="#e0f7fa" strokeWidth="1"
+                      style={{ transformOrigin: "50px 50px" }}
+                    >
+                      <polygon
+                        points="50,18 78,68 22,68"
+                        fill="none" stroke="#06b6d4" strokeWidth="1.2"
+                      />
+                    </motion.g>
+                    <motion.g
                       animate={{ scale: [0.7, 1.25], opacity: [0.65, 0] }}
                       transition={{ duration: 0.45, ease: "easeOut" }}
-                    />
+                      style={{ transformOrigin: "50px 50px" }}
+                    >
+                      <circle
+                        cx="50" cy="50" r="30"
+                        fill="none" stroke="#e0f7fa" strokeWidth="1"
+                      />
+                    </motion.g>
                   </svg>
                 </div>
               )}
@@ -1100,13 +1196,17 @@ export function BattlefieldVfxLayer({ vfxs }: Props) {
                     className="absolute inset-0 bg-[radial-gradient(circle,rgba(239,68,68,0.48),transparent_70%)] rounded-full filter blur-md"
                   />
                   <svg width="160" height="160" viewBox="0 0 100 100" className="absolute pointer-events-none overflow-visible">
-                    <motion.polygon
-                      points="50,15 80,45 80,75 50,85 20,75 20,45"
-                      fill="none" stroke="#ef4444" strokeWidth="3"
-                      filter="url(#vfx-glow-heavy)"
+                    <motion.g
                       animate={{ scale: [0.6, 1.2, 0], rotate: 45 }}
                       transition={{ duration: 0.45 }}
-                    />
+                      style={{ transformOrigin: "50px 50px" }}
+                    >
+                      <polygon
+                        points="50,15 80,45 80,75 50,85 20,75 20,45"
+                        fill="none" stroke="#ef4444" strokeWidth="3"
+                        filter="url(#vfx-glow-heavy)"
+                      />
+                    </motion.g>
                     {/* Cracking Shard Lines */}
                     {Array.from({ length: 8 }).map((_, i) => {
                       const angle = i * 45 * (Math.PI / 180)
@@ -1114,9 +1214,9 @@ export function BattlefieldVfxLayer({ vfxs }: Props) {
                       const tx = Math.cos(angle) * radVal
                       const ty = Math.sin(angle) * radVal
                       return (
-                        <motion.line
+                        <motion.path
                           key={i}
-                          x1="50" y1="50" x2={50 + tx} y2={50 + ty}
+                          d={`M 50,50 L ${50 + tx},${50 + ty}`}
                           stroke="#fee2e2" strokeWidth="1.5"
                           filter="url(#vfx-glow-medium)"
                           initial={{ pathLength: 0 }}
@@ -1195,22 +1295,30 @@ export function BattlefieldVfxLayer({ vfxs }: Props) {
                   />
                   <svg width="160" height="160" viewBox="0 0 100 100" className="absolute pointer-events-none overflow-visible">
                     {/* Core Hexagon Grid */}
-                    <motion.polygon
-                      points="50,15 80,30 80,70 50,85 20,70 20,30"
-                      fill="none" stroke="#22d3ee" strokeWidth="4.5"
-                      filter="url(#vfx-glow-heavy)"
+                    <motion.g
                       initial={{ scale: 0.6, opacity: 0 }}
                       animate={{ scale: [0.6, 1.15, 0.9], opacity: [0, 1, 0.85, 0] }}
                       transition={{ duration: 0.48, ease: 'easeOut' }}
-                    />
+                      style={{ transformOrigin: "50px 50px" }}
+                    >
+                      <polygon
+                        points="50,15 80,30 80,70 50,85 20,70 20,30"
+                        fill="none" stroke="#22d3ee" strokeWidth="4.5"
+                        filter="url(#vfx-glow-heavy)"
+                      />
+                    </motion.g>
                     {/* Honeycomb grid sub-lines */}
-                    <motion.path
-                      d="M 50,15 L 50,85 M 20,30 L 80,70 M 20,70 L 80,30"
-                      fill="none" stroke="#0891b2" strokeWidth="1.5"
+                    <motion.g
                       initial={{ scale: 0.6, opacity: 0 }}
                       animate={{ scale: [0.6, 1.15, 0.9], opacity: [0, 0.8, 0.6, 0] }}
                       transition={{ duration: 0.48, ease: 'easeOut' }}
-                    />
+                      style={{ transformOrigin: "50px 50px" }}
+                    >
+                      <path
+                        d="M 50,15 L 50,85 M 20,30 L 80,70 M 20,70 L 80,30"
+                        fill="none" stroke="#0891b2" strokeWidth="1.5"
+                      />
+                    </motion.g>
                   </svg>
                 </div>
               )}
