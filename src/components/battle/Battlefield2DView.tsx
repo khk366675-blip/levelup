@@ -354,6 +354,7 @@ export function Battlefield2DView({
         targetY: coords.y,
         style: popupStyle,
         intensity,
+        isBoss: t.isBoss || t.kind === 'boss',
       }
     }).filter((p): p is NonNullable<typeof p> => p !== null)
 
@@ -469,51 +470,11 @@ export function Battlefield2DView({
         </div>
       )}
 
-      {/* 2.5D ARENA SPACE */}
+{/* 2.5D ARENA SPACE */}
       <div className="relative flex-1 w-full h-full p-4">
-        {/* SVG Action Ranged Projectile / Subtle Trail Animation */}
+        {/* HTML Ranged Projectiles (100% crash-free and smooth) */}
         {latestAction?.actorId && latestAction.targetIds && latestAction.targetIds.length > 0 && (
           <>
-            {/* Guide lines are safe inside SVG as long as they don't use motion on x1/y1 attributes */}
-            <svg className="absolute inset-0 w-full h-full pointer-events-none z-[110]">
-              {latestAction.targetIds.map(targetId => {
-                const start = actorCoords[latestAction.actorId!]
-                const end = actorCoords[targetId]
-                if (!start || !end) return null
-                const kind = latestAction.kind || 'attack'
-                const actor = overriddenActors.find(a => a.id === latestAction.actorId)
-                if (isMeleeAction(actor?.role, kind)) return null
-
-                let projectileColor = '#f43f5e'
-                if (kind === 'heal') projectileColor = '#10b981'
-                else if (kind === 'guard') projectileColor = '#f59e0b'
-                else if (kind === 'skill') projectileColor = '#22d3ee'
-                else if (kind === 'magic') projectileColor = '#6366f1'
-                else if (kind === 'shadow') projectileColor = '#a855f7'
-                else if (kind === 'curse') projectileColor = '#ef4444'
-
-                return (
-                  <motion.g
-                    key={`line-${latestAction.actorId}-${targetId}`}
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: [0, 0.12, 0] }}
-                    transition={{ duration: 0.35 }}
-                  >
-                    <line
-                      x1={`${start.x}%`}
-                      y1={`${start.y}%`}
-                      x2={`${end.x}%`}
-                      y2={`${end.y}%`}
-                      stroke={projectileColor}
-                      strokeWidth="1.5"
-                      strokeDasharray="4 4"
-                    />
-                  </motion.g>
-                )
-              })}
-            </svg>
-
-            {/* HTML Ranged Projectiles (100% crash-free and smooth) */}
             <div className="absolute inset-0 w-full h-full pointer-events-none z-[111]">
               {latestAction.targetIds.map(targetId => {
                 const start = actorCoords[latestAction.actorId!]
@@ -522,6 +483,14 @@ export function Battlefield2DView({
                 const kind = latestAction.kind || 'attack'
                 const actor = overriddenActors.find(a => a.id === latestAction.actorId)
                 if (isMeleeAction(actor?.role, kind)) return null
+
+                const targetUnit = overriddenActors.find(a => a.id === targetId)
+                const attackerUnit = overriddenActors.find(a => a.id === latestAction.actorId)
+
+                const startIsBoss = attackerUnit?.isBoss || attackerUnit?.kind === 'boss'
+                const endIsBoss = targetUnit?.isBoss || targetUnit?.kind === 'boss'
+                const startOffset = startIsBoss ? 76 : 52
+                const endOffset = endIsBoss ? 76 : 52
 
                 let projectileColor = '#f43f5e'
                 if (kind === 'heal') projectileColor = '#10b981'
@@ -549,7 +518,7 @@ export function Battlefield2DView({
                       }}
                       animate={{
                         left: [`${start.x}%`, `${end.x}%`],
-                        top: [`${start.y}%`, `${end.y}%`],
+                        top: [`calc(${start.y}% - ${startOffset}px)`, `calc(${end.y}% - ${endOffset}px)`],
                         scale: [0.8, 1.2, 0.7],
                         opacity: [1, 1, 0]
                       }}
@@ -572,7 +541,7 @@ export function Battlefield2DView({
                       }}
                       animate={{
                         left: [`${start.x}%`, `${end.x}%`],
-                        top: [`${start.y}%`, `${end.y}%`],
+                        top: [`calc(${start.y}% - ${startOffset}px)`, `calc(${end.y}% - ${endOffset}px)`],
                         scale: [0.6, 0.9, 0],
                         opacity: [0.8, 0.8, 0]
                       }}
@@ -692,7 +661,7 @@ export function Battlefield2DView({
             className="absolute pointer-events-none z-[130]"
             style={{
               left: `${pop.targetX}%`,
-              top: `${pop.targetY}%`,
+              top: pop.targetY !== undefined ? `calc(${pop.targetY}% - ${pop.isBoss ? '150px' : '110px'})` : '50%',
               transform: 'translate(-50%, -50%)',
             }}
           >

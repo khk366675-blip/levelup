@@ -410,7 +410,9 @@ export function BattlefieldVfxLayer({ vfxs }: Props) {
               className="absolute flex items-center justify-center"
               style={{
                 left: vfx.targetX !== undefined ? `${vfx.targetX}%` : '50%',
-                top: vfx.targetY !== undefined ? `${vfx.targetY}%` : '50%',
+                top: vfx.targetY !== undefined 
+                  ? `calc(${vfx.targetY}% - ${vfx.isBoss ? '76px' : '52px'})` 
+                  : '50%',
                 transform: 'translate(-50%, -50%)',
               }}
             >
@@ -419,37 +421,43 @@ export function BattlefieldVfxLayer({ vfxs }: Props) {
                 <div className="relative flex items-center justify-center w-40 h-40">
                   {/* B안 테스트: 참격 이미지 추가 연출 - 기본 공격이 아닐 때만 렌더링! */}
                   {!isBasicAttack && resolved.motionType === 'slash' && (
-                    <motion.img
-                      src={resolved.image}
-                      alt="slash-vfx"
-                      initial={{ scale: 0.5, rotate: -45, opacity: 0 }}
-                      animate={{ scale: [0.6, 1.45, 1.55, 1.6], rotate: [-45, 10, 20, 25], opacity: [0, 1, 0.8, 0] }}
-                      transition={{ duration: 0.72, ease: 'easeOut', times: [0, 0.15, 0.75, 1] }}
-                      className="absolute w-64 h-64 object-contain pointer-events-none z-30"
-                      style={{ mixBlendMode: 'screen', filter: `brightness(1.45) contrast(1.2) drop-shadow(0 0 16px ${glowColor})` }}
-                    />
+                    <div className="absolute top-1/2 left-1/2 w-0 h-0 flex items-center justify-center overflow-visible">
+                      <motion.img
+                        src={resolved.image}
+                        alt="slash-vfx"
+                        initial={{ scale: 0.5, rotate: -45, opacity: 0 }}
+                        animate={{ scale: [0.6, 1.45, 1.55, 1.6], rotate: [-45, 10, 20, 25], opacity: [0, 1, 0.8, 0] }}
+                        transition={{ duration: 0.72, ease: 'easeOut', times: [0, 0.15, 0.75, 1] }}
+                        className="max-w-none w-64 h-64 object-contain pointer-events-none z-30"
+                        style={{ mixBlendMode: 'screen', filter: `brightness(1.45) contrast(1.2) drop-shadow(0 0 16px ${glowColor})` }}
+                      />
+                    </div>
                   )}
                   {!isBasicAttack && resolved.motionType === 'pierce' && (
-                    <motion.img
-                      src={resolved.image}
-                      alt="pierce-vfx"
-                      initial={{ scaleX: 0.2, scaleY: 0.6, opacity: 0 }}
-                      animate={{ scaleX: [0.3, 1.8, 1.9], scaleY: [0.6, 1.0, 0.8], opacity: [0, 1, 0.8, 0] }}
-                      transition={{ duration: 0.64, ease: 'easeOut' }}
-                      className="absolute w-60 h-60 object-contain pointer-events-none z-30"
-                      style={{ mixBlendMode: 'screen', filter: `brightness(1.45) contrast(1.2) drop-shadow(0 0 16px ${glowColor})` }}
-                    />
+                    <div className="absolute top-1/2 left-1/2 w-0 h-0 flex items-center justify-center overflow-visible">
+                      <motion.img
+                        src={resolved.image}
+                        alt="pierce-vfx"
+                        initial={{ scaleX: 0.2, scaleY: 0.6, opacity: 0 }}
+                        animate={{ scaleX: [0.3, 1.8, 1.9], scaleY: [0.6, 1.0, 0.8], opacity: [0, 1, 0.8, 0] }}
+                        transition={{ duration: 0.64, ease: 'easeOut' }}
+                        className="max-w-none w-60 h-60 object-contain pointer-events-none z-30"
+                        style={{ mixBlendMode: 'screen', filter: `brightness(1.45) contrast(1.2) drop-shadow(0 0 16px ${glowColor})` }}
+                      />
+                    </div>
                   )}
                   {!isBasicAttack && resolved.motionType === 'strike' && (
-                    <motion.img
-                      src={resolved.image}
-                      alt="strike-vfx"
-                      initial={{ scale: 0.3, rotate: 0, opacity: 0 }}
-                      animate={{ scale: [0.4, 1.4, 1.6, 1.7], rotate: [0, 10, 15, 20], opacity: [0, 0.95, 0.7, 0] }}
-                      transition={{ duration: 0.64, ease: 'easeOut', times: [0, 0.18, 0.8, 1] }}
-                      className="absolute w-56 h-56 object-contain pointer-events-none z-20"
-                      style={{ mixBlendMode: 'screen', filter: `brightness(1.35) contrast(1.15) drop-shadow(0 0 12px ${glowColor})` }}
-                    />
+                    <div className="absolute top-1/2 left-1/2 w-0 h-0 flex items-center justify-center overflow-visible">
+                      <motion.img
+                        src={resolved.image}
+                        alt="strike-vfx"
+                        initial={{ scale: 0.3, rotate: 0, opacity: 0 }}
+                        animate={{ scale: [0.4, 1.4, 1.6, 1.7], rotate: [0, 10, 15, 20], opacity: [0, 0.95, 0.7, 0] }}
+                        transition={{ duration: 0.64, ease: 'easeOut', times: [0, 0.18, 0.8, 1] }}
+                        className="max-w-none w-56 h-56 object-contain pointer-events-none z-20"
+                        style={{ mixBlendMode: 'screen', filter: `brightness(1.35) contrast(1.15) drop-shadow(0 0 12px ${glowColor})` }}
+                      />
+                    </div>
                   )}
                   
                   {/* B안 테스트: 원래의 담백한 기본 공격 절차적 이펙트들 - 기본 공격일 때만 렌더링! */}
@@ -495,25 +503,6 @@ export function BattlefieldVfxLayer({ vfxs }: Props) {
                         className="absolute w-12 h-12 bg-white rounded-full filter blur-[1px] z-10"
                         style={{ boxShadow: `0 0 20px ${themeColor}` }}
                       />
-                      {/* SVG Container: Dynamic Slash Arc */}
-                      <svg width="220" height="220" viewBox="0 0 100 100" className="absolute inset-0 pointer-events-none overflow-visible">
-                        <motion.path
-                          d="M 15 85 Q 48 24 85 15"
-                          fill="none"
-                          stroke={
-                            isBossAction ? "#fda4af" :
-                            theme === 'swordsman' ? "#67e8f9" :
-                            theme === 'warrior' ? "#fcd34d" :
-                            theme === 'tracker' ? "#6ee7b7" : "#ffffff"
-                          }
-                          strokeWidth="6.5"
-                          strokeLinecap="round"
-                          filter="url(#vfx-glow-heavy)"
-                          initial={{ pathLength: 0, opacity: 1 }}
-                          animate={{ pathLength: [0, 1, 1], pathOffset: [0, 0, 1], opacity: [0, 1, 0] }}
-                          transition={{ duration: 0.26, ease: "easeInOut" }}
-                        />
-                      </svg>
                     </>
                   )}
                 </div>
@@ -524,589 +513,59 @@ export function BattlefieldVfxLayer({ vfxs }: Props) {
                 <div className="relative flex items-center justify-center w-40 h-40">
                   {/* B안 테스트: 스킬 발동 시 이미지 추가 */}
                   {resolved.motionType === 'burst' && (
-                    <motion.img
-                      src={resolved.image}
-                      alt="burst-vfx"
-                      initial={{ scale: 0.5, rotate: 0, opacity: 0 }}
-                      animate={{ scale: [0.6, 1.6, 1.8, 1.95], rotate: [0, 45, 75, 90], opacity: [0, 1, 0.85, 0] }}
-                      transition={{ duration: 0.96, ease: 'easeOut', times: [0, 0.2, 0.8, 1] }}
-                      className="absolute w-72 h-72 object-contain pointer-events-none z-30"
-                      style={{ mixBlendMode: 'screen', filter: `brightness(1.5) contrast(1.25) drop-shadow(0 0 20px ${glowColor})` }}
-                    />
+                    <div className="absolute top-1/2 left-1/2 w-0 h-0 flex items-center justify-center overflow-visible">
+                      <motion.img
+                        src={resolved.image}
+                        alt="burst-vfx"
+                        initial={{ scale: 0.5, rotate: 0, opacity: 0 }}
+                        animate={{ scale: [0.6, 1.6, 1.8, 1.95], rotate: [0, 45, 75, 90], opacity: [0, 1, 0.85, 0] }}
+                        transition={{ duration: 0.96, ease: 'easeOut', times: [0, 0.2, 0.8, 1] }}
+                        className="max-w-none w-72 h-72 object-contain pointer-events-none z-30"
+                        style={{ mixBlendMode: 'screen', filter: `brightness(1.5) contrast(1.25) drop-shadow(0 0 20px ${glowColor})` }}
+                      />
+                    </div>
                   )}
                   {resolved.motionType === 'slash' && (
-                    <motion.img
-                      src={resolved.image}
-                      alt="skill-slash-vfx"
-                      initial={{ scale: 0.5, rotate: -45, opacity: 0 }}
-                      animate={{ scale: [0.7, 1.5, 1.7, 1.8], rotate: [-45, 15, 30, 40], opacity: [0, 1, 0.8, 0] }}
-                      transition={{ duration: 0.82, ease: 'easeOut', times: [0, 0.15, 0.8, 1] }}
-                      className="absolute w-72 h-72 object-contain pointer-events-none z-30"
-                      style={{ mixBlendMode: 'screen', filter: `brightness(1.5) contrast(1.25) drop-shadow(0 0 18px ${glowColor})` }}
-                    />
+                    <div className="absolute top-1/2 left-1/2 w-0 h-0 flex items-center justify-center overflow-visible">
+                      <motion.img
+                        src={resolved.image}
+                        alt="skill-slash-vfx"
+                        initial={{ scale: 0.5, rotate: -45, opacity: 0 }}
+                        animate={{ scale: [0.7, 1.5, 1.7, 1.8], rotate: [-45, 15, 30, 40], opacity: [0, 1, 0.8, 0] }}
+                        transition={{ duration: 0.82, ease: 'easeOut', times: [0, 0.15, 0.8, 1] }}
+                        className="max-w-none w-72 h-72 object-contain pointer-events-none z-30"
+                        style={{ mixBlendMode: 'screen', filter: `brightness(1.5) contrast(1.25) drop-shadow(0 0 18px ${glowColor})` }}
+                      />
+                    </div>
                   )}
                   {resolved.motionType === 'pierce' && (
-                    <motion.img
-                      src={resolved.image}
-                      alt="skill-pierce-vfx"
-                      initial={{ scaleX: 0.2, scaleY: 0.7, opacity: 0 }}
-                      animate={{ scaleX: [0.3, 2.0, 2.2], scaleY: [0.7, 1.1, 0.9], opacity: [0, 1, 0.8, 0] }}
-                      transition={{ duration: 0.78, ease: 'easeOut' }}
-                      className="absolute w-64 h-64 object-contain pointer-events-none z-30"
-                      style={{ mixBlendMode: 'screen', filter: `brightness(1.5) contrast(1.25) drop-shadow(0 0 18px ${glowColor})` }}
-                    />
+                    <div className="absolute top-1/2 left-1/2 w-0 h-0 flex items-center justify-center overflow-visible">
+                      <motion.img
+                        src={resolved.image}
+                        alt="skill-pierce-vfx"
+                        initial={{ scaleX: 0.2, scaleY: 0.7, opacity: 0 }}
+                        animate={{ scaleX: [0.3, 2.0, 2.2], scaleY: [0.7, 1.1, 0.9], opacity: [0, 1, 0.8, 0] }}
+                        transition={{ duration: 0.78, ease: 'easeOut' }}
+                        className="max-w-none w-64 h-64 object-contain pointer-events-none z-30"
+                        style={{ mixBlendMode: 'screen', filter: `brightness(1.5) contrast(1.25) drop-shadow(0 0 18px ${glowColor})` }}
+                      />
+                    </div>
                   )}
                   {resolved.motionType === 'strike' && (
-                    <motion.img
-                      src={resolved.image}
-                      alt="skill-strike-vfx"
-                      initial={{ scale: 0.3, rotate: 0, opacity: 0 }}
-                      animate={{ scale: [0.4, 1.6, 1.8], rotate: [0, 20], opacity: [0, 1, 0.8, 0] }}
-                      transition={{ duration: 0.78, ease: 'easeOut' }}
-                      className="absolute w-64 h-64 object-contain pointer-events-none z-30"
-                      style={{ mixBlendMode: 'screen', filter: `brightness(1.4) contrast(1.2) drop-shadow(0 0 16px ${glowColor})` }}
-                    />
+                    <div className="absolute top-1/2 left-1/2 w-0 h-0 flex items-center justify-center overflow-visible">
+                      <motion.img
+                        src={resolved.image}
+                        alt="skill-strike-vfx"
+                        initial={{ scale: 0.3, rotate: 0, opacity: 0 }}
+                        animate={{ scale: [0.4, 1.6, 1.8], rotate: [0, 20], opacity: [0, 1, 0.8, 0] }}
+                        transition={{ duration: 0.78, ease: 'easeOut' }}
+                        className="max-w-none w-64 h-64 object-contain pointer-events-none z-30"
+                        style={{ mixBlendMode: 'screen', filter: `brightness(1.4) contrast(1.2) drop-shadow(0 0 16px ${glowColor})` }}
+                      />
+                    </div>
                   )}
 
 
-                  {isBasicAttack && (
-                    isBossAction ? (
-                      // 2.1 Boss Action: Ground-cracking Crimson Doom Ritual
-                    <>
-                      <motion.div
-                        animate={{ scale: [0.5, 1.5, 1.7], rotate: [0, -90] }}
-                        transition={{ duration: 0.5, ease: 'easeOut' }}
-                        className="absolute inset-0 rounded-full border-4 border-rose-600 bg-rose-950/20 opacity-30 filter blur-sm shadow-[0_0_35px_rgba(244,63,94,0.95)]"
-                      />
-                      <svg width="240" height="240" viewBox="0 0 120 120" className="absolute pointer-events-none overflow-visible">
-                        {/* Doom Runes */}
-                        <motion.g
-                          animate={{ rotate: 360 }}
-                          transition={{ duration: 0.6, ease: "easeOut" }}
-                          style={{ transformOrigin: "60px 60px" }}
-                        >
-                          <circle
-                            cx="60" cy="60" r="48"
-                            fill="none" stroke="#f43f5e" strokeWidth="2.5"
-                            strokeDasharray="4, 16, 28, 4"
-                            filter="url(#vfx-glow-heavy)"
-                          />
-                        </motion.g>
-                        {/* Cracking Rift Lines */}
-                        {[-60, -30, 0, 30, 60].map((deg, index) => {
-                          const rad = (deg * Math.PI) / 180
-                          const x2 = 60 + Math.sin(rad) * 55
-                          const y2 = 60 - Math.cos(rad) * 55
-                          return (
-                            <motion.path
-                              key={index}
-                              d={`M 60,60 L ${60 + (x2 - 60) * 0.4},${60 + (y2 - 60) * 0.4} L ${60 + (x2 - 60) * 0.8},${60 + (y2 - 60) * 0.7} L ${x2},${y2}`}
-                              fill="none" stroke="#f43f5e" strokeWidth="3.5"
-                              strokeLinecap="round" strokeLinejoin="round"
-                              filter="url(#vfx-glow-heavy)"
-                              initial={{ pathLength: 0, opacity: 1 }}
-                              animate={{ pathLength: 1, opacity: [1, 1, 0] }}
-                              transition={{ duration: 0.48, ease: "easeOut", delay: index * 0.02 }}
-                            />
-                          )
-                        })}
-                        {/* Doom Shards */}
-                        {Array.from({ length: 16 }).map((_, i) => {
-                          const a = i * 22.5 * (Math.PI / 180)
-                          const radVal = 40 + (i % 3) * 15
-                          const tx = Math.cos(a) * radVal
-                          const ty = Math.sin(a) * radVal
-                          return (
-                            <motion.g
-                              key={i}
-                              animate={{
-                                x: [0, tx],
-                                y: [0, ty],
-                                scale: [1.6, 0],
-                                rotate: [0, i * 45]
-                              }}
-                              transition={{ duration: 0.5, ease: "easeOut", delay: (i % 3) * 0.02 }}
-                              style={{ transformOrigin: "60px 60px" }}
-                            >
-                              <polygon
-                                points="60,60 63,55 60,52 57,55"
-                                fill="#fda4af"
-                                filter="url(#vfx-glow-medium)"
-                              />
-                            </motion.g>
-                          )
-                        })}
-                      </svg>
-                    </>
-                  ) : theme === 'hidden-shadow' ? (
-                    // 2.2 Shadow Hidden: Dark Abyssal Void Vortex
-                    <>
-                      <motion.div
-                        animate={{ scale: [0.6, 1.5], opacity: [0.9, 0] }}
-                        transition={{ duration: 0.52 }}
-                        className="absolute inset-0 bg-[radial-gradient(circle,rgba(168,85,247,0.5),rgba(0,0,0,0.95)_70%,transparent_95%)] rounded-full filter blur-md"
-                      />
-                      <svg width="220" height="220" viewBox="0 0 100 100" className="absolute pointer-events-none overflow-visible">
-                        {/* Abyssal Swirling Spirals */}
-                        {[0, 120, 240].map((offset, i) => (
-                          <motion.path
-                            key={i}
-                            d="M 50,50 Q 65,30 80,45 T 50,85 T 15,50 T 50,15"
-                            fill="none" stroke="#a855f7" strokeWidth="3.5"
-                            strokeLinecap="round"
-                            filter="url(#vfx-glow-heavy)"
-                            animate={{ rotate: [offset, offset + 360], scale: [0.5, 1.25, 0] }}
-                            transition={{ duration: 0.52, ease: "easeInOut" }}
-                          />
-                        ))}
-                        {/* Shadow tendril lines */}
-                        {Array.from({ length: 8 }).map((_, i) => {
-                          const angle = i * 45 * (Math.PI / 180)
-                          const radVal = 55
-                          const cpX = 50 + Math.cos(angle + 0.3) * 30
-                          const cpY = 50 + Math.sin(angle + 0.3) * 30
-                          const targetX = 50 + Math.cos(angle) * radVal
-                          const targetY = 50 + Math.sin(angle) * radVal
-                          return (
-                            <motion.path
-                              key={i}
-                              d={`M 50,50 Q ${cpX},${cpY} ${targetX},${targetY}`}
-                              fill="none" stroke="#d8b4fe" strokeWidth="2"
-                              strokeLinecap="round"
-                              filter="url(#vfx-glow-medium)"
-                              initial={{ pathLength: 0 }}
-                              animate={{ pathLength: 1, opacity: [1, 0.8, 0] }}
-                              transition={{ duration: 0.45, ease: "easeOut", delay: i * 0.02 }}
-                            />
-                          )
-                        })}
-                      </svg>
-                    </>
-                  ) : theme === 'hidden-curse' ? (
-                    // 2.3 Curse Hidden: Crimson Blood Curse Ritual Seal
-                    <>
-                      <motion.div
-                        animate={{ scale: [0.5, 1.4], opacity: [0.9, 0] }}
-                        transition={{ duration: 0.44 }}
-                        className="absolute inset-0 bg-[radial-gradient(circle,rgba(239,68,68,0.5),transparent_75%)] rounded-full filter blur-sm"
-                      />
-                      <svg width="200" height="200" viewBox="0 0 100 100" className="absolute pointer-events-none overflow-visible">
-                        {/* Pentagram Geometric Lines */}
-                        <motion.g
-                          animate={{ rotate: 180, scale: [0.5, 1.2] }}
-                          transition={{ duration: 0.44 }}
-                          style={{ transformOrigin: "50px 50px" }}
-                        >
-                          <polygon
-                            points="50,15 82,75 18,75"
-                            fill="none" stroke="#ef4444" strokeWidth="2"
-                            filter="url(#vfx-glow-heavy)"
-                          />
-                        </motion.g>
-                        <motion.g
-                          animate={{ rotate: -180, scale: [0.5, 1.2] }}
-                          transition={{ duration: 0.44 }}
-                          style={{ transformOrigin: "50px 50px" }}
-                        >
-                          <polygon
-                            points="50,85 82,25 18,25"
-                            fill="none" stroke="#ef4444" strokeWidth="2"
-                            filter="url(#vfx-glow-heavy)"
-                          />
-                        </motion.g>
-                        <motion.g
-                          animate={{ rotate: 360 }}
-                          transition={{ duration: 0.5, ease: "linear" }}
-                          style={{ transformOrigin: "50px 50px" }}
-                        >
-                          <circle
-                            cx="50" cy="50" r="38"
-                            fill="none" stroke="#b91c1c" strokeWidth="3"
-                            strokeDasharray="8, 6"
-                          />
-                        </motion.g>
-                        {/* Blood bubbles rising */}
-                        {Array.from({ length: 14 }).map((_, i) => {
-                          const dx = -20 + (i % 5) * 10
-                          const dy = -45 - (i % 3) * 10
-                          return (
-                            <motion.g
-                              key={i}
-                              animate={{
-                                y: [0, dy],
-                                opacity: [0, 1, 1, 0],
-                                scale: [0.8, 1.3, 0.4]
-                              }}
-                              transition={{ duration: 0.55, ease: "easeOut", delay: (i % 4) * 0.03 }}
-                              style={{ transformOrigin: `${50 + dx}px 50px` }}
-                            >
-                              <circle
-                                cx={50 + dx}
-                                cy="50"
-                                r={1.5 + (i % 3)}
-                                fill="#f87171"
-                                filter="url(#vfx-glow-medium)"
-                              />
-                            </motion.g>
-                          )
-                        })}
-                      </svg>
-                    </>
-                  ) : theme === 'hidden-rift' ? (
-                    // 2.4 Rift Hidden: Spatial Lightning Dimension Crack
-                    <>
-                      <motion.div
-                        animate={{ scale: [0.6, 1.5], rotate: [0, 120] }}
-                        transition={{ duration: 0.5 }}
-                        className="absolute inset-0 border border-violet-500 bg-violet-600/5 rounded-full opacity-30 filter blur-xs"
-                      />
-                      <svg width="220" height="220" viewBox="0 0 100 100" className="absolute pointer-events-none overflow-visible">
-                        {/* Spatial Distortion Distortion Rings */}
-                        {[0, 0.08, 0.16].map((del, i) => (
-                          <motion.g
-                            key={i}
-                            initial={{ scale: 0.2, opacity: 1 }}
-                            animate={{ scale: 1.5, opacity: 0 }}
-                            transition={{ duration: 0.45, delay: del, ease: "easeOut" }}
-                            style={{ transformOrigin: "50px 50px" }}
-                          >
-                            <circle
-                              cx="50" cy="50" r="40"
-                              fill="none" stroke="#a855f7" strokeWidth={4 - i}
-                              filter="url(#vfx-glow-heavy)"
-                            />
-                          </motion.g>
-                        ))}
-                        {/* Zigzag Lightning Crack path */}
-                        <motion.path
-                          d="M 12,50 L 32,42 L 48,64 L 68,36 L 88,50"
-                          fill="none" stroke="#22d3ee" strokeWidth="4.5"
-                          strokeLinecap="round" strokeLinejoin="round"
-                          filter="url(#vfx-glow-heavy)"
-                          initial={{ pathLength: 0 }}
-                          animate={{ pathLength: 1, opacity: [1, 1, 0] }}
-                          transition={{ duration: 0.42, ease: "easeInOut" }}
-                        />
-                        <motion.path
-                          d="M 12,50 L 32,42 L 48,64 L 68,36 L 88,50"
-                          fill="none" stroke="#ffffff" strokeWidth="1.8"
-                          strokeLinecap="round" strokeLinejoin="round"
-                          initial={{ pathLength: 0 }}
-                          animate={{ pathLength: 1, opacity: [1, 1, 0] }}
-                          transition={{ duration: 0.42, ease: "easeInOut" }}
-                        />
-                      </svg>
-                    </>
-                  ) : theme === 'swordsman' ? (
-                    // 2.5 Swordsman: Swift Dual Neon X-Slash
-                    <svg width="240" height="240" viewBox="0 0 100 100" className="absolute pointer-events-none overflow-visible">
-                      {/* Slash 1 (Diagonal Left) */}
-                      <motion.path
-                        d="M 15,15 Q 50,50 85,85"
-                        fill="none" stroke="#22d3ee" strokeWidth="5.5"
-                        strokeLinecap="round"
-                        filter="url(#vfx-glow-heavy)"
-                        initial={{ pathLength: 0, opacity: 1 }}
-                        animate={{ pathLength: [0, 1, 1], pathOffset: [0, 0, 1], opacity: [0, 1, 0] }}
-                        transition={{ duration: 0.28, ease: "easeInOut" }}
-                      />
-                      {/* Slash 2 (Diagonal Right) */}
-                      <motion.path
-                        d="M 85,15 Q 50,50 15,85"
-                        fill="none" stroke="#22d3ee" strokeWidth="5.5"
-                        strokeLinecap="round"
-                        filter="url(#vfx-glow-heavy)"
-                        initial={{ pathLength: 0, opacity: 1 }}
-                        animate={{ pathLength: [0, 1, 1], pathOffset: [0, 0, 1], opacity: [0, 1, 0] }}
-                        transition={{ duration: 0.28, ease: "easeInOut", delay: 0.06 }}
-                      />
-                      {/* Diamond Sword Qi Sparks */}
-                      {Array.from({ length: 14 }).map((_, i) => {
-                        const a = i * 25.7 * (Math.PI / 180)
-                        const radVal = 30 + (i % 3) * 12
-                        const tx = Math.cos(a) * radVal
-                        const ty = Math.sin(a) * radVal
-                        return (
-                          <motion.g
-                            key={i}
-                            animate={{
-                              x: [0, tx],
-                              y: [0, ty],
-                              scale: [1.4, 0],
-                              rotate: [0, i * 90]
-                            }}
-                            transition={{ duration: 0.38, ease: "easeOut", delay: (i % 3) * 0.02 }}
-                            style={{ transformOrigin: "50px 50px" }}
-                          >
-                            <polygon
-                              points="50,50 53,46 50,42 47,46"
-                              fill="#e0f7fa"
-                              filter="url(#vfx-glow-medium)"
-                            />
-                          </motion.g>
-                        )
-                      })}
-                    </svg>
-                  ) : theme === 'warrior' ? (
-                    // 2.6 Warrior: Crimson Ground Eruption Magma Blast
-                    <>
-                      <motion.div
-                        animate={{ scale: [0.6, 1.45], opacity: [0.9, 0] }}
-                        transition={{ duration: 0.45 }}
-                        className="absolute inset-0 rounded-full bg-gradient-to-r from-red-600/30 via-amber-500/40 to-transparent filter blur-md"
-                      />
-                      <svg width="220" height="220" viewBox="0 0 100 100" className="absolute pointer-events-none overflow-visible">
-                        {/* Shockwaves */}
-                        {[0, 0.08, 0.16].map((del, i) => (
-                          <motion.g
-                            key={i}
-                            initial={{ scale: 0.2, opacity: 1 }}
-                            animate={{ scale: 1.65, opacity: 0 }}
-                            transition={{ duration: 0.44, delay: del, ease: "easeOut" }}
-                            style={{ transformOrigin: "50px 50px" }}
-                          >
-                            <circle
-                              cx="50" cy="50" r="36"
-                              fill="none" stroke="#f59e0b" strokeWidth={5 - i}
-                              filter="url(#vfx-glow-heavy)"
-                            />
-                          </motion.g>
-                        ))}
-                        {/* Magma Embers (Polygon shapes exploding) */}
-                        {Array.from({ length: 18 }).map((_, i) => {
-                          const angle = (i * 20 + (i % 3) * 9) * (Math.PI / 180)
-                          const radVal = 40 + (i % 4) * 12
-                          const tx = Math.cos(angle) * radVal
-                          const ty = Math.sin(angle) * radVal
-                          return (
-                            <motion.g
-                              key={i}
-                              animate={{
-                                x: [0, tx],
-                                y: [0, ty],
-                                scale: [1.6, 0],
-                                rotate: [0, i * 45]
-                              }}
-                              transition={{ duration: 0.46, ease: "easeOut", delay: (i % 4) * 0.012 }}
-                              style={{ transformOrigin: "50px 50px" }}
-                            >
-                              <polygon
-                                points="50,50 54,45 50,40 46,45"
-                                fill={i % 2 === 0 ? "#ef4444" : "#f59e0b"}
-                                filter="url(#vfx-glow-medium)"
-                              />
-                            </motion.g>
-                          )
-                        })}
-                      </svg>
-                    </>
-                  ) : theme === 'mage' ? (
-                    // 2.7 Mage: Ancient Double-Circle Magic Sigil
-                    <>
-                      <svg width="220" height="220" viewBox="0 0 100 100" className="absolute pointer-events-none overflow-visible">
-                        {/* Outer Runes ring */}
-                        <motion.g
-                          animate={{ rotate: 360, scale: [0.6, 1.25, 0] }}
-                          transition={{ duration: 0.58, ease: "easeInOut" }}
-                          style={{ transformOrigin: "50px 50px" }}
-                        >
-                          <circle
-                            cx="50" cy="50" r="43"
-                            fill="none" stroke="#818cf8" strokeWidth="1.8"
-                            strokeDasharray="6, 8, 20, 4"
-                            filter="url(#vfx-glow-heavy)"
-                          />
-                        </motion.g>
-                        {/* Inner geometric hexagram */}
-                        <motion.g
-                          animate={{ rotate: -180, scale: [0.6, 1.2, 0] }}
-                          transition={{ duration: 0.58, ease: "easeInOut" }}
-                          style={{ transformOrigin: "50px 50px" }}
-                        >
-                          <polygon
-                            points="50,15 80,67 20,67"
-                            fill="none" stroke="#67e8f9" strokeWidth="1.2"
-                            filter="url(#vfx-glow-heavy)"
-                          />
-                        </motion.g>
-                        <motion.g
-                          animate={{ rotate: 180, scale: [0.6, 1.2, 0] }}
-                          transition={{ duration: 0.58, ease: "easeInOut" }}
-                          style={{ transformOrigin: "50px 50px" }}
-                        >
-                          <polygon
-                            points="50,85 80,33 20,33"
-                            fill="none" stroke="#67e8f9" strokeWidth="1.2"
-                            filter="url(#vfx-glow-heavy)"
-                          />
-                        </motion.g>
-                        {/* Magic core flash */}
-                        <motion.g
-                          animate={{ scale: [0.2, 1.5, 0] }}
-                          transition={{ duration: 0.44 }}
-                          style={{ transformOrigin: "50px 50px" }}
-                        >
-                          <circle
-                            cx="50" cy="50" r="10"
-                            fill="#ffffff"
-                            filter="url(#vfx-glow-heavy)"
-                          />
-                        </motion.g>
-                        {/* Magic Star Dust particles */}
-                        {Array.from({ length: 20 }).map((_, i) => {
-                          const angle = i * 18 * (Math.PI / 180)
-                          const radVal = 35 + (i % 3) * 15
-                          const tx = Math.cos(angle) * radVal
-                          const ty = Math.sin(angle) * radVal
-                          return (
-                            <motion.g
-                              key={i}
-                              animate={{
-                                x: [0, tx],
-                                y: [0, ty],
-                                opacity: [1, 1, 0],
-                                scale: [1.6, 0.8, 0]
-                              }}
-                              transition={{ duration: 0.5, ease: "easeOut", delay: (i % 5) * 0.02 }}
-                              style={{ transformOrigin: "50px 50px" }}
-                            >
-                              <circle
-                                cx="50" cy="50"
-                                r="2.5"
-                                fill="#c084fc"
-                                filter="url(#vfx-glow-medium)"
-                              />
-                            </motion.g>
-                          )
-                        })}
-                      </svg>
-                    </>
-                  ) : theme === 'guardian' ? (
-                    // 2.8 Guardian: Triple Emerald Hexagon Shield + Holy Cross Beam
-                    <>
-                      <svg width="220" height="220" viewBox="0 0 100 100" className="absolute pointer-events-none overflow-visible">
-                        {/* Multi-layered hexagonal grids */}
-                        {[0, 15, 30].map((rot, i) => (
-                          <motion.g
-                            key={i}
-                            animate={{ rotate: [rot, rot + 45], scale: [0.5, 1.25, 0] }}
-                            transition={{ duration: 0.48, ease: "easeOut" }}
-                            style={{ transformOrigin: "50px 50px" }}
-                          >
-                            <polygon
-                              points="50,14 81,32 81,68 50,86 19,68 19,32"
-                              fill="none" stroke="#34d399" strokeWidth={2 - i * 0.4}
-                              filter="url(#vfx-glow-heavy)"
-                            />
-                          </motion.g>
-                        ))}
-                        {/* Golden Holy Cross shaft of light */}
-                        <motion.path
-                          d="M 50,10 L 50,90 M 20,45 L 80,45"
-                          fill="none" stroke="#fbbf24" strokeWidth="4.5"
-                          strokeLinecap="round"
-                          filter="url(#vfx-glow-heavy)"
-                          initial={{ pathLength: 0 }}
-                          animate={{ pathLength: 1, opacity: [1, 1, 0] }}
-                          transition={{ duration: 0.42, ease: "easeInOut", delay: 0.05 }}
-                        />
-                      </svg>
-                    </>
-                  ) : theme === 'tactician' ? (
-                    // 2.9 Tactician: Golden Octagon Tactical Formula
-                    <>
-                      <svg width="200" height="200" viewBox="0 0 100 100" className="absolute pointer-events-none overflow-visible">
-                        {/* Octagram matrix lines */}
-                        <motion.g
-                          animate={{ rotate: 90, scale: [0.6, 1.25, 0] }}
-                          transition={{ duration: 0.52 }}
-                          style={{ transformOrigin: "50px 50px" }}
-                        >
-                          <polygon
-                            points="50,15 75,25 85,50 75,75 50,85 25,75 15,50 25,25"
-                            fill="none" stroke="#fbbf24" strokeWidth="2.2"
-                            filter="url(#vfx-glow-heavy)"
-                          />
-                        </motion.g>
-                        <motion.g
-                          animate={{ rotate: -90, scale: [0.6, 1.15, 0] }}
-                          transition={{ duration: 0.52 }}
-                          style={{ transformOrigin: "50px 50px" }}
-                        >
-                          <polygon
-                            points="50,15 75,25 85,50 75,75 50,85 25,75 15,50 25,25"
-                            fill="none" stroke="#fbbf24" strokeWidth="1"
-                            filter="url(#vfx-glow-heavy)"
-                          />
-                        </motion.g>
-                        <motion.g
-                          animate={{ rotate: 180 }}
-                          transition={{ duration: 0.52 }}
-                          style={{ transformOrigin: "50px 50px" }}
-                        >
-                          <circle
-                            cx="50" cy="50" r="28"
-                            fill="none" stroke="#f59e0b" strokeWidth="1"
-                            strokeDasharray="4, 4"
-                          />
-                        </motion.g>
-                        {/* Floating formula grid cards */}
-                        {Array.from({ length: 8 }).map((_, i) => {
-                          const a = i * 45 * (Math.PI / 180)
-                          const dx = Math.cos(a) * 45
-                          const dy = Math.sin(a) * 45
-                          return (
-                            <motion.g
-                              key={i}
-                              animate={{
-                                x: [0, dx],
-                                y: [0, dy],
-                                scale: [1, 0],
-                                rotate: [0, i * 90]
-                              }}
-                              transition={{ duration: 0.48, ease: "easeOut", delay: 0.05 }}
-                              style={{ transformOrigin: "50px 50px" }}
-                            >
-                              <rect
-                                x="46" y="46" width="8" height="8" rx="1"
-                                fill="none" stroke="#fbbf24" strokeWidth="1.2"
-                                filter="url(#vfx-glow-medium)"
-                              />
-                            </motion.g>
-                          )
-                        })}
-                      </svg>
-                    </>
-                  ) : (
-                    // 2.10 Default Skill: Amber Core Energy Ring
-                    <>
-                      <motion.div
-                        animate={{ scale: [0.6, 1.3, 1.45], rotate: [0, 90] }}
-                        transition={{ duration: 0.42 }}
-                        className="absolute inset-0 rounded-lg border-2 border-amber-400 bg-amber-500/5 opacity-30 filter blur-sm"
-                      />
-                      <svg width="200" height="200" viewBox="0 0 100 100" className="absolute pointer-events-none overflow-visible">
-                        <motion.g
-                          initial={{ scale: 0.3, opacity: 1 }}
-                          animate={{ scale: 1.45, opacity: 0 }}
-                          transition={{ duration: 0.38, ease: "easeOut" }}
-                          style={{ transformOrigin: "50px 50px" }}
-                        >
-                          <circle
-                            cx="50" cy="50" r="35"
-                            fill="none" stroke="#f59e0b" strokeWidth="3.5"
-                            filter="url(#vfx-glow-heavy)"
-                          />
-                        </motion.g>
-                        <motion.path
-                          d="M 15,50 L 50,15 L 85,50 L 50,85 Z"
-                          fill="none" stroke="#f59e0b" strokeWidth="1.5"
-                          animate={{ rotate: 180, scale: [0.5, 1.2, 0] }}
-                          transition={{ duration: 0.42 }}
-                        />
-                      </svg>
-                    </>
-                  ))}
                 </div>
               )}
 
@@ -1115,57 +574,23 @@ export function BattlefieldVfxLayer({ vfxs }: Props) {
                 <div className="relative flex items-center justify-center w-36 h-36">
                   {/* B안 테스트: 마법 스킬 투명화 PNG 이미지 추가 */}
                   {!isBasicAttack && resolved.image && (
-                    <motion.img
-                      src={resolved.image}
-                      alt="magic-vfx-image"
-                      initial={{ scale: 0.4, rotate: 0, opacity: 0 }}
-                      animate={{
-                        scale: [0.5, 1.4, 1.5, 1.6],
-                        rotate: [0, 45, 90],
-                        opacity: [0, 1, 0.85, 0]
-                      }}
-                      transition={{ duration: 0.68, ease: 'easeOut', times: [0, 0.15, 0.75, 1] }}
-                      className="absolute w-64 h-64 object-contain pointer-events-none z-30"
-                      style={{ mixBlendMode: 'screen', filter: `brightness(1.5) contrast(1.2) drop-shadow(0 0 16px ${glowColor})` }}
-                    />
+                    <div className="absolute top-1/2 left-1/2 w-0 h-0 flex items-center justify-center overflow-visible">
+                      <motion.img
+                        src={resolved.image}
+                        alt="magic-vfx-image"
+                        initial={{ scale: 0.4, rotate: 0, opacity: 0 }}
+                        animate={{
+                          scale: [0.5, 1.4, 1.5, 1.6],
+                          rotate: [0, 45, 90],
+                          opacity: [0, 1, 0.85, 0]
+                        }}
+                        transition={{ duration: 0.68, ease: 'easeOut', times: [0, 0.15, 0.75, 1] }}
+                        className="max-w-none w-64 h-64 object-contain pointer-events-none z-30"
+                        style={{ mixBlendMode: 'screen', filter: `brightness(1.5) contrast(1.2) drop-shadow(0 0 16px ${glowColor})` }}
+                      />
+                    </div>
                   )}
 
-                  {isBasicAttack && (
-                    <svg width="180" height="180" viewBox="0 0 100 100" className="absolute pointer-events-none overflow-visible">
-                      <motion.g
-                        animate={{ rotate: 360 }}
-                        transition={{ duration: 0.8, repeat: Infinity, ease: 'linear' }}
-                        style={{ transformOrigin: "50px 50px" }}
-                      >
-                        <circle
-                          cx="50" cy="50" r="42"
-                          fill="none" stroke="#22d3ee" strokeWidth="2"
-                          strokeDasharray="6, 4, 18, 6"
-                          filter="url(#vfx-glow-heavy)"
-                        />
-                      </motion.g>
-                      <motion.g
-                        animate={{ rotate: -360 }}
-                        transition={{ duration: 0.8, repeat: Infinity, ease: 'linear' }}
-                        style={{ transformOrigin: "50px 50px" }}
-                      >
-                        <polygon
-                          points="50,18 78,68 22,68"
-                          fill="none" stroke="#06b6d4" strokeWidth="1.2"
-                        />
-                      </motion.g>
-                      <motion.g
-                        animate={{ scale: [0.7, 1.25], opacity: [0.65, 0] }}
-                        transition={{ duration: 0.45, ease: "easeOut" }}
-                        style={{ transformOrigin: "50px 50px" }}
-                      >
-                        <circle
-                          cx="50" cy="50" r="30"
-                          fill="none" stroke="#e0f7fa" strokeWidth="1"
-                        />
-                      </motion.g>
-                    </svg>
-                  )}
                 </div>
               )}
 
@@ -1180,36 +605,23 @@ export function BattlefieldVfxLayer({ vfxs }: Props) {
                   
                   {/* B안 테스트: 그림자 스킬 투명화 PNG 이미지 추가 */}
                   {!isBasicAttack && resolved.image && (
-                    <motion.img
-                      src={resolved.image}
-                      alt="shadow-vfx-image"
-                      initial={{ scale: 0.4, rotate: resolved.motionType === 'slash' ? -35 : 0, opacity: 0 }}
-                      animate={{
-                        scale: resolved.motionType === 'slash' ? [0.5, 1.5, 1.6, 1.65] : [0.4, 1.35, 1.45, 1.5],
-                        rotate: resolved.motionType === 'slash' ? [-35, 15, 25, 30] : [0, 30, 45, 50],
-                        opacity: [0, 1, 0.85, 0]
-                      }}
-                      transition={{ duration: 0.68, ease: 'easeOut', times: [0, 0.15, 0.75, 1] }}
-                      className="absolute w-64 h-64 object-contain pointer-events-none z-30"
-                      style={{ mixBlendMode: 'screen', filter: `brightness(1.5) contrast(1.2) drop-shadow(0 0 16px ${glowColor})` }}
-                    />
+                    <div className="absolute top-1/2 left-1/2 w-0 h-0 flex items-center justify-center overflow-visible">
+                      <motion.img
+                        src={resolved.image}
+                        alt="shadow-vfx-image"
+                        initial={{ scale: 0.4, rotate: resolved.motionType === 'slash' ? -35 : 0, opacity: 0 }}
+                        animate={{
+                          scale: resolved.motionType === 'slash' ? [0.5, 1.5, 1.6, 1.65] : [0.4, 1.35, 1.45, 1.5],
+                          rotate: resolved.motionType === 'slash' ? [-35, 15, 25, 30] : [0, 30, 45, 50],
+                          opacity: [0, 1, 0.85, 0]
+                        }}
+                        transition={{ duration: 0.68, ease: 'easeOut', times: [0, 0.15, 0.75, 1] }}
+                        className="max-w-none w-64 h-64 object-contain pointer-events-none z-30"
+                        style={{ mixBlendMode: 'screen', filter: `brightness(1.5) contrast(1.2) drop-shadow(0 0 16px ${glowColor})` }}
+                      />
+                    </div>
                   )}
 
-                  {isBasicAttack && (
-                    <svg width="200" height="200" viewBox="0 0 100 100" className="absolute pointer-events-none overflow-visible">
-                      {[0, 120, 240].map((rot, i) => (
-                        <motion.path
-                          key={i}
-                          d="M 50,50 Q 62,35 75,50 T 50,78 T 25,50"
-                          fill="none" stroke="#a855f7" strokeWidth="2.5"
-                          strokeLinecap="round"
-                          filter="url(#vfx-glow-heavy)"
-                          animate={{ rotate: [rot, rot - 180], scale: [0.65, 1.25, 0] }}
-                          transition={{ duration: 0.48, ease: "easeOut" }}
-                        />
-                      ))}
-                    </svg>
-                  )}
                 </div>
               )}
 
@@ -1224,54 +636,23 @@ export function BattlefieldVfxLayer({ vfxs }: Props) {
 
                   {/* B안 테스트: 저주 스킬 투명화 PNG 이미지 추가 */}
                   {!isBasicAttack && resolved.image && (
-                    <motion.img
-                      src={resolved.image}
-                      alt="curse-vfx-image"
-                      initial={{ scale: 0.4, rotate: 0, opacity: 0 }}
-                      animate={{
-                        scale: [0.5, 1.4, 1.5, 1.55],
-                        rotate: [-15, 15, 25, 30],
-                        opacity: [0, 1, 0.8, 0]
-                      }}
-                      transition={{ duration: 0.68, ease: 'easeOut', times: [0, 0.15, 0.75, 1] }}
-                      className="absolute w-60 h-60 object-contain pointer-events-none z-30"
-                      style={{ mixBlendMode: 'screen', filter: `brightness(1.45) contrast(1.2) drop-shadow(0 0 16px ${glowColor})` }}
-                    />
+                    <div className="absolute top-1/2 left-1/2 w-0 h-0 flex items-center justify-center overflow-visible">
+                      <motion.img
+                        src={resolved.image}
+                        alt="curse-vfx-image"
+                        initial={{ scale: 0.4, rotate: 0, opacity: 0 }}
+                        animate={{
+                          scale: [0.5, 1.4, 1.5, 1.55],
+                          rotate: [-15, 15, 25, 30],
+                          opacity: [0, 1, 0.8, 0]
+                        }}
+                        transition={{ duration: 0.68, ease: 'easeOut', times: [0, 0.15, 0.75, 1] }}
+                        className="max-w-none w-60 h-60 object-contain pointer-events-none z-30"
+                        style={{ mixBlendMode: 'screen', filter: `brightness(1.45) contrast(1.2) drop-shadow(0 0 16px ${glowColor})` }}
+                      />
+                    </div>
                   )}
 
-                  {isBasicAttack && (
-                    <svg width="160" height="160" viewBox="0 0 100 100" className="absolute pointer-events-none overflow-visible">
-                      <motion.g
-                        animate={{ scale: [0.6, 1.2, 0], rotate: 45 }}
-                        transition={{ duration: 0.45 }}
-                        style={{ transformOrigin: "50px 50px" }}
-                      >
-                        <polygon
-                          points="50,15 80,45 80,75 50,85 20,75 20,45"
-                          fill="none" stroke="#ef4444" strokeWidth="3"
-                          filter="url(#vfx-glow-heavy)"
-                        />
-                      </motion.g>
-                      {/* Cracking Shard Lines */}
-                      {Array.from({ length: 8 }).map((_, i) => {
-                        const angle = i * 45 * (Math.PI / 180)
-                        const radVal = 42
-                        const tx = Math.cos(angle) * radVal
-                        const ty = Math.sin(angle) * radVal
-                        return (
-                          <motion.path
-                            key={i}
-                            d={`M 50,50 L ${50 + tx},${50 + ty}`}
-                            stroke="#fee2e2" strokeWidth="1.5"
-                            filter="url(#vfx-glow-medium)"
-                            initial={{ pathLength: 0 }}
-                            animate={{ pathLength: 1, opacity: [1, 0] }}
-                            transition={{ duration: 0.4, delay: 0.05 }}
-                          />
-                        )
-                      })}
-                    </svg>
-                  )}
                 </div>
               )}
 
@@ -1279,15 +660,17 @@ export function BattlefieldVfxLayer({ vfxs }: Props) {
               {isHeal && (
                 <div className="relative flex flex-col items-center justify-end w-28 h-52">
                   {/* B안 테스트: 치유/정화 이미지 추가 */}
-                  <motion.img
-                    src={resolved.image}
-                    alt="heal-vfx"
-                    initial={{ y: 40, scale: 0.5, opacity: 0 }}
-                    animate={{ y: [-20, -60], scale: [0.8, 1.35], opacity: [0, 1, 0.9, 0] }}
-                    transition={{ duration: 0.88, ease: 'easeOut' }}
-                    className="absolute w-44 h-72 object-contain pointer-events-none z-30"
-                    style={{ mixBlendMode: 'screen', filter: `brightness(1.4) contrast(1.2) drop-shadow(0 0 14px ${glowColor})` }}
-                  />
+                  <div className="absolute bottom-0 left-1/2 w-0 h-0 flex flex-col items-center justify-end overflow-visible">
+                    <motion.img
+                      src={resolved.image}
+                      alt="heal-vfx"
+                      initial={{ y: 40, scale: 0.5, opacity: 0 }}
+                      animate={{ y: [-20, -60], scale: [0.8, 1.35], opacity: [0, 1, 0.9, 0] }}
+                      transition={{ duration: 0.88, ease: 'easeOut' }}
+                      className="max-w-none w-44 h-72 object-contain pointer-events-none z-30"
+                      style={{ mixBlendMode: 'screen', filter: `brightness(1.4) contrast(1.2) drop-shadow(0 0 14px ${glowColor})` }}
+                    />
+                  </div>
                   {/* Glowing vertical aura beam */}
                   <motion.div
                     animate={{ height: [0, 180], opacity: [0.85, 0] }}
@@ -1330,42 +713,17 @@ export function BattlefieldVfxLayer({ vfxs }: Props) {
               {isGuard && (
                 <div className="relative flex items-center justify-center w-32 h-32">
                   {/* B안 테스트: 가드/오라 보호막 이미지 추가 */}
-                  <motion.img
-                    src={resolved.image}
-                    alt="guard-vfx"
-                    initial={{ scale: 0.6, opacity: 0 }}
-                    animate={{ scale: [0.7, 1.15, 1.05], opacity: [0, 1, 0.9, 0] }}
-                    transition={{ duration: 0.78, ease: 'easeOut' }}
-                    className="absolute w-48 h-48 object-contain pointer-events-none z-30"
-                    style={{ mixBlendMode: 'screen', filter: `brightness(1.4) contrast(1.2) drop-shadow(0 0 16px ${glowColor})` }}
-                  />
-                  <svg width="160" height="160" viewBox="0 0 100 100" className="absolute pointer-events-none overflow-visible">
-                    {/* Core Hexagon Grid */}
-                    <motion.g
+                  <div className="absolute top-1/2 left-1/2 w-0 h-0 flex items-center justify-center overflow-visible">
+                    <motion.img
+                      src={resolved.image}
+                      alt="guard-vfx"
                       initial={{ scale: 0.6, opacity: 0 }}
-                      animate={{ scale: [0.6, 1.15, 0.9], opacity: [0, 1, 0.85, 0] }}
-                      transition={{ duration: 0.48, ease: 'easeOut' }}
-                      style={{ transformOrigin: "50px 50px" }}
-                    >
-                      <polygon
-                        points="50,15 80,30 80,70 50,85 20,70 20,30"
-                        fill="none" stroke="#22d3ee" strokeWidth="4.5"
-                        filter="url(#vfx-glow-heavy)"
-                      />
-                    </motion.g>
-                    {/* Honeycomb grid sub-lines */}
-                    <motion.g
-                      initial={{ scale: 0.6, opacity: 0 }}
-                      animate={{ scale: [0.6, 1.15, 0.9], opacity: [0, 0.8, 0.6, 0] }}
-                      transition={{ duration: 0.48, ease: 'easeOut' }}
-                      style={{ transformOrigin: "50px 50px" }}
-                    >
-                      <path
-                        d="M 50,15 L 50,85 M 20,30 L 80,70 M 20,70 L 80,30"
-                        fill="none" stroke="#0891b2" strokeWidth="1.5"
-                      />
-                    </motion.g>
-                  </svg>
+                      animate={{ scale: [0.7, 1.15, 1.05], opacity: [0, 1, 0.9, 0] }}
+                      transition={{ duration: 0.78, ease: 'easeOut' }}
+                      className="max-w-none w-48 h-48 object-contain pointer-events-none z-30"
+                      style={{ mixBlendMode: 'screen', filter: `brightness(1.4) contrast(1.2) drop-shadow(0 0 16px ${glowColor})` }}
+                    />
+                  </div>
                 </div>
               )}
             </motion.div>
