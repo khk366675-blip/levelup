@@ -6245,16 +6245,22 @@ export const useGame = create<GameState>()(
         const eGates = GATE_DEFINITIONS.filter(g => g.rank === 'E')
         const dGates = GATE_DEFINITIONS.filter(g => g.rank === 'D')
         const cGates = GATE_DEFINITIONS.filter(g => g.rank === 'C')
+        
+        const hunterGateRank = s.hunter.rank === 'National' ? 'S' : s.hunter.rank
+        const hunterRankGates = GATE_DEFINITIONS.filter(g => g.rank === hunterGateRank)
+
         const candidates =
-          source === 'daily_open' || source === 'daily_completion'
-            ? [...eGates, ...eGates, ...eGates]
-            : source === 'random_completion'
-              ? [...eGates, ...eGates, ...dGates]
-              : source === 'dungeon_clear'
-                ? [...eGates, ...dGates, ...dGates]
-                : source === 'hard_dungeon_clear'
-                  ? [...dGates, ...dGates, ...cGates]
-                  : [...dGates, ...cGates, ...cGates]
+          source === 'daily_completion'
+            ? hunterRankGates
+            : source === 'daily_open'
+              ? [...eGates, ...eGates, ...eGates]
+              : source === 'random_completion'
+                ? [...eGates, ...eGates, ...dGates]
+                : source === 'dungeon_clear'
+                  ? [...eGates, ...dGates, ...dGates]
+                  : source === 'hard_dungeon_clear'
+                    ? [...dGates, ...dGates, ...cGates]
+                    : [...dGates, ...cGates, ...cGates]
         const fallback = GATE_DEFINITIONS.filter(g => g.rank === 'E')
         const pool = candidates.length > 0 ? candidates : fallback.length > 0 ? fallback : GATE_DEFINITIONS
         const selected = pool[Math.floor(Math.random() * pool.length)]
