@@ -111,7 +111,7 @@ import { computeRollingSummary } from './aiCoachSummary'
 
 
 
-import { TITLE_DEFINITIONS, CATEGORY_META, JOB_DEFINITIONS, EQUIPMENT_SLOT_LABEL } from './types'
+import { TITLE_DEFINITIONS, CATEGORY_META, JOB_DEFINITIONS, EQUIPMENT_SLOT_LABEL, GateRank } from './types'
 import { JOB_DEFINITIONS_V2 } from './jobs'
 import { recalcHunterGradeState, createInitialHunterGradeState, evaluateTitleUnlocks, GRADE_LABELS, HUNTER_TITLE_DEFINITIONS, clampMigratedGradeByEvidence } from './hunterGrade'
 import { getMockDirectBattleMonster } from './directBattleMonsters'
@@ -1679,8 +1679,10 @@ const applyXp = (
     categoryProgress = emptyCategoryProgress()
   }
 
-  const newRank = rankFromLevel(level)
-  const rankChanged = newRank !== hunter.rank
+  // In the promotion exam system, hunter.rank is strictly managed via exams.
+  // We keep hunter.rank unchanged during normal XP gain/level ups.
+  const newRank = hunter.rank
+  const rankChanged = false
 
   return {
     hunter: {
@@ -6246,7 +6248,8 @@ export const useGame = create<GameState>()(
         const dGates = GATE_DEFINITIONS.filter(g => g.rank === 'D')
         const cGates = GATE_DEFINITIONS.filter(g => g.rank === 'C')
         
-        const hunterGateRank = s.hunter.rank === 'National' ? 'S' : s.hunter.rank
+        const rawGrade = s.hunterGrade?.currentGrade || (s.hunter.rank === 'National' ? 'NATIONAL' : s.hunter.rank) || 'E'
+        const hunterGateRank = (rawGrade === 'NATIONAL' ? 'S' : rawGrade) as GateRank
         const hunterRankGates = GATE_DEFINITIONS.filter(g => g.rank === hunterGateRank)
 
         const candidates =
