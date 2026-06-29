@@ -47,14 +47,7 @@ export function generateAiCoachSaveSummary(state: GameState): AiCoachSaveSummary
     .filter((q: Quest) => q.type === 'main' && !q.completed)
     .map((q: Quest) => q.title)
 
-  // 4. 활성화된 던전 진행률
-  const activeDungeons = quests
-    .filter((q: Quest) => q.type === 'dungeon' && !q.completed)
-    .map((q: Quest) => ({
-      id: q.id,
-      title: q.title,
-      progress: `${q.currentSteps ?? 0}/${q.totalSteps ?? 30} steps`,
-    }))
+
 
   // 5. 최근 AI 추천 퀘스트 성공률 (임시 계산 또는 placeholder)
   let aiQuestTotal = 0
@@ -170,7 +163,6 @@ export function generateAiCoachSaveSummary(state: GameState): AiCoachSaveSummary
     recentDailyCompletionRate,
     categoryCounts,
     currentMainGoals,
-    activeDungeons,
     recentAiQuestSuccessRate,
     baseDailies,
     maintenanceStatus,

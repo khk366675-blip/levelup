@@ -63,7 +63,7 @@ ${coreText}
 
 * 지침: 위의 Core Context는 사용자의 중장기 목표, 선호 루틴, 개인 상황 정보입니다.
 - 이 내용은 코칭 운영 원칙이 아닙니다. AI 코치인 당신은 이 Core Context에 기반하여 사용자의 루틴과 목표를 이해하고, 이를 오늘의 실제 수행 상황(일기) 및 내일 일정과 결합하여 유기적인 내일의 Daily Plan을 구성해야 합니다.
-- 내일 Daily Plan 설계, 던전/메인 목표 제안 시 이 Core Context와 방향이 충돌하지 않도록 최대한 존중하십시오.
+- 내일 Daily Plan 설계, 메인 목표 제안 시 이 Core Context와 방향이 충돌하지 않도록 최대한 존중하십시오.
 - 다만, 오늘 컨디션(피로/수면부족 등)이나 캘린더 가용시간이 Core Context 상의 heavy한 작업 강행과 충돌할 경우, 무리하게 강행하지 말고 현실적인 부하로 조율하십시오.
 - 이 Core Context 내용을 답변에 verbatim(그대로) 길게 복제하거나 요약 응답으로 채우지 마십시오. 필요한 경우 제안 사유(reason)에 "Core 방향성 반영" 등으로 간결하게만 언급하십시오.
 - 당신(AI)은 이 Core Context를 임의로 수정, 편집, 혹은 재설정하라고 피드백할 수 없습니다.
@@ -136,7 +136,6 @@ ${schedulePromptText}
 - 최근 일일 퀘스트 완료율: ${saveSummary.recentDailyCompletionRate ? (saveSummary.recentDailyCompletionRate * 100).toFixed(0) + '%' : '정보 없음'}
 - 최근 AI 추천 퀘스트 성공률: ${saveSummary.recentAiQuestSuccessRate ? (saveSummary.recentAiQuestSuccessRate * 100).toFixed(0) + '%' : '정보 없음'}
 - 현재 메인 목표 (Main Goals): ${JSON.stringify(saveSummary.currentMainGoals || [])}
-- 진행 중인 던전 (Active Dungeons): ${JSON.stringify(saveSummary.activeDungeons || [])}
 - 카테고리별 누적 완료 횟수: ${JSON.stringify(saveSummary.categoryCounts || {})}
 
 ### 6. Maintenance Status / Base Daily Library (생활 유지관리 및 루틴)
@@ -155,13 +154,9 @@ ${JSON.stringify(saveSummary.maintenanceStatus || [])}
 - Core 운동 루틴 반영 강화: Core Context에 주간 운동 루틴(예: 월/화/수/목/금/토/일 운동 계획)이 명시되어 있다면 이를 운동 계획의 기준으로 적극 참고하십시오. 단, Core 운동 루틴을 맹목적으로 따르지 말고 실제 회복 상태로 조정해야 합니다. 즉, 오늘 일기에서 실제 수행한 운동 부위가 있다면 그것을 최우선적으로 고려하여 연속으로 같은 부위의 고강도 훈련을 처방하지 마십시오. 또한 수면 부족, 컨디션 낮음, 혹은 Calendar heavy day(일정이 매우 바쁜 날)인 경우, 고중량 웨이트 대신 유산소, 스트레칭, 혹은 가벼운 보조 운동으로 강도를 완화 및 조정하십시오. 모든 운동 퀘스트는 단순히 "운동하기"가 아니라 부위, 강도, 목표를 "하체 40분: 스쿼트/레그컬 저중량 볼륨 + 10분 스트레칭"과 같이 구체적으로 제목과 설명에 기술하십시오.
 - 가벼운 Daily Micro Quest 적극 포함: 일기나 Core에 언급된 내용 외에도, 하루 18개 내외의 총 퀘스트 수량을 맞추기 위해 가볍고 부담 없는 마이크로 퀘스트 후보군을 적극 채택하십시오.
   * 마이크로 퀘스트 후보군: 물 2L 마시기, 단백질 100g 섭취, 공복 체중 기록하기, 취침/기상 시간 기록, 방 5분 정리, 책상 정리 5분, 쓰레기 버리기, 빨래 확인/빨래 돌리기, 오늘 수업 복습 15분, KBI 복습 15~30분, 시장 마감 10분 점검, 지출 기록 3분, 스트레칭 5분, 산책 10~20분, 숏폼 제한, 기상 후 30분 동안 폰 멀리하기, 하루 회고 3줄 적기
-- 던전(Dungeon) 대신 Main Quest v2 / Milestone 제안 및 감지:
-  * Dungeon은 신규 자기관리 성장 구조에서 제외되고 Legacy로 격하되었습니다. 따라서 더 이상 새로운 던전 제안(dungeonSuggestions)을 하지 마십시오.
-  * 모든 장기 목표 제안은 mainQuestSuggestions를 통해 Main Quest v2 구조로 처방하십시오. 새 Main Quest는 정말 새로운 장기 목표일 때만 제안하고, 기존에 유사한 메인 퀘스트가 이미 있다면 중복 제안하지 마십시오. 가능한 한 현재 진행 중인 Main 목록을 보고 기존 Main에 추가할 milestone(중간 목표)을 우선적으로 제안하십시오.
-  * 새 Main Quest는 finalGoal 및 순서(order)와 중요도(importance: 'minor' | 'normal' | 'major')를 지닌 마일스톤(milestones) 배열을 가지고 있어야 합니다.
-  * 마일스톤은 별도 일일퀘스트로 생성되는 것이 아니라, 오직 해당 장기 Main Quest 내부의 성취 지점입니다. 사용자의 내일 Daily Plan은 이 Main milestone을 전진시키기 위한 구체적인 하루 행동들로 유기적으로 연계되어야 합니다.
-  * 일기에서 사용자가 기존에 진행 중이던 Main Quest의 마일스톤을 실질적으로 완료한 흔적(증거)이 감지되면, 이를 mainProgressDetections에 담아 markComplete 후보로 제안하십시오. 단, 사용자가 직접 수동 승인/완료 버튼을 누르기 전까지는 장기목표나 마일스톤 상태가 자동으로 반영되지 않습니다.
-  * 특정 목표(KBI 금융 AI 리터러시, 벤치프레스 100kg 등)에 대한 milestone 목록을 기계적으로 하드코딩하거나 템플릿화하지 마십시오. 반드시 사용자의 현재 수준, Core Context 내의 구체적인 목표, 일기 속의 회복 및 수행 피드백 상태, 목표 기간 등을 종합 고려하여 동적으로 milestones를 생성 및 제안하십시오.
+- Main Quest (장기 목표) 제안:
+  * 모든 장기 목표 제안은 mainQuestSuggestions를 통해 Main Quest 구조로 처방하십시오. 새 Main Quest는 정말 새로운 장기 목표일 때만 제안하고, 기존에 유사한 메인 퀘스트가 이미 있다면 중복 제안하지 마십시오.
+  * 새 Main Quest는 구체적인 최종 목표(finalGoal)를 지니고 있어야 하며, 별도의 중간 마일스톤(milestones)은 지정하지 않습니다.
 
 ### 7. CoachMemory Summary (과거 성공/실패/안정습관 패턴)
 [장기 메모리 요약 (MemorySummary)]
@@ -340,34 +335,9 @@ interface AiCoachResponse {
     finalGoal: string;
     category: 'workout' | 'study' | 'career' | 'health' | 'mind' | 'finance' | 'social' | 'challenge' | 'habit';
     description?: string;
-    milestones: {
-      title: string;
-      description?: string;
-      order: number;
-      importance?: 'minor' | 'normal' | 'major';
-    }[];
-    reason: string;
-  }[];
-  
-  mainMilestoneSuggestions?: {
-    mainQuestId?: string;
-    mainQuestTitle?: string;
-    title: string;
-    description?: string;
-    importance?: 'minor' | 'normal' | 'major';
     reason: string;
   }[];
 
-  mainProgressDetections?: {
-    mainQuestId?: string;
-    mainQuestTitle: string;
-    milestoneTitle: string;
-    evidence: string;
-    confidence: 'low' | 'medium' | 'high';
-    suggestedAction: 'markComplete' | 'addEvidence' | 'review';
-  }[];
-
-  dungeonSuggestions?: any[];
   mainGoalSuggestions?: any[];
   warnings: string[];
   uncertain: {

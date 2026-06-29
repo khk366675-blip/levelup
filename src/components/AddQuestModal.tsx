@@ -41,7 +41,6 @@ export function AddQuestModal({ open, onClose, type }: Props) {
   const [steps, setSteps] = useState(30)
   const [selectedStats, setSelectedStats] = useState<StatKey[]>(CATEGORY_STAT_SUGGESTIONS['workout'])
   const [finalGoal, setFinalGoal] = useState('')
-  const [milestonesText, setMilestonesText] = useState('')
 
   const reset = () => {
     setTitle('')
@@ -51,7 +50,6 @@ export function AddQuestModal({ open, onClose, type }: Props) {
     setSteps(30)
     setSelectedStats(CATEGORY_STAT_SUGGESTIONS['workout'])
     setFinalGoal('')
-    setMilestonesText('')
   }
 
   const handleCategoryChange = (c: Category) => {
@@ -83,18 +81,6 @@ export function AddQuestModal({ open, onClose, type }: Props) {
     const w = 1 / selectedStats.length
     selectedStats.forEach(s => { rewardStatWeights[s] = w })
 
-    const milestoneList = milestonesText.split(/[\n,]+/).map(x => x.trim()).filter(Boolean)
-    const milestoneObjects = type === 'main' && milestoneList.length > 0
-      ? milestoneList.map((mTitle, idx) => ({
-          id: `ms-${idx}-${Math.random().toString(36).slice(2, 6)}`,
-          title: mTitle,
-          description: undefined,
-          status: idx === 0 ? ('active' as const) : ('locked' as const),
-          order: idx,
-          importance: 'normal' as const
-        }))
-      : undefined
-
     addQuest({
       title: title.trim(),
       description: desc.trim() || undefined,
@@ -107,7 +93,7 @@ export function AddQuestModal({ open, onClose, type }: Props) {
       totalSteps: type === 'dungeon' ? steps : undefined,
       currentSteps: type === 'dungeon' ? 0 : undefined,
       finalGoal: type === 'main' ? (finalGoal.trim() || title.trim()) : undefined,
-      milestones: milestoneObjects,
+      milestones: undefined,
       progressPercent: type === 'main' ? 0 : undefined,
       status: type === 'main' ? 'active' : undefined
     })
@@ -250,33 +236,15 @@ export function AddQuestModal({ open, onClose, type }: Props) {
               )}
 
               {type === 'main' && (
-                <>
-                  <div>
-                    <label className="block text-xs text-cyan-300/70 system-text mb-1">최종 목표 (Final Goal)</label>
-                    <input
-                      value={finalGoal}
-                      onChange={(e) => setFinalGoal(e.target.value)}
-                      placeholder="예: AI 자격증 합격하기 (비워두면 제목과 동일)"
-                      className="w-full bg-ink-900/60 border border-cyan-400/20 rounded px-3 py-2 text-sm focus:outline-none focus:border-cyan-400/60"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-xs text-cyan-300/70 system-text mb-1">
-                      중간 목표 단계들 (Stages / Milestones)
-                    </label>
-                    <textarea
-                      value={milestonesText}
-                      onChange={(e) => setMilestonesText(e.target.value)}
-                      placeholder="단계별로 쉼표(,) 또는 줄바꿈(Enter)으로 구분하여 입력하십시오.&#10;예:&#10;1권 1회독 완료&#10;2권 1회독 완료&#10;예상 문제 풀이&#10;오답 분석"
-                      rows={5}
-                      className="w-full bg-ink-900/60 border border-cyan-400/20 rounded px-3 py-2 text-sm focus:outline-none focus:border-cyan-400/60 font-sans leading-relaxed"
-                    />
-                    <p className="text-[10px] text-white/30 mt-1">
-                      * 입력하신 순서대로 첫 번째 단계는 'ACTIVE' 상태로 활성화되며, 나머지 단계들은 순차적으로 잠금(LOCKED) 처리됩니다.
-                    </p>
-                  </div>
-                </>
+                <div>
+                  <label className="block text-xs text-cyan-300/70 system-text mb-1">최종 목표 (Final Goal)</label>
+                  <input
+                    value={finalGoal}
+                    onChange={(e) => setFinalGoal(e.target.value)}
+                    placeholder="예: AI 자격증 합격하기 (비워두면 제목과 동일)"
+                    className="w-full bg-ink-900/60 border border-cyan-400/20 rounded px-3 py-2 text-sm focus:outline-none focus:border-cyan-400/60"
+                  />
+                </div>
               )}
             </div>
 

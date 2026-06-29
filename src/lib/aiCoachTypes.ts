@@ -142,11 +142,6 @@ export interface AiCoachSaveSummary {
   recentDailyCompletionRate?: number // 최근 일일 퀘스트 완료율 (0~1)
   categoryCounts?: Record<Category, number> // 카테고리별 누적 완료 횟수
   currentMainGoals?: string[] // 현재 설정된 메인 목표 리스트
-  activeDungeons?: {
-    id: string
-    title: string
-    progress?: string // 예: "12/30 steps"
-  }[]
   recentAiQuestSuccessRate?: number // AI가 추천했던 퀘스트들의 최근 성공률 (0~1)
   baseDailies?: {
     id: string
@@ -215,7 +210,7 @@ export interface AiCoachMainQuestSuggestion {
   finalGoal: string
   category: Category
   description?: string
-  milestones: {
+  milestones?: {
     title: string
     description?: string
     order: number
@@ -260,7 +255,7 @@ export interface AiCoachResponse {
     risk?: string // 도메인별 리스크 및 경고 요인
   }[]
   recommendedActions: AiCoachRecommendation[] // 내일의 일일 퀘스트 추천
-  dungeonSuggestions: AiCoachRecommendation[] // 던전 진행/참여 제안
+  dungeonSuggestions?: AiCoachRecommendation[] // 던전 진행/참여 제안 (Legacy)
   mainGoalSuggestions: AiCoachRecommendation[] // 장기 메인 목표 조정을 위한 제안
   warnings: string[] // 긴급 리스크 경고 (예: 수면 3시간 미만 경고)
   uncertain: AiCoachUncertainItem[] // 전체 분석 중 모호하여 확정이 필요했던 정보들

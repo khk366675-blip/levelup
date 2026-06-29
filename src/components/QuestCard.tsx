@@ -1,7 +1,7 @@
 import { motion } from 'framer-motion'
-import { Check, Clock, Trash2, Edit, Plus, FastForward } from 'lucide-react'
+import { Check, Clock, Trash2 } from 'lucide-react'
 import { useGame } from '../lib/store'
-import { CATEGORY_META, DIFFICULTY_META, type Quest, type StatKey, type MainQuestMilestone } from '../lib/types'
+import { CATEGORY_META, DIFFICULTY_META, type Quest, type StatKey } from '../lib/types'
 import {
   formatStatReward,
   getBalancedDungeonClearXp,
@@ -20,62 +20,11 @@ interface Props {
 export function QuestCard({ quest, onRemove, removable }: Props) {
   const complete = useGame(s => s.completeQuest)
   const progress = useGame(s => s.progressDungeon)
-  const completeMilestone = useGame(s => s.completeMainQuestMilestone)
-  const skipMilestone = useGame(s => s.skipMainQuestMilestone)
-  const addMilestone = useGame(s => s.addMainQuestMilestone)
-  const updateMilestone = useGame(s => s.updateMainQuestMilestone)
 
   const cat = CATEGORY_META[quest.category]
   const diff = DIFFICULTY_META[quest.difficulty]
 
-  const isV2Milestones = quest.type === 'main' &&
-    quest.milestones &&
-    quest.milestones.length > 0 &&
-    typeof quest.milestones[0] !== 'string'
-
-  const handleCompleteMilestone = (milestoneId: string, milestoneTitle: string) => {
-    const note = window.prompt(`"${milestoneTitle}" 완료 증거 메모를 입력하세요 (선택):`, '')
-    if (note === null) return
-    completeMilestone(quest.id, milestoneId, note || undefined)
-  }
-
-  const handleSkipMilestone = (milestoneId: string, milestoneTitle: string) => {
-    const ok = window.confirm(`"${milestoneTitle}" 단계를 건너뛰시겠습니까?\n건너뛰면 마일스톤 완수 보상(XP/Gold)은 지급되지 않으며, 다음 단계가 활성화되었습니다.`)
-    if (ok) {
-      skipMilestone(quest.id, milestoneId)
-    }
-  }
-
-  const handleAddMilestone = () => {
-    const titleInput = window.prompt('추가할 새로운 중간 단계(Milestone) 제목을 입력하십시오:')
-    if (!titleInput || !titleInput.trim()) return
-    
-    const descInput = window.prompt('해당 단계의 간략한 설명을 입력하십시오 (선택):')
-    
-    addMilestone(quest.id, {
-      title: titleInput.trim(),
-      description: descInput?.trim() || undefined,
-      importance: 'normal',
-      order: quest.milestones ? quest.milestones.length : 0
-    })
-  }
-
-  const handleEditMilestone = (m: MainQuestMilestone) => {
-    const newTitle = window.prompt(`"${m.title}" 단계의 새로운 제목을 입력하십시오:`, m.title)
-    if (newTitle === null) return
-    if (!newTitle.trim()) {
-      alert('제목은 비워둘 수 없습니다.')
-      return
-    }
-
-    const newDesc = window.prompt(`"${m.title}" 단계의 새로운 설명을 입력하십시오 (선택):`, m.description || '')
-    if (newDesc === null) return
-
-    updateMilestone(quest.id, m.id, {
-      title: newTitle.trim(),
-      description: newDesc.trim() || undefined
-    })
-  }
+  const isV2Milestones = false
 
   const cooldownRemaining = quest.type === 'daily' ? getCooldownRemaining(quest) : 0
   const isDailyDone = quest.type === 'daily' && cooldownRemaining > 0
@@ -160,130 +109,7 @@ export function QuestCard({ quest, onRemove, removable }: Props) {
           </div>
         )}
 
-        {/* Main Quest v2 Milestones */}
-        {isV2Milestones && (() => {
-          const milestones = (quest.milestones as MainQuestMilestone[]) || []
-          const sorted = [...milestones].sort((a, b) => a.order - b.order)
-          
-          return (
-            <div className="mt-3.5 space-y-3.5 border-t border-cyan-400/10 pt-3">
-              {/* 진행도 프로그레스 바 */}
-              <div className="space-y-1">
-                <div className="flex justify-between text-[10px] font-mono text-cyan-300/60">
-                  <span>진행도 (Milestones)</span>
-                  <span>{quest.progressPercent ?? 0}% ({sorted.filter(m => m.status === 'completed').length}/{sorted.length})</span>
-                </div>
-                <div className="h-1.5 bg-black/40 rounded-full overflow-hidden border border-cyan-400/5">
-                  <motion.div
-                    className="h-full bg-gradient-to-r from-cyan-500 to-indigo-500 rounded-full"
-                    initial={false}
-                    animate={{ width: `${quest.progressPercent ?? 0}%` }}
-                  />
-                </div>
-              </div>
 
-              {/* 마일스톤 항목 리스트 */}
-              <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
-                {sorted.map((m) => {
-                  const isCompleted = m.status === 'completed'
-                  const isActive = m.status === 'active'
-                  const isLocked = m.status === 'locked'
-                  const isSkipped = m.status === 'skipped'
-                  
-                  return (
-                    <div 
-                      key={m.id} 
-                      className={`p-2 rounded text-xs border transition-all ${
-                        isCompleted ? 'bg-emerald-950/20 border-emerald-500/25 opacity-75' :
-                        isActive ? 'bg-cyan-950/30 border-cyan-400/30' :
-                        isSkipped ? 'bg-amber-950/20 border-amber-500/25 opacity-75' :
-                        'bg-ink-950/20 border-cyan-400/5 opacity-50'
-                      }`}
-                    >
-                      <div className="flex justify-between items-start gap-2">
-                        <div className="space-y-0.5">
-                          <div className="flex items-center gap-1.5 flex-wrap">
-                            <span className="font-semibold text-white">{m.title}</span>
-                            {/* 상태 뱃지 */}
-                            <span className={`text-[9px] px-1 rounded border font-mono ${
-                              isCompleted ? 'border-emerald-400/30 text-emerald-300 bg-emerald-500/5' :
-                              isActive ? 'border-cyan-400/30 text-cyan-300 bg-cyan-400/5 animate-pulse' :
-                              isSkipped ? 'border-amber-400/30 text-amber-300 bg-amber-400/5' :
-                              'border-zinc-500/30 text-zinc-400'
-                            }`}>
-                              {m.status.toUpperCase()}
-                            </span>
-                            {/* 단계 편집 버튼 */}
-                            {!quest.completed && (
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation()
-                                  handleEditMilestone(m)
-                                }}
-                                className="text-white/30 hover:text-cyan-300 transition"
-                                title="단계 수정"
-                              >
-                                <Edit className="w-3 h-3" />
-                              </button>
-                            )}
-                          </div>
-                          {m.description && <p className="text-[11px] text-white/50">{m.description}</p>}
-                          {m.evidenceNote && (
-                            <p className="text-[10px] text-emerald-400/80 bg-emerald-950/30 px-1.5 py-0.5 rounded mt-1 font-mono italic">
-                              ✍️ {m.evidenceNote}
-                            </p>
-                          )}
-                        </div>
-
-                        {/* 달성 완료 / 건너뛰기 버튼 */}
-                        {isActive && !isCompleted && !quest.completed && (
-                          <div className="flex gap-1.5 shrink-0">
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation()
-                                handleSkipMilestone(m.id, m.title)
-                              }}
-                              className="px-2 py-1 bg-amber-950/40 border border-amber-500/35 hover:bg-amber-950/60 text-amber-300 rounded text-[10px] font-bold transition flex items-center gap-0.5 whitespace-nowrap"
-                              title="단계 건너뛰기"
-                            >
-                              <FastForward className="w-2.5 h-2.5" /> 건너뛰기
-                            </button>
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation()
-                                handleCompleteMilestone(m.id, m.title)
-                              }}
-                              className="px-2 py-1 bg-gradient-to-r from-cyan-500 to-indigo-600 hover:from-cyan-400 hover:to-indigo-500 text-white rounded text-[10px] font-bold transition shadow-md whitespace-nowrap"
-                            >
-                              달성 완료
-                            </button>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  )
-                })}
-              </div>
-
-              {/* 수동 단계 추가 버튼 */}
-              {!quest.completed && (
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    handleAddMilestone()
-                  }}
-                  className="w-full py-1.5 border border-dashed border-cyan-400/20 hover:border-cyan-400/50 bg-cyan-400/5 hover:bg-cyan-400/10 text-cyan-300 rounded text-xs font-bold transition flex items-center justify-center gap-1 mt-1"
-                >
-                  <Plus className="w-3.5 h-3.5" /> 새 중간 단계 추가
-                </button>
-              )}
-            </div>
-          )
-        })()}
 
         {/* dungeon progress */}
         {isDungeon && (

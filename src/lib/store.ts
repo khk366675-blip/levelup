@@ -14792,12 +14792,19 @@ export const useGame = create<GameState>()(
       clearMessages: () => set({ messages: [] }),
 
       syncDefaultQuestMetadata: () => set((s) => {
+        const legacyMainQuestIds = [
+          'main-club', 'main-kbi-cert', 'main-cut', 'main-gpa',
+          'main-spend-monthly', 'main-investment-return',
+          'main-networth-1000', 'main-bench-100', 'main-run-5k'
+        ]
+        const activeQuests = s.quests.filter(q => !legacyMainQuestIds.includes(q.id))
+        let changed = s.quests.length !== activeQuests.length
+
         const defaultMap = new Map<string, Quest>(
           initialQuests.map(q => [q.id, q])
         )
         const preserved = new Set<string>()
-        let changed = false
-        const mergedQuests: Quest[] = s.quests.map(saved => {
+        const mergedQuests: Quest[] = activeQuests.map(saved => {
           const def = defaultMap.get(saved.id)
           if (!def) return saved // custom quest: leave untouched
           preserved.add(saved.id)

@@ -203,13 +203,10 @@ export function AiCoachPanel() {
   const aiCoachCoreContext = useGame(s => s.aiCoachCoreContext)
   const updateAiCoachCoreContext = useGame(s => s.updateAiCoachCoreContext)
   const addMainQuest = useGame(s => s.addMainQuest)
-  const addMainQuestMilestone = useGame(s => s.addMainQuestMilestone)
   const quests = useGame(s => s.quests)
 
   const [showLongTermSuggestions, setShowLongTermSuggestions] = useState(false)
   const [appliedMainQuests, setAppliedMainQuests] = useState<Record<string, boolean>>({})
-  const [appliedMilestones, setAppliedMilestones] = useState<Record<string, boolean>>({})
-  const [selectedMainQuestForMilestone, setSelectedMainQuestForMilestone] = useState<Record<string, string>>({})
 
   // 새 Main Quest 후보 원클릭 추가
   const handleAddMainQuestSuggestion = (suggestion: any, index: number) => {
@@ -231,20 +228,12 @@ export function AiCoachPanel() {
     // 카테고리 정규화
     const sanitizedCat = sanitizeCategory(suggestion.category)
 
-    // 마일스톤 매핑 (별도 퀘스트 생성 없이 MainQuest.milestones 내부 배열로 주입)
-    const proposedMilestones = (suggestion.milestones || []).map((m: any, idx: number) => ({
-      title: m.title,
-      description: m.description || '',
-      order: m.order ?? idx,
-      importance: m.importance || 'normal'
-    }))
-
     addMainQuest({
       title: suggestion.title,
       description: suggestion.description || suggestion.reason || '',
       category: sanitizedCat,
       finalGoal: suggestion.finalGoal,
-      milestones: proposedMilestones,
+      milestones: [],
       source: 'aiCoach',
       coachReason: suggestion.reason
     })
@@ -252,66 +241,7 @@ export function AiCoachPanel() {
     setAppliedMainQuests(prev => ({ ...prev, [key]: true }))
   }
 
-  // Milestone 후보를 기존 Main에 추가
-  const handleAddMilestoneSuggestion = (suggestion: any, index: number) => {
-    const key = `milestone-${index}-${suggestion.title}`
-    if (appliedMilestones[key]) return
 
-    const activeMainQuests = quests.filter(q => q.type === 'main' && !q.completed)
-    let targetMainQuestId = suggestion.mainQuestId
-
-    // 1. 수동으로 선택한 메인 퀘스트가 있다면 우선 적용
-    if (selectedMainQuestForMilestone[key]) {
-      targetMainQuestId = selectedMainQuestForMilestone[key]
-    }
-
-    // 2. targetMainQuestId가 없고 mainQuestTitle이 있으면 유사 매칭
-    if (!targetMainQuestId && suggestion.mainQuestTitle) {
-      const matched = activeMainQuests.find(q => 
-        q.title.replace(/\s+/g, '').includes(suggestion.mainQuestTitle.replace(/\s+/g, '')) || 
-        suggestion.mainQuestTitle.replace(/\s+/g, '').includes(q.title.replace(/\s+/g, ''))
-      )
-      if (matched) {
-        targetMainQuestId = matched.id
-      }
-    }
-
-    // 3. 캘리브레이션/매칭이 불가능한 경우 (select에서도 선택 안 됨)
-    if (!targetMainQuestId) {
-      // 첫 번째 활성화된 메인 퀘스트를 Fallback으로 잡음
-      if (activeMainQuests.length > 0) {
-        targetMainQuestId = activeMainQuests[0].id
-      } else {
-        alert('연결할 수 있는 활성화된 메인 퀘스트가 없습니다. 먼저 메인 퀘스트를 추가해 주세요.')
-        return
-      }
-    }
-
-    const targetMain = activeMainQuests.find(q => q.id === targetMainQuestId)
-    if (!targetMain) {
-      alert('선택한 메인 퀘스트가 존재하지 않거나 이미 완료되었습니다.')
-      return
-    }
-
-    // 중복 체크: 해당 메인 퀘스트 안에 동일한 title을 가진 milestone이 있는지
-    const currentMilestones = (targetMain.milestones as any[]) || []
-    const isDuplicate = currentMilestones.some(m => m.title?.trim() === suggestion.title?.trim())
-
-    if (isDuplicate) {
-      alert('해당 메인 퀘스트에 이미 비슷한 중간 목표가 존재합니다.')
-      return
-    }
-
-    // milestone 추가 (별도 일일퀘스트가 아닌 milestones 내부 배열에 추가)
-    addMainQuestMilestone(targetMainQuestId, {
-      title: suggestion.title,
-      description: suggestion.description || suggestion.reason || '',
-      order: currentMilestones.length,
-      importance: suggestion.importance || 'normal'
-    })
-
-    setAppliedMilestones(prev => ({ ...prev, [key]: true }))
-  }
 
   const [showCoreContext, setShowCoreContext] = useState(false)
   const [coreText, setCoreText] = useState(aiCoachCoreContext?.text || '')
@@ -1407,16 +1337,15 @@ export function AiCoachPanel() {
                 </div>
               </div>
 
-              {/* 🎯 AI 장기 목표 및 마일스톤 제안 섹션 */}
-              {((Array.isArray(apiResult.response.mainQuestSuggestions) && apiResult.response.mainQuestSuggestions.length > 0) || 
-                (Array.isArray(apiResult.response.mainMilestoneSuggestions) && apiResult.response.mainMilestoneSuggestions.length > 0)) && (
+              {/* 🎯 AI 장기 목표 제안 섹션 */}
+              {(Array.isArray(apiResult.response.mainQuestSuggestions) && apiResult.response.mainQuestSuggestions.length > 0) && (
                 <div className="panel corner-bracket p-5 space-y-4 bg-slate-950/20 border border-purple-500/10 shadow-[0_0_15px_rgba(168,85,247,0.02)]">
                   <div className="tl" /> <div className="tr" /> <div className="bl" /> <div className="br" />
                   <div className="flex justify-between items-center border-b border-purple-500/10 pb-2 cursor-pointer font-sans" onClick={() => setShowLongTermSuggestions(!showLongTermSuggestions)}>
                     <h4 className="text-xs font-bold text-purple-300 flex items-center gap-1.5 font-mono tracking-wider">
-                      <Compass className="w-4 h-4 text-purple-400" /> AI 장기 목표 및 마일스톤 제안 
+                      <Compass className="w-4 h-4 text-purple-400" /> AI 장기 목표 제안 
                       <span className="text-[10px] px-1.5 py-0.2 bg-purple-500/15 text-purple-300 rounded border border-purple-500/20 font-normal">
-                        {(apiResult.response.mainQuestSuggestions?.length || 0) + (apiResult.response.mainMilestoneSuggestions?.length || 0)}건
+                        {apiResult.response.mainQuestSuggestions.length}건
                       </span>
                     </h4>
                     <div className="flex items-center gap-2">
@@ -1428,7 +1357,7 @@ export function AiCoachPanel() {
                   {/* 제안 반영 안내 배너 */}
                   <div className="panel corner-bracket p-3 bg-purple-950/30 border border-purple-500/20 text-purple-200 text-[11px] leading-relaxed">
                     <div className="tl" /> <div className="tr" /> <div className="bl" /> <div className="br" />
-                    💡 <strong>안내:</strong> 장기 목표(Main Quest) 및 중간 마일스톤(Milestone) 제안은 일일퀘스트와 달리 <strong>자동 반영되지 않습니다.</strong> 아래의 제안 목록에서 필요한 항목만 직접 선택하여 적용하십시오.
+                    💡 <strong>안내:</strong> 장기 목표(Main Quest) 제안은 일일퀘스트와 달리 <strong>자동 반영되지 않습니다.</strong> 아래의 제안 목록에서 필요한 항목만 직접 선택하여 적용하십시오.
                   </div>
 
                   {showLongTermSuggestions && (
@@ -1469,16 +1398,7 @@ export function AiCoachPanel() {
                                     <p className="text-[10px] text-amber-300/80 bg-amber-500/5 p-1.5 border border-amber-500/10 rounded leading-relaxed mt-1 font-sans">
                                       💡 <strong>이유:</strong> {suggestion.reason}
                                     </p>
-                                    {suggestion.milestones && suggestion.milestones.length > 0 && (
-                                      <div className="text-[10px] text-purple-300 border-t border-cyan-400/5 pt-2 mt-2 space-y-0.5 font-mono">
-                                        <div className="font-bold mb-1">제안된 중간 목표 ({suggestion.milestones.length}):</div>
-                                        {suggestion.milestones.map((m, mIdx) => (
-                                          <div key={mIdx} className="text-cyan-300/60 truncate">
-                                            - {m.title}
-                                          </div>
-                                        ))}
-                                      </div>
-                                    )}
+
                                   </div>
 
                                   <div className="pt-2 border-t border-cyan-400/5 flex items-center justify-between">
@@ -1521,148 +1441,18 @@ export function AiCoachPanel() {
                         </div>
                       )}
 
-                      {/* 기존 Main에 추가할 Milestone 제안 */}
-                      {apiResult.response.mainMilestoneSuggestions && apiResult.response.mainMilestoneSuggestions.length > 0 && (
-                        <div className="space-y-3">
-                          <h5 className="text-[11px] font-bold text-cyan-300 flex items-center gap-1">
-                            <span>✨ 기존 메인 퀘스트의 중간 목표(Milestone) 제안</span>
-                          </h5>
-                          <div className="grid md:grid-cols-2 gap-3">
-                            {apiResult.response.mainMilestoneSuggestions.map((suggestion, idx) => {
-                              const key = `milestone-${idx}-${suggestion.title}`
-                              const isAdded = appliedMilestones[key]
-                              
-                              const activeMainQuests = quests.filter(q => q.type === 'main' && !q.completed)
-                              
-                              // 기본적으로 매칭되는 퀘스트 찾기
-                              let preSelectedQuestId = selectedMainQuestForMilestone[key] || ''
-                              if (!preSelectedQuestId) {
-                                if (suggestion.mainQuestId) {
-                                  preSelectedQuestId = suggestion.mainQuestId
-                                } else if (suggestion.mainQuestTitle) {
-                                  const titleToMatch = suggestion.mainQuestTitle
-                                  const matched = activeMainQuests.find(q => 
-                                    q.title.replace(/\s+/g, '').includes(titleToMatch.replace(/\s+/g, '')) || 
-                                    titleToMatch.replace(/\s+/g, '').includes(q.title.replace(/\s+/g, ''))
-                                  )
-                                  if (matched) {
-                                    preSelectedQuestId = matched.id
-                                  }
-                                }
-                                if (!preSelectedQuestId && activeMainQuests.length > 0) {
-                                  preSelectedQuestId = activeMainQuests[0].id
-                                }
-                              }
 
-                              const currentSelectedMain = activeMainQuests.find(q => q.id === preSelectedQuestId)
-                              const currentMilestones = (currentSelectedMain?.milestones as any[]) || []
-                              const isDuplicate = currentMilestones.some(m => m.title?.trim() === suggestion.title?.trim())
-
-                              return (
-                                <div key={idx} className="p-3 bg-ink-950/40 border border-purple-500/5 rounded-md flex flex-col justify-between text-xs space-y-2">
-                                  <div className="space-y-1">
-                                    <div className="flex justify-between items-start gap-2">
-                                      <span className="font-bold text-cyan-50 text-[12px]">📌 {suggestion.title}</span>
-                                      <span className={`text-[9px] px-1.5 py-0.2 rounded border font-mono font-bold capitalize ${
-                                        suggestion.importance === 'major' ? 'border-red-400/30 bg-red-500/10 text-red-300' :
-                                        suggestion.importance === 'minor' ? 'border-zinc-500/30 bg-zinc-500/10 text-zinc-400' :
-                                        'border-cyan-400/30 bg-cyan-500/10 text-cyan-300'
-                                      }`}>
-                                        {suggestion.importance || 'normal'}
-                                      </span>
-                                    </div>
-                                    {suggestion.description && (
-                                      <p className="text-[10px] text-cyan-300/50 leading-relaxed font-sans">
-                                        {suggestion.description}
-                                      </p>
-                                    )}
-                                    <p className="text-[10px] text-amber-300/80 bg-amber-500/5 p-1.5 border border-amber-500/10 rounded leading-relaxed mt-1 font-sans">
-                                      💡 <strong>이유:</strong> {suggestion.reason}
-                                    </p>
-
-                                    {/* 연결 대상 메인 퀘스트 선택 UI */}
-                                    <div className="text-[10px] text-cyan-300/60 border-t border-cyan-400/5 pt-2 mt-2 space-y-1">
-                                      <div className="font-bold flex items-center justify-between">
-                                        <span>연결할 메인 퀘스트:</span>
-                                        {suggestion.mainQuestTitle && !selectedMainQuestForMilestone[key] && (
-                                          <span className="text-[9px] text-cyan-300/40 font-normal truncate max-w-[120px]">
-                                            AI 매칭: {suggestion.mainQuestTitle}
-                                          </span>
-                                        )}
-                                      </div>
-                                      {activeMainQuests.length > 0 ? (
-                                        <select
-                                          value={preSelectedQuestId}
-                                          disabled={isAdded}
-                                          onChange={(e) => setSelectedMainQuestForMilestone(prev => ({ ...prev, [key]: e.target.value }))}
-                                          className="w-full bg-ink-950/60 border border-cyan-400/20 rounded p-1 text-[10px] text-cyan-100 focus:outline-none focus:border-cyan-400 font-sans"
-                                        >
-                                          {activeMainQuests.map((q) => (
-                                            <option key={q.id} value={q.id}>
-                                              {q.title}
-                                            </option>
-                                          ))}
-                                        </select>
-                                      ) : (
-                                        <div className="text-red-400 text-[10px] italic">
-                                          연결할 수 있는 메인 퀘스트가 없습니다.
-                                        </div>
-                                      )}
-                                    </div>
-                                  </div>
-
-                                  <div className="pt-2 border-t border-cyan-400/5 flex items-center justify-between">
-                                    {isDuplicate ? (
-                                      <span className="text-[10px] text-amber-300/70">이미 등록된 중간 목표</span>
-                                    ) : (
-                                      <span className="text-[10px] text-purple-300/40 font-mono">AI Coach 처방</span>
-                                    )}
-                                    <button
-                                      type="button"
-                                      disabled={isAdded || isDuplicate || activeMainQuests.length === 0}
-                                      onClick={() => handleAddMilestoneSuggestion(suggestion, idx)}
-                                      className={`px-3 py-1.5 rounded text-[11px] font-bold transition flex items-center gap-1 shadow-md ${
-                                        isAdded
-                                          ? 'bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 cursor-not-allowed'
-                                          : isDuplicate
-                                          ? 'bg-zinc-500/10 border border-zinc-500/20 text-zinc-400/60 cursor-not-allowed'
-                                          : activeMainQuests.length === 0
-                                          ? 'bg-zinc-500/10 border border-zinc-500/20 text-zinc-400/40 cursor-not-allowed'
-                                          : 'bg-gradient-to-r from-purple-500 to-indigo-600 hover:from-purple-400 hover:to-indigo-500 text-white font-semibold'
-                                      }`}
-                                    >
-                                      {isAdded ? (
-                                        <>
-                                          <Check className="w-3.5 h-3.5" />
-                                          <span>추가 완료</span>
-                                        </>
-                                      ) : isDuplicate ? (
-                                        <span>등록 불가</span>
-                                      ) : (
-                                        <>
-                                          <Plus className="w-3.5 h-3.5" />
-                                          <span>Milestone 추가</span>
-                                        </>
-                                      )}
-                                    </button>
-                                  </div>
-                                </div>
-                              )
-                            })}
-                          </div>
-                        </div>
-                      )}
                     </div>
                   )}
                 </div>
               )}
 
-              {/* 추가 장기/던전 제안 뱃지 알림 */}
-              {(apiResult.response.dungeonSuggestions?.length > 0 || apiResult.response.mainGoalSuggestions?.length > 0) && (
+              {/* 추가 장기 제안 뱃지 알림 */}
+              {(apiResult.response.mainGoalSuggestions?.length > 0) && (
                 <div className="p-3 bg-purple-950/15 border border-purple-500/20 rounded text-xs text-purple-300 flex items-center justify-between flex-wrap gap-2">
                   <span className="flex items-center gap-1.5 font-semibold">
                     <Info className="w-4 h-4 text-purple-400 shrink-0" />
-                    <span>AI 코치의 추가 장기 목표/던전 제안이 {apiResult.response.dungeonSuggestions.length + apiResult.response.mainGoalSuggestions.length}건 존재합니다.</span>
+                    <span>AI 코치의 추가 장기 목표 제안이 {apiResult.response.mainGoalSuggestions.length}건 존재합니다.</span>
                   </span>
                   <button 
                     type="button"
@@ -1938,26 +1728,15 @@ export function AiCoachPanel() {
                       </div>
                     )}
 
-                    {/* 던전 / 메인 퀘스트 조정 제안 */}
-                    {((Array.isArray(apiResult.response.dungeonSuggestions) && apiResult.response.dungeonSuggestions.length > 0) || 
-                      (Array.isArray(apiResult.response.mainGoalSuggestions) && apiResult.response.mainGoalSuggestions.length > 0)) && (
+                    {/* 메인 퀘스트 조정 제안 */}
+                    {(Array.isArray(apiResult.response.mainGoalSuggestions) && apiResult.response.mainGoalSuggestions.length > 0) && (
                       <div className="panel corner-bracket p-5 space-y-4">
                         <div className="tl" /> <div className="tr" /> <div className="bl" /> <div className="br" />
                         <h4 className="text-sm font-bold text-cyan-200 flex items-center gap-1.5">
-                          <Compass className="w-4 h-4 text-cyan-400" /> 목표 및 던전 조정 제안 (제안 전용)
+                          <Compass className="w-4 h-4 text-cyan-400" /> 메인 목표 조정 제안 (제안 전용)
                         </h4>
                         <div className="grid md:grid-cols-2 gap-3">
-                          {Array.isArray(apiResult.response.dungeonSuggestions) && apiResult.response.dungeonSuggestions.map((action: any) => (
-                            <div key={action.id} className="p-3 border border-purple-500/10 bg-purple-950/5 rounded-md text-xs space-y-1">
-                              <div className="font-bold text-purple-300 flex justify-between items-center">
-                                <span>[던전 제안] {action.title}</span>
-                                <span className="text-[9px] px-1.5 py-0.5 border border-purple-400/20 bg-purple-500/15 rounded text-purple-300 font-normal">제안만 표시</span>
-                              </div>
-                              <p className="text-[11px] text-cyan-300/60">{action.description}</p>
-                              <p className="text-[10px] text-amber-300/80 pt-1">이유: {action.reason}</p>
-                            </div>
-                          ))}
-                          {Array.isArray(apiResult.response.mainGoalSuggestions) && apiResult.response.mainGoalSuggestions.map((action: any) => (
+                          {apiResult.response.mainGoalSuggestions.map((action: any) => (
                             <div key={action.id} className="p-3 border border-purple-500/10 bg-purple-950/5 rounded-md text-xs space-y-1">
                               <div className="font-bold text-purple-300 flex justify-between items-center">
                                 <span>[메인 목표 제안] {action.title}</span>
